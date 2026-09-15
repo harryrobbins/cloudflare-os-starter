@@ -1,0 +1,104 @@
+name: Sync upstream
+
+# Keeps this fork close to cloudflare/cloudflare-os-starter without silently rewriting
+# main: on a schedule (and on demand), it fetches upstream/main and, if it's ahead,
+# opens/updates a PR from `upstream-sync` into `main` so the incoming diff gets reviewed
+# before it lands. It never pushes to main directly.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Monday 06:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/cloudflare/cloudflare-os-starter.git
+          git fetch upstream main
+          git fetch origin main
+
+      - name: Check for new upstream commits
+        id: diff
+        run: |
+          count=$(git rev-list --count origin/main..upstream/main)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "$count new commit(s) on upstream/main"
+
+      - name: Build sync branch
+        if: steps.diff.outputs.count != '0'
+        id: merge
+        run: |
+          git branch -f upstream-sync origin/main
+          git checkout upstream-sync
+
+          {
+            echo "commits<<EOF_UPSTREAM_SYNC_BODY"
+            git log --format='- %h %s' origin/main..upstream/main
+            echo "EOF_UPSTREAM_SYNC_BODY"
+          } >> "$GITHUB_OUTPUT"
+
+          if git merge --ff-only upstream/main; then
+            echo "status=clean" >> "$GITHUB_OUTPUT"
+          elif git merge --no-edit upstream/main; then
+            echo "status=merged" >> "$GITHUB_OUTPUT"
+          else
+            # Commit with conflict markers left in place so the PR diff shows exactly
+            # what needs manual resolution, instead of failing the workflow silently.
+            git add -A
+            git commit -m "Merge upstream/main (unresolved conflicts)"
+            echo "status=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+          git push --force origin upstream-sync
+
+      - name: Open or update pull request
+        if: steps.diff.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ steps.merge.outputs.status }}
+          COMMITS: ${{ steps.merge.outputs.commits }}
+          COUNT: ${{ steps.diff.outputs.count }}
+        run: |
+          if [ "$STATUS" = "conflict" ]; then
+            title="[conflicts] Sync with cloudflare/cloudflare-os-starter"
+          else
+            title="Sync with cloudflare/cloudflare-os-starter"
+          fi
+
+          body_file=$(mktemp)
+          {
+            printf 'Upstream (`cloudflare/cloudflare-os-starter`) has %s new commit(s) not yet on `main`:\n\n' "$COUNT"
+            printf '%s\n\n' "$COMMITS"
+            if [ "$STATUS" = "conflict" ]; then
+              printf '**This merge has unresolved conflicts.** Conflict markers were committed as-is on this branch — resolve them locally (`git fetch origin upstream-sync && git checkout upstream-sync`) before merging this PR.\n\n'
+            fi
+            printf 'Check whether the `cloudflare-os` submodule pin, `package.json`, or `pnpm-lock.yaml` changed — run `pnpm install` and `pnpm check` locally before merging.\n'
+          } > "$body_file"
+
+          if gh pr view upstream-sync --json number >/dev/null 2>&1; then
+            gh pr edit upstream-sync --title "$title" --body-file "$body_file"
+          else
+            gh pr create --base main --head upstream-sync --title "$title" --body-file "$body_file"
+          fi
