@@ -73,7 +73,7 @@ Authorized by the user's request to implement, commit and deploy direct owner Ru
 
 No Worker, route, Access policy, storage binding, container image, migration or capacity changes. Deploy the seven existing Workers in their established order. New Notebook instances receive revision 12 with updated guidance. Existing Notebook code also executes directly through the updated backend/runtime, but may retain old Activity-approval wording until its gadget code is upgraded.
 
-Validation: six runtime tests, 338 backend tests, two backend integration tests (four pre-existing skips), backend type-check, and the real Workshop/Python browser test passed. The browser test makes no Activity approval call: it checks execution, owner-attributed action records, shared-viewer denial, independent clone execution and kernel resets. Full production check and deployment are pending.
+Validation: six runtime tests, 338 backend tests, two backend integration tests (four pre-existing skips), backend type-check, and the real Workshop/Python browser test passed. The browser test makes no Activity approval call: it checks execution, owner-attributed action records, shared-viewer denial, independent clone execution and kernel resets. Full `pnpm check` passed, including all production builds and seven Worker dry runs. Deployment completed successfully (exit 0) from root `2b115f8` and submodule `d262ffd6`.
 
 ### Baseline for the follow-up
 
@@ -88,3 +88,17 @@ Validation: six runtime tests, 338 backend tests, two backend integration tests 
 | `cfos-router` | `e98c3ecf-78f8-47e1-9ff2-7d22efba334a` |
 
 Recovery: the previous Workshop and runtime remain API-compatible; restoring them reintroduces manual approval. Already executed Python is not undone. Existing runtime, notebook data, and Activity records must be preserved.
+
+### Follow-up deployed versions
+
+| Worker | Deployment | Version |
+| --- | --- | --- |
+| `cfos-error-reporter` | `add779d7-5ac9-45bf-a1e2-842168c5d051` | `621c1b5d-d9bf-47f4-b8fe-b78fb080c8f8` |
+| `cfos-context` | `ed08dac6-7bc6-42a7-8ff0-9b108d74db15` | `495d7a68-bfad-4b6a-84c4-e5c658be51f9` |
+| `cfos-scheduler` | `7a52aa8c-3107-46e3-8a9d-88ceebb95185` | `b1e5bd7e-900b-4043-9fb6-c648eaa9146b` |
+| `cfos-custom-gatekeeper` | `f21d5c99-d6dc-4ac3-93ef-4507638c7beb` | `db3347fb-3dd4-4273-90e2-ea72023e8ce5` |
+| `cfos-notebook-python` | `2fed690e-c1b8-435c-9524-18a77ec3e7c7` | `75acd33a-2307-472b-abed-7b51e6469464` |
+| `cfos-workshop` | `730ae227-73fd-4aa7-92da-0b6e7b725756` | `bb655312-c851-40b2-836d-340f9c0284b8` |
+| `cfos-router` | `33ccab52-1815-4b30-b94d-a72f94f90b9b` | `6d9a2ee7-fde8-4d10-aac9-b2b1c5c5508d` |
+
+Post-rollout verification: all seven Workers have the exact same bindings as before, and workers.dev/preview URLs remain disabled. Container health reports five healthy slots and no failures/errors. Unauthenticated HTTPS `/` and `/api` still redirect to Access (302). The real local browser test covered immediate owner execution and audit attribution; signed-in production execution remains unverified because no authenticated production browser session is available.
