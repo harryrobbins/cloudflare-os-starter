@@ -2,7 +2,7 @@
 
 Part of the [master plan](collaborative-blueprints.md). Built after the [kanban board](kanban-blueprint.md), from a copy of its package.
 
-**Status: built, not yet deployed (2026-09-16).** The source is [`packages/blueprint-whiteboard`](../../packages/blueprint-whiteboard/README.md). It ships as the bundled format `format.whiteboard` (revision 4) from [`formats/whiteboard.json`](../../formats/whiteboard.json). This page describes the whiteboard as built. The delivery record below lists every departure from the original plan.
+**Status: built and deployed (2026-09-16).** The source is [`packages/blueprint-whiteboard`](../../packages/blueprint-whiteboard/README.md). It ships as the bundled format `format.whiteboard` (revision 4) on cfos.surprisingly.ltd, from [`formats/whiteboard.json`](../../formats/whiteboard.json). The same `pnpm deploy` shipped Board revision 5. This page describes the whiteboard as built. The delivery record below lists every departure from the original plan.
 
 **The authoritative RPC and storage reference** is the gadget's own [`src/README.md`](../../packages/blueprint-whiteboard/src/README.md). Where this page and that file disagree, the file wins.
 
@@ -67,13 +67,17 @@ Departures from the plan below, and why:
 - **Connectors.** They have no endpoint handles, so to reconnect one you delete it and draw it again. There is no snapping or alignment guide.
 - **No viewport culling.** Performance was checked at 500 objects (60 fps panning); the object cap is 5,000.
 
+**Deployed** 2026-09-16 with `pnpm deploy` (router version `69969eff`, workshop `2eb98281`). The Workshop build bundled all five formats (Docs, Sheets, Slides, Board revision 5, Whiteboard revision 4). They install on the first signed-in request.
+
 **Still to do, by Harry:**
 
-1. `pnpm deploy`. It also ships Board revision 5, with the kanban fixes below.
+1. Check that **New** offers Whiteboard, and create one.
 2. Add a second Access identity, then run the two-browser checks on production and test 8 (agent chat).
 3. Optionally publish a blueprint with a screenshot.
 
-**Kanban fixes delivered alongside** (Board revisions 3–5):
+**Next:** the Wave plan ([wave-blueprint.md](wave-blueprint.md)) opens with notes for the next build, drawn from this one.
+
+**Kanban fixes delivered alongside** (Board revisions 3–5, deployed with the whiteboard):
 
 - the hub disposes callback stubs and no longer calls `onRpcBroken`, the likely source of the production warning;
 - request ids are unguessable and replay records match per sender;

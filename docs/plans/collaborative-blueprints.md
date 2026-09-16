@@ -9,7 +9,7 @@ Background research is in [`../research/`](../research/README.md). Read [gadget-
 | Plan | Product analogue | Hard part | Status |
 | --- | --- | --- | --- |
 | [Kanban board](kanban-blueprint.md) | Trello, Jira board | Nothing new; the Sheets pattern applied to cards and columns | **Deployed 2026-09-16** as `format.board` from [`packages/blueprint-kanban`](../../packages/blueprint-kanban/README.md), about 2,500 lines of shared, core and server code and 5,400 of client |
-| [Whiteboard](whiteboard-blueprint.md) | Miro | High-frequency ephemeral state (drags, cursors) kept off storage; many small versioned objects | **Built 2026-09-16, awaiting deploy** as `format.whiteboard` from [`packages/blueprint-whiteboard`](../../packages/blueprint-whiteboard/README.md), about 4,000 lines of shared, core and server code and 8,500 of client |
+| [Whiteboard](whiteboard-blueprint.md) | Miro | High-frequency ephemeral state (drags, cursors) kept off storage; many small versioned objects | **Deployed 2026-09-16** as `format.whiteboard` (revision 4) from [`packages/blueprint-whiteboard`](../../packages/blueprint-whiteboard/README.md), about 4,000 lines of shared, core and server code and 8,500 of client |
 | [Wave](wave-blueprint.md) | Google Wave | Character-level co-editing inside many threaded messages, which needs a CRDT inlined into the gadget | Not started |
 
 Build them in that order. The kanban board proved the deployment, sharing and promotion pipeline end to end, and its package is the base for the other two (see [Reusing the kanban build](#reusing-the-kanban-build)).
@@ -120,8 +120,9 @@ If upstream's `libraries/sync` arrives through step 7, compare the two and adopt
 1. ~~Kanban board: draft, two-browser test, harden, publish, promote.~~ Done 2026-09-16. It was built in the repo, not drafted, and took one day with parallel agents. Production two-browser checks and the agent-chat test are still Harry's to run.
 2. ~~Starter change for the formats directory, and ship the board as a bundled format.~~ Done 2026-09-16 (`format.board` revision 2).
 3. Phase 0 viewer identity, if wanted. One day. Re-test the board with real names.
-4. ~~Whiteboard.~~ Built 2026-09-16 in one day with parallel agents (spikes, contract, four build streams, three reviews, three fix streams, local platform e2e). Awaiting `pnpm deploy`; production two-browser checks and the agent-chat test are Harry's to run. The same deploy ships Board revision 5 (stub disposal, request-id and conflict-rebase fixes).
-5. Wave. Two to three days, the first of which is getting a Yjs build that loads under the gadget module rules.
+4. ~~Whiteboard.~~ Done 2026-09-16: built in one day with parallel agents (spikes, contract, four build streams, three reviews, three fix streams, local platform e2e) and deployed as `format.whiteboard` revision 4. The same deploy shipped Board revision 5 (stub disposal, request-id and conflict-rebase fixes). Production two-browser checks and the agent-chat tests for both are Harry's to run.
+5. **Next: Wave.** Read the "Start here" notes at the top of [wave-blueprint.md](wave-blueprint.md) first, and start from a copy of `packages/blueprint-whiteboard`.
+   Budget one to two days. Yjs is a normal esbuild import, so the first spike is binary RPC (`Uint8Array` round-trips) and the RPC rate for text updates.
 6. Upstream sync and rebase onto `libraries/sync` when it arrives.
 
 ## Success criteria

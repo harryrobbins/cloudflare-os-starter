@@ -43,6 +43,8 @@ Test status at deploy:
 | Local platform e2e | 11 |
 | Deploy scripts | 31 |
 
+**Later the same day:** the whiteboard build found three bugs in the board. Its hub never disposed subscriber stubs, which caused the production "RPC stub was not disposed properly" warning. Its request ids were guessable. Its conflict retries could rebase on a stale card. Revisions 3 to 5 fix them, and revision 5 was deployed with the whiteboard. See [whiteboard-blueprint.md](whiteboard-blueprint.md).
+
 **Still to do, by Harry:**
 
 1. Add a second identity to the Access policy.

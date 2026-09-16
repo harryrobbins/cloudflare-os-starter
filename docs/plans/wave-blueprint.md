@@ -1,12 +1,68 @@
 # Plan: Wave blueprint (Google Wave)
 
-Part of the [master plan](collaborative-blueprints.md). Build last. It reuses the [kanban](kanban-blueprint.md) package ([`packages/blueprint-kanban`](../../packages/blueprint-kanban/README.md): hub, sync store, harness, esbuild and `.gadget` packing, platform e2e) and the [whiteboard](whiteboard-blueprint.md) presence work. It adds the one thing neither needed: several people typing in the same paragraph at the same time.
+Part of the [master plan](collaborative-blueprints.md). Build last. It adds the one thing the [kanban board](kanban-blueprint.md) and [whiteboard](whiteboard-blueprint.md) did not need: several people typing in the same paragraph at the same time.
 
-**Kanban lessons that apply here:**
+## Start here: notes for the agent building Wave
 
-- **Bundle Yjs with esbuild.** The kanban `scripts/build.mjs` already bundles one `client.js` and one `server.js` with esbuild, so Yjs is just an import in the source tree. The hand concatenation described below is unnecessary.
-- **Reconnect via the heartbeat, not dispose.** `[Symbol.dispose]` never fired on the real platform. Detect restarts with the heartbeat, and reload the frame when the stub is dead. On reload, re-open blips from server state: the Yjs merge makes that safe, but unsent local updates are lost.
-- **Platform quirks.** Read `gadget`/`RpcTarget` as module bindings, and use no `<form>` elements.
+Written 2026-09-16, after the kanban board and whiteboard were both built in this repo and deployed (`format.board` revision 5, `format.whiteboard` revision 4). **These notes override anything older below them.**
+
+### Read first, in this order
+
+1. The master plan's [gaps table](collaborative-blueprints.md#what-the-platform-does-not-give-us). Several rows were found only on a real instance, and each cost time: facet restarts, dead stubs after a code edit, prefix bindings, no forms, stub disposal, the RPC rate, `connect()`, V8 sizes, request ids and native undo.
+2. [whiteboard-blueprint.md](whiteboard-blueprint.md), "Delivery record". It covers the process that worked, what the spike measured, what the reviews found, and what is still known-broken.
+3. [kanban-delivery.md](kanban-delivery.md), for the phase template: spikes → contract → parallel streams → reviews → fixes → local platform e2e → pack → deploy.
+4. The whiteboard package's [`README.md`](../../packages/blueprint-whiteboard/README.md), [`harness/README.md`](../../packages/blueprint-whiteboard/harness/README.md) and [`e2e/README.md`](../../packages/blueprint-whiteboard/e2e/README.md).
+
+### Start from a copy of `packages/blueprint-whiteboard`, not the kanban package
+
+The whiteboard is the newer and more hardened copy of the same skeleton. Copy it to `packages/blueprint-wave`. Delete the whiteboard-specific `src/core/whiteboard.js`, `src/client/model`, `src/client/ui`, `src/shared/{geometry,render,simplify}.js` and their tests. Keep:
+
+| Part | Why it matters for Wave |
+| --- | --- |
+| `src/core/hub.js` | Sessions and backpressure, plus what the kanban hub lacks: stubs are disposed on replace, leave and drop; presence is coalesced (33 ms, latest state wins, arrays delivered); presence is capped at 512 KiB per delivery and 40 updates/s per client; idle subscribers are evicted when the board is full. Carets go through it unchanged; only `cleanPresence` changes. |
+| `src/client/sync/store.js` | Subscription generations, verbatim idempotent replay, heartbeat restart detection, frame reload on a dead stub. Also: one `updatePresence` in flight; request ids from a per-page secret; `onUnrecoverable` that tolerates a slow server; peers reconciled after a re-subscribe. Use it for the **structure** channel (blips, participants, reads). |
+| `src/shared/protocol.js` `storedBytes`, `cleanPresence`, `isRequestId`, `newSession` | `storedBytes` bounds the V8 serialisation, not JSON. Use it for every cap, including Yjs state. |
+| `src/core/repository.js` + `src/server/do-repository.js` | One transaction per commit, writes in batches of 128 |
+| `test/client/net.js` + `fuzz.test.js` | A real-core network simulator with latency, reordering (`FIFO=0`) and restarts fenced by epoch, plus a seeded convergence fuzz. Extend it with text updates: it is the fastest way to find sync bugs. |
+| `harness/` + `e2e/harness-helpers.mjs` | The multi-pane simulator mirroring the platform prefix, sandbox, CSP and stale stubs. Pass `HARNESS_PORT` to avoid clashing with a harness someone already has on 8790. |
+| `e2e/start-local-platform.sh`, `platform-helpers.mjs`, `platform-whiteboard-helpers.mjs` | The start script boots a local Cloudflare OS on WSL, and rebuilds the frontend if a deploy left it in Access mode. The helpers cover sign-up, upload, share, export and scanning the platform log for "not disposed properly" or runtime crashes. |
+| `scripts/` | esbuild bundling (unminified), deterministic packing, and the revision lock. Point `pack-gadget.mjs` at `formats/wave.*`. |
+
+### Changes to this plan that follow from the builds
+
+- **Yjs is just an import.** Both `server.js` and `client.js` are esbuild bundles built from `src/` (see `scripts/build.mjs`). Ignore the hand-concatenation, `lib/yjs.js` and `lib/client-app.js` steps below. They were for the Workshop-agent route, which neither build used. Add `yjs` as a devDependency; the kanban package already pins `yjs` 13.6.31.
+- **Spike binary RPC first.** Before writing the contract, on the local platform, check that a `Uint8Array` round-trips through both hops (browser → Workshop → facet, and facet → callback → browser) with its type intact, and that stored `Uint8Array`s come back as such. The whiteboard spike did not test binary. If it fails, base64 in strings works everywhere; size the caps for the 4/3 overhead.
+- **Budget the RPC rate.** A gadget handled about 45–50 inbound calls a second, one at a time, on the local platform. The plan's `pushTextUpdate` on a 50 ms timer is 20 calls/s per typist, before presence, so three typists would saturate it. Keep at most one `pushTextUpdate` in flight per client per blip. Merge queued updates with `Y.mergeUpdatesV2` while one is in flight. Send carets through the gated presence path. Measure with three browsers in the platform e2e, as whiteboard test T11 does.
+- **Size values by V8, not JSON.** A value is capped at 128 KiB, and V8 stores a number in about 12 bytes. The `updates:<id>` list is one value, so a burst of small updates can outgrow it before the 200-entry compaction trigger. Compact by `storedBytes`, not by count. Consider one key per update (`upd:<blipId>:<seq>`), listed by prefix, as the kanban board does for comments.
+- **Idempotency for text.** Yjs makes a duplicate text update harmless, but `pushTextUpdate` still appends to storage and history. Carry a `requestId` built from the per-page secret, or de-duplicate by update hash, so a replay after a restart does not double the log or the playback.
+- **Stub disposal.** Every `callback.dup()` must be disposed exactly once when its entry leaves the hub. An undisposed dup that is garbage-collected crashes local workerd and logs a warning in production. Disposal never reaches the client's `[Symbol.dispose]`, so don't rely on it for reconnects.
+- **Don't name an RPC method `connect`.** A Durable Object stub already has a built-in `connect()` for TCP sockets, so `env.Wave.connect()` never reaches the gadget. `fetch` is taken the same way.
+- **Unguessable request ids.** Client ids are broadcast, so request ids must not be derived from them. Replay records must match per `senderId`, or a peer can make another user's writes vanish as duplicates.
+- **Undo inside a `contenteditable`.** In the sandboxed iframe, Ctrl+Z outside a text field runs the browser's native undo, which moves focus into the last edited field. Inside the editor you want `Y.UndoManager`, not native undo. Intercept Ctrl/Cmd+Z, Shift+Z and Y in a capture-phase `keydown` in both cases. See `src/client/ui/canvas/index.js` in the whiteboard.
+- **Clipboard.** `navigator.clipboard` is blocked by permissions policy. Handle paste with the `paste` event's `clipboardData`, and sanitise it to the tiny rich-text model.
+- **Accessibility.** The UI review is part of the gate, and it failed both earlier builds on keyboard alternatives. Plan from the start:
+  - a keyboard path to every blip and reply action;
+  - roving tabindex in toolbars;
+  - focus restored after dialogs and deletes;
+  - visible `outline` focus rings;
+  - 44 px targets on phones;
+  - no `<form>`, `alert`, `confirm` or `localStorage`.
+- **Presence of carets.** Relative positions are binary. Give `cleanPresence` a size cap per caret, and drop malformed carets rather than rejecting the whole update.
+
+### Process lessons
+
+- **Contract first, one author.** Parallel streams against the contract worked twice. Give each stream a disjoint file list, and expose a small internal interface between canvas and shell (the whiteboard's `ui-contract.js`) so the UI can split into two streams.
+- **Reviews with repro scripts, then fix agents with disjoint ownership.** Each reviewer writes runnable repros in the scratchpad; each fix agent turns them into regression tests. The sync reviewer's widened fuzz (`SEEDS=1..20 STEPS=1500 MAXLAT=120 FIFO=0`) found bugs the default fuzz missed.
+- **API session limits stop background agents mid-task.** Their files stay on disk. Resume each agent with SendMessage rather than starting over, and check for leftover servers (`ps -ef | grep -E 'wrangler|workerd|serve.mjs'`), because a stopped agent does not stop its platform.
+- **Don't commit while agents edit.** The gitleaks pre-commit hook stashes unstaged files for a moment, which can clobber an agent's in-flight edit. An agent that runs `git stash` does the same.
+- **Check exit codes, not grep output.** `cmd | grep Tests && git commit` commits even when tests failed.
+- **Repack after any source change.** `pnpm check` fails when any `formats/*.gadget` is stale, including the board's after a kanban-only fix.
+- **Local platform.** Run one at a time and stop it when done. `pnpm check` and `pnpm deploy` leave `workshop-frontend/dist` built in Access mode; the whiteboard start script detects that and rebuilds.
+
+### Known open items you may hit
+
+- **Stub warnings around code edits.** An instance aborted by a code edit cannot dispose what it holds, so an "RPC stub/result was not disposed properly" warning can appear around a code-edit restart. It is harmless, but the platform e2e should record it rather than fail on it.
+- **Production tests are pending** for both earlier boards: the two-browser checks (they need a second Access identity) and agent chat. Wave test 9 is in the same position.
 
 Reference: the Docs gadget's block model and caret presence ([bundled-blueprint-sync-patterns.md](../research/bundled-blueprint-sync-patterns.md), "Docs in detail"). Docs stops at block-level conflicts, which is exactly the limit Wave has to get past.
 

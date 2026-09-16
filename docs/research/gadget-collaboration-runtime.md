@@ -221,6 +221,14 @@ Real gaps:
 > - `gadget` and `RpcTarget` are module-level bindings in the injected prefix, not globals.
 > - The iframe sandbox lacks `allow-forms`.
 >
+> **Update 2026-09-16, later (verified by the whiteboard build's spike on a local Cloudflare OS):**
+> - A `callback.dup()` stub that is garbage-collected without `[Symbol.dispose]()` logs "An RPC stub was not disposed properly" (the deployed kanban board did this) and crashes local workerd. Disposing a kept stub never reaches the client's `RpcTarget` `[Symbol.dispose]`.
+> - Calling `stub.onRpcBroken(fn)` does not throw, but `fn` never fires; it also sends `fn` over RPC as a stub.
+> - `setTimeout` and `setInterval` work in the facet, accurate to about 1 ms.
+> - A gadget handled about 45–50 inbound RPC calls a second, one at a time. Unawaited calls above that queue for seconds.
+> - A Durable Object stub has a built-in `connect()`, so a gadget method named `connect` is unreachable through `env.<Gadget>`.
+> - In the sandboxed iframe, `navigator.clipboard` rejects (permissions policy), `localStorage` throws, and Ctrl+Z outside a text field runs native undo, which refocuses the last edited field.
+>
 > The workarounds are in the [master plan's gaps table](../plans/collaborative-blueprints.md#what-the-platform-does-not-give-us).
 
 ## Not found

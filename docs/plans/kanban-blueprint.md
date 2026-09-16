@@ -2,7 +2,7 @@
 
 Part of the [master plan](collaborative-blueprints.md). Build this one first: it needs nothing the platform does not already give, and it proves the whole draft, share, promote pipeline.
 
-**Status: built and deployed (2026-09-16).** The source is [`packages/blueprint-kanban`](../../packages/blueprint-kanban/README.md). It ships as the bundled format `format.board` on cfos.surprisingly.ltd: revision 2 is deployed; revision 5, built during the [whiteboard](whiteboard-blueprint.md) work, awaits the next deploy. It disposes subscriber stubs (the production "RPC stub was not disposed properly" warning), makes request ids unguessable with replay records matched per sender, and rebases conflicts on the newest card state. How it was built, and every departure from the original plan, is recorded in the [delivery plan](kanban-delivery.md). This page now describes the board as built.
+**Status: built and deployed (2026-09-16).** The source is [`packages/blueprint-kanban`](../../packages/blueprint-kanban/README.md). It ships as the bundled format `format.board` on cfos.surprisingly.ltd, at revision 5 since the 2026-09-16 [whiteboard](whiteboard-blueprint.md) deploy (revision 2 was the first). Revisions 3 to 5 dispose subscriber stubs (the production "RPC stub was not disposed properly" warning), makes request ids unguessable with replay records matched per sender, and rebases conflicts on the newest card state. How it was built, and every departure from the original plan, is recorded in the [delivery plan](kanban-delivery.md). This page now describes the board as built.
 
 **The authoritative RPC and storage reference** is the gadget's own [`src/README.md`](../../packages/blueprint-kanban/src/README.md). Where this page and that file disagree, the file wins.
 
