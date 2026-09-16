@@ -216,6 +216,8 @@ describe("kanban harness", { concurrency: false }, () => {
         assert.deepEqual(titles, ["After restart", "After restart B", "Before restart", "During restart"]);
         const subs = await page.evaluate(() => window.harness.subscribers().length);
         assert.equal(subs, 2);
+        // A recoverable restart must not make the panes reload themselves.
+        assert.deepEqual(await page.evaluate(() => [window.harness.paneLoads("A"), window.harness.paneLoads("B")]), [1, 1]);
       });
     });
   }
@@ -323,7 +325,7 @@ describe("kanban harness", { concurrency: false }, () => {
       await h.addCard(A, "Backlog", "Discuss");
       await h.card(A, "Discuss").click();
       await A.locator(".panel .comment-input").fill("First!");
-      await A.locator(".panel .comment-form button[type=submit]").click();
+      await A.locator(".panel .comment-form .comment-send").click();
       await A.locator(".panel .comment-text", { hasText: "First!" }).waitFor();
       await h.card(B, "Discuss").click();
       await B.locator(".panel .comment-text", { hasText: "First!" }).waitFor({ timeout: 3000 });
@@ -554,6 +556,77 @@ describe("kanban harness", { concurrency: false }, () => {
       await first.locator(".undo-btn").click();
       await h.card(A, "Keep me").waitFor({ timeout: 3000 });
       await h.card(B, "Keep me").waitFor({ timeout: 3000 });
+    });
+  });
+
+  test("9a. no form submission needed: name dialog (button and Enter), add column, checklist add", async () => {
+    await withHarness({ names: ["Alice", "Bob"] }, async ({ page, frames: { A, B } }) => {
+      // The panes are sandboxed without allow-forms (like the platform), and openHarness already
+      // joined both through the Join board button. Now join through Enter.
+      await page.evaluate(() => window.harness.reloadPane("B"));
+      const input = B.locator(".name-dialog .name-input");
+      await input.waitFor({ timeout: 10_000 });
+      await input.fill("Bobby Enter");
+      await input.press("Enter");
+      await input.waitFor({ state: "detached", timeout: 3000 });
+      await h.waitLive(B);
+      await A.locator('.avatars .avatar[title="Bobby Enter"]').waitFor({ timeout: 5000 });
+
+      // Add column through its button.
+      await A.locator(".add-column-btn").click();
+      await A.locator('.add-column input[aria-label="New column name"]').fill("Review");
+      await A.locator(".add-column .add-column-submit").click();
+      await h.column(B, "Review").waitFor({ timeout: 3000 });
+
+      // Checklist item and label through their buttons; card through the composer's button.
+      const col = h.column(A, "Backlog");
+      await col.locator(".add-card-btn").click();
+      await col.locator(".composer-input").fill("Button card");
+      await col.locator(".composer-add").click();
+      await h.card(B, "Button card").waitFor({ timeout: 3000 });
+      await col.locator(".composer-input").press("Escape");
+      await h.card(A, "Button card").click();
+      await A.locator(".panel .check-add input").fill("Via button");
+      await A.locator(".panel .check-add button").click();
+      await A.locator(".panel .new-label input").fill("Needs QA");
+      await A.locator(".panel .new-label button", { hasText: "Create label" }).click();
+      await h.until(async () => {
+        const b = await serverBoard(page);
+        const c = Object.values(b.cards).find((x) => x.title === "Button card");
+        const label = Object.values(b.labels).find((l) => l.name === "Needs QA");
+        return c?.checklist.some((i) => i.text === "Via button") && label && c.labels.includes(label.id);
+      }, { message: "checklist item and label saved" }).catch(async (e) => {
+        const b = await serverBoard(page);
+        throw new Error(e.message + " " + JSON.stringify({ cards: Object.values(b.cards), labels: b.labels }));
+      });
+    });
+  });
+
+  test("9b. restart with stale stubs (platform behaviour): panes reload themselves and keep their names", async () => {
+    await withHarness({ names: ["Alice Adams", "Bob Brown"] }, async ({ page, frames: { A, B } }) => {
+      await h.addCard(A, "Backlog", "Before stale restart");
+      await h.card(B, "Before stale restart").waitFor();
+      const started = Date.now();
+      await page.evaluate(() => window.harness.restart({ staleStub: true }));
+      await h.until(() => page.evaluate(() => window.harness.paneLoads("A") >= 2 && window.harness.paneLoads("B") >= 2),
+        { timeout: 20_000, message: "both panes reloaded" });
+      await h.waitLive(A);
+      await h.waitLive(B);
+      const recoveredMs = Date.now() - started;
+      assert.ok(await page.evaluate(() => window.harness.staleRejections) > 0, "stale stubs were exercised");
+      // Names carried across the reload in window.name: no dialog, same avatars.
+      assert.equal(await A.locator(".name-dialog").count(), 0);
+      assert.equal(await B.locator(".name-dialog").count(), 0);
+      await A.locator('.avatars .avatar[title="Bob Brown"]').waitFor({ timeout: 5000 });
+      await B.locator('.avatars .avatar[title="Alice Adams"]').waitFor({ timeout: 5000 });
+      await h.card(B, "Before stale restart").waitFor();
+      await h.addCard(B, "To do", "After stale restart");
+      await h.card(A, "After stale restart").waitFor({ timeout: 5000 });
+      await h.addCard(A, "Done", "After stale restart A");
+      await h.card(B, "After stale restart A").waitFor({ timeout: 5000 });
+      assert.deepEqual(await page.evaluate(() => [window.harness.paneLoads("A"), window.harness.paneLoads("B")]), [2, 2],
+        "exactly one self-reload per pane");
+      console.log(`# 9b recovered in ${recoveredMs} ms`);
     });
   });
 });

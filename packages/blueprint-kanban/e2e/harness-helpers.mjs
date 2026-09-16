@@ -78,7 +78,7 @@ export async function joinAs(frame, name) {
   const input = frame.locator(".name-dialog .name-input");
   await input.waitFor({ timeout: 10_000 });
   await input.fill(name);
-  await frame.locator(".name-dialog button[type=submit]").click();
+  await frame.locator(".name-dialog .join-btn").click();
   await input.waitFor({ state: "detached" });
 }
 

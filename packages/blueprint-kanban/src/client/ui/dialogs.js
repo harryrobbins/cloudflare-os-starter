@@ -90,7 +90,16 @@ export function nameDialog({ name, color, title = "Who's here?", skippable = tru
     );
     input.addEventListener("input", refreshPreview);
     refreshPreview();
-    const form = h("form", { class: "modal name-dialog", "aria-label": title },
+    // No <form>: the platform iframe's sandbox lacks allow-forms, so native submission is blocked
+    // before a submit event fires. A button click and Enter in the input do the same thing.
+    const join = () => {
+      const value = input.value.trim();
+      close(value ? { name: value, color: chosen } : null);
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); join(); }
+    });
+    const form = h("div", { class: "modal name-dialog", "aria-label": title },
       h("h2", null, title),
       h("p", null, "Pick a name and colour so others can see who is on the board. Nothing is stored."),
       h("div", { style: { display: "flex", gap: "10px", alignItems: "center" } }, preview, input),
@@ -99,14 +108,9 @@ export function nameDialog({ name, color, title = "Who's here?", skippable = tru
         skippable
           ? h("button", { type: "button", class: "btn outline", "data-skip": true, onclick: () => close(null) }, "Continue as guest")
           : h("button", { type: "button", class: "btn outline", onclick: () => close(null) }, "Cancel"),
-        h("button", { type: "submit", class: "btn primary" }, "Join board"),
+        h("button", { type: "button", class: "btn primary join-btn", onclick: join }, "Join board"),
       ),
     );
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const value = input.value.trim();
-      close(value ? { name: value, color: chosen } : null);
-    });
     requestAnimationFrame(() => input.select());
     return form;
   }, null);

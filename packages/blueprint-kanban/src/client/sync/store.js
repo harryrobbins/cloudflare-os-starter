@@ -51,6 +51,14 @@ export const BACKOFF_MAX_MS = 10000;
 export const MAX_POSITION_RETRIES = 5;
 /** New client ids tried in a row when the server says ours is held by another session. */
 export const MAX_CLIENT_ID_RENAMES = 3;
+/**
+ * `onUnrecoverable` fires after this many subscribe attempts in a row have failed. On the
+ * platform a facet restart (code edit) leaves the iframe's `gadget` stub permanently broken, so
+ * retrying on it cannot succeed; only a reload of the frame gets a new stub.
+ */
+export const UNRECOVERABLE_FAILURES = 3;
+/** ... or after the connection has been non-live this long without any call succeeding. */
+export const UNRECOVERABLE_AFTER_MS = 8000;
 /** Request ids are `${clientId}:${seq}`, at most this long, of [A-Za-z0-9:_-]. */
 export const REQUEST_ID_MAX = 64;
 
@@ -126,6 +134,11 @@ export async function createStore(options) {
   let buffered = [];
   let resubscribing = false;
   let failures = 0;
+  /** subscribe attempts that failed since the last successful one */
+  let subscribeFailuresInRow = 0;
+  /** @type {any} */
+  let unrecoverableTimer = null;
+  let unrecoverableFired = false;
   /** @type {any} */
   let retryTimer = null;
   /** @type {any} */
@@ -366,6 +379,11 @@ export async function createStore(options) {
       const issued = /** @type {any} */ (snapshot)?.session;
       if (typeof issued === "string" && issued) session = issued;
       clientIdRenames = 0;
+      subscribeFailuresInRow = 0;
+      if (unrecoverableTimer) {
+        timers.clearTimeout(unrecoverableTimer);
+        unrecoverableTimer = null;
+      }
       generationReady = true;
       const events = buffered;
       buffered = [];
@@ -385,7 +403,37 @@ export async function createStore(options) {
         void attemptSubscribe();
         return;
       }
+      subscribeFailuresInRow++;
+      if (subscribeFailuresInRow >= UNRECOVERABLE_FAILURES) giveUp();
       scheduleSubscribe();
+    }
+  }
+
+  /**
+   * Arms the "non-live for too long" check. Only a successful subscribe makes the connection
+   * live again (and nothing else is sent while it is not), so still being non-live when the timer
+   * fires means no call has succeeded in that time.
+   */
+  function watchUnrecoverable() {
+    if (!options.onUnrecoverable || unrecoverableFired || unrecoverableTimer || disposed) return;
+    unrecoverableTimer = timers.setTimeout(() => {
+      unrecoverableTimer = null;
+      if (!disposed && state.connection !== "live") giveUp();
+    }, UNRECOVERABLE_AFTER_MS);
+  }
+
+  /** Tells the owner, once, that this connection is not coming back. Retries continue. */
+  function giveUp() {
+    if (unrecoverableFired || disposed || !options.onUnrecoverable) return;
+    unrecoverableFired = true;
+    if (unrecoverableTimer) {
+      timers.clearTimeout(unrecoverableTimer);
+      unrecoverableTimer = null;
+    }
+    try {
+      options.onUnrecoverable();
+    } catch (err) {
+      console.error("kanban onUnrecoverable failed", err);
     }
   }
 
@@ -405,6 +453,7 @@ export async function createStore(options) {
       gapTimer = null;
     }
     setConnection("reconnecting");
+    watchUnrecoverable();
     scheduleSubscribe();
   }
 
@@ -828,6 +877,7 @@ export async function createStore(options) {
   await new Promise((resolve) => {
     onFirstLive = () => resolve(undefined);
     resubscribing = true;
+    watchUnrecoverable();
     scheduleSubscribe();
   });
   failures = 0;
@@ -993,11 +1043,11 @@ export async function createStore(options) {
     dispose() {
       if (disposed) return;
       disposed = true;
-      for (const t of [retryTimer, gapTimer, presenceTimer, inflight?.timer]) {
+      for (const t of [retryTimer, gapTimer, presenceTimer, unrecoverableTimer, inflight?.timer]) {
         if (t) timers.clearTimeout(t);
       }
       if (heartbeat) timers.clearInterval(heartbeat);
-      heartbeat = retryTimer = gapTimer = presenceTimer = null;
+      heartbeat = retryTimer = gapTimer = presenceTimer = unrecoverableTimer = null;
       listeners.clear();
       Promise.resolve()
         .then(() => gadget.leavePresence(clientId, session ?? undefined))

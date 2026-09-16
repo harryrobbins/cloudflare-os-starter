@@ -112,6 +112,11 @@
  * @property {Viewer} viewer
  * @property {{setTimeout: typeof setTimeout, clearTimeout: typeof clearTimeout,
  *   setInterval: typeof setInterval, clearInterval: typeof clearInterval, now: () => number}} [timers]
+ * @property {() => void} [onUnrecoverable]  called at most once, when the connection looks dead
+ *   for good: UNRECOVERABLE_FAILURES (3) subscribe attempts in a row have failed, or the
+ *   connection has been non-live for UNRECOVERABLE_AFTER_MS (8 s) with no call succeeding. On the
+ *   platform the iframe's `gadget` stub stays broken after a facet restart (code edit), so the
+ *   only way back is reloading the frame; main.js does that. The store keeps retrying regardless.
  */
 
 export {};

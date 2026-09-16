@@ -467,6 +467,70 @@ describe("restart recovery", () => {
   });
 });
 
+describe("unrecoverable connection", () => {
+  it("calls onUnrecoverable once after 3 failed subscribes in a row, and keeps retrying", async () => {
+    const server = new FakeServer({ latency: 5 });
+    server.seedColumn("To do");
+    const onUnrecoverable = vi.fn();
+    const a = await startStore(server, "a", { onUnrecoverable });
+    for (let i = 0; i < 4; i++) server.failNext("subscribe");
+    server.disposeSubscriber(a.clientId);
+    await settle(100);
+    expect(onUnrecoverable).not.toHaveBeenCalled(); // one or two failures so far
+    await settle(1500); // attempts at 0, 500 and 1500 ms (backoff)
+    expect(onUnrecoverable).toHaveBeenCalledTimes(1);
+    await settle(10000);
+    expect(onUnrecoverable).toHaveBeenCalledTimes(1);
+    expect(a.store.getState().connection).toBe("live"); // retries went on and succeeded
+  });
+
+  it("does not call it for a restart that recovers within two attempts", async () => {
+    const server = new FakeServer({ latency: 5 });
+    const todo = server.seedColumn("To do");
+    server.seedCard(todo, { title: "Seed" });
+    const onUnrecoverable = vi.fn();
+    const a = await startStore(server, "a", { onUnrecoverable });
+    server.restart();
+    server.failNext("subscribe");
+    await settle(PRESENCE_HEARTBEAT_MS + 2000);
+    expect(a.store.getState().connection).toBe("live");
+    server.failNext("subscribe");
+    server.disposeSubscriber(a.clientId);
+    await settle(20000);
+    expect(a.store.getState().connection).toBe("live");
+    expect(onUnrecoverable).not.toHaveBeenCalled();
+  });
+
+  it("calls it when the connection stays non-live for 8 s with calls hanging", async () => {
+    const server = new FakeServer({ latency: 5 });
+    server.seedColumn("To do");
+    const real = server.connect();
+    let hang = false;
+    const gadget = { ...real, subscribe: (/** @type {any[]} */ ...args) => (hang ? new Promise(() => {}) : real.subscribe(...args)) };
+    const onUnrecoverable = vi.fn();
+    const a = await startStore(server, "a", { gadget, onUnrecoverable });
+    hang = true;
+    server.disposeSubscriber(a.clientId);
+    await settle(7900);
+    expect(a.store.getState().connection).toBe("reconnecting");
+    expect(onUnrecoverable).not.toHaveBeenCalled();
+    await settle(200);
+    expect(onUnrecoverable).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears the watch on dispose", async () => {
+    const server = new FakeServer({ latency: 5 });
+    server.seedColumn("To do");
+    const onUnrecoverable = vi.fn();
+    const a = await startStore(server, "a", { onUnrecoverable });
+    for (let i = 0; i < 10; i++) server.failNext("subscribe");
+    server.disposeSubscriber(a.clientId);
+    a.store.dispose();
+    await settle(20000);
+    expect(onUnrecoverable).not.toHaveBeenCalled();
+  });
+});
+
 describe("presence", () => {
   it("tracks join, update and leave, and throttles sends", async () => {
     const { server, cardId, clients: [a, b] } = await setup();

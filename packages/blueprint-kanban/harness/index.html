@@ -28,6 +28,7 @@
     <label>Latency <input id="latency" type="range" min="0" max="1000" step="10" value="0"> <span id="latency-value">0 ms</span></label>
     <button id="restart" title="New core + empty hub over the same repository; callbacks are not disposed">Restart server</button>
     <button id="restart-dispose" title="Same, and calls [Symbol.dispose] on every callback">Restart + dispose</button>
+    <button id="restart-stale" title="Same as Restart server, and every pane's existing gadget stub rejects forever (as on the platform); panes must reload themselves">Restart (stale stub)</button>
     <button id="add-pane">Add pane</button>
     <button id="add-export" title="A pane with gadgetExportFormatId = 'html'">Add export pane</button>
     <span id="log"></span>

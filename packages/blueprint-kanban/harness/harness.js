@@ -5,7 +5,9 @@
 // Transport model (per pane, in each direction): calls are delivered in order after `latency`
 // ms; arguments and results are structured-cloned (so nothing aliases across "the wire");
 // RpcTarget instances are passed by reference, wrapped in a stub with dup()/onRpcBroken().
-// A killed pane's stubs reject, like a broken RPC connection.
+// A killed pane's stubs reject, like a broken RPC connection. A "stale stub" restart makes every
+// `gadget` stub handed out so far reject forever, as the real platform does for the iframe after
+// a facet restart; only a reload of the pane (which asks for a new stub) recovers.
 
 import { InMemoryRepository } from "../src/core/repository.js";
 import { FakeGadget, RPC_METHODS } from "./fake-server.js";
@@ -26,6 +28,7 @@ const state = {
   nextPane: 0,
   log: /** @type {string[]} */ ([]),
   calls: 0,
+  staleRejections: 0,
 };
 
 function startServer() {
@@ -77,7 +80,15 @@ class Pane {
     this.brokenHandlers = new Set();
     /** @type {Window|null} */
     this.win = null;
+    /** @type {any} the pane realm's RpcTarget class */
+    this.RpcTarget = null;
+    /** incremented per connect(); stubs with an epoch below `staleBelow` reject forever */
+    this.stubEpoch = 0;
+    this.staleBelow = 0;
     this.frame = /** @type {HTMLIFrameElement} */ (document.createElement("iframe"));
+    // The platform's sandbox minus popups, plus allow-same-origin so this page can reach in.
+    // No allow-forms: native form submission is blocked, as on the platform.
+    this.frame.setAttribute("sandbox", "allow-scripts allow-same-origin");
     this.frame.title = `Pane ${id}`;
     this.frame.dataset.pane = id;
     const q = new URLSearchParams({ pane: id });
@@ -114,14 +125,17 @@ class Pane {
   /**
    * Builds the `gadget` global for a pane window.
    * @param {Window} win
+   * @param {any} RpcTarget  the pane realm's RpcTarget class
    */
-  connect(win) {
+  connect(win, RpcTarget) {
     this.win = win;
+    this.RpcTarget = RpcTarget;
     const pane = this;
+    const epoch = ++this.stubEpoch;
     return new Proxy({}, {
       get(_, name) {
         if (typeof name !== "string" || name === "then" || !RPC_METHODS.has(name)) return undefined;
-        return (/** @type {any[]} */ ...args) => pane.call(name, args);
+        return (/** @type {any[]} */ ...args) => pane.call(name, args, epoch);
       },
     });
   }
@@ -129,10 +143,15 @@ class Pane {
   /**
    * @param {string} method
    * @param {any[]} args
+   * @param {number} epoch  which connect() handed out the stub making this call
    */
-  call(method, args) {
+  call(method, args, epoch) {
     const win = /** @type {any} */ (this.win);
     if (this.dead) return new win.Promise(() => {}); // a dead tab's calls go nowhere
+    if (epoch < this.staleBelow) {
+      state.staleRejections++;
+      return win.Promise.reject(new win.Error("RPC session was shut down by disposing the main stub"));
+    }
     state.calls++;
     let wireArgs;
     try {
@@ -158,7 +177,7 @@ class Pane {
   /** @param {any} arg */
   marshal(arg) {
     const win = /** @type {any} */ (this.win);
-    if (arg && typeof arg === "object" && win?.RpcTarget && arg instanceof win.RpcTarget) {
+    if (arg && typeof arg === "object" && this.RpcTarget && arg instanceof this.RpcTarget) {
       return this.stubFor(arg);
     }
     return arg === undefined ? undefined : structuredClone(arg);
@@ -230,11 +249,21 @@ function reloadPane(id) {
 
 /**
  * Simulates a facet restart: a new core instance over the same repository and a new, empty hub.
- * @param {{dispose?: boolean}} [opts]
+ * With `staleStub`, every pane's current `gadget` stub also rejects forever (the real platform's
+ * behaviour after a code edit); a pane only recovers by reloading itself.
+ * @param {{dispose?: boolean, staleStub?: boolean}} [opts]
  */
-function restart({ dispose = false } = {}) {
+function restart({ dispose = false, staleStub = false } = {}) {
   state.downUntil = performance.now() + state.restartDowntimeMs;
   startServer();
+  if (staleStub) {
+    for (const pane of state.panes.values()) {
+      pane.staleBelow = pane.stubEpoch + 1;
+      pane.targets.clear();
+    }
+    log("server restarted (stale stubs: panes must reload)");
+    return;
+  }
   let disposed = 0;
   if (dispose) {
     for (const pane of state.panes.values()) {
@@ -270,13 +299,14 @@ slider.addEventListener("input", () => setLatency(Number(slider.value)));
 setLatency(state.latency);
 /** @type {HTMLElement} */ (document.getElementById("restart")).onclick = () => restart({ dispose: false });
 /** @type {HTMLElement} */ (document.getElementById("restart-dispose")).onclick = () => restart({ dispose: true });
+/** @type {HTMLElement} */ (document.getElementById("restart-stale")).onclick = () => restart({ staleStub: true });
 /** @type {HTMLElement} */ (document.getElementById("add-pane")).onclick = () => addPane();
 /** @type {HTMLElement} */ (document.getElementById("add-export")).onclick = () => addPane({ exportFormat: "html" });
 
 // ---- API for panes and Playwright
 /** @type {any} */ (window).harness = {
-  /** @param {string} paneId @param {Window} win */
-  connect(paneId, win) {
+  /** @param {string} paneId @param {Window} win @param {any} RpcTarget */
+  connect(paneId, win, RpcTarget) {
     const pane = state.panes.get(paneId);
     if (!pane) throw new Error("unknown pane " + paneId);
     // Fetched fresh per pane load, so a rebuild is picked up by "Reload".
@@ -284,7 +314,7 @@ setLatency(state.latency);
       if (!r.ok) throw new Error("dist/client.js missing: run node scripts/build.mjs");
       return r.text();
     });
-    return { gadget: pane.connect(win), exportFormat: pane.exportFormat, clientSource };
+    return { gadget: pane.connect(win, RpcTarget), exportFormat: pane.exportFormat, clientSource };
   },
   getBoard: () => state.server.getBoard(),
   getHistory: (/** @type {number} */ n) => state.server.getHistory(n),
@@ -303,6 +333,9 @@ setLatency(state.latency);
   get latency() { return state.latency; },
   get generation() { return state.generation; },
   get calls() { return state.calls; },
+  get staleRejections() { return state.staleRejections; },
+  /** @param {string} id how many times the pane has loaded (asked for a stub) */
+  paneLoads: (id) => state.panes.get(id)?.stubEpoch ?? 0,
   get log() { return [...state.log]; },
   repo: state.repo,
 };

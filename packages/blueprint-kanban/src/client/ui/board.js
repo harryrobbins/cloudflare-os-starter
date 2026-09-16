@@ -28,24 +28,26 @@ export function createBoardView(app) {
       type: "text", placeholder: "Column name", "aria-label": "New column name", maxlength: LIMITS.columnName,
     }));
     const close = () => { form.replaceWith(addColumnBtn); addColumnBtn.focus(); };
-    const form = h("form", null, input,
-      h("div", { class: "composer-actions" },
-        h("button", { type: "submit", class: "btn primary small" }, "Add column"),
-        h("button", { type: "button", class: "btn icon-only", "aria-label": "Cancel", onclick: close }, icon("close")),
-      ),
-    );
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
+    const add = () => {
       const name = input.value.trim();
-      if (!name) return;
+      if (!name) { input.focus(); return; }
       const id = store.createColumn(name);
       input.value = "";
       app.activeColumnId = id;
       renderAll(store.getState());
       input.focus();
       boardEl.scrollLeft = boardEl.scrollWidth;
+    };
+    const form = h("div", { class: "add-column-form" }, input,
+      h("div", { class: "composer-actions" },
+        h("button", { type: "button", class: "btn primary small add-column-submit", onclick: add }, "Add column"),
+        h("button", { type: "button", class: "btn icon-only", "aria-label": "Cancel", onclick: close }, icon("close")),
+      ),
+    );
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); add(); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
     });
-    input.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); } });
     addColumnBtn.replaceWith(form);
     input.focus();
   }

@@ -35,18 +35,19 @@ After changing client code, run `node scripts/build.mjs` again and press **Reloa
 - **Latency**: 0 to 1000 ms, applied in order per pane to calls (pane to server) and to events (server to pane).
 - **Restart server**: a new core instance over the same repository and a new, empty hub, without disposing callbacks. This simulates a facet restart. Clients notice through the heartbeat (`updatePresence` returns `known: false`) and resubscribe. Calls during the downtime fail.
 - **Restart + dispose**: the same, and also calls `[Symbol.dispose]()` on every callback a pane passed to `subscribe`.
+- **Restart (stale stub)**: the same restart, and every `gadget` stub handed out so far rejects every call forever. This is what the real platform does to the iframe after a code edit. The client gives up after 3 failed subscribes (or 8 s non-live), reloads its own frame and keeps the viewer's name in `window.name`; the reloaded pane gets a fresh stub.
 - **Kill pane** removes the iframe without `leavePresence`, like a crashed tab. The hub drops the pane on its next failed delivery, and other clients also expire it after 12 s without a heartbeat.
 - **Reload** reloads one pane (new client id).
 - **Add pane** and **Add export pane**.
 
 ## How a pane is wired
 
-`pane.html` carries the platform iframe's CSP (`default-src 'none'; script-src data: 'unsafe-inline'; ... connect-src 'none'`). It asks the parent for:
+`pane.html` carries the platform iframe's CSP (`default-src 'none'; script-src data: 'unsafe-inline'; ... form-action 'none'; connect-src 'none'`), and the iframe has `sandbox="allow-scripts allow-same-origin"`: no `allow-forms`, so native form submission is blocked as on the platform. Unlike the platform it is same-origin, because the parent has to reach in. The pane asks the parent for:
 
 - `gadget`, a proxy whose method calls go to the fake server with structured-cloned arguments and results;
-- `RpcTarget`, a trivial class. Instances passed as arguments go by reference, wrapped in a stub with `dup()` and `onRpcBroken()`. Delivery to a killed pane rejects.
+- `RpcTarget`, a trivial class from the pane's realm. Instances passed as arguments go by reference, wrapped in a stub with `dup()` and `onRpcBroken()`. Delivery to a killed pane rejects.
 
-It then runs `dist/client.js` as an inline module, as the platform does. Unlike the platform, the iframe is same-origin, because the parent has to reach into it.
+It then runs `dist/client.js` as an inline module with a prefix that declares `gadget`, `RpcTarget` (and the platform's other prefix names `RpcStub`, `newMessagePortRpcSession`, `blockedOpen`) as module-scope bindings, like the platform's `INJECTED_CODE_PREFIX`. They are not on `window`, so a client that reads `globalThis.gadget` fails here too, and a bundle that declares one of those names at top level fails with a SyntaxError. In export mode `gadgetExportFormatId` is a real global, as in the platform's export page.
 
 ## Scripting it
 
@@ -58,7 +59,8 @@ It then runs `dist/client.js` as an inline module, as the platform does. Unlike 
 | `rpc(method, ...args)` | Call any RPC method directly, as a third user such as the chat agent would |
 | `apply(request)` | Shorthand for `rpc("applyOperation", request)` |
 | `subscribers()` | The hub's current subscribers |
-| `restart({dispose})`, `setLatency(ms)` | Same as the controls |
+| `restart({dispose, staleStub})`, `setLatency(ms)` | Same as the controls |
+| `paneLoads(id)`, `staleRejections` | How many times a pane has loaded (asked for a stub); calls rejected on stale stubs |
 | `addPane({exportFormat})`, `killPane(id)`, `reloadPane(id)`, `panes()`, `paneInfo()` | Manage panes |
 
 Inside each pane, `window.kanbanStore` is the client's store.

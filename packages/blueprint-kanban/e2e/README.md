@@ -11,40 +11,22 @@ Object facets run in workerd, storage persists, `.gadget` upload works, exports 
 (esbuild spawn inside vp's tracked sandbox), so the gatekeeper app UI build aborts. It also starts
 a `vite build --watch` per gatekeeper once Wrangler is up (heat).
 
-Workaround without touching the submodule: a patched copy of `scripts/run-dev-server.ts` that uses
-`--no-cache` and can skip watchers. Generate it into any scratch dir (paths are absolute):
-
-```bash
-C=/var/web/cloudflare-os-starter/cloudflare-os
-OUT=/tmp/run-dev-server-spike.ts   # anywhere outside the submodule
-sed -e "s#from \"\./#from \"$C/scripts/#g" \
-    -e "s#^import { parse } from .*#import { createRequire } from \"node:module\"; const { parse } = createRequire(\"$C/scripts/run-dev-server.ts\")(\"jsonc-parser\");#" \
-    -e "s#^const SCRIPTS_DIR = .*#const SCRIPTS_DIR = \"$C/scripts\";#" \
-    -e 's#"--cache"#"--no-cache"#g' \
-    -e 's#^function spawnDevWatcher(label: string, command: string, args: string\[\]): void {#&  if (process.env.SPIKE_NO_WATCHERS) return;#' \
-    $C/scripts/run-dev-server.ts > $OUT
-```
-
-First time only (or after submodule source changes), build the frontend bundle + typed-storage.
-Either run `pnpm run-local` once and let it fail at the EBUSY step (it writes `.run-local-stamp`
-and `packages/workshop-frontend/dist` before failing), or run the two builds directly:
+Workaround without touching the submodule: `start-local-platform.sh` copies
+`scripts/run-dev-server.ts` into a temp dir at run time and patches the copy (imports point back at
+the submodule, `--cache` becomes `--no-cache`, the per-gatekeeper watchers are skipped). It refuses
+to start if a wrangler/workerd/run-dev-server process already exists, builds typed-storage and the
+Workshop frontend when their outputs are missing (or `CFOS_REBUILD=1`), starts the server with
+`setsid` in its own process group, waits for the URL and prints the PGID.
 
 ```bash
 eval "$(fnm env)" && fnm use v24.21.0 >/dev/null
-cd $C && pnpm install && pnpm --filter @gadgets/typed-storage build \
-  && pnpm --filter @gadgets/workshop-frontend exec vite build
+packages/blueprint-kanban/e2e/start-local-platform.sh    # -> "PGID <n>" ... "READY http://localhost:8787"
+packages/blueprint-kanban/e2e/stop-local-platform.sh     # kills the group, then checks ps is clean
 ```
 
-Start (own process group, no watchers, log to file):
-
-```bash
-ps -ef | grep -E 'vite|wrangler|workerd' | grep -v grep     # nothing should already be running
-cd $C && eval "$(fnm env)" && fnm use v24.21.0 >/dev/null && \
-  SPIKE_NO_WATCHERS=1 setsid node $OUT --serve-frontend-assets > /tmp/run-local.log 2>&1 < /dev/null & echo $!
-# wait for: until curl -sf -o /dev/null http://localhost:8787/; do sleep 2; done
-```
-
-Stop: `kill -- -<pid printed above>` (it is the process-group id), then confirm with the `ps` line.
+- State: patched launcher + PGID file in `${TMPDIR:-/tmp}/cfos-local-platform/`; log in
+  `${TMPDIR:-/tmp}/cfos-local-platform.log` (`CFOS_LOG` overrides). Manual stop: `kill -- -<PGID>`.
+- The script fails loudly if an upstream change stops one of the sed patches from applying.
 
 - URL: **http://localhost:8787** (frontend served as static assets by the backend Worker).
 - Timings: install+typed-storage+frontend `vite build` ~20 s; server (28 configurator/app UI builds
@@ -86,3 +68,38 @@ Whole smoke run takes ~19 s against a warm server (verified: exit 0, PASS).
 | Export | button `Export Gadget` (download icon in the pane header) opens `role=menu`; formats are `role=menuitem` with the format `label`; loading skeleton is `role=status name="Loading export formats"`. Download: delete `window.showSaveFilePicker` first so the blob `<a download>` path fires a Playwright `download` event. |
 | Share | header button `Share workspace` -> `Create a share link` -> role dropdown `Access granted by link` (the `use` role is labelled **Gadget only** and is the default; `build` = "Workspace") -> `Create link` -> "Link ready" card, URL in `p.font-mono`: `http://localhost:8787/workspace/<id>#share=<key>`. |
 | Share redeem | Signed-in second user (separate browser context) opens the URL; the `#share` fragment is consumed and they land on the gadget-only view (has `Export Gadget`, no `Share workspace`). The plain `/workspace/<id>` URL keeps working for them afterwards. |
+
+## 4. Board suite (`platform.test.mjs`)
+
+Two users (`alice` owner, `bob` via a `use`-role share link), each in their own browser context at
+1920x1000, against the running platform. It uploads the shipped `formats/board.gadget` as is (no
+shim):
+
+```bash
+eval "$(fnm env)" && fnm use v24.21.0 >/dev/null
+packages/blueprint-kanban/e2e/start-local-platform.sh
+pnpm --filter blueprint-kanban pack:gadget                           # repo root -> formats/board.gadget (bumps revision)
+cd packages/blueprint-kanban
+PLATFORM_SHOTS=/tmp/kanban-platform-shots \
+  node --test --test-concurrency=1 e2e/platform.test.mjs              # ~55 s against a warm server
+cd ../.. && packages/blueprint-kanban/e2e/stop-local-platform.sh
+```
+
+- `CFOS_URL` (default `http://localhost:8787`), `PLATFORM_SHOTS` (screenshots, `timings.json`,
+  exported CSV/HTML).
+- Platform facts the client depends on (all reproduced by the harness, see `harness/README.md`):
+  `gadget` / `RpcTarget` are module-scope bindings in a prefix prepended to `client.js`, not
+  `globalThis` properties; the iframe sandbox has no `allow-forms`, so the UI never uses form
+  submission; after a code edit restarts the facet, the iframe's `gadget` stub rejects every call
+  forever, so the board reloads its own frame (keeping the viewer's name in `window.name`).
+- Tests: `0a` shipped client boots and joins; `0b` name dialog joins via button (alice) and Enter
+  (bob), no blocked form submissions; `T1` create -> other browser; `T5` use-role chrome; `T2`
+  concurrent drags; `T3` title conflict banner + "Use theirs"; `T8` CSV/HTML export; `T6` code edit
+  in Monaco (a single `keyboard.insertText` into `server.js`, which bumps the code version and
+  aborts the facet): bob's frame must reload itself, stay named (no dialog) and keep syncing both
+  ways; reload; bulk 30 cards; `T4` presence ring/avatar after a renderer crash and after
+  `context.close()`. `T7` (agent chat) needs a model and is not run locally.
+- Verified 2026-09-16 (revision 2): 11/11 pass in ~54 s. T6: bob `reconnecting` at ~2.6 s after the
+  edit, "Reconnecting…" overlay at ~4.0 s (3 failed subscribes), live again after the self-reload
+  at ~4.5 s. Alice (owner) gets a rebuilt iframe when she switches back from the Code tab, so she
+  sees the name dialog again (platform behaviour, noted in `timings.json`).

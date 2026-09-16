@@ -120,13 +120,12 @@ export function createColumnView(app, columnId) {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
       else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
     });
-    const form = h("form", { class: "composer" }, input,
+    const form = h("div", { class: "composer" }, input,
       h("div", { class: "composer-actions" },
-        h("button", { type: "submit", class: "btn primary small" }, "Add card"),
+        h("button", { type: "button", class: "btn primary small composer-add", onclick: submit }, "Add card"),
         h("button", { type: "button", class: "btn icon-only", "aria-label": "Cancel", onclick: close }, icon("close")),
       ),
     );
-    form.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
     addBtn.replaceWith(form);
     input.focus();
     requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });

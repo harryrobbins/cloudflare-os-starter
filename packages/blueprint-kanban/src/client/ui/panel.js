@@ -164,17 +164,20 @@ export function createPanel(app) {
           for (const s of newLabelSwatches.children) s.setAttribute("aria-checked", String(s === e.currentTarget));
         },
       })));
-    const newLabelForm = h("form", { class: "new-label" },
-      newLabelName, newLabelSwatches, h("button", { type: "submit", class: "btn small outline" }, icon("plus", 14), "Create label"));
-    newLabelForm.addEventListener("submit", (e) => {
-      e.preventDefault();
+    const createLabel = () => {
       const name = newLabelName.value.trim();
       if (!name || !card()) return;
       const labelId = store.upsertLabel(null, name, newLabelColor);
       const c = card();
       if (c && labelId && !c.labels.includes(labelId)) store.updateCard(cardId, { labels: [...c.labels, labelId] });
       newLabelName.value = "";
+    };
+    newLabelName.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); createLabel(); }
     });
+    const newLabelForm = h("div", { class: "new-label" },
+      newLabelName, newLabelSwatches,
+      h("button", { type: "button", class: "btn small outline", onclick: createLabel }, icon("plus", 14), "Create label"));
     let labelsKey = "";
 
     // ---- description
@@ -193,16 +196,19 @@ export function createPanel(app) {
     const addItemInput = /** @type {HTMLInputElement} */ (h("input", {
       type: "text", placeholder: "Add an item", maxlength: LIMITS.checklistText, "aria-label": "New checklist item",
     }));
-    const addItemForm = h("form", { class: "check-add" }, addItemInput, h("button", { type: "submit", class: "btn small outline" }, "Add"));
-    addItemForm.addEventListener("submit", (e) => {
-      e.preventDefault();
+    const addItem = () => {
       const text = addItemInput.value.trim();
       const c = card();
       if (!text || !c) return;
       store.updateCard(cardId, { checklist: [...c.checklist, { id: newId("item"), text, done: false }] });
       addItemInput.value = "";
       addItemInput.focus();
+    };
+    addItemInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); addItem(); }
     });
+    const addItemForm = h("div", { class: "check-add" }, addItemInput,
+      h("button", { type: "button", class: "btn small outline", onclick: addItem }, "Add"));
 
     /**
      * @param {(items: Card["checklist"]) => Card["checklist"]} fn
@@ -311,8 +317,8 @@ export function createPanel(app) {
     const commentInput = /** @type {HTMLTextAreaElement} */ (h("textarea", {
       placeholder: "Write a comment…", maxlength: LIMITS.commentText, "aria-label": "New comment", class: "comment-input",
     }));
-    const commentBtn = /** @type {HTMLButtonElement} */ (h("button", { type: "submit", class: "btn primary small" }, "Comment"));
-    const commentForm = h("form", { class: "comment-form" }, commentInput, h("div", null, commentBtn));
+    const commentBtn = /** @type {HTMLButtonElement} */ (h("button", { type: "button", class: "btn primary small comment-send" }, "Comment"));
+    const commentForm = h("div", { class: "comment-form" }, commentInput, h("div", null, commentBtn));
     const sendComment = async () => {
       const text = commentInput.value.trim();
       if (!text) return;
@@ -327,7 +333,7 @@ export function createPanel(app) {
         commentBtn.disabled = false;
       }
     };
-    commentForm.addEventListener("submit", (e) => { e.preventDefault(); sendComment(); });
+    commentBtn.addEventListener("click", () => { sendComment(); });
     commentInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendComment(); }
     });

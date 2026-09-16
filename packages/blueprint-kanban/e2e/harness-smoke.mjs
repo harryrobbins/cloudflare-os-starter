@@ -53,7 +53,7 @@ try {
     await page.screenshot({ path: `${shots}/smoke-${scheme}-board.png` });
     await h.card(A, "Order hardware for new starters").click();
     await A.locator(".panel .comment-input").fill("Monitors are back-ordered until next week.");
-    await A.locator(".panel .comment-form button[type=submit]").click();
+    await A.locator(".panel .comment-form .comment-send").click();
     await page.waitForTimeout(500);
     await page.screenshot({ path: `${shots}/smoke-${scheme}-panel.png` });
     await A.locator(".panel").press("Escape");

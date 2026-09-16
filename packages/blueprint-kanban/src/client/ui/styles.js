@@ -206,7 +206,7 @@ input:focus, textarea:focus, select:focus { border-color: var(--accent); box-sha
 
 .add-column { flex: none; width: var(--column-width); }
 .add-column > .btn { width: 100%; background: rgba(127, 127, 127, .12); padding: 10px 12px; border-radius: var(--radius); justify-content: flex-start; }
-.add-column form { background: var(--column); padding: 8px; border-radius: var(--radius); display: flex; flex-direction: column; gap: 6px; }
+.add-column .add-column-form { background: var(--column); padding: 8px; border-radius: var(--radius); display: flex; flex-direction: column; gap: 6px; }
 
 /* Card */
 .card {
