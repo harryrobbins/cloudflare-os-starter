@@ -2,8 +2,8 @@
 // The card side panel: every field of one card, saved as you type, plus the conflict banner,
 // checklist and comment thread.
 
-import { LIMITS, newId } from "../../shared/protocol.js";
-import { h, icon, avatar, debounce, formatTime, trapTab, PALETTE, textOn } from "./dom.js";
+import { LIMITS, newId, cardsInColumn } from "../../shared/protocol.js";
+import { h, icon, avatar, debounce, formatTime, trapTab, PALETTE, textOn, colorName, inertOthers } from "./dom.js";
 import { confirmDialog, showToast } from "./dialogs.js";
 import { colorForName } from "./card.js";
 
@@ -69,7 +69,7 @@ export function createPanel(app) {
 
     // ---- head
     const where = h("div", { class: "where" });
-    const viewers = h("div", { class: "viewers", "aria-label": "Also viewing" });
+    const viewers = h("div", { class: "viewers", role: "group", "aria-label": "Also viewing" });
     const closeBtn = h("button", {
       type: "button", class: "btn icon-only panel-close", "aria-label": "Close card", title: "Close (Esc)",
       onclick: () => close(),
@@ -83,8 +83,9 @@ export function createPanel(app) {
     let bannerKey = "";
 
     // ---- title
+    const titleId = "panel-title-" + cardId;
     const titleInput = /** @type {HTMLTextAreaElement} */ (h("textarea", {
-      class: "panel-title", rows: 1, maxlength: LIMITS.cardTitle, "aria-label": "Card title",
+      id: titleId, class: "panel-title", rows: 1, maxlength: LIMITS.cardTitle, "aria-label": "Card title",
     }));
     const autoGrow = () => { titleInput.style.height = "auto"; titleInput.style.height = titleInput.scrollHeight + "px"; };
     titleInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); titleInput.blur(); } });
@@ -115,6 +116,39 @@ export function createPanel(app) {
       },
     }, "Assign me");
 
+    // ---- column / position (keyboard alternative to dragging)
+    const moveSelect = /** @type {HTMLSelectElement} */ (h("select", { class: "move-select", "aria-label": "Move to column" }));
+    moveSelect.addEventListener("change", () => {
+      const c = card();
+      const to = moveSelect.value;
+      const state = store.getState();
+      if (!c || to === c.columnId || !state.board.columns[to]) return;
+      store.moveCard(cardId, to, null);
+      app.announce(`Moved "${c.title}" to ${state.board.columns[to].name}`);
+    });
+    /** @param {"top"|"bottom"} where */
+    const moveWithin = (where) => {
+      const c = card();
+      if (!c) return;
+      const siblings = cardsInColumn(store.getState().board.cards, c.columnId);
+      const index = siblings.findIndex((x) => x.id === cardId);
+      if (where === "top") {
+        if (index <= 0) { app.announce("Already at the top"); return; }
+        store.moveCard(cardId, c.columnId, siblings[0].id);
+        app.announce(`Moved "${c.title}" to the top`);
+      } else {
+        if (index === siblings.length - 1) { app.announce("Already at the bottom"); return; }
+        store.moveCard(cardId, c.columnId, null);
+        app.announce(`Moved "${c.title}" to the bottom`);
+      }
+    };
+    const topBtn = h("button", {
+      type: "button", class: "btn small outline move-top", "aria-label": "Move to top of column", onclick: () => moveWithin("top"),
+    }, "Top");
+    const bottomBtn = h("button", {
+      type: "button", class: "btn small outline move-bottom", "aria-label": "Move to bottom of column", onclick: () => moveWithin("bottom"),
+    }, "Bottom");
+
     // ---- labels
     const labelToggles = h("div", { class: "label-toggles", role: "group", "aria-label": "Labels" });
     let newLabelColor = PALETTE[5];
@@ -124,7 +158,7 @@ export function createPanel(app) {
     const newLabelSwatches = h("div", { class: "swatches", role: "radiogroup", "aria-label": "Label colour" },
       PALETTE.map((c) => h("button", {
         type: "button", class: "swatch", role: "radio", "aria-checked": String(c === newLabelColor),
-        "aria-label": "Colour " + c, style: { background: c },
+        "aria-label": colorName(c), style: { background: c },
         onclick: (/** @type {Event} */ e) => {
           newLabelColor = c;
           for (const s of newLabelSwatches.children) s.setAttribute("aria-checked", String(s === e.currentTarget));
@@ -154,7 +188,7 @@ export function createPanel(app) {
     const progress = h("div", { class: "progress" }, progressBar);
     const progressText = h("span", { class: "muted checklist-count" });
     const checklistEl = h("div", { class: "checklist" });
-    /** @type {Map<string, {row: HTMLElement, box: HTMLInputElement, text: HTMLInputElement, save: ReturnType<typeof debounce>}>} */
+    /** @type {Map<string, {row: HTMLElement, box: HTMLInputElement, text: HTMLInputElement, del: HTMLElement, save: ReturnType<typeof debounce>}>} */
     const itemRows = new Map();
     const addItemInput = /** @type {HTMLInputElement} */ (h("input", {
       type: "text", placeholder: "Add an item", maxlength: LIMITS.checklistText, "aria-label": "New checklist item",
@@ -181,8 +215,8 @@ export function createPanel(app) {
 
     /** @param {Card["checklist"][number]} item */
     function createItemRow(item) {
-      const box = /** @type {HTMLInputElement} */ (h("input", { type: "checkbox", "aria-label": "Done" }));
-      const text = /** @type {HTMLInputElement} */ (h("input", { type: "text", class: "check-text", maxlength: LIMITS.checklistText, "aria-label": "Checklist item" }));
+      const box = /** @type {HTMLInputElement} */ (h("input", { type: "checkbox", "aria-label": "Done: " + item.text }));
+      const text = /** @type {HTMLInputElement} */ (h("input", { type: "text", class: "check-text", maxlength: LIMITS.checklistText, "aria-label": "Checklist item: " + item.text }));
       const save = debounce(() => {
         const value = text.value.trim();
         if (!value) return;
@@ -201,11 +235,11 @@ export function createPanel(app) {
       });
       text.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); text.blur(); } });
       const del = h("button", {
-        type: "button", class: "btn icon-only small", "aria-label": "Delete item", title: "Delete item",
+        type: "button", class: "btn icon-only small", "aria-label": "Delete item: " + item.text, title: "Delete item",
         onclick: () => { save.cancel(); editChecklist((items) => items.filter((i) => i.id !== item.id)); },
       }, icon("trash", 14));
       const row = h("div", { class: "check-item", dataset: { itemId: item.id } }, box, text, del);
-      return { row, box, text, save };
+      return { row, box, text, del, save };
     }
 
     /** @param {Card} c */
@@ -217,6 +251,11 @@ export function createPanel(app) {
         let entry = itemRows.get(item.id);
         if (!entry) { entry = createItemRow(item); itemRows.set(item.id, entry); }
         if (entry.box.checked !== item.done) entry.box.checked = item.done;
+        if (entry.box.getAttribute("aria-label") !== "Done: " + item.text) {
+          entry.box.setAttribute("aria-label", "Done: " + item.text);
+          entry.text.setAttribute("aria-label", "Checklist item: " + item.text);
+          entry.del.setAttribute("aria-label", "Delete item: " + item.text);
+        }
         entry.row.classList.toggle("done", item.done);
         if (document.activeElement !== entry.text && !entry.save.pending() && entry.text.value !== item.text) entry.text.value = item.text;
         const expectedNext = prev ? prev.nextElementSibling : checklistEl.firstElementChild;
@@ -302,12 +341,20 @@ export function createPanel(app) {
         if (!c) return;
         const ok = await confirmDialog({
           title: "Delete this card?", message: `"${c.title}" and its comments will be deleted for everyone.`,
-          confirmLabel: "Delete card", danger: true,
+          confirmLabel: "Delete card", danger: true, returnFocus: deleteBtn,
         });
         if (!ok) return;
         for (const d of debouncers) d.cancel();
+        const columnId = card()?.columnId ?? c.columnId;
+        const siblings = cardsInColumn(store.getState().board.cards, columnId);
+        const index = siblings.findIndex((x) => x.id === cardId);
+        const nextId = (siblings[index + 1] ?? siblings[index - 1])?.id ?? null;
         store.deleteCard(cardId);
         close({ restoreFocus: false });
+        const next = nextId ? app.cardEls.get(nextId) : null;
+        if (next && next.isConnected) next.focus();
+        else /** @type {HTMLElement|null|undefined} */ (app.boardView?.views.get(columnId)?.el.querySelector(".column-foot button, .column-foot textarea"))?.focus();
+        app.announce(`Deleted "${c.title}"`);
       },
     }, icon("trash", 14), "Delete card");
 
@@ -320,6 +367,8 @@ export function createPanel(app) {
         h("div", null, h("div", { class: "field-label" }, icon("calendar", 13), "Due date"),
           h("div", { style: { display: "flex", gap: "6px", alignItems: "center" } }, dueInput, clearDue)),
       ),
+      h("div", null, h("div", { class: "field-label" }, icon("list", 13), "Column"),
+        h("div", { class: "move-row" }, moveSelect, topBtn, bottomBtn)),
       h("div", null, h("div", { class: "field-label" }, icon("tag", 13), "Labels"), labelToggles, newLabelForm),
       h("div", null, h("div", { class: "field-label" }, icon("text", 13), "Description"), descInput),
       h("div", null,
@@ -330,7 +379,7 @@ export function createPanel(app) {
     );
 
     const panel = h("aside", {
-      class: "panel", role: "dialog", "aria-modal": "true", "aria-label": "Card details", tabindex: "-1",
+      class: "panel", role: "dialog", "aria-modal": "true", "aria-labelledby": titleId, tabindex: "-1",
       dataset: { panelCardId: cardId },
     }, head, body);
     const scrim = h("div", { class: "scrim" });
@@ -345,7 +394,8 @@ export function createPanel(app) {
       trapTab(panel, e);
     });
     document.body.append(scrim, panel);
-    cleanups.push(() => { scrim.remove(); panel.remove(); });
+    const restoreInert = inertOthers([scrim, panel]);
+    cleanups.push(() => { scrim.remove(); panel.remove(); restoreInert(); });
 
     /**
      * Binds a text field: debounced save while typing, save on blur, and remote updates only
@@ -403,7 +453,8 @@ export function createPanel(app) {
           if (conflict) store.resolveConflict(cardId, "discard");
           close({ restoreFocus: false });
         };
-        banner.replaceChildren(h("div", { class: "banner conflict-banner", role: "alert" },
+        // Announced through the app's live region (with who did it), so no role="alert" here.
+        banner.replaceChildren(h("div", { class: "banner conflict-banner" },
           h("strong", null, "This card was deleted"),
           h("span", null, "Someone else deleted this card. Your unsaved changes can't be kept."),
           h("div", { class: "actions" }, h("button", { type: "button", class: "btn primary small", onclick: resolveDeleted }, "Close")),
@@ -415,7 +466,7 @@ export function createPanel(app) {
       for (const field of Object.keys(conflict.mine)) {
         rows.push(h("dt", null, fieldName(field)), h("dd", null, describe(field, /** @type {any} */ (theirs)[field], state)));
       }
-      banner.replaceChildren(h("div", { class: "banner conflict-banner", role: "alert" },
+      banner.replaceChildren(h("div", { class: "banner conflict-banner" },
         h("strong", null, "Someone else changed this card"),
         h("span", null, "Their version:"),
         h("dl", null, rows),
@@ -451,12 +502,19 @@ export function createPanel(app) {
       renderBanner(state);
       const c = state.board.cards[cardId];
       const disabled = !c;
-      for (const el of panel.querySelectorAll(".panel-body input, .panel-body textarea, .panel-body button:not(.banner button)")) {
+      for (const el of panel.querySelectorAll(".panel-body input, .panel-body textarea, .panel-body select, .panel-body button:not(.banner button)")) {
         /** @type {any} */ (el).disabled = disabled;
       }
       if (!c) return;
       const column = state.board.columns[c.columnId];
       where.replaceChildren("in ", h("strong", null, column?.name ?? "?"));
+      const columnsKey = state.board.columnOrder.map((id) => id + ":" + (state.board.columns[id]?.name ?? "")).join("|");
+      if (moveSelect.dataset.key !== columnsKey) {
+        moveSelect.dataset.key = columnsKey;
+        moveSelect.replaceChildren(...state.board.columnOrder.filter((id) => state.board.columns[id])
+          .map((id) => h("option", { value: id }, state.board.columns[id].name)));
+      }
+      if (moveSelect.value !== c.columnId) moveSelect.value = c.columnId;
       syncTitle(c);
       autoGrow();
       syncAssignee(c);
@@ -480,7 +538,7 @@ export function createPanel(app) {
         const focusedLabel = document.activeElement instanceof HTMLElement ? document.activeElement.dataset.labelId : undefined;
         labelToggles.replaceChildren(...labels.map((l) => h("button", {
           type: "button", class: "chip label-toggle", "aria-pressed": String(c.labels.includes(l.id)),
-          style: { background: l.color, color: textOn(l.color) }, dataset: { labelId: l.id },
+          style: { "--chip": l.color, "--chip-text": textOn(l.color) }, dataset: { labelId: l.id },
           onclick: () => {
             const cur = card();
             if (!cur) return;

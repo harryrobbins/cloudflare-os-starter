@@ -24,7 +24,7 @@ export function createHeader(app) {
 
   const conn = h("span", { class: "conn", role: "status", "aria-live": "polite" },
     h("span", { class: "conn-dot" }), h("span", { class: "conn-text" }, "Connecting"));
-  const avatars = h("div", { class: "avatars", "aria-label": "Nobody else is here" });
+  const avatars = h("div", { class: "avatars", role: "group", "aria-label": "Nobody else is here" });
   app.avatarsEl = avatars;
 
   const meBtn = h("button", { type: "button", class: "btn me-btn", title: "Change your name or colour", "aria-label": "Change your name or colour" });
@@ -35,7 +35,7 @@ export function createHeader(app) {
   });
 
   const header = h("header", { class: "header" },
-    h("div", { class: "header-title" }, title.el),
+    h("div", { class: "header-title" }, h("h1", null, title.el)),
     h("div", { class: "header-right" }, conn, avatars, meBtn),
   );
 

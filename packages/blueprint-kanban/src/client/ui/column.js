@@ -4,7 +4,7 @@
 
 import { cardsInColumn, LIMITS } from "../../shared/protocol.js";
 import { h, icon, inlineEditable } from "./dom.js";
-import { createCardEl, updateCardEl } from "./card.js";
+import { createCardEl, updateCardEl, cardBaseLabel } from "./card.js";
 import { confirmDialog, openMenu } from "./dialogs.js";
 import { matches, isActive } from "./filters.js";
 
@@ -34,11 +34,27 @@ export function createColumnView(app, columnId) {
   const menuBtn = h("button", {
     type: "button", class: "btn icon-only col-menu-btn", "aria-label": "Column actions", "aria-haspopup": "menu", title: "Column actions",
   }, icon("more"));
+  /** @param {number} delta */
+  function moveBy(delta) {
+    const order = store.getState().board.columnOrder;
+    const from = order.indexOf(columnId);
+    const to = from + delta;
+    if (from === -1 || to < 0 || to >= order.length) return;
+    store.moveColumn(columnId, to);
+    // Moving the column element drops focus from inside it.
+    if (document.activeElement !== menuBtn && menuBtn.isConnected) menuBtn.focus({ preventScroll: false });
+    app.announce(`Moved column "${column()?.name ?? ""}" to position ${to + 1} of ${order.length}`);
+  }
+
   menuBtn.addEventListener("click", () => {
+    const order = store.getState().board.columnOrder;
+    const index = order.indexOf(columnId);
     openMenu(menuBtn, [
       { label: "Add card", onSelect: () => openComposer() },
       { label: column()?.collapsed ? "Expand column" : "Collapse column", onSelect: () => store.setColumnCollapsed(columnId, !column()?.collapsed) },
       { label: "Rename column", onSelect: () => name.start() },
+      index > 0 ? { label: "Move left", onSelect: () => moveBy(-1) } : null,
+      index !== -1 && index < order.length - 1 ? { label: "Move right", onSelect: () => moveBy(1) } : null,
       {
         label: "Delete column…", danger: true, onSelect: async () => {
           const col = column();
@@ -47,17 +63,30 @@ export function createColumnView(app, columnId) {
           const ok = await confirmDialog({
             title: `Delete "${col.name}"?`,
             message: n ? `This deletes the column and its ${n} card${n === 1 ? "" : "s"} for everyone.` : "This deletes the column for everyone.",
-            confirmLabel: "Delete column", danger: true,
+            confirmLabel: "Delete column", danger: true, returnFocus: menuBtn,
           });
-          if (ok) store.deleteColumn(columnId);
+          if (!ok) return;
+          const before = store.getState().board.columnOrder;
+          const at = before.indexOf(columnId);
+          const neighbour = before[at + 1] ?? before[at - 1] ?? null;
+          store.deleteColumn(columnId);
+          const next = neighbour ? app.boardView?.views.get(neighbour) : null;
+          if (next) {
+            app.boardView?.setActive(neighbour);
+            /** @type {HTMLElement|null} */ (next.el.querySelector(".col-menu-btn"))?.focus();
+          } else {
+            /** @type {HTMLElement|null} */ (document.querySelector(".add-column-btn"))?.focus();
+          }
+          app.announce(`Deleted column "${col.name}"`);
         },
       },
-    ]);
+    ].filter((x) => x !== null));
   });
 
   const head = h("div", { class: "column-head", dataset: { columnHead: columnId } },
-    name.el, count, collapseBtn, menuBtn);
-  const list = h("div", { class: "cards", role: "list", dataset: { columnList: columnId } });
+    h("h2", { class: "column-heading" }, name.el), count, collapseBtn, menuBtn);
+  const list = h("div", { class: "cards", dataset: { columnList: columnId } });
+  const noMatch = h("p", { class: "no-match muted", hidden: true }, "No matching cards");
 
   // Composer
   const addBtn = h("button", { type: "button", class: "btn add-card-btn", onclick: () => openComposer() },
@@ -103,7 +132,7 @@ export function createColumnView(app, columnId) {
     requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
   }
 
-  const el = h("section", { class: "column", dataset: { columnId }, "aria-label": "Column" }, head, list, foot);
+  const el = h("section", { class: "column", dataset: { columnId }, "aria-label": "Column" }, head, list, noMatch, foot);
 
   /** @param {ClientState} state */
   function render(state) {
@@ -132,6 +161,8 @@ export function createColumnView(app, columnId) {
       const ok = !filtering || matches(app.filters, card);
       if (ok) shown++;
       cardEl.classList.toggle("dim", !ok);
+      const label = cardBaseLabel(cardEl) + (ok ? "" : ", doesn't match filter");
+      if (cardEl.getAttribute("aria-label") !== label) cardEl.setAttribute("aria-label", label);
       desired.push(cardEl);
     }
     // Remove card elements that no longer belong here (moved or deleted).
@@ -148,9 +179,10 @@ export function createColumnView(app, columnId) {
       if (at !== -1) current.splice(at, 1);
       current.splice(i, 0, desired[i]);
     }
+    noMatch.hidden = !(filtering && shown === 0 && cards.length > 0);
     count.textContent = filtering ? `${shown}/${cards.length}` : String(cards.length);
     count.setAttribute("aria-label", filtering ? `${shown} of ${cards.length} cards match` : `${cards.length} cards`);
   }
 
-  return { el, head, list, render, openComposer, name };
+  return { el, head, list, render, openComposer, name, menuBtn, addBtn };
 }

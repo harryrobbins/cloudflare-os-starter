@@ -82,17 +82,34 @@ describe("storage", () => {
     });
   });
 
-  it("deleting a card removes all its comment keys, beyond one 128-key batch", async () => {
+  it("deleting a card removes all its comment keys, beyond one 128-key batch and one list page", async () => {
     const { stub } = fresh();
     await runInDurableObject(stub, async (_instance, state) => {
       const repo = new DoStorageRepository(state.storage);
-      const comments = Array.from({ length: 300 }, (_, i) => ({ id: "m_" + i.toString(16).padStart(8, "0"), cardId: "c_00000001", author: "a", text: "t", at: 1000 + i }));
+      await repo.commit({ putCards: [{ id: "c_00000002" }], putComments: [{ id: "m_00000001", cardId: "c_00000002", author: "a", text: "keep", at: 1 }] });
+      const comments = Array.from({ length: 600 }, (_, i) => ({ id: "m_" + i.toString(16).padStart(8, "0"), cardId: "c_00000001", author: "a", text: "t", at: 1000 + i }));
       await repo.commit({ putCards: [{ id: "c_00000001" }], putComments: comments });
-      expect(await repo.countComments("c_00000001")).toBe(300);
+      expect(await repo.countComments("c_00000001")).toBe(600);
       expect((await repo.getComments("c_00000001")).map((c) => c.at)).toEqual(comments.map((c) => c.at));
       await repo.commit({ deleteCards: ["c_00000001"], deleteCommentsFor: ["c_00000001"] });
-      expect((await state.storage.list()).size).toBe(0);
+      expect([...(await state.storage.list()).keys()]).toEqual(["card:c_00000002", "comment:c_00000002:0000000000001:m_00000001"]);
     });
+  });
+
+  it("request records are stored under \"requests\" in the same commit and survive a restart", async () => {
+    const { stub, again } = fresh();
+    const board = await stub.getBoard();
+    const id = cardId();
+    const req = { requestId: "client:1", cardOps: [{ op: "upsert", cardId: id, columnId: board.columnOrder[0], baseVersion: 0, card: { title: "Once" } }] };
+    const first = await stub.applyOperation(req);
+    expect(first.status).toBe("applied");
+    const stored = await runInDurableObject(stub, async (_i, state) => state.storage.get("requests"));
+    expect(stored).toEqual([{ requestId: "client:1", revision: 1, status: "applied", conflicts: [], errors: [] }]);
+    await stub.deleteCard({ cardId: id });
+    await abortAllDurableObjects();
+    const replay = await again().applyOperation(req);
+    expect(replay).toMatchObject({ status: "applied", revision: 2, duplicate: true, upserts: [] });
+    expect((await again().getBoard()).cards[id]).toBeUndefined();
   });
 
   it("board survives a restart", async () => {
@@ -181,20 +198,20 @@ describe("live updates", () => {
   it("a failing subscriber is removed and others see it leave", async () => {
     const { stub } = fresh();
     const good = new Callbacks();
-    await stub.subscribe(good, { clientId: "G", name: "Good" });
-    await stub.subscribe(new Dead(), { clientId: "T", name: "Bad" });
+    const { session } = await stub.subscribe(good, { clientId: "G", name: "Good" });
+    const dead = await stub.subscribe(new Dead(), { clientId: "T", name: "Bad" });
     await boardWithCard(stub);
     await vi.waitFor(() => expect(good.presences.some((p) => p.type === "leave" && p.clientId === "T")).toBe(true));
     expect(good.ops).toHaveLength(1);
-    expect(await stub.updatePresence({ clientId: "T" })).toMatchObject({ known: false });
-    expect(await stub.updatePresence({ clientId: "G" })).toMatchObject({ known: true });
+    expect(await stub.updatePresence({ clientId: "T", session: dead.session })).toMatchObject({ known: false });
+    expect(await stub.updatePresence({ clientId: "G", session })).toMatchObject({ known: true });
   });
 
   it("presence join (with replay), update and leave", async () => {
     const { stub } = fresh();
     const a = new Callbacks();
     const b = new Callbacks();
-    await stub.subscribe(a, { clientId: "A", name: "Ann", color: "#112233" });
+    const { session } = await stub.subscribe(a, { clientId: "A", name: "Ann", color: "#112233" });
     await stub.subscribe(b, { clientId: "B", name: "Bob", color: "not a colour" });
     await vi.waitFor(() => expect(b.presences).toHaveLength(2));
     expect(b.presences.map((p) => [p.type, p.clientId])).toEqual([["join", "A"], ["join", "B"]]);
@@ -202,22 +219,51 @@ describe("live updates", () => {
     await vi.waitFor(() => expect(a.presences.map((p) => p.clientId)).toEqual(["A", "B"]));
 
     const { id } = await boardWithCard(stub);
-    const r = await stub.updatePresence({ clientId: "A", name: "Ann", color: "#112233", openCardId: id, dragCardId: "<script>", hoverColumnId: null });
+    const r = await stub.updatePresence({ clientId: "A", session, name: "Ann", color: "#112233", openCardId: id, dragCardId: "<script>", hoverColumnId: null });
     expect(r).toEqual({ known: true, revision: 1 });
     await vi.waitFor(() => expect(b.presences.at(-1)).toMatchObject({ type: "update", clientId: "A", openCardId: id, dragCardId: null }));
 
-    await stub.leavePresence("A");
+    await stub.leavePresence("A", session);
     await vi.waitFor(() => expect(b.presences.at(-1)).toMatchObject({ type: "leave", clientId: "A" }));
-    expect(await stub.updatePresence({ clientId: "A" })).toEqual({ known: false, revision: 1 });
+    expect(await stub.updatePresence({ clientId: "A", session })).toEqual({ known: false, revision: 1 });
     expect(await stub.updatePresence({ clientId: "nobody" })).toEqual({ known: false, revision: 1 });
   });
 
   it("updatePresence reports known: false after a restart", async () => {
     const { stub, again } = fresh();
-    await stub.subscribe(new Callbacks(), { clientId: "A" });
-    expect((await stub.updatePresence({ clientId: "A" })).known).toBe(true);
+    const { session } = await stub.subscribe(new Callbacks(), { clientId: "A" });
+    expect((await stub.updatePresence({ clientId: "A", session })).known).toBe(true);
     await abortAllDurableObjects();
-    expect(await again().updatePresence({ clientId: "A" })).toEqual({ known: false, revision: 0 });
+    expect(await again().updatePresence({ clientId: "A", session })).toEqual({ known: false, revision: 0 });
+    // Re-subscribing after the restart keeps the client's token.
+    const resub = await again().subscribe(new Callbacks(), { clientId: "A", session });
+    expect(resub.session).toBe(session);
+    expect((await again().updatePresence({ clientId: "A", session })).known).toBe(true);
+  });
+
+  it("sessions: subscribe returns one, and it guards replace, presence and leave", async () => {
+    const { stub } = fresh();
+    const a = new Callbacks();
+    const watcher = new Callbacks();
+    const snap = await stub.subscribe(a, { clientId: "A", name: "Ann" });
+    expect(snap.session).toMatch(/^[0-9a-f]{32}$/);
+    expect(snap.revision).toBe(0);
+    expect(snap.columnOrder).toHaveLength(4);
+    await stub.subscribe(watcher, { clientId: "W" });
+
+    // A hijacker who knows the clientId cannot take over the subscription, presence or leave.
+    await expect(runInDurableObject(stub, (instance) => instance.subscribe(new Callbacks(), { clientId: "A", name: "Mallory" }))).rejects.toThrow("clientId in use");
+    expect(await stub.updatePresence({ clientId: "A", name: "Mallory" })).toMatchObject({ known: false });
+    await stub.leavePresence("A");
+    await stub.leavePresence("A", "0".repeat(32));
+    expect(await stub.updatePresence({ clientId: "A", session: snap.session })).toMatchObject({ known: true });
+    await vi.waitFor(() => expect(watcher.presences.some((p) => p.type === "update" && p.clientId === "A")).toBe(true));
+    expect(watcher.presences.some((p) => p.name === "Mallory" || p.type === "leave")).toBe(false);
+    for (const p of [...a.presences, ...watcher.presences]) expect(JSON.stringify(p)).not.toContain(snap.session);
+
+    // The owner can replace its own subscription, keeping the session.
+    const again = await stub.subscribe(new Callbacks(), { clientId: "A", session: snap.session });
+    expect(again.session).toBe(snap.session);
   });
 });
 

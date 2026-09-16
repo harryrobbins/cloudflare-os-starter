@@ -8,6 +8,7 @@
 /** @typedef {import("../shared/protocol.js").Label} Label */
 /** @typedef {import("../shared/protocol.js").Comment} Comment */
 /** @typedef {import("../shared/protocol.js").HistoryEntry} HistoryEntry */
+/** @typedef {import("../shared/protocol.js").RequestRecord} RequestRecord */
 
 /**
  * One atomic write. Every present field is applied together or not at all.
@@ -19,6 +20,7 @@
  * @property {Comment[]} [putComments]
  * @property {string[]} [deleteCommentsFor]    card ids whose comments are all removed
  * @property {HistoryEntry[]} [history]        replaces the whole list
+ * @property {RequestRecord[]} [requests]      replaces the whole list of recent request records
  */
 
 /**
@@ -30,6 +32,7 @@
  * @property {(cardId: string) => Promise<Comment[]>} getComments  oldest first
  * @property {(cardId: string) => Promise<number>} countComments
  * @property {() => Promise<HistoryEntry[]>} getHistory       oldest first
+ * @property {() => Promise<RequestRecord[]>} getRequests     oldest first
  * @property {(commit: Commit) => Promise<void>} commit
  */
 
@@ -50,6 +53,8 @@ export class InMemoryRepository {
     this.comments = new Map();
     /** @type {HistoryEntry[]} */
     this.history = [];
+    /** @type {RequestRecord[]} */
+    this.requests = [];
   }
 
   async getMeta() { return clone(this.meta); }
@@ -59,6 +64,7 @@ export class InMemoryRepository {
   async getComments(cardId) { return clone(this.comments.get(cardId) ?? []); }
   async countComments(cardId) { return this.comments.get(cardId)?.length ?? 0; }
   async getHistory() { return clone(this.history); }
+  async getRequests() { return clone(this.requests); }
 
   /** @param {Commit} commit */
   async commit(commit) {
@@ -74,6 +80,7 @@ export class InMemoryRepository {
       this.comments.set(comment.cardId, list);
     }
     if (c.history) this.history = c.history;
+    if (c.requests) this.requests = c.requests;
   }
 }
 

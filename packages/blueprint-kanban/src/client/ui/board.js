@@ -79,6 +79,69 @@ export function createBoardView(app) {
       ? document.activeElement.dataset.tabColumnId : null;
     tabs.replaceChildren(...buttons);
     if (focusedTab) /** @type {HTMLElement|null} */ (tabs.querySelector(`[data-tab-column-id="${focusedTab}"]`))?.focus();
+    updateTabOverflow();
+  }
+
+  function updateTabOverflow() {
+    tabs.classList.toggle("overflow-end", tabs.scrollLeft + tabs.clientWidth < tabs.scrollWidth - 1);
+  }
+  tabs.addEventListener("scroll", updateTabOverflow, { passive: true });
+  window.addEventListener("resize", updateTabOverflow);
+
+  // Keyboard alternative to dragging: Alt+Arrow on a focused card.
+  boardEl.addEventListener("keydown", (e) => {
+    if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    const target = /** @type {HTMLElement} */ (e.target);
+    if (!target.classList?.contains("card") || !target.dataset.cardId) return;
+    const moves = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+    const delta = /** @type {Record<string, number[]>} */ (moves)[e.key];
+    if (!delta) return;
+    e.preventDefault(); // Alt+Left/Right would otherwise navigate history
+    e.stopPropagation();
+    moveCardBy(target.dataset.cardId, delta[0], delta[1]);
+  });
+
+  /**
+   * Moves a card one step: dy within its column, dx to the neighbouring column (keeping its index).
+   * Focus stays on the card.
+   * @param {string} cardId
+   * @param {number} dx
+   * @param {number} dy
+   */
+  function moveCardBy(cardId, dx, dy) {
+    const state = store.getState();
+    const card = state.board.cards[cardId];
+    if (!card) return;
+    const order = state.board.columnOrder;
+    const siblings = cardsInColumn(state.board.cards, card.columnId);
+    const index = siblings.findIndex((c) => c.id === cardId);
+    const columnName = (/** @type {string} */ id) => state.board.columns[id]?.name ?? "";
+    if (dy) {
+      const to = index + dy;
+      if (to < 0 || to >= siblings.length) {
+        app.announce(dy < 0 ? "Already at the top" : "Already at the bottom");
+        return;
+      }
+      const others = siblings.filter((c) => c.id !== cardId);
+      store.moveCard(cardId, card.columnId, others[to]?.id ?? null);
+      app.announce(`"${card.title}" moved to position ${to + 1} of ${siblings.length} in ${columnName(card.columnId)}`);
+    } else {
+      const toColumnId = order[order.indexOf(card.columnId) + dx];
+      if (!toColumnId) {
+        app.announce(dx < 0 ? "Already in the first column" : "Already in the last column");
+        return;
+      }
+      if (state.board.columns[toColumnId]?.collapsed) store.setColumnCollapsed(toColumnId, false);
+      const targets = cardsInColumn(store.getState().board.cards, toColumnId);
+      const before = targets[Math.min(index, targets.length)]?.id ?? null;
+      store.moveCard(cardId, toColumnId, before);
+      if (app.activeColumnId !== "__add" && app.activeColumnId !== toColumnId) setActive(toColumnId);
+      const position = Math.min(index, targets.length) + 1;
+      app.announce(`"${card.title}" moved to ${columnName(toColumnId)}, position ${position} of ${targets.length + 1}`);
+    }
+    const el = app.cardEls.get(cardId);
+    if (el && document.activeElement !== el) el.focus();
+    el?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
   tabs.addEventListener("keydown", (e) => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
@@ -149,5 +212,5 @@ export function createBoardView(app) {
     renderTabs(state);
   }
 
-  return { el, boardEl, views, renderAll, renderColumns, setActive, tabs };
+  return { el, boardEl, views, renderAll, renderColumns, setActive, tabs, moveCardBy, addColumnBtn };
 }

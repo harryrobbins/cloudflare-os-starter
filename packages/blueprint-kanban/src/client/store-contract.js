@@ -12,7 +12,8 @@
 
 /**
  * @typedef {object} Viewer
- * @property {string} clientId  random per page load
+ * @property {string} clientId  random per page load. The store replaces it (emitting a "viewer"
+ *   change) if the server reports it is held by another live session ("clientId in use").
  * @property {string} name      "" until the user has chosen one
  * @property {string} color     "#rrggbb"
  */
@@ -50,7 +51,9 @@
  * @property {Map<string, CardConflict>} conflicts  keyed by card id
  * @property {number} pending               local ops not yet acknowledged
  * @property {HistoryEntry[]} history       most recent last; seeded by loadHistory(), then live
- * @property {string|null} lastError        last validation error message from the server, if any
+ * @property {string|null} lastError        last error: a server validation error (including "limit"),
+ *   or a change the store gave up on (a move or delete that kept conflicting, a request that
+ *   kept failing). Such changes are rolled back, never dropped silently.
  */
 
 /**

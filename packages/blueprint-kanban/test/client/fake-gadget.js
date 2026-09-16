@@ -1,8 +1,9 @@
 // @ts-check
 // A scripted, in-memory stand-in for the Gadget RPC surface, for client sync tests. It is NOT the
 // real core: it implements just enough version and conflict semantics (per-card versions,
-// version-checked column renames and deletes, last-writer-wins order/labels/title) to exercise
-// the store. All delays use setTimeout so tests drive it with fake timers.
+// version-checked column renames and deletes, last-writer-wins order/labels/title, subscription
+// sessions and requestId idempotency) to exercise the store. All delays use setTimeout so tests
+// drive it with fake timers.
 
 /** @typedef {import("../../src/shared/protocol.js").Card} Card */
 /** @typedef {import("../../src/shared/protocol.js").Column} Column */
@@ -19,6 +20,7 @@ function fakeId(prefix) {
  * @typedef {object} Subscriber
  * @property {any} callback
  * @property {{clientId: string, name: string, color: string}} info
+ * @property {string} session
  */
 
 export class FakeServer {
@@ -60,6 +62,11 @@ export class FakeServer {
     this.maxOps = 500;
     this.concurrentOps = 0;
     this.maxConcurrentOps = 0;
+    /** @type {Map<string, any>} requestId -> recorded outcome; survives restarts (it is stored) */
+    this.requests = new Map();
+    this.sessionCounter = 0;
+    /** @type {string[]} every requestId received, in order */
+    this.requestIds = [];
   }
 
   // ---------------------------------------------------------------------------------------
@@ -218,8 +225,8 @@ export class FakeServer {
       undo: (req) => server.call("undo", [req], () => server.doUndo(req)),
       /** @param {any} p */
       updatePresence: (p) => server.call("updatePresence", [p], () => server.doPresence(p)),
-      /** @param {string} clientId */
-      leavePresence: (clientId) => server.call("leavePresence", [clientId], () => server.doLeave(clientId)),
+      /** @param {string} clientId @param {string} [session] */
+      leavePresence: (clientId, session) => server.call("leavePresence", [clientId, session], () => server.doLeave(clientId, session)),
     };
   }
 
@@ -240,32 +247,39 @@ export class FakeServer {
 
   /** @param {any} callback @param {any} info */
   doSubscribe(callback, info) {
+    const existing = this.subscribers.get(info.clientId);
+    if (existing && existing.session !== info.session) throw new Error("clientId in use");
+    const session = existing?.session ??
+      (/^[0-9a-f]{32}$/.test(info.session ?? "") ? info.session : (++this.sessionCounter).toString(16).padStart(32, "0"));
     /** @type {Subscriber} */
-    const sub = { callback, info: { ...info } };
+    const sub = { callback, info: { clientId: info.clientId, name: info.name, color: info.color }, session };
     for (const [id, other] of this.subscribers) {
       if (id !== info.clientId) this.deliver(sub, "presence", { type: "join", ...other.info, at: Date.now() });
     }
     this.subscribers.set(info.clientId, sub);
     // Like the real server: everyone, the newcomer included, hears the join.
-    this.broadcast("presence", { type: "join", ...info, at: Date.now() });
+    this.broadcast("presence", { type: "join", ...sub.info, at: Date.now() });
     // The real server registers before reading the snapshot, so events at or below the
     // snapshot's revision can reach the newcomer before subscribe() resolves.
     if (this.replayLastEventOnSubscribe && this.lastEvent) this.deliver(sub, "operation", this.lastEvent);
-    return this.board();
+    return { ...this.board(), session };
   }
 
   /** @param {any} p */
   doPresence(p) {
     const sub = this.subscribers.get(p.clientId);
-    if (!sub) return { known: false, revision: this.revision };
+    if (!sub || sub.session !== p.session) return { known: false, revision: this.revision };
     sub.info = { clientId: p.clientId, name: p.name, color: p.color };
-    this.broadcast("presence", { type: "update", ...p, at: Date.now() }, p.clientId);
+    const { session: _session, ...event } = p;
+    this.broadcast("presence", { type: "update", ...event, at: Date.now() }, p.clientId);
     return { known: true, revision: this.revision };
   }
 
-  /** @param {string} clientId */
-  doLeave(clientId) {
-    if (!this.subscribers.delete(clientId)) return;
+  /** @param {string} clientId @param {string} [session] */
+  doLeave(clientId, session) {
+    const sub = this.subscribers.get(clientId);
+    if (!sub || sub.session !== session) return;
+    this.subscribers.delete(clientId);
     this.broadcast("presence", { type: "leave", clientId, at: Date.now() });
   }
 
@@ -277,14 +291,45 @@ export class FakeServer {
     return comment;
   }
 
+  /**
+   * Runs a request once per requestId; a replay gets the recorded outcome with duplicate: true,
+   * no effects, and conflicts carrying present values.
+   * @param {any} req
+   * @param {() => any} fn
+   */
+  once(req, fn) {
+    const id = req.requestId;
+    if (typeof id === "string") this.requestIds.push(id);
+    const recorded = typeof id === "string" ? this.requests.get(id) : undefined;
+    if (recorded) {
+      return structuredClone({
+        ...recorded, revision: this.revision, upserts: [], deletes: [], moved: [], structure: null,
+        labels: null, history: null, duplicate: true,
+        conflicts: recorded.conflicts.map((/** @type {any} */ c) => ({
+          kind: c.kind, id: c.id, current: (c.kind === "card" ? this.cards[c.id] : this.columns[c.id]) ?? null,
+        })),
+      });
+    }
+    const result = fn();
+    if (typeof id === "string") {
+      this.requests.set(id, { status: result.status, conflicts: result.conflicts, errors: result.errors });
+    }
+    return result;
+  }
+
   /** @param {any} req */
   doUndo(req) {
+    return this.once(req, () => this.undoOnce(req));
+  }
+
+  /** @param {any} req */
+  undoOnce(req) {
     const entry = this.history.find((h) => h.id === req.historyId);
-    if (!entry?.inverse) return this.doApply({ senderId: req.senderId, by: req.by });
+    if (!entry?.inverse) return this.applyOnce({ senderId: req.senderId, by: req.by });
     const cardOps = entry.inverse.cardOps.map((/** @type {any} */ op) => ({
       ...op, baseVersion: this.cards[op.cardId]?.version ?? 0,
     }));
-    return this.doApply({ senderId: req.senderId, by: req.by, cardOps });
+    return this.applyOnce({ senderId: req.senderId, by: req.by, cardOps });
   }
 
   /** @param {string} columnId */
@@ -296,6 +341,11 @@ export class FakeServer {
 
   /** @param {any} req */
   doApply(req) {
+    return this.once(req, () => this.applyOnce(req));
+  }
+
+  /** @param {any} req */
+  applyOnce(req) {
     const total = (req.cardOps?.length ?? 0) + (req.columnOps?.length ?? 0) + (req.labelOps?.length ?? 0);
     if (total > this.maxOps) {
       return {

@@ -28,6 +28,7 @@ function randomClientId() {
 }
 
 function ensureDocument() {
+  if (!document.documentElement.lang) document.documentElement.lang = "en";
   if (!document.head.querySelector("meta[name=viewport]")) {
     const meta = document.createElement("meta");
     meta.name = "viewport";

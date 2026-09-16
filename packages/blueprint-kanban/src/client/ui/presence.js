@@ -38,11 +38,12 @@ export function applyPresence(app, state) {
     el.classList.add("peer-open");
     let badges = /** @type {HTMLElement|null} */ (el.querySelector(".peer-badges"));
     const key = peers.map((p) => p.clientId + p.name + p.color).join("|");
-    if (!badges) { badges = h("span", { class: "peer-badges" }); el.appendChild(badges); }
+    if (!badges) { badges = h("span", { class: "peer-badges", role: "group" }); el.appendChild(badges); }
     if (badges.dataset.key !== key) {
       badges.dataset.key = key;
       badges.replaceChildren(...peers.map((p) => avatar(p.name || "Guest", p.color, "small")));
       badges.title = peers.map((p) => p.name || "Guest").join(", ") + " viewing";
+      badges.setAttribute("aria-label", badges.title);
     }
   }
   for (const [cardId, peer] of draggers) {
@@ -117,7 +118,11 @@ function renderAvatars(app, state) {
       a.dataset.clientId = p.clientId;
       return a;
     }),
-    peers.length > shown.length ? h("span", { class: "avatar", style: { background: "var(--border)" }, title: peers.slice(6).map((p) => p.name).join(", ") }, `+${peers.length - 6}`) : "",
+    peers.length > shown.length ? h("span", {
+      class: "avatar", style: { background: "var(--border)" }, role: "img",
+      title: peers.slice(6).map((p) => p.name || "Guest").join(", "),
+      "aria-label": `and ${peers.length - 6} more: ${peers.slice(6).map((p) => p.name || "Guest").join(", ")}`,
+    }, `+${peers.length - 6}`) : "",
   );
   host.setAttribute("aria-label", peers.length
     ? `Also here: ${peers.map((p) => p.name || "Guest").join(", ")}`

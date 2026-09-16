@@ -6,8 +6,12 @@
 //   "card:<cardId>"                            Card
 //   "comment:<cardId>:<13-digit ms>:<id>"      Comment (key order = oldest first)
 //   "history"                                  HistoryEntry[]
+//   "requests"                                 RequestRecord[] (recent requestIds, newest last)
 //
 // commit() runs inside storage.transaction(), so a multi-key write lands entirely or not at all.
+// The board bounds what one commit may touch (LIMITS.cards card keys, LIMITS.columnDeleteComments
+// comment keys), so a single transaction stays small; keys are still written and deleted in
+// batches of 128 and comments are listed a page at a time so no call holds a whole thread.
 
 /** @typedef {import("../core/repository.js").Commit} Commit */
 /** @typedef {import("../shared/protocol.js").Card} Card */
@@ -15,6 +19,8 @@
 
 /** storage.put/delete accept at most this many keys per call. */
 const BATCH = 128;
+/** Comments listed per page when collecting keys to delete. */
+const LIST_PAGE = 256;
 
 /** @param {string} cardId */
 export const cardKey = (cardId) => "card:" + cardId;
@@ -82,6 +88,10 @@ export class DoStorageRepository {
     return (await this.storage.get("history")) ?? [];
   }
 
+  async getRequests() {
+    return (await this.storage.get("requests")) ?? [];
+  }
+
   /** @param {Commit} commit */
   async commit(commit) {
     await this.storage.transaction(async (/** @type {any} */ txn) => {
@@ -90,14 +100,22 @@ export class DoStorageRepository {
       if (commit.meta) puts.meta = commit.meta;
       if (commit.labels) puts.labels = commit.labels;
       if (commit.history) puts.history = commit.history;
+      if (commit.requests) puts.requests = commit.requests;
       for (const card of commit.putCards ?? []) puts[cardKey(card.id)] = card;
       for (const comment of commit.putComments ?? []) puts[commentKey(comment)] = comment;
 
       /** @type {string[]} */
       const deletes = (commit.deleteCards ?? []).map(cardKey);
       for (const cardId of commit.deleteCommentsFor ?? []) {
-        const existing = await txn.list({ prefix: commentPrefix(cardId) });
-        deletes.push(...existing.keys());
+        const prefix = commentPrefix(cardId);
+        /** @type {string|undefined} */
+        let startAfter;
+        for (;;) {
+          /** @type {Map<string, unknown>} */
+          const page = await txn.list({ prefix, limit: LIST_PAGE, ...(startAfter ? { startAfter } : {}) });
+          for (const key of page.keys()) deletes.push((startAfter = key));
+          if (page.size < LIST_PAGE) break;
+        }
       }
 
       const putDeletes = new Set(Object.keys(puts));

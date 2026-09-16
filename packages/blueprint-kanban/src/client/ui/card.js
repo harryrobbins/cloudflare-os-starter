@@ -7,6 +7,18 @@ import { h, icon, avatar, formatDue, todayIso, PALETTE, textOn } from "./dom.js"
 /** @typedef {import("../../shared/protocol.js").Card} Card */
 /** @typedef {import("../../shared/protocol.js").Label} Label */
 
+/** Id of the hidden element describing card keyboard shortcuts (created by mountApp). */
+export const CARD_HELP_ID = "kanban-card-help";
+
+/**
+ * Accessible name of a card element without the filter suffix.
+ * @param {HTMLElement} el
+ * @returns {string}
+ */
+export function cardBaseLabel(el) {
+  return /** @type {any} */ (el)._label ?? el.getAttribute("aria-label") ?? "";
+}
+
 /**
  * Stable colour for a free-text assignee name.
  * @param {string} name
@@ -44,6 +56,7 @@ function signature(card, labels) {
 export function createCardEl(card, labels, onOpen) {
   const el = h("div", {
     class: "card", tabindex: "0", role: "button", dataset: { cardId: card.id },
+    "aria-describedby": CARD_HELP_ID,
   });
   el.addEventListener("click", () => {
     if (el.dataset.suppressClick) { delete el.dataset.suppressClick; return; }
@@ -98,5 +111,6 @@ export function updateCardEl(el, card, labels) {
   if (card.assignee) parts.push("assigned to " + card.assignee);
   if (card.due) parts.push((overdue ? "overdue, was due " : "due ") + card.due);
   if (total) parts.push(`checklist ${done} of ${total}`);
+  /** @type {any} */ (el)._label = parts.join("; ");
   el.setAttribute("aria-label", parts.join("; "));
 }

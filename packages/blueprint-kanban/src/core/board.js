@@ -15,11 +15,22 @@
 // Valid ops commit even when others fail; the whole request is written with ONE repo.commit and
 // bumps the revision once. A card's version is bumped once per request that changes it, and an
 // op may name either the version from before the request or the one current within it.
+//
+// Size budget: the stored size of every card is tracked in memory (computed at load), so creates,
+// growing edits and undo restores that would push the total past LIMITS.boardBytes fail with
+// "limit". Comment counts and bytes per card are cached lazily (the board is the only writer).
+// One request may remove at most LIMITS.columnDeleteComments comments, and a column delete is
+// refused when the column holds more than LIMITS.columnDeleteCards cards, which keeps each
+// commit's key count small enough for one storage transaction.
+//
+// Idempotency: a request carrying a valid requestId is recorded ("requests", bounded) in the same
+// commit as its changes, or in a records-only commit when nothing changed. A replay of a recorded
+// requestId returns the recorded outcome with duplicate: true and applies nothing.
 
 import {
   DEFAULT_COLUMNS, DEFAULT_LABELS, DEFAULT_TITLE, LIMITS, SCHEMA_VERSION,
   cleanCardPatch, cleanColor, cleanLabelIds, cleanLine, cleanName, cleanText, compareCards, isId,
-  newId as protocolNewId,
+  isRequestId, newId as protocolNewId,
 } from "../shared/protocol.js";
 import { isValidOrderKey, keyBetween } from "../shared/order.js";
 
@@ -34,11 +45,15 @@ import { isValidOrderKey, keyBetween } from "../shared/order.js";
 /** @typedef {import("../shared/protocol.js").OperationResult} OperationResult */
 /** @typedef {import("../shared/protocol.js").OpError} OpError */
 /** @typedef {import("../shared/protocol.js").Conflict} Conflict */
+/** @typedef {import("../shared/protocol.js").RequestRecord} RequestRecord */
 /** @typedef {import("./repository.js").Repository} Repository */
 
 const CONTENT_FIELDS = /** @type {const} */ (["title", "description", "labels", "assignee", "due", "checklist"]);
 const DEFAULT_LABEL_COLOR = "#6b7280";
 const UNTITLED_COLUMN = "Untitled column";
+/** A single request record is shrunk (errors, then conflicts halved) to fit in this many bytes. */
+const RECORD_MAX_BYTES = 16 * 1024;
+const MIB = 1024 * 1024;
 
 // ---------------------------------------------------------------------------------------------
 // Schema migration
@@ -167,7 +182,17 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
   // The board is the only writer, so state is loaded once and replaced after each commit. A
   // failed commit drops the cache so the next call reloads from storage.
 
-  /** @typedef {{meta: BoardMeta, labels: Record<string, Label>, cards: Map<string, Card>, history: HistoryEntry[]}} State */
+  /**
+   * @typedef {object} State
+   * @property {BoardMeta} meta
+   * @property {Record<string, Label>} labels
+   * @property {Map<string, Card>} cards
+   * @property {HistoryEntry[]} history
+   * @property {RequestRecord[]} requests
+   * @property {Map<string, number>} sizes      storedBytes of each card
+   * @property {number} boardBytes              sum of sizes
+   * @property {Map<string, {count: number, bytes: number}>} comments  lazily loaded per card
+   */
   /** @type {State|null} */
   let state = null;
 
@@ -194,14 +219,108 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
         labels[id] = { id, name, color };
       }
       await repo.commit({ meta, labels, history: [] });
-      state = { meta, labels, cards: new Map(), history: [] };
+      state = { meta, labels, cards: new Map(), history: [], requests: [], sizes: new Map(), boardBytes: 0, comments: new Map() };
       return state;
     }
     const meta = migrate(stored);
     if (meta !== stored) await repo.commit({ meta });
-    const [labels, cards, history] = await Promise.all([repo.getLabels(), repo.getCards(), repo.getHistory()]);
-    state = { meta, labels, cards: new Map(Object.entries(cards)), history };
+    const [labels, cards, history, requests] = await Promise.all([
+      repo.getLabels(), repo.getCards(), repo.getHistory(), repo.getRequests(),
+    ]);
+    const sizes = new Map();
+    let boardBytes = 0;
+    for (const [id, card] of Object.entries(cards)) {
+      const size = storedBytes(card);
+      sizes.set(id, size);
+      boardBytes += size;
+    }
+    state = {
+      meta, labels, cards: new Map(Object.entries(cards)), history,
+      requests: Array.isArray(requests) ? requests : [], sizes, boardBytes, comments: new Map(),
+    };
     return state;
+  }
+
+  /**
+   * Comment count and bytes of one card, loaded from the repository on first use.
+   * @param {State} s @param {string} cardId
+   */
+  async function commentStats(s, cardId) {
+    let stats = s.comments.get(cardId);
+    if (!stats) {
+      const list = await repo.getComments(cardId);
+      stats = { count: list.length, bytes: list.reduce((n, c) => n + storedBytes(c), 0) };
+      s.comments.set(cardId, stats);
+    }
+    return stats;
+  }
+
+  // --- Request records (idempotency) ---------------------------------------------------------
+
+  /** @param {unknown} v @returns {string|null} */
+  const requestIdOf = (v) => (isRequestId(v) ? v : null);
+
+  /**
+   * The request list with `result` recorded under `requestId`, trimmed to the LIMITS.
+   * @param {State} s @param {string} requestId @param {OperationResult} result
+   * @returns {RequestRecord[]}
+   */
+  function withRecord(s, requestId, result) {
+    /** @type {RequestRecord} */
+    const record = structuredClone({
+      requestId, revision: result.revision, status: result.status,
+      conflicts: result.conflicts.map(({ kind, id }) => ({ kind, id })), errors: result.errors,
+    });
+    while (storedBytes(record) > RECORD_MAX_BYTES && record.errors.length > 1) {
+      record.errors = record.errors.slice(0, Math.ceil(record.errors.length / 2));
+    }
+    while (storedBytes(record) > RECORD_MAX_BYTES && record.conflicts.length > 1) {
+      record.conflicts = record.conflicts.slice(0, Math.ceil(record.conflicts.length / 2));
+    }
+    const requests = [...s.requests.filter((r) => r.requestId !== requestId), record];
+    while (requests.length > LIMITS.requestRecords) requests.shift();
+    while (requests.length > 1 && storedBytes(requests) > LIMITS.requestRecordBytes) requests.shift();
+    return requests;
+  }
+
+  /**
+   * The recorded answer for a replayed requestId, or null when it has not been seen.
+   * @param {State} s @param {string|null} requestId
+   * @returns {OperationResult|null}
+   */
+  function duplicateOf(s, requestId) {
+    if (!requestId) return null;
+    const record = s.requests.find((r) => r.requestId === requestId);
+    if (!record) return null;
+    return structuredClone({
+      status: record.status, revision: s.meta.revision, upserts: [], deletes: [], moved: [],
+      structure: null, labels: null, history: null,
+      conflicts: record.conflicts.map(({ kind, id }) => ({
+        kind, id,
+        current: (kind === "card" ? s.cards.get(id) : Object.hasOwn(s.meta.columns, id) ? s.meta.columns[id] : null) ?? null,
+      })),
+      errors: record.errors, duplicate: true,
+    });
+  }
+
+  /**
+   * Records a request that changed nothing (records-only commit, no revision bump) and returns
+   * the outcome unchanged.
+   * @param {State} s @param {string|null} requestId @param {OperationResult} result
+   * @returns {Promise<{result: OperationResult, event: null}>}
+   */
+  async function finishUnchanged(s, requestId, result) {
+    if (requestId) {
+      const requests = withRecord(s, requestId, result);
+      try {
+        await repo.commit({ requests });
+      } catch (e) {
+        state = null;
+        throw e;
+      }
+      s.requests = requests;
+    }
+    return { result, event: null };
   }
 
   /** @param {State} s @returns {BoardSnapshot} */
@@ -226,6 +345,9 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
   async function applyLocked(rawReq, { force = false, summaryPrefix = "" } = {}) {
     const s = await load();
     const req = isObject(rawReq) ? rawReq : {};
+    const requestId = requestIdOf(req.requestId);
+    const duplicate = duplicateOf(s, requestId);
+    if (duplicate) return { result: duplicate, event: null };
     /** @type {OpError[]} */
     const errors = [];
     /** @type {Conflict[]} */
@@ -245,7 +367,7 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
     if (total > LIMITS.opsPerRequest) {
       errors.push(opError("structure", -1, "limit",
         `A request may carry at most ${LIMITS.opsPerRequest} ops; this one has ${total}. Nothing was applied.`));
-      return { result: emptyResult(s.meta.revision, errors), event: null };
+      return finishUnchanged(s, requestId, emptyResult(s.meta.revision, errors));
     }
 
     const senderId = cleanId(req.senderId);
@@ -262,6 +384,30 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
     const touched = new Set();
     /** @type {Set<string>} cards removed by a column delete (described by the column) */
     const cascaded = new Set();
+
+    // Size budget, tracked across the ops of this request.
+    const sizes = new Map(s.sizes);
+    let boardBytes = s.boardBytes;
+    /** @param {string} id @param {number} size */
+    const setSize = (id, size) => { boardBytes += size - (sizes.get(id) ?? 0); sizes.set(id, size); };
+    /** @param {string} id */
+    const dropSize = (id) => { boardBytes -= sizes.get(id) ?? 0; sizes.delete(id); };
+    /** True when writing `size` for card `id` stays within budget or does not grow the card. */
+    const fitsBudget = (/** @type {string} */ id, /** @type {number} */ size) => {
+      const old = sizes.get(id) ?? 0;
+      return size <= old || boardBytes - old + size <= LIMITS.boardBytes;
+    };
+    const budgetMessage = `The board is full: cards may take at most ${LIMITS.boardBytes / MIB} MiB in total. Shorten or delete cards first.`;
+
+    // Comments removed by this request (card deletes and column cascades).
+    let commentDeletes = 0;
+    /** Stored comment count of a card; 0 for cards that did not exist before this request. */
+    const commentCount = (/** @type {string} */ id) => (s.cards.has(id) ? s.comments.get(id)?.count ?? 0 : 0);
+    for (const op of lists.cardOps) {
+      if (isObject(op) && op.op === "delete" && isId(op.cardId, "card") && s.cards.has(op.cardId)) {
+        await commentStats(s, op.cardId);
+      }
+    }
 
     /**
      * Runs one op, turning any exception into an invalid_op error.
@@ -460,6 +606,9 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
           if (!force && /** @type {number} */ (base) > 0) return void conflicts.push({ kind: "card", id, current: null });
           return void errors.push(opError("card", i, "unknown_card", `No card ${id}`));
         }
+        if (touched.has(id)) {
+          return void errors.push(opError("card", i, "exists", `Card ${id} was deleted earlier in this request and cannot be recreated in it`));
+        }
         if (!isId(op.columnId, "column") || !Object.hasOwn(meta.columns, op.columnId)) {
           return void errors.push(opError("card", i, "unknown_column", `No column ${String(op.columnId).slice(0, 40)}`));
         }
@@ -480,7 +629,10 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
           updatedAt: at,
           createdBy: typeof restore.createdBy === "string" ? cleanName(restore.createdBy, by) : by,
         };
+        const size = storedBytes(card);
+        if (!fitsBudget(id, size)) return void errors.push(opError("card", i, "limit", budgetMessage));
         cards.set(id, card);
+        setSize(id, size);
         touched.add(id);
         return;
       }
@@ -494,7 +646,14 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
       }
 
       if (op.op === "delete") {
+        const n = commentCount(id);
+        if (commentDeletes + n > LIMITS.columnDeleteComments) {
+          return void errors.push(opError("card", i, "limit",
+            `This request would delete more than ${LIMITS.columnDeleteComments} comments; delete fewer cards at once.`));
+        }
+        commentDeletes += n;
         cards.delete(id);
+        dropSize(id);
         touched.add(id);
         return;
       }
@@ -511,10 +670,14 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
         else order = appendKey(to, id);
         const nextLabels = stripLabels(current);
         if (to === current.columnId && order === current.order && nextLabels.length === current.labels.length) return;
-        cards.set(id, {
+        /** @type {Card} */
+        const relocated = {
           ...current, columnId: to, order, labels: nextLabels,
           version: bumpedVersion(id, current), updatedAt: at,
-        });
+        };
+        // Moves are never refused for size: they grow a card by at most an order key.
+        cards.set(id, relocated);
+        setSize(id, storedBytes(relocated));
         touched.add(id);
         return;
       }
@@ -528,11 +691,21 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
       if (JSON.stringify(contentOf(next)) === JSON.stringify(contentOf(current)) && next.order === current.order) return;
       next.version = bumpedVersion(id, current);
       next.updatedAt = at;
+      const size = storedBytes(next);
+      if (!fitsBudget(id, size)) return void errors.push(opError("card", i, "limit", budgetMessage));
       cards.set(id, next);
+      setSize(id, size);
       touched.add(id);
     }));
 
     // ---- 4. Column deletes (cascade to cards) ----
+    // Load comment counts for the cards that deletes could cascade to (bounded by the card cap).
+    for (const op of lists.columnOps) {
+      if (!isObject(op) || op.op !== "delete" || !isId(op.columnId, "column")) continue;
+      const inColumn = [...cards.values()].filter((c) => c.columnId === op.columnId);
+      if (inColumn.length > LIMITS.columnDeleteCards) continue;
+      for (const c of inColumn) if (s.cards.has(c.id)) await commentStats(s, c.id);
+    }
     lists.columnOps.forEach((op, i) => {
       if (!isObject(op) || op.op !== "delete") return;
       guard("column", i, () => {
@@ -546,11 +719,23 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
           return void errors.push(opError("column", i, "unknown_column", `No column ${id}`));
         }
         if (!columnVersionOk(op, i, id)) return;
+        const inColumn = [...cards.values()].filter((c) => c.columnId === id);
+        const name = quote(meta.columns[id].name);
+        if (inColumn.length > LIMITS.columnDeleteCards) {
+          return void errors.push(opError("column", i, "limit",
+            `Column ${name} has ${inColumn.length} cards; a column can only be deleted with at most ${LIMITS.columnDeleteCards} cards in it. Move or delete cards first.`));
+        }
+        const comments = inColumn.reduce((n, c) => n + commentCount(c.id), 0);
+        if (commentDeletes + comments > LIMITS.columnDeleteComments) {
+          return void errors.push(opError("column", i, "limit",
+            `The cards in column ${name} have too many comments to delete at once (at most ${LIMITS.columnDeleteComments} per change). Move or delete cards first.`));
+        }
+        commentDeletes += comments;
         delete meta.columns[id];
         meta.columnOrder = meta.columnOrder.filter((c) => c !== id);
-        for (const card of [...cards.values()]) {
-          if (card.columnId !== id) continue;
+        for (const card of inColumn) {
           cards.delete(card.id);
+          dropSize(card.id);
           touched.add(card.id);
           cascaded.add(card.id);
         }
@@ -674,7 +859,7 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
     }
 
     const changed = upserts.length > 0 || deletes.length > 0 || structureChanged || labelsChanged;
-    if (!changed) return { result: structuredClone(emptyResult(s.meta.revision, errors, conflicts)), event: null };
+    if (!changed) return finishUnchanged(s, requestId, structuredClone(emptyResult(s.meta.revision, errors, conflicts)));
 
     // ---- History entry ----
     let inverse = null;
@@ -697,21 +882,6 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
     meta.revision = s.meta.revision + 1;
     meta.lastModified = at;
     const deletedIds = deletes.map((d) => d.cardId);
-    try {
-      await repo.commit({
-        meta,
-        ...(labelsChanged ? { labels } : {}),
-        putCards: upserts,
-        deleteCards: deletedIds,
-        deleteCommentsFor: deletedIds,
-        history,
-      });
-    } catch (e) {
-      state = null;
-      throw e;
-    }
-    state = { meta, labels, cards, history };
-
     const structure = structureChanged
       ? { title: meta.title, columnOrder: meta.columnOrder, columns: meta.columns }
       : null;
@@ -720,6 +890,24 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
       status: conflicts.length ? "conflict" : "applied", revision: meta.revision, upserts, deletes,
       moved, structure, labels: labelsChanged ? labels : null, history: entry, conflicts, errors,
     });
+    const requests = requestId ? withRecord(s, requestId, result) : s.requests;
+    try {
+      await repo.commit({
+        meta,
+        ...(labelsChanged ? { labels } : {}),
+        putCards: upserts,
+        deleteCards: deletedIds,
+        deleteCommentsFor: deletedIds,
+        history,
+        ...(requestId ? { requests } : {}),
+      });
+    } catch (e) {
+      state = null;
+      throw e;
+    }
+    for (const id of deletedIds) s.comments.delete(id);
+    state = { meta, labels, cards, history, requests, sizes, boardBytes, comments: s.comments };
+
     /** @type {BoardEvent} */
     const event = structuredClone({
       type: "operation", senderId, revision: meta.revision, upserts, deletes, moved, structure,
@@ -785,16 +973,19 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
     applyOperation: (req) => enqueue(() => applyLocked(req)),
 
     /**
-     * @param {any} args {senderId?, by?, historyId}
+     * @param {any} args {senderId?, by?, historyId, requestId?}
      * @returns {Promise<{result: OperationResult, event: BoardEvent|null}>}
      */
     undo: (args) => enqueue(async () => {
       const s = await load();
       const a = isObject(args) ? args : {};
+      const requestId = requestIdOf(a.requestId);
+      const duplicate = duplicateOf(s, requestId);
+      if (duplicate) return { result: duplicate, event: null };
       const entry = s.history.find((h) => h.id === a.historyId);
-      if (!entry) return { result: emptyResult(s.meta.revision, [opError("structure", -1, "invalid_op", "No such history entry")]), event: null };
-      if (!entry.inverse) return { result: emptyResult(s.meta.revision, [opError("structure", -1, "invalid_op", "That change cannot be undone")]), event: null };
-      return applyLocked({ ...entry.inverse, senderId: a.senderId, by: a.by }, { force: true, summaryPrefix: "Undid: " });
+      if (!entry) return finishUnchanged(s, requestId, emptyResult(s.meta.revision, [opError("structure", -1, "invalid_op", "No such history entry")]));
+      if (!entry.inverse) return finishUnchanged(s, requestId, emptyResult(s.meta.revision, [opError("structure", -1, "invalid_op", "That change cannot be undone")]));
+      return applyLocked({ ...entry.inverse, senderId: a.senderId, by: a.by, requestId }, { force: true, summaryPrefix: "Undid: " });
     }),
 
     /**
@@ -806,14 +997,26 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
       const a = isObject(args) ? args : {};
       if (!isId(a.cardId, "card")) throw new Error("addComment: cardId must look like c_1a2b3c4d");
       if (!s.cards.has(a.cardId)) throw new Error(`addComment: no card ${a.cardId}`);
-      if (await repo.countComments(a.cardId) >= LIMITS.commentsPerCard) {
+      const stats = await commentStats(s, a.cardId);
+      if (stats.count >= LIMITS.commentsPerCard) {
         throw new Error(`addComment: card ${a.cardId} already has the maximum of ${LIMITS.commentsPerCard} comments`);
       }
       const text = cleanText(a.text, LIMITS.commentText);
       if (!text.trim()) throw new Error("addComment: text is empty");
       /** @type {Comment} */
       const comment = { id: newId("comment"), cardId: a.cardId, author: cleanName(a.author, "Anonymous"), text, at: now() };
-      await repo.commit({ putComments: [comment] });
+      const size = storedBytes(comment);
+      if (stats.bytes + size > LIMITS.commentBytesPerCard) {
+        throw new Error(`addComment: card ${a.cardId} has reached the maximum comment size of ${LIMITS.commentBytesPerCard / 1024} KiB`);
+      }
+      try {
+        await repo.commit({ putComments: [comment] });
+      } catch (e) {
+        state = null;
+        throw e;
+      }
+      stats.count += 1;
+      stats.bytes += size;
       /** @type {BoardEvent} */
       const event = { type: "comment", senderId: cleanId(a.senderId), comment: structuredClone(comment) };
       emit(event);

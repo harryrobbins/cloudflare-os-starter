@@ -2,7 +2,7 @@
 // Pending local operations: their shape, how they apply optimistically, how they coalesce, which
 // may share a request, and how they are written on the wire.
 
-import { deepEqual } from "./equal.js";
+import { patchMatches } from "./rebase.js";
 
 /** @typedef {import("../../shared/protocol.js").BoardSnapshot} BoardSnapshot */
 /** @typedef {import("../../shared/protocol.js").Card} Card */
@@ -35,7 +35,8 @@ import { deepEqual } from "./equal.js";
  * @property {number} retries     automatic conflict retries so far
  * @property {boolean} replayed   sent before, outcome unknown (request failed or server restarted)
  * @property {number} [sendFailures]  requests carrying this op that failed outright
- * @property {Card|null} [baseCard]  the server card this op was last sent against
+ * @property {Card|null} [baseCard]  the server card this op was last sent against; a replay
+ *   of the same request keeps it (and its version as baseVersion)
  */
 
 /** @typedef {OpBody & OpMeta} PendingOp */
@@ -284,9 +285,13 @@ export function mergeOps(target, next) {
  */
 
 /**
- * Builds one OperationRequest. `baseVersionOf` reads versions from server state at send time.
+ * Builds one OperationRequest. Card and column versions are read from server state at send
+ * time through `ctx`, except that a replayed card op (its earlier send had an unknown outcome)
+ * keeps the version of the card it was originally sent against, so a change made meanwhile by
+ * someone else comes back as a conflict instead of being overwritten.
  * @param {PendingOp[]} ops
- * @param {{senderId: string, by: string, cardVersion: (id: string) => number, columnVersion: (id: string) => number}} ctx
+ * @param {{senderId: string, by: string, requestId?: string, cardVersion: (id: string) => number,
+ *   columnVersion: (id: string) => number}} ctx
  * @returns {{request: OperationRequest, refs: Map<PendingOp, WireRef>}}
  */
 export function buildRequest(ops, ctx) {
@@ -298,6 +303,10 @@ export function buildRequest(ops, ctx) {
   const labelOps = [];
   /** @type {OperationRequest} */
   const request = { senderId: ctx.senderId, by: ctx.by };
+  if (ctx.requestId) /** @type {any} */ (request).requestId = ctx.requestId;
+  /** @param {PendingOp} op @param {string} cardId */
+  const cardVersion = (op, cardId) =>
+    op.replayed && op.baseCard !== undefined ? op.baseCard?.version ?? 0 : ctx.cardVersion(cardId);
   /** @type {Map<PendingOp, WireRef>} */
   const refs = new Map();
   /**
@@ -321,18 +330,18 @@ export function buildRequest(ops, ctx) {
       case "card.patch":
         push(op, "cardOps", cardOps, {
           op: "upsert", cardId: op.cardId,
-          baseVersion: op.pinnedBase ?? ctx.cardVersion(op.cardId), card: { ...op.patch },
+          baseVersion: op.pinnedBase ?? cardVersion(op, op.cardId), card: { ...op.patch },
         });
         break;
       case "card.move":
         push(op, "cardOps", cardOps, {
-          op: "move", cardId: op.cardId, baseVersion: ctx.cardVersion(op.cardId),
+          op: "move", cardId: op.cardId, baseVersion: cardVersion(op, op.cardId),
           toColumnId: op.toColumnId, order: op.order,
         });
         break;
       case "card.delete":
         push(op, "cardOps", cardOps, {
-          op: "delete", cardId: op.cardId, baseVersion: ctx.cardVersion(op.cardId),
+          op: "delete", cardId: op.cardId, baseVersion: cardVersion(op, op.cardId),
         });
         break;
       case "column.create": {
@@ -390,11 +399,8 @@ export function alreadyApplied(op, server) {
   switch (op.type) {
     case "card.create":
       return Boolean(server.cards[op.cardId]);
-    case "card.patch": {
-      const card = /** @type {Record<string, unknown>|undefined} */ (server.cards[op.cardId]);
-      if (!card) return false;
-      return Object.entries(op.patch).every(([k, v]) => deepEqual(card[k], v));
-    }
+    case "card.patch":
+      return patchMatches(op.patch, server.cards[op.cardId], server.labels);
     case "card.move": {
       const card = server.cards[op.cardId];
       return Boolean(card && card.columnId === op.toColumnId && card.order === op.order);

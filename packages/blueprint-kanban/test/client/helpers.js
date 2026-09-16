@@ -11,9 +11,9 @@ let clientCounter = 0;
  * Starts a store against the fake server. Requires vi.useFakeTimers().
  * @param {FakeServer} server
  * @param {string} name
+ * @param {{clientId?: string}} [options]
  */
-export async function startStore(server, name) {
-  const clientId = "client-" + name + "-" + ++clientCounter;
+export async function startStore(server, name, { clientId = "client-" + name + "-" + ++clientCounter } = {}) {
   const promise = createStore({
     gadget: server.connect(),
     RpcTarget: FakeRpcTarget,

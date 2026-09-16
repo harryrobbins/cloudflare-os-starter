@@ -199,6 +199,48 @@ export async function until(fn, { timeout = 5000, interval = 50, message = "cond
   }
 }
 
+/**
+ * Describes what has keyboard focus inside a pane: {cardTitle, className, columnName}.
+ * @param {import("playwright").FrameLocator} frame
+ */
+export function focused(frame) {
+  return frame.locator("body").evaluate(() => {
+    const el = /** @type {HTMLElement|null} */ (document.activeElement);
+    if (!el || el === document.body) return { cardTitle: null, className: "", columnName: null };
+    const card = el.classList.contains("card") ? el : null;
+    return {
+      cardTitle: card?.querySelector(".card-title")?.textContent ?? null,
+      className: el.className || "",
+      columnName: el.closest(".column")?.querySelector(".column-name .inline-edit-display")?.textContent ?? null,
+    };
+  });
+}
+
+/**
+ * Current text of the app's polite live region.
+ * @param {import("playwright").FrameLocator} frame
+ */
+export function liveText(frame) {
+  return frame.locator(".live-region").evaluate((el) => el.textContent || "");
+}
+
+/**
+ * WCAG contrast ratio of two computed CSS colours ("rgb(r, g, b)" / "rgba(...)", opaque assumed).
+ * @param {string} a
+ * @param {string} b
+ */
+export function contrastRatio(a, b) {
+  const lum = (/** @type {string} */ css) => {
+    const m = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/.exec(css);
+    if (!m) throw new Error("unparsable colour " + css);
+    const [r, g, bl] = [m[1], m[2], m[3]].map((x) => Number(x) / 255)
+      .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [x, y] = [lum(a), lum(b)];
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
 /** @param {string} s */
 export function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

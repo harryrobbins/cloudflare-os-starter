@@ -149,10 +149,25 @@
  * @typedef {object} OperationRequest
  * @property {string} [senderId]  the client's id, echoed in the broadcast so it can skip its own
  * @property {string} [by]        display name recorded in history
+ * @property {string} [requestId] idempotency key, 1-64 chars of [A-Za-z0-9:_-] (anything else is
+ *   ignored as if absent). A request whose requestId the board has already recorded is not
+ *   applied again; the recorded outcome is returned with `duplicate: true`. The board remembers
+ *   the most recent LIMITS.requestRecords requests (at most LIMITS.requestRecordBytes).
  * @property {CardOp[]} [cardOps]
  * @property {ColumnOp[]} [columnOps]
  * @property {LabelOp[]} [labelOps]
  * @property {{title?: string}} [structure]  last-writer-wins
+ */
+
+/**
+ * What the board persists (storage key "requests", newest last) for each request carrying a
+ * valid requestId, in the same atomic commit as the request's changes.
+ * @typedef {object} RequestRecord
+ * @property {string} requestId
+ * @property {number} revision  the revision the original request returned
+ * @property {"applied"|"conflict"|"unchanged"} status
+ * @property {{kind: "card"|"column", id: string}[]} conflicts
+ * @property {OpError[]} errors
  */
 
 /**
@@ -166,7 +181,9 @@
  * @typedef {object} OpError
  * @property {"card"|"column"|"label"|"structure"} kind
  * @property {number} index  position in its op array (-1 for structure)
- * @property {string} code   e.g. "invalid_id", "unknown_column", "limit", "invalid_op"
+ * @property {string} code   "invalid_id", "unknown_card", "unknown_column", "exists", "limit" or
+ *   "invalid_op". "limit" covers the count caps, the board byte budget (LIMITS.boardBytes) and a
+ *   column delete that would cascade too far (LIMITS.columnDeleteCards/columnDeleteComments).
  * @property {string} message
  */
 
@@ -177,6 +194,10 @@
  * status: "applied" when something changed and nothing conflicted; "conflict" when any op
  * conflicted (others may still have applied); "unchanged" when nothing changed and nothing
  * conflicted (errors may be present).
+ *
+ * duplicate: the request's requestId was already recorded, so nothing was applied. `status`,
+ * `conflicts` (ids only; `current` is re-read now) and `errors` are the recorded ones, `revision`
+ * is the CURRENT revision, and the diff fields are empty. No event is broadcast.
  *
  * @typedef {object} OperationResult
  * @property {"applied"|"conflict"|"unchanged"} status
@@ -189,6 +210,7 @@
  * @property {HistoryEntry|null} history
  * @property {Conflict[]} conflicts
  * @property {OpError[]} errors
+ * @property {boolean} [duplicate]    true when this is the recorded answer to a replayed requestId
  */
 
 /**
@@ -239,10 +261,37 @@
  */
 
 /**
+ * Second argument of subscribe(callback, client).
  * @typedef {object} ClientInfo
  * @property {string} clientId
  * @property {string} name
  * @property {string} color
+ * @property {string} [session]  the session subscribe() returned earlier for this clientId. Needed
+ *   to replace a live subscription for the same clientId; a 32-hex value is also kept as the new
+ *   session when the server has no entry (e.g. after a restart), so the token stays stable.
+ */
+
+/**
+ * What subscribe() returns: the snapshot plus the subscription's session token (32 lowercase hex,
+ * 128 bits). The token is never broadcast. It must accompany updatePresence and leavePresence,
+ * and a re-subscribe for the same clientId while the old subscription is live.
+ *
+ * subscribe throws Error("clientId in use") when a live subscription for clientId has a different
+ * session, and Error("board is full") beyond LIMITS.subscribers.
+ * @typedef {BoardSnapshot & {session: string}} SubscribeResult
+ */
+
+/**
+ * Argument of updatePresence. Returns {known, revision}; known is false when this server
+ * instance has no subscription for clientId or the session does not match it.
+ * @typedef {object} PresenceUpdate
+ * @property {string} clientId
+ * @property {string} session
+ * @property {string} [name]
+ * @property {string} [color]
+ * @property {string|null} [openCardId]
+ * @property {string|null} [dragCardId]
+ * @property {string|null} [hoverColumnId]
  */
 
 // ---------------------------------------------------------------------------------------------
@@ -253,11 +302,29 @@ export const SCHEMA_VERSION = 1;
 
 export const LIMITS = Object.freeze({
   columns: 50,
-  cards: 5000,
+  cards: 2000,
   labels: 50,
   labelsPerCard: 20,
-  checklistItems: 100,
-  commentsPerCard: 500,
+  checklistItems: 50,
+  commentsPerCard: 200,
+  /**
+   * Budget for the stored size of all cards together (sum of each card's conservative stored
+   * size: UTF-8 JSON bytes, or 2 bytes per UTF-16 unit when non-Latin-1). Creates, growing edits
+   * and undo restores beyond it fail with "limit"; shrinking edits, moves and deletes always work.
+   * Keeps the snapshot well inside the 32 MiB RPC message and 128 MB isolate limits.
+   */
+  boardBytes: 8 * 1024 * 1024,
+  /** Same measure, for all comments of one card. */
+  commentBytesPerCard: 256 * 1024,
+  /** A column delete is refused ("limit") when the column holds more cards than this... */
+  columnDeleteCards: 200,
+  /** ...or when one request would remove more comments than this (card and column deletes). */
+  columnDeleteComments: 5000,
+  /** Recent requestIds remembered for idempotent replays (entries, and serialized bytes). */
+  requestRecords: 500,
+  requestRecordBytes: 64 * 1024,
+  /** Live subscriptions per board; subscribe beyond this throws "board is full". */
+  subscribers: 200,
   historyEntries: 200,
   /** Serialized JSON bytes; oldest history entries are dropped beyond this. */
   historyBytes: 100 * 1024,
@@ -267,11 +334,11 @@ export const LIMITS = Object.freeze({
   boardTitle: 200,
   columnName: 80,
   cardTitle: 500,
-  description: 20000,
+  description: 10000,
   assignee: 80,
-  checklistText: 300,
+  checklistText: 200,
   labelName: 40,
-  commentText: 4000,
+  commentText: 2000,
   displayName: 40,
   orderKey: 128,
   summary: 200,
@@ -284,7 +351,7 @@ export const DEFAULT_TITLE = "Untitled board";
 export const DEFAULT_COLUMNS = ["Backlog", "To do", "In progress", "Done"];
 /** @type {ReadonlyArray<{name: string, color: string}>} */
 export const DEFAULT_LABELS = [
-  { name: "Bug", color: "#d64545" },
+  { name: "Bug", color: "#c93c3c" },
   { name: "Feature", color: "#3b82f6" },
   { name: "Urgent", color: "#e8871e" },
   { name: "Chore", color: "#6b7280" },
@@ -295,6 +362,8 @@ export const ID_PREFIX = Object.freeze({
 });
 
 const ID_RE = /^[a-z]_[0-9a-f]{8}$/;
+const REQUEST_ID_RE = /^[A-Za-z0-9:_-]{1,64}$/;
+const SESSION_RE = /^[0-9a-f]{32}$/;
 const ORDER_RE = /^[0-9A-Za-z]+$/;
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
@@ -323,6 +392,23 @@ export function newId(kind) {
  */
 export function isId(id, kind) {
   return typeof id === "string" && ID_RE.test(id) && id[0] === ID_PREFIX[kind];
+}
+
+/** @param {unknown} v @returns {v is string} a valid OperationRequest.requestId */
+export function isRequestId(v) {
+  return typeof v === "string" && REQUEST_ID_RE.test(v);
+}
+
+/** @param {unknown} v @returns {v is string} a well-formed session token (32 lowercase hex) */
+export function isSession(v) {
+  return typeof v === "string" && SESSION_RE.test(v);
+}
+
+/** @returns {string} a fresh session token: 128 random bits as 32 lowercase hex digits */
+export function newSession() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 // ---------------------------------------------------------------------------------------------

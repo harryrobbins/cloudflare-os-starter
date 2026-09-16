@@ -346,8 +346,13 @@ describe("restart recovery", () => {
     server.restart();
     await settle(1000);
     expect(a.store.getState().connection).toBe("live");
-    expect(opsFrom(server, a.clientId)).toHaveLength(1);
+    // Re-sent verbatim under the same requestId; the server answers duplicate and applies nothing.
+    const sends = opsFrom(server, a.clientId);
+    expect(sends).toHaveLength(2);
+    expect(sends[1].args[0]).toEqual(sends[0].args[0]);
+    expect(sends[0].args[0].requestId).toMatch(new RegExp("^" + a.clientId + ":\\d+$"));
     expect(server.history).toHaveLength(1);
+    expect(a.store.getState().lastError).toBeNull();
     expect(a.store.getState().conflicts.size).toBe(0);
     expect(a.store.getState().pending).toBe(0);
     expect(a.store.getState().board.cards[cardId]).toEqual(server.cards[cardId]);
@@ -538,5 +543,224 @@ describe("dispose", () => {
     const presence = server.callsOf("updatePresence").length;
     await settle(PRESENCE_HEARTBEAT_MS * 3);
     expect(server.callsOf("updatePresence").length).toBe(presence);
+  });
+});
+
+/**
+ * Makes another writer change `cardId` just before each of the first `times` requests from
+ * `clientId` is applied, with `change(card)` returning the replacement fields.
+ */
+function interfere(server, clientId, cardId, times, change) {
+  const original = server.applyOnce.bind(server);
+  let left = times;
+  server.applyOnce = (req) => {
+    const card = server.cards[cardId];
+    if (req.senderId === clientId && left > 0 && card) {
+      left--;
+      server.cards[cardId] = { ...card, ...change(card), version: card.version + 1 };
+      server.revision++;
+    }
+    return original(req);
+  };
+}
+
+describe("stale moves and deletes", () => {
+  it("keeps retrying a move while others only edit the card's content", async () => {
+    const { server, done, cardId, clients: [a] } = await setup({ n: 1 });
+    let n = 0;
+    interfere(server, a.clientId, cardId, 3, () => ({ description: "edit " + ++n }));
+    a.store.moveCard(cardId, done, null);
+    await settle(300);
+    expect(opsFrom(server, a.clientId)).toHaveLength(4);
+    expect(server.cards[cardId]).toMatchObject({ columnId: done, description: "edit 3" });
+    expect(a.store.getState().board.cards[cardId]).toEqual(server.cards[cardId]);
+    expect(a.store.getState().pending).toBe(0);
+    expect(a.store.getState().lastError).toBeNull();
+  });
+
+  it("gives up on a move after bounded retries, with an error", async () => {
+    const { server, todo, done, cardId, clients: [a] } = await setup({ n: 1 });
+    interfere(server, a.clientId, cardId, 100, (c) => ({ description: c.description + "x" }));
+    a.store.moveCard(cardId, done, null);
+    await settle(500);
+    expect(opsFrom(server, a.clientId)).toHaveLength(6); // first send + 5 retries
+    expect(server.cards[cardId].columnId).toBe(todo);
+    expect(a.store.getState().board.cards[cardId].columnId).toBe(todo);
+    expect(a.store.getState().pending).toBe(0);
+    expect(a.store.getState().lastError).toMatch(/move/);
+    expect(a.changes.some((c) => c.change.kind === "error")).toBe(true);
+  });
+
+  it("does not retry a move when someone else moved the card, and says so", async () => {
+    const { server, done, cardId, clients: [a] } = await setup({ n: 1 });
+    interfere(server, a.clientId, cardId, 1, () => ({ order: "zz" }));
+    a.store.moveCard(cardId, done, null);
+    await settle(300);
+    expect(opsFrom(server, a.clientId)).toHaveLength(1);
+    expect(server.cards[cardId].order).toBe("zz");
+    expect(a.store.getState().board.cards[cardId]).toEqual(server.cards[cardId]);
+    expect(a.store.getState().lastError).toMatch(/someone else moved/);
+  });
+
+  it("keeps retrying a delete while the card exists", async () => {
+    const { server, cardId, clients: [a] } = await setup({ n: 1 });
+    interfere(server, a.clientId, cardId, 2, (c) => ({ title: c.title + "!" }));
+    a.store.deleteCard(cardId);
+    await settle(300);
+    expect(opsFrom(server, a.clientId)).toHaveLength(3);
+    expect(server.cards[cardId]).toBeUndefined();
+    expect(a.store.getState().board.cards[cardId]).toBeUndefined();
+    expect(a.store.getState().lastError).toBeNull();
+  });
+
+  it("gives up on a delete after bounded retries, with an error", async () => {
+    const { server, cardId, clients: [a] } = await setup({ n: 1 });
+    interfere(server, a.clientId, cardId, 100, (c) => ({ title: c.title + "!" }));
+    a.store.deleteCard(cardId);
+    await settle(500);
+    expect(opsFrom(server, a.clientId)).toHaveLength(6);
+    expect(server.cards[cardId]).toBeDefined();
+    expect(a.store.getState().board.cards[cardId]).toEqual(server.cards[cardId]);
+    expect(a.store.getState().lastError).toMatch(/deleted/);
+  });
+});
+
+describe("requests and replays", () => {
+  it("gives every request a monotonic requestId, including undo", async () => {
+    const { server, cardId, clients: [a] } = await setup({ n: 1 });
+    a.store.updateCard(cardId, { title: "one" });
+    await settle(50);
+    a.store.updateCard(cardId, { title: "two" });
+    await settle(50);
+    await Promise.all([a.store.undo(server.history[1].id), settle(50)]);
+    const ids = server.requestIds;
+    expect(ids).toHaveLength(3);
+    expect(ids.map((id) => id.split(":")[0])).toEqual([a.clientId, a.clientId, a.clientId]);
+    const seqs = ids.map((id) => Number(id.split(":")[1]));
+    expect(seqs[0]).toBeLessThan(seqs[1]);
+    expect(seqs[1]).toBeLessThan(seqs[2]);
+    expect(server.callsOf("undo")[0].args[0].requestId).toBe(ids[2]);
+  });
+
+  it("keeps request ids to 64 characters the server accepts, whatever the clientId", async () => {
+    const server = new FakeServer({ latency: 5 });
+    const col = server.seedColumn("C");
+    const a = await startStore(server, "long", { clientId: "x.y " + "x".repeat(64) });
+    a.store.createCard(col, { title: "t" });
+    await settle(100);
+    expect(server.requestIds).toHaveLength(1);
+    expect(server.requestIds[0].length).toBeLessThanOrEqual(64);
+    expect(server.requestIds[0]).toMatch(/^x_y_x+:1$/);
+  });
+
+  it("replays a failed request against its original base, so a concurrent edit conflicts", async () => {
+    const { server, cardId, clients: [a] } = await setup({ n: 1, latency: 20 });
+    server.failNext("applyOperation");
+    a.store.updateCard(cardId, { title: "Mine" });
+    await settle(5);
+    // Someone else saves the same field while A's request is failing.
+    server.doApply({ senderId: "agent", cardOps: [{ op: "upsert", cardId, baseVersion: 1, card: { title: "Theirs" } }] });
+    await settle(1000);
+    const sends = opsFrom(server, a.clientId);
+    expect(sends).toHaveLength(2);
+    expect(sends[1].args[0]).toEqual(sends[0].args[0]);
+    expect(sends[1].args[0].cardOps[0].baseVersion).toBe(1);
+    expect(server.cards[cardId].title).toBe("Theirs");
+    expect(a.store.getState().conflicts.get(cardId)).toMatchObject({ mine: { title: "Mine" }, theirs: { title: "Theirs" } });
+  });
+
+  it("sends nothing new until the replayed request has an outcome", async () => {
+    const { server, cardId, todo, clients: [a] } = await setup({ n: 1, latency: 20 });
+    server.failNext("applyOperation");
+    a.store.updateCard(cardId, { title: "first" });
+    await settle(5);
+    a.store.updateCard(cardId, { description: "second" }); // must not merge into the failed send
+    a.store.createCard(todo, { title: "third" });
+    await settle(1000);
+    const sends = opsFrom(server, a.clientId).map((c) => c.args[0]);
+    expect(sends[1]).toEqual(sends[0]);
+    expect(sends[0].cardOps).toHaveLength(1);
+    expect(sends.slice(2).every((r) => r.requestId !== sends[0].requestId)).toBe(true);
+    expect(server.cards[cardId]).toMatchObject({ title: "first", description: "second" });
+    expect(a.store.getState().pending).toBe(0);
+  });
+
+  it("does not resurrect a created card deleted while its result was lost", async () => {
+    const { server, todo, clients: [a] } = await setup({ n: 1, latency: 30 });
+    const id = a.store.createCard(todo, { title: "Temp" });
+    await settle(45); // created on the server, result in transit
+    expect(server.cards[id]).toBeDefined();
+    server.doApply({ senderId: "agent", cardOps: [{ op: "delete", cardId: id, baseVersion: 1 }] });
+    server.restart();
+    await settle(1000);
+    expect(opsFrom(server, a.clientId)).toHaveLength(2);
+    expect(server.cards[id]).toBeUndefined();
+    expect(a.store.getState().board.cards[id]).toBeUndefined();
+    expect(a.store.getState().pending).toBe(0);
+    expect(a.store.getState().lastError).toBeNull();
+    expect(a.store.getState().conflicts.size).toBe(0);
+  });
+
+  it("rolls back a change the server refuses with a limit error", async () => {
+    const { server, todo, clients: [a] } = await setup({ n: 1 });
+    const original = server.applyOnce.bind(server);
+    server.applyOnce = (req) => (req.cardOps?.some((o) => o.op === "upsert" && o.baseVersion === 0)
+      ? { status: "unchanged", revision: server.revision, upserts: [], deletes: [], moved: [], structure: null,
+        labels: null, history: null, conflicts: [],
+        errors: [{ kind: "card", index: 0, code: "limit", message: "The board is full." }] }
+      : original(req));
+    const id = a.store.createCard(todo, { title: "Too much" });
+    await settle(100);
+    expect(a.store.getState().board.cards[id]).toBeUndefined();
+    expect(a.store.getState().pending).toBe(0);
+    expect(a.store.getState().lastError).toBe("The board is full.");
+  });
+});
+
+describe("sessions", () => {
+  it("keeps its server-issued session across re-subscribes and presence calls", async () => {
+    const { server, clients: [a] } = await setup({ n: 1 });
+    const session = server.subscribers.get(a.clientId).session;
+    server.restart();
+    await settle(PRESENCE_HEARTBEAT_MS + 1000);
+    const subs = server.callsOf("subscribe").filter((c) => c.args[0].clientId === a.clientId);
+    expect(subs.length).toBe(2);
+    expect(subs[0].args[0].session).toBeUndefined();
+    expect(subs[1].args[0].session).toBe(session);
+    expect(server.subscribers.get(a.clientId).session).toBe(session);
+    expect(a.store.getState().board.session).toBeUndefined();
+    const presence = server.callsOf("updatePresence").filter((c) => c.args[0].clientId === a.clientId);
+    expect(presence.at(-1).args[0].session).toBe(session);
+    a.store.dispose();
+    await settle(100);
+    expect(server.callsOf("leavePresence")[0].args).toEqual([a.clientId, session]);
+    expect(server.subscribers.has(a.clientId)).toBe(false);
+  });
+
+  it("re-subscribes after a callback dispose with the same session (no 'clientId in use')", async () => {
+    const { server, clients: [a] } = await setup({ n: 1 });
+    // The old subscription is still registered on the server when the gap resync happens.
+    const session = server.subscribers.get(a.clientId).session;
+    server.subscribers.get(a.clientId).callback[Symbol.dispose]();
+    await settle(200);
+    expect(a.store.getState().connection).toBe("live");
+    expect(a.store.getState().viewer.clientId).toBe(a.clientId);
+    expect(server.subscribers.get(a.clientId).session).toBe(session);
+  });
+
+  it("takes a new clientId when its id is held by another session", async () => {
+    const { server, clients: [a] } = await setup({ n: 1 });
+    const b = await startStore(server, "dup", { clientId: a.clientId });
+    await settle(100);
+    const bId = b.store.getState().viewer.clientId;
+    expect(bId).not.toBe(a.clientId);
+    expect(b.store.getState().connection).toBe("live");
+    expect(server.subscribers.has(bId)).toBe(true);
+    expect(server.subscribers.has(a.clientId)).toBe(true);
+    expect([...a.store.getState().peers.keys()]).toEqual([bId]);
+    expect([...b.store.getState().peers.keys()]).toEqual([a.clientId]);
+    b.store.updateCard(Object.keys(server.cards)[0], { title: "from b" });
+    await settle(100);
+    expect(server.requestIds.at(-1).startsWith(bId + ":")).toBe(true);
   });
 });

@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { cardsInColumn } from "../../src/shared/protocol.js";
 import { isValidOrderKey } from "../../src/shared/order.js";
 import { diffBoards } from "../../src/client/model/diff.js";
-import { buildRequest, deriveBoard, dependsOn, mergeOps } from "../../src/client/model/ops.js";
+import { alreadyApplied, buildRequest, deriveBoard, dependsOn, mergeOps } from "../../src/client/model/ops.js";
 import { placeCard } from "../../src/client/model/placement.js";
-import { decidePatchConflict, mergeChecklist } from "../../src/client/model/rebase.js";
+import { decidePatchConflict, mergeChecklist, patchMatches } from "../../src/client/model/rebase.js";
 import { applyUpdate, createServerModel } from "../../src/client/model/server-model.js";
 
 /** @param {Partial<import("../../src/shared/protocol.js").Card>} f */
@@ -108,6 +108,36 @@ describe("mergeChecklist and decidePatchConflict", () => {
   });
 });
 
+describe("comparing patches as the server stores them", () => {
+  const labels = { l_00000001: { id: "l_00000001", name: "Bug", color: "#ff0000" } };
+
+  it("acks a conflict where mine differs from theirs only by server cleaning", () => {
+    const base = card({ title: "A" });
+    const theirs = card({ title: "Same", description: "x\ny", assignee: "Lee", due: null, version: 2 });
+    expect(decidePatchConflict({ title: "Same  " }, base, theirs, 0, labels).action).toBe("ack");
+    expect(decidePatchConflict({ description: "x\r\ny", assignee: " Lee " }, base, theirs, 0, labels).action).toBe("ack");
+    expect(decidePatchConflict({ due: "2026-02-30" }, card({ due: "2026-01-01" }), theirs, 0, labels).action).toBe("ack");
+    expect(decidePatchConflict({ title: "Other" }, base, theirs, 0, labels).action).toBe("conflict");
+  });
+
+  it("ignores unknown label ids and matches checklist items the server would give ids", () => {
+    const theirs = card({
+      labels: ["l_00000001"], checklist: [{ id: "i_0000000a", text: "new item", done: false }], version: 2,
+    });
+    expect(patchMatches({ labels: ["l_00000001", "l_0000dead"] }, theirs, labels)).toBe(true);
+    expect(patchMatches({ checklist: [{ text: " new item ", done: false }] }, theirs, labels)).toBe(true);
+    expect(patchMatches({ checklist: [{ id: "i_0000000b", text: "new item", done: false }] }, theirs, labels)).toBe(false);
+    expect(patchMatches({ checklist: [{ text: "new item", done: true }] }, theirs, labels)).toBe(false);
+    expect(decidePatchConflict({ labels: ["l_00000001", "l_0000dead"] }, card({}), theirs, 0, labels).action).toBe("ack");
+  });
+
+  it("uses cleaning to decide whether a replayed patch already applied", () => {
+    const b = board({ c_00000001: card({ title: "Same" }) });
+    expect(alreadyApplied({ type: "card.patch", cardId: "c_00000001", patch: { title: " Same\t" } }, b)).toBe(true);
+    expect(alreadyApplied({ type: "card.patch", cardId: "c_00000001", patch: { title: "Other" } }, b)).toBe(false);
+  });
+});
+
 describe("server model", () => {
   it("ignores updates not newer than what it holds", () => {
     const m = createServerModel(board({ c_00000001: card({ title: "old" }) }));
@@ -172,5 +202,18 @@ describe("ops", () => {
       structure: { title: "T" },
     });
     expect(refs.get(/** @type {any} */ (ops[2]))).toEqual({ array: "structure", index: -1 });
+  });
+
+  it("carries the requestId, and a replayed card op keeps its original base version", () => {
+    const ops = [
+      { type: "card.patch", cardId: "c_1", patch: { title: "t" }, replayed: true, baseCard: card({ version: 4 }) },
+      { type: "card.move", cardId: "c_2", toColumnId: "k_1", order: "a0", replayed: true, baseCard: card({ version: 2 }) },
+      { type: "card.delete", cardId: "c_3", replayed: false, baseCard: card({ version: 1 }) },
+    ];
+    const { request } = buildRequest(/** @type {any} */ (ops), {
+      senderId: "me", by: "Me", requestId: "me:3", cardVersion: () => 9, columnVersion: () => 3,
+    });
+    expect(request.requestId).toBe("me:3");
+    expect(request.cardOps?.map((o) => o.baseVersion)).toEqual([4, 2, 9]);
   });
 });

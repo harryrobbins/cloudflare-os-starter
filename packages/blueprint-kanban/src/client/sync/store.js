@@ -7,12 +7,11 @@ import {
   LIMITS, PRESENCE_HEARTBEAT_MS, PRESENCE_STALE_MS, cleanLine, newId,
 } from "../../shared/protocol.js";
 import { diffBoards } from "../model/diff.js";
-import { deepEqual } from "../model/equal.js";
 import {
   alreadyApplied, buildRequest, cardIdOf, dependsOn, deriveBoard, mergeOps, pickCardFields,
 } from "../model/ops.js";
 import { placeCard } from "../model/placement.js";
-import { decidePatchConflict } from "../model/rebase.js";
+import { decidePatchConflict, patchMatches } from "../model/rebase.js";
 import {
   applyCardState, applyColumnState, applyUpdate, createServerModel,
 } from "../model/server-model.js";
@@ -45,7 +44,22 @@ export const REQUEST_TIMEOUT_MS = 30000;
 export const MAX_SEND_FAILURES = 3;
 export const BACKOFF_BASE_MS = 500;
 export const BACKOFF_MAX_MS = 10000;
-const HISTORY_MAX = LIMITS.historyEntries;
+/**
+ * Automatic re-sends of a card move or a delete rejected as stale while the target was only
+ * changed in ways that don't contradict it (content edits, not someone else's move).
+ */
+export const MAX_POSITION_RETRIES = 5;
+/** New client ids tried in a row when the server says ours is held by another session. */
+export const MAX_CLIENT_ID_RENAMES = 3;
+/** Request ids are `${clientId}:${seq}`, at most this long, of [A-Za-z0-9:_-]. */
+export const REQUEST_ID_MAX = 64;
+
+function randomClientId() {
+  const bytes = new Uint8Array(8);
+  if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(bytes);
+  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 function defaultTimers() {
   return {
@@ -67,7 +81,11 @@ export async function createStore(options) {
 
   /** @type {Viewer} */
   const viewer = { ...options.viewer };
-  const clientId = viewer.clientId;
+  // The server may refuse our clientId (held by another live session); we then pick a new one.
+  let clientId = viewer.clientId;
+  /** @type {string|null} issued by the server on first subscribe, sent back on every later call */
+  let session = null;
+  let clientIdRenames = 0;
 
   /** @type {ServerModel} */
   let model = createServerModel({
@@ -77,8 +95,17 @@ export async function createStore(options) {
   /** @type {PendingOp[]} */
   let queue = [];
   let seq = 0;
-  /** @type {{token: number, ops: PendingOp[], refs: Map<PendingOp, WireRef>, timer: any}|null} */
+  let requestSeq = 0;
+  /**
+   * One request as sent. A request whose outcome is unknown (it failed or timed out) is kept
+   * as `replay` and re-sent verbatim, with the same requestId, before anything else: the server
+   * recognises the id and reports the original outcome instead of applying it twice.
+   * @typedef {{requestId: string, ops: PendingOp[], refs: Map<PendingOp, WireRef>, request: any}} Batch
+   */
+  /** @type {(Batch & {token: number, timer: any})|null} */
   let inflight = null;
+  /** @type {Batch|null} */
+  let replay = null;
   let requestToken = 0;
 
   // Revisions: `lastRevision` is the highest revision up to which this client has seen every
@@ -184,7 +211,8 @@ export async function createStore(options) {
       added = true;
     }
     if (!added) return;
-    if (state.history.length > HISTORY_MAX) state.history.splice(0, state.history.length - HISTORY_MAX);
+    const max = LIMITS.historyEntries;
+    if (state.history.length > max) state.history.splice(0, state.history.length - max);
     emit({ kind: "history" });
   }
 
@@ -222,7 +250,8 @@ export async function createStore(options) {
 
   /** @param {BoardSnapshot} snapshot */
   function installSnapshot(snapshot) {
-    model = createServerModel(snapshot);
+    const { session: _session, ...board } = /** @type {BoardSnapshot & {session?: string}} */ (snapshot);
+    model = createServerModel(board);
     for (const id of Object.keys(model.board.cards)) everSeen.add(id);
     lastRevision = model.board.revision;
     ackedRevisions.clear();
@@ -274,7 +303,25 @@ export async function createStore(options) {
   // -----------------------------------------------------------------------------------------
 
   function clientInfo() {
-    return { clientId, name: viewer.name, color: viewer.color };
+    /** @type {{clientId: string, name: string, color: string, session?: string}} */
+    const info = { clientId, name: viewer.name, color: viewer.color };
+    if (session) info.session = session;
+    return info;
+  }
+
+  /** `${clientId}:${seq}`, restricted to the characters and length the server accepts. */
+  function nextRequestId() {
+    const suffix = ":" + ++requestSeq;
+    const prefix = clientId.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, REQUEST_ID_MAX - suffix.length);
+    return prefix + suffix;
+  }
+
+  /** Our clientId is held by another session: take a fresh identity. */
+  function renameClient() {
+    clientId = randomClientId();
+    viewer.clientId = clientId;
+    session = null;
+    emit({ kind: "viewer" });
   }
 
   class Callbacks extends RpcTarget {
@@ -316,6 +363,9 @@ export async function createStore(options) {
     try {
       const snapshot = await gadget.subscribe(new Callbacks(gen), clientInfo());
       if (disposed || gen !== generation) return;
+      const issued = /** @type {any} */ (snapshot)?.session;
+      if (typeof issued === "string" && issued) session = issued;
+      clientIdRenames = 0;
       generationReady = true;
       const events = buffered;
       buffered = [];
@@ -326,8 +376,15 @@ export async function createStore(options) {
       onFirstLive?.();
       onFirstLive = null;
       pump();
-    } catch {
+    } catch (err) {
       if (disposed || gen !== generation) return;
+      const message = String(/** @type {any} */ (err)?.message ?? err);
+      if (message.includes("clientId in use") && clientIdRenames < MAX_CLIENT_ID_RENAMES) {
+        clientIdRenames++;
+        renameClient();
+        void attemptSubscribe();
+        return;
+      }
       scheduleSubscribe();
     }
   }
@@ -361,7 +418,6 @@ export async function createStore(options) {
    */
   function shouldSend(op) {
     const server = model.board;
-    if (op.replayed && alreadyApplied(op, server)) return false;
     const cardId = cardIdOf(op);
     if (cardId && op.type !== "card.create" && !server.cards[cardId]) {
       if (op.type === "card.patch" && everSeen.has(cardId)) {
@@ -378,6 +434,11 @@ export async function createStore(options) {
 
   function pump() {
     if (disposed || inflight || state.connection !== "live" || !generationReady) return;
+    if (replay) {
+      // The outcome of this exact request is unknown; settle it before sending anything new.
+      send(replay);
+      return;
+    }
     /** @type {PendingOp[]} */
     const batch = [];
     let dropped = false;
@@ -396,21 +457,30 @@ export async function createStore(options) {
     if (batch.length === 0) return;
 
     for (const op of batch) {
-      op.inflight = true;
       const cardId = cardIdOf(op);
       op.baseCard = cardId ? model.board.cards[cardId] ?? null : null;
     }
+    const requestId = nextRequestId();
     const { request, refs } = buildRequest(batch, {
       senderId: clientId,
       by: viewer.name,
+      requestId,
       cardVersion: (id) => model.board.cards[id]?.version ?? 0,
       columnVersion: (id) => model.board.columns[id]?.version ?? 0,
     });
+    send({ requestId, ops: batch, refs, request });
+  }
+
+  /** @param {Batch} batch */
+  function send(batch) {
+    replay = null;
+    for (const op of batch.ops) op.inflight = true;
     const token = ++requestToken;
     const timer = timers.setTimeout(() => {
       if (inflight?.token === token) onSendFailure(token);
     }, REQUEST_TIMEOUT_MS);
-    inflight = { token, ops: batch, refs, timer };
+    inflight = { ...batch, token, timer };
+    const request = batch.request;
     Promise.resolve()
       .then(() => gadget.applyOperation(request))
       .then(
@@ -422,22 +492,26 @@ export async function createStore(options) {
   /** @param {number} token */
   function onSendFailure(token) {
     if (!inflight || inflight.token !== token) return;
-    timers.clearTimeout(inflight.timer);
-    /** @type {Set<PendingOp>} */
-    const abandoned = new Set();
-    for (const op of inflight.ops) {
-      op.inflight = false;
+    const { timer, token: _token, ...batch } = inflight;
+    timers.clearTimeout(timer);
+    inflight = null;
+    let abandon = false;
+    for (const op of batch.ops) {
+      // Still marked in flight: nothing may merge into an op whose request will be re-sent as is.
       op.replayed = true;
       op.sendFailures = (op.sendFailures ?? 0) + 1;
-      if (op.sendFailures > MAX_SEND_FAILURES) abandoned.add(op);
+      if (op.sendFailures > MAX_SEND_FAILURES) abandon = true;
     }
-    inflight = null;
     if (disposed) return;
-    if (abandoned.size) {
+    if (abandon) {
       // A request that keeps failing is more likely rejected than lost; stop retrying it.
+      const abandoned = new Set(batch.ops);
+      for (const op of batch.ops) op.inflight = false;
       queue = queue.filter((op) => !abandoned.has(op));
       refresh("operation");
       setError("A change could not be saved and was undone.");
+    } else {
+      replay = batch;
     }
     resubscribe();
   }
@@ -464,10 +538,16 @@ export async function createStore(options) {
     failures = 0;
 
     const revision = result.revision;
-    applyServerUpdate(result, revision);
-    const changedSomething = (result.upserts?.length ?? 0) > 0 || (result.deletes?.length ?? 0) > 0 ||
-      Boolean(result.structure) || Boolean(result.labels);
-    if (changedSomething) noteOwnRevision(revision);
+    // A duplicate is the server's record of a request it had already applied (we re-sent it
+    // after losing the result). Its effects are in the snapshot we re-subscribed with, so only
+    // its per-op outcome (errors, conflicts with present values) is used.
+    const duplicate = /** @type {any} */ (result).duplicate === true;
+    if (!duplicate) {
+      applyServerUpdate(result, revision);
+      const changedSomething = (result.upserts?.length ?? 0) > 0 || (result.deletes?.length ?? 0) > 0 ||
+        Boolean(result.structure) || Boolean(result.labels);
+      if (changedSomething) noteOwnRevision(revision);
+    }
 
     /** @type {Map<string, import("../../shared/protocol.js").OpError>} */
     const errors = new Map();
@@ -487,6 +567,9 @@ export async function createStore(options) {
     /** @type {string|null} */
     let errorMessage = null;
     const conflictCards = [];
+
+    /** @param {string} message */
+    const report = (message) => { errorMessage = message; };
 
     for (const op of ops) {
       op.inflight = false;
@@ -514,7 +597,7 @@ export async function createStore(options) {
       const current = conflicts.get(key) ?? null;
       if (cardId) applyCardState(model, cardId, /** @type {Card|null} */ (current), revision);
       else applyColumnState(model, /** @type {any} */ (op).columnId, /** @type {Column|null} */ (current));
-      if (!handleConflict(op, current)) done.add(op);
+      if (!handleConflict(op, current, report)) done.add(op);
       else if (cardId) conflictCards.push(cardId);
     }
 
@@ -531,8 +614,9 @@ export async function createStore(options) {
    * for another attempt (mutating it as needed), false to drop it.
    * @param {PendingOp} op
    * @param {Card|Column|null} current
+   * @param {(message: string) => void} report  called when a change is given up for good
    */
-  function handleConflict(op, current) {
+  function handleConflict(op, current, report) {
     const server = model.board;
     if (op.type !== "card.patch" && alreadyApplied(op, server)) return false;
     switch (op.type) {
@@ -545,12 +629,10 @@ export async function createStore(options) {
       case "card.patch": {
         const theirs = server.cards[op.cardId] ?? null;
         if (op.pinnedBase != null) {
-          const same = theirs && Object.entries(op.patch)
-            .every(([k, v]) => deepEqual(/** @type {any} */ (theirs)[k], v));
-          if (!same) addConflict(op.cardId, op.patch, theirs);
+          if (!patchMatches(op.patch, theirs, server.labels)) addConflict(op.cardId, op.patch, theirs);
           return false;
         }
-        const decision = decidePatchConflict(op.patch, op.baseCard ?? null, theirs, op.retries);
+        const decision = decidePatchConflict(op.patch, op.baseCard ?? null, theirs, op.retries, server.labels);
         if (decision.action === "retry") {
           op.patch = decision.patch;
           op.retries++;
@@ -560,16 +642,36 @@ export async function createStore(options) {
         if (decision.action === "conflict") addConflict(op.cardId, op.patch, theirs);
         return false;
       }
-      case "card.move":
+      case "card.move": {
+        if (!current) return false; // deleted meanwhile: nothing left to move
+        const card = /** @type {Card} */ (current);
+        const base = op.baseCard;
+        // Someone else only edited the card (content, not position): my move still stands.
+        const positionKept = !base || (card.columnId === base.columnId && card.order === base.order);
+        if (positionKept && op.retries < MAX_POSITION_RETRIES) return retry(op);
+        report(positionKept
+          ? "A card move could not be saved because the card kept changing."
+          : "A card move was not saved because someone else moved the card first.");
+        return false;
+      }
       case "card.delete":
       case "column.delete":
-        if (!current || op.retries > 0) return false;
-        op.retries++;
-        op.replayed = false;
-        return true;
+        if (!current) return false; // already gone
+        if (op.retries < MAX_POSITION_RETRIES) return retry(op);
+        report(op.type === "card.delete"
+          ? "A card could not be deleted because it kept changing."
+          : "A column could not be deleted because it kept changing.");
+        return false;
       default:
         return false;
     }
+  }
+
+  /** @param {PendingOp} op */
+  function retry(op) {
+    op.retries++;
+    op.replayed = false;
+    return true;
   }
 
   /**
@@ -837,14 +939,16 @@ export async function createStore(options) {
     async loadHistory(limit) {
       const entries = /** @type {HistoryEntry[]} */ (await gadget.getHistory(limit) ?? []);
       const ids = new Set(entries.map((e) => e.id));
-      state.history = [...entries, ...state.history.filter((h) => !ids.has(h.id))].slice(-HISTORY_MAX);
+      state.history = [...entries, ...state.history.filter((h) => !ids.has(h.id))].slice(-LIMITS.historyEntries);
       emit({ kind: "history" });
       return state.history;
     },
 
     async undo(historyId) {
       /** @type {OperationResult} */
-      const result = await gadget.undo({ senderId: clientId, by: viewer.name, historyId });
+      const result = await gadget.undo({
+        senderId: clientId, by: viewer.name, historyId, requestId: nextRequestId(),
+      });
       if (disposed || !result) return;
       const res = applyServerUpdate(result, result.revision);
       if (res.cards.length || res.structure || res.labels) noteOwnRevision(result.revision);
@@ -896,7 +1000,7 @@ export async function createStore(options) {
       heartbeat = retryTimer = gapTimer = presenceTimer = null;
       listeners.clear();
       Promise.resolve()
-        .then(() => gadget.leavePresence(clientId))
+        .then(() => gadget.leavePresence(clientId, session ?? undefined))
         .catch(() => {});
     },
   };

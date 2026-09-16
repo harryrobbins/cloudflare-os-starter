@@ -15,7 +15,13 @@ export function h(tag, attrs, ...children) {
       if (value == null || value === false) continue;
       if (key === "class") el.className = value;
       else if (key === "dataset") Object.assign(el.dataset, value);
-      else if (key === "style" && typeof value === "object") Object.assign(el.style, value);
+      else if (key === "style" && typeof value === "object") {
+        for (const [prop, v] of Object.entries(value)) {
+          if (v == null) continue;
+          if (prop.startsWith("--")) el.style.setProperty(prop, String(v));
+          else /** @type {any} */ (el.style)[prop] = v;
+        }
+      }
       else if (key.startsWith("on") && typeof value === "function") {
         el.addEventListener(key.slice(2), value);
       } else if (key === "value") /** @type {any} */ (el).value = value;
@@ -102,16 +108,35 @@ export function initials(name) {
 }
 
 /**
- * Readable text colour (black or white) for a "#rrggbb" background.
+ * WCAG relative luminance of a "#rrggbb" colour, or null when it isn't one.
+ * @param {string} hex
+ */
+export function luminance(hex) {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
+  if (!m) return null;
+  const [r, g, b] = [m[1], m[2], m[3]].map((x) => parseInt(x, 16) / 255)
+    .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/**
+ * WCAG contrast ratio between two luminances.
+ * @param {number} a
+ * @param {number} b
+ */
+export function contrastRatio(a, b) {
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+/**
+ * Readable text colour for a "#rrggbb" background: black or white, whichever has the higher
+ * WCAG contrast ratio against it.
  * @param {string} hex
  */
 export function textOn(hex) {
-  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
-  if (!m) return "#fff";
-  const [r, g, b] = [m[1], m[2], m[3]].map((x) => parseInt(x, 16) / 255)
-    .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return lum > 0.4 ? "#111827" : "#ffffff";
+  const lum = luminance(hex);
+  if (lum === null) return "#ffffff";
+  return contrastRatio(lum, 0) > contrastRatio(lum, 1) ? "#000000" : "#ffffff";
 }
 
 /**
@@ -124,6 +149,7 @@ export function avatar(name, color, extraClass = "") {
     class: "avatar " + extraClass,
     style: { background: color, color: textOn(color) },
     title: name,
+    role: "img",
     "aria-label": name,
   }, initials(name));
 }
@@ -187,9 +213,43 @@ export function formatTime(ms) {
 
 /** Colours offered for people and labels. */
 export const PALETTE = [
-  "#d64545", "#e8871e", "#c9a100", "#2f9e44", "#0f9d8f",
-  "#3b82f6", "#6366f1", "#9c36b5", "#d6336c", "#6b7280",
+  "#c93c3c", "#e8871e", "#c9a100", "#2f9e44", "#0f9d8f",
+  "#3b82f6", "#5b5fef", "#9c36b5", "#d6336c", "#6b7280",
 ];
+
+/** Spoken names for PALETTE, index for index. */
+export const PALETTE_NAMES = [
+  "Red", "Orange", "Yellow", "Green", "Teal",
+  "Blue", "Indigo", "Purple", "Pink", "Grey",
+];
+
+/** @param {string} color */
+export function colorName(color) {
+  const i = PALETTE.indexOf(color);
+  return i === -1 ? color : PALETTE_NAMES[i];
+}
+
+/** @param {Element} el */
+export function isVisible(el) {
+  return el.isConnected && el.getClientRects().length > 0;
+}
+
+/**
+ * Makes every other top-level body child inert (a modal surface is open) and returns a function
+ * that undoes exactly what it changed. Live regions and toasts stay reachable.
+ * @param {Element[]} keep
+ * @returns {() => void}
+ */
+export function inertOthers(keep) {
+  /** @type {HTMLElement[]} */
+  const changed = [];
+  for (const el of /** @type {HTMLElement[]} */ ([...document.body.children])) {
+    if (keep.includes(el) || el.inert || el.matches("script, style, .toasts, .live-region")) continue;
+    el.inert = true;
+    changed.push(el);
+  }
+  return () => { for (const el of changed) el.inert = false; };
+}
 
 /**
  * Selectors for focusable descendants.

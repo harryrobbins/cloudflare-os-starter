@@ -417,10 +417,11 @@ describe("limits", () => {
   it("comments cap and text clamp", async () => {
     const { board, col, repo } = await ready();
     const { cardId } = await create(board, col.Backlog, { title: "t" });
+    // Stored before the board first counts this card's comments (it caches counts afterwards).
+    for (let i = 1; i < LIMITS.commentsPerCard; i++) await repo.commit({ putComments: [{ id: "m_" + i.toString(16).padStart(8, "0"), cardId, author: "a", text: "x", at: i }] });
     const { comment } = await board.addComment({ cardId, author: "", text: "x".repeat(LIMITS.commentText + 5) });
     expect(comment.text).toHaveLength(LIMITS.commentText);
     expect(comment.author).toBe("Anonymous");
-    for (let i = 1; i < LIMITS.commentsPerCard; i++) await repo.commit({ putComments: [{ ...comment, id: "m_" + i.toString(16).padStart(8, "0") }] });
     await expect(board.addComment({ cardId, author: "a", text: "one too many" })).rejects.toThrow(/maximum/);
     expect(await repo.countComments(cardId)).toBe(LIMITS.commentsPerCard);
   });

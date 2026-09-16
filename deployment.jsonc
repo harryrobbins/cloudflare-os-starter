@@ -118,6 +118,12 @@
     "release": null
   },
 
+  // Formats shipped with the deployment: a directory of <name>.gadget + <name>.json pairs, relative
+  // to this file. It REPLACES upstream's Docs/Sheets/Slides, so formats/ carries copies of them
+  // beside our Board. null ships upstream's set.
+  // Reference: docs/customization.md#bundled-formats
+  "formatBlueprintsDir": "formats",
+
   // null values use Wrangler automatic provisioning. Set IDs/names to reuse owned resources.
   // https://developers.cloudflare.com/workers/wrangler/configuration/#automatic-provisioning
   "resources": {

@@ -57,7 +57,7 @@ export class Gadget extends DurableObject {
     return (await this.#board.applyOperation(request)).result;
   }
 
-  /** @param {any} args {senderId?, by?, historyId} */
+  /** @param {any} args {senderId?, by?, historyId, requestId?} */
   async undo(args) {
     return (await this.#board.undo(args)).result;
   }
@@ -99,30 +99,40 @@ export class Gadget extends DurableObject {
   // --- Live updates and presence -------------------------------------------------------------
 
   /**
-   * Keeps `callback` (duplicated, so it outlives this call) and returns the current snapshot.
-   * The subscriber is registered before the snapshot is read, so no event is missed; events at
-   * or below the snapshot's revision may also arrive and should be ignored by the client.
+   * Keeps `callback` (duplicated, so it outlives this call) and returns the current snapshot plus
+   * the subscription's `session` token. The subscriber is registered before the snapshot is read,
+   * so no event is missed; events at or below the snapshot's revision may also arrive and should
+   * be ignored by the client. Throws "clientId in use" (live subscription, other session) or
+   * "board is full" (LIMITS.subscribers).
    * @param {any} callback RpcTarget with operation(event) and presence(event)
-   * @param {any} client {clientId, name, color}
+   * @param {any} client {clientId, name, color, session?}
+   * @returns {Promise<import("../shared/protocol.js").SubscribeResult>}
    */
   async subscribe(callback, client) {
     const stub = typeof callback?.dup === "function" ? callback.dup() : callback;
-    this.#hub.add(stub, client);
-    return this.#board.getBoard();
+    let session;
+    try {
+      ({ session } = this.#hub.add(stub, client));
+    } catch (e) {
+      if (stub !== callback) stub?.[Symbol.dispose]?.();
+      throw e;
+    }
+    return { ...(await this.#board.getBoard()), session };
   }
 
   /**
-   * Heartbeat. `known: false` tells the client this instance has no subscription for it.
-   * @param {any} presence {clientId, name, color, openCardId, dragCardId, hoverColumnId}
+   * Heartbeat. `known: false` tells the client this instance has no subscription for it (or the
+   * session does not match), so it re-subscribes.
+   * @param {any} presence {clientId, session, name, color, openCardId, dragCardId, hoverColumnId}
    */
   async updatePresence(presence) {
     const { known } = this.#hub.updatePresence(presence);
     return { known, revision: await this.#board.getRevision() };
   }
 
-  /** @param {string} clientId */
-  leavePresence(clientId) {
-    this.#hub.leave(clientId);
+  /** @param {string} clientId @param {string} session */
+  leavePresence(clientId, session) {
+    this.#hub.leave(clientId, session);
   }
 }
 

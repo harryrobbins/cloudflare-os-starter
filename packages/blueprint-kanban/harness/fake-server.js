@@ -41,8 +41,8 @@ export class FakeGadget {
   /** @param {any} callback @param {any} client */
   async subscribe(callback, client) {
     const stub = typeof callback?.dup === "function" ? callback.dup() : callback;
-    this.hub.add(stub, client);
-    return this.board.getBoard();
+    const { session } = this.hub.add(stub, client);
+    return { ...(await this.board.getBoard()), session };
   }
 
   /** @param {any} presence */
@@ -51,8 +51,8 @@ export class FakeGadget {
     return { known, revision: await this.board.getRevision() };
   }
 
-  /** @param {string} clientId */
-  leavePresence(clientId) { this.hub.leave(clientId); }
+  /** @param {string} clientId @param {string} session */
+  leavePresence(clientId, session) { this.hub.leave(clientId, session); }
 }
 
 /** Method names a pane's `gadget` proxy may call. */

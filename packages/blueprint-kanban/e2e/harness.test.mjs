@@ -412,6 +412,132 @@ describe("kanban harness", { concurrency: false }, () => {
     });
   });
 
+  test("10. keyboard moves: panel Move to / Top / Bottom, Alt+Arrow on a card, column menu Move left", async () => {
+    await withHarness({ names: ["Alice", "Bob"] }, async ({ page, frames: { A, B } }) => {
+      for (const t of ["One", "Two", "Three"]) await h.addCard(A, "Backlog", t);
+      await A.locator(".composer-input").press("Escape");
+      await h.card(B, "Three").waitFor();
+
+      // Panel: Move to another column, then back (lands at the bottom), then Top and Bottom.
+      await h.card(A, "Two").click();
+      const panel = A.locator(".panel");
+      await panel.waitFor();
+      assert.ok(await A.locator(".app").evaluate((el) => !!el.closest("[inert]")), "board is inert behind the panel");
+      const labelledBy = await panel.getAttribute("aria-labelledby");
+      assert.equal(await A.locator(`[id="${labelledBy}"]`).inputValue(), "Two", "panel is named by its title field");
+      await panel.locator(".move-select").selectOption({ label: "Done" });
+      await h.until(async () => (await h.titles(B, "Done")).join() === "Two", { message: "B sees Two in Done" });
+      assert.deepEqual(await h.titles(A, "Backlog"), ["One", "Three"]);
+      await panel.locator(".move-select").selectOption({ label: "Backlog" });
+      await h.until(async () => (await h.titles(B, "Backlog")).join() === "One,Three,Two", { message: "Two back at the bottom" });
+      await panel.locator(".move-top").click();
+      await h.until(async () => (await h.titles(B, "Backlog")).join() === "Two,One,Three", { message: "Top" });
+      await panel.locator(".move-bottom").click();
+      await h.until(async () => (await h.titles(B, "Backlog")).join() === "One,Three,Two", { message: "Bottom" });
+      await panel.press("Escape");
+      await panel.waitFor({ state: "detached" });
+      assert.ok(!(await A.locator(".app").evaluate((el) => !!el.closest("[inert]"))), "inert removed after close");
+      assert.equal((await h.focused(A)).cardTitle, "Two", "focus back on the card");
+
+      // Alt+Arrow on the focused card; focus follows the card.
+      await h.card(A, "Two").press("Alt+ArrowUp");
+      await h.until(async () => (await h.titles(A, "Backlog")).join() === "One,Two,Three", { message: "Alt+Up" });
+      assert.equal((await h.focused(A)).cardTitle, "Two");
+      await h.card(A, "Two").press("Alt+ArrowRight");
+      await h.until(async () => (await h.titles(A, "To do")).join() === "Two", { message: "Alt+Right" });
+      assert.deepEqual(await h.focused(A).then((f) => [f.cardTitle, f.columnName]), ["Two", "To do"]);
+      await h.card(A, "Two").press("Alt+ArrowLeft");
+      await h.until(async () => (await h.titles(A, "Backlog")).join() === "Two,One,Three", { message: "Alt+Left lands at the same index" });
+      assert.equal((await h.focused(A)).cardTitle, "Two");
+      await h.card(A, "Two").press("Alt+ArrowDown");
+      await h.until(async () => (await h.titles(A, "Backlog")).join() === "One,Two,Three", { message: "Alt+Down" });
+      await h.card(A, "Two").press("Alt+ArrowDown");
+      await h.until(async () => (await h.titles(B, "Backlog")).join() === "One,Three,Two", { message: "Alt+Down reaches B" });
+      assert.equal((await h.focused(A)).cardTitle, "Two");
+      // The live region is filled after a short gap so a repeated message is still announced.
+      await h.until(async () => /Two/.test(await h.liveText(A)), { message: "move announced" });
+
+      // Column menu: Move left, focus stays on that column's menu button.
+      await h.column(A, "To do").locator(".col-menu-btn").click();
+      await A.getByRole("menuitem", { name: "Move left" }).click();
+      for (const f of [A, B]) {
+        await h.until(async () => (await h.columnNames(f)).join() === "To do,Backlog,In progress,Done", { message: "column moved left" });
+      }
+      const f = await h.focused(A);
+      assert.ok(f.className.includes("col-menu-btn") && f.columnName === "To do", "focus on the moved column's menu button");
+
+      const board = await serverBoard(page);
+      const backlog = board.columnOrder.find((id) => board.columns[id].name === "Backlog");
+      const order = Object.values(board.cards).filter((c) => c.columnId === backlog)
+        .sort((a, b) => (a.order < b.order ? -1 : 1)).map((c) => c.title);
+      assert.deepEqual(order, ["One", "Three", "Two"]);
+    });
+  });
+
+  test("11. focus stays with a card a peer moves, and falls back to Add card when a peer deletes it", async () => {
+    await withHarness({ names: ["Alice", "Bob"] }, async ({ page, frames: { A } }) => {
+      for (const t of ["Alpha", "Beta"]) await h.addCard(A, "Backlog", t);
+      await A.locator(".composer-input").press("Escape");
+      await h.card(A, "Alpha").focus();
+      assert.equal((await h.focused(A)).cardTitle, "Alpha");
+
+      // A third party moves it (RPC, so no other pane takes focus).
+      const cardId = await page.evaluate(async () => {
+        const [c] = await window.harness.rpc("findCards", { text: "Alpha" });
+        await window.harness.rpc("moveCard", { cardId: c.id, toColumn: "Done", by: "Agent" });
+        return c.id;
+      });
+      await h.until(async () => (await h.titles(A, "Done")).join() === "Alpha", { message: "A sees the move" });
+      await h.until(async () => {
+        const f = await h.focused(A);
+        return f.cardTitle === "Alpha" && f.columnName === "Done";
+      }, { message: "focus followed the moved card" });
+      await h.until(async () => /Alpha|Agent/.test(await h.liveText(A)), { message: "move announced" });
+
+      // Now it is deleted: focus lands on that column's Add card button.
+      await page.evaluate((id) => window.harness.rpc("deleteCard", { cardId: id, by: "Agent" }), cardId);
+      await h.card(A, "Alpha").waitFor({ state: "detached" });
+      await h.until(async () => {
+        const f = await h.focused(A);
+        return f.className.includes("add-card-btn") && f.columnName === "Done";
+      }, { message: "focus on Done's Add card" });
+      await h.until(async () => /Alpha|Agent/.test(await h.liveText(A)), { message: "delete announced" });
+    });
+  });
+
+  test("12. label chips have at least 4.5:1 text contrast", async () => {
+    await withHarness({ panes: 1 }, async ({ frames: { A } }) => {
+      await h.addCard(A, "Backlog", "Colourful");
+      await A.locator(".composer-input").press("Escape");
+      await h.card(A, "Colourful").click();
+      const toggles = A.locator(".panel .label-toggle");
+      await toggles.first().waitFor();
+      const n = await toggles.count();
+      assert.ok(n > 0, "default labels exist");
+      for (let i = 0; i < n; i++) {
+        const toggle = toggles.nth(i);
+        if ((await toggle.getAttribute("aria-pressed")) !== "true") await toggle.click();
+        await h.until(async () => (await toggles.nth(i).getAttribute("aria-pressed")) === "true", { message: `label ${i} on` });
+      }
+      // Selected toggles in the panel are filled chips too.
+      const pressed = await toggles.evaluateAll((els) => els.map((el) => {
+        const cs = getComputedStyle(el);
+        return { name: el.textContent, color: cs.color, background: cs.backgroundColor };
+      }));
+      await A.locator(".panel").press("Escape");
+      const chips = h.card(A, "Colourful").locator(".chip");
+      await h.until(async () => (await chips.count()) === n, { message: "all chips on the card" });
+      const colours = await chips.evaluateAll((els) => els.map((el) => {
+        const cs = getComputedStyle(el);
+        return { name: el.textContent, color: cs.color, background: cs.backgroundColor };
+      }));
+      for (const c of [...colours, ...pressed]) {
+        const ratio = h.contrastRatio(c.color, c.background);
+        assert.ok(ratio >= 4.5, `${c.name}: ${c.color} on ${c.background} is ${ratio.toFixed(2)}:1`);
+      }
+    });
+  });
+
   test("8e. undo from the activity panel", async () => {
     await withHarness({}, async ({ page, frames: { A, B } }) => {
       await h.addCard(A, "Backlog", "Keep me");
