@@ -741,13 +741,17 @@ test("the repository's formats directory pairs every archive with a sidecar", as
   const files = await readdir(dir);
   const archives = files.filter((f) => f.endsWith(".gadget"));
   // Setting the directory replaces upstream's defaults, so they must be carried here.
-  for (const name of ["workspace-docs", "workspace-sheets", "workspace-slides", "board"]) {
+  for (const name of ["workspace-docs", "workspace-sheets", "workspace-slides", "board", "whiteboard"]) {
     assert.ok(archives.includes(`${name}.gadget`), `formats/${name}.gadget missing`);
   }
+  const blueprintIds = new Set<string>();
   for (const archive of archives) {
     const sidecar = JSON.parse(await readFile(join(dir, archive.replace(/\.gadget$/, ".json")), "utf8"));
     assert.match(sidecar.blueprintId, /^[a-zA-Z0-9._-]+$/);
     assert.ok(Number.isInteger(sidecar.revision) && sidecar.revision >= 1, archive);
+    // The id is the install key: two formats sharing one would overwrite each other.
+    assert.ok(!blueprintIds.has(sidecar.blueprintId), `duplicate blueprintId ${sidecar.blueprintId}`);
+    blueprintIds.add(sidecar.blueprintId);
   }
 });
 

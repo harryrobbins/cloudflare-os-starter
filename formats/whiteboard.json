@@ -1,0 +1,17 @@
+{
+  "blueprintId": "format.whiteboard",
+  "title": "Whiteboard",
+  "description": "Use to brainstorm, map ideas and plan visually on a live, shared whiteboard with sticky notes, shapes, connectors, pen drawing and frames.",
+  "output": {
+    "id": "whiteboard",
+    "noun": "Whiteboard",
+    "plural": "Whiteboards",
+    "icon": "flowArrow"
+  },
+  "author": {
+    "type": "user",
+    "name": "Surprisingly Ltd",
+    "id": "harryrobbins@gmail.com"
+  },
+  "revision": 1
+}

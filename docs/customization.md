@@ -221,11 +221,18 @@ Formats are the blueprints offered under **New** in the composer. You can promot
 
 - **What it points at.** The directory holds `<name>.gadget` archives, each with a `<name>.json` sidecar that sets `blueprintId`, `title`, `description`, `output` and `revision`.
 - **How the deploy uses it.** The deploy passes the directory's absolute path to the Workshop build as `FORMAT_BLUEPRINTS_DIR`.
-- **It replaces upstream's formats.** The directory replaces upstream's default set rather than adding to it. That is why this repository's [`formats/`](../formats) carries copies of Docs, Sheets and Slides beside its own Board. The deploy refuses a directory with no archives, or an archive with no sidecar.
+- **It replaces upstream's formats.** The directory replaces upstream's default set rather than adding to it. That is why this repository's [`formats/`](../formats) carries copies of Docs, Sheets and Slides beside its own Board and Whiteboard. The deploy refuses a directory with no archives, or an archive with no sidecar.
 - **Updating a format.** A deployment reinstalls a format only when its `revision` or presentation changes. Bump `revision` with every code change.
 - **Never change a `blueprintId`.** It is the install key.
 
-The Board format is built from [`packages/blueprint-kanban`](../packages/blueprint-kanban/README.md). `pnpm --filter blueprint-kanban pack:gadget` rebuilds `formats/board.gadget` and bumps its revision. The package's tests fail if the committed archive is stale.
+This repository builds two of its formats from source, and each package's tests fail if its committed archive is stale:
+
+| Format | Source | Rebuild with |
+| --- | --- | --- |
+| Board (`format.board`) | [`packages/blueprint-kanban`](../packages/blueprint-kanban/README.md) | `pnpm --filter blueprint-kanban pack:gadget` |
+| Whiteboard (`format.whiteboard`) | [`packages/blueprint-whiteboard`](../packages/blueprint-whiteboard/README.md) | `pnpm --filter blueprint-whiteboard pack:gadget` |
+
+Each command rebuilds `formats/<name>.gadget` and bumps its revision.
 
 ## Custom Gatekeepers
 
