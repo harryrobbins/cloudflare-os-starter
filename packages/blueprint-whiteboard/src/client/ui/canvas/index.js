@@ -143,6 +143,7 @@ export function createCanvas(store, options = {}) {
   /** Pointers to ignore until released (e.g. the finger left after a pinch). @type {Set<number>} */
   const ignoredPointers = new Set();
   let spaceDown = false;
+  let canvasActive = false;
   /** @type {Map<string, Override>} */
   const overrides = new Map();
   /** @type {WhiteboardObject[]|null} */
@@ -609,6 +610,7 @@ export function createCanvas(store, options = {}) {
   function onPointerDown(e) {
     if (destroyed || e.target instanceof HTMLTextAreaElement) return;
     if (editor?.isOpen) editor.commit();
+    canvasActive = true;
     if (document.activeElement !== element) element.focus({ preventScroll: true });
     if (!cameraReady) measure();
     if (e.pointerType === "touch") {
@@ -939,6 +941,27 @@ export function createCanvas(store, options = {}) {
     on(element, "keyup", onKeyUp);
     on(element, "blur", releaseSpace);
     on(window, "blur", () => { releaseSpace(); cancelGesture(); });
+    // Canvas "activity": set by a press on the canvas, cleared by a press anywhere else. On the
+    // platform a click can leave focus on <body>; keys arriving there still drive the canvas.
+    on(window, "pointerdown", (e) => { canvasActive = element.contains(/** @type {Node} */ (e.target)); }, { capture: true });
+    // Undo/redo outside text fields: never let the browser's native undo run (it refocuses the last
+    // edited textarea). Keys inside the canvas are handled by onKeyDown; elsewhere route them here.
+    on(window, "keydown", (e) => {
+      if (destroyed || isTextField(e.target)) return;
+      const action = undoAction(e);
+      if (!action) return;
+      e.preventDefault();
+      if (element.contains(/** @type {Node} */ (e.target))) return;
+      cancelGesture();
+      if (action === "undo") store.undo(); else store.redo();
+    }, { capture: true });
+    on(window, "keydown", (e) => {
+      if (e.defaultPrevented || !canvasActive || !isBodyTarget(e.target)) return;
+      onKeyDown(e);
+    });
+    on(window, "keyup", (e) => {
+      if (canvasActive && isBodyTarget(e.target)) onKeyUp(e);
+    });
     // Safari's non-standard gesture events would otherwise zoom the whole page.
     on(element, "gesturestart", (e) => e.preventDefault());
     if (typeof ResizeObserver !== "undefined") {
@@ -1057,6 +1080,29 @@ function describe(o) {
   const names = { sticky: "sticky note", rect: "rectangle", ellipse: "ellipse", text: "text", frame: "frame", pen: "drawing", connector: "connector" };
   const label = o.text ? `: ${o.text.slice(0, 40)}` : "";
   return `${names[o.type] ?? o.type}${label}`;
+}
+
+/** @param {EventTarget|null} t */
+function isTextField(t) {
+  const el = /** @type {HTMLElement|null} */ (t instanceof Element ? t : null);
+  return !!el?.closest?.("input, textarea, select, [contenteditable]:not([contenteditable=\"false\"])");
+}
+
+/** @param {EventTarget|null} t */
+function isBodyTarget(t) {
+  return t === document.body || t === document.documentElement || t === document || t === window;
+}
+
+/**
+ * "undo" for Ctrl/Cmd+Z, "redo" for Ctrl/Cmd+Shift+Z and Ctrl/Cmd+Y, else null.
+ * @param {KeyboardEvent} e
+ */
+function undoAction(e) {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return null;
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (key === "z") return e.shiftKey ? "redo" : "undo";
+  if (key === "y") return "redo";
+  return null;
 }
 
 /** @param {number} a @param {number} n */

@@ -66,6 +66,8 @@ export const UNRECOVERABLE_FAILURES = 3;
 export const UNRECOVERABLE_AFTER_MS = 8000;
 /** Peers are checked for staleness this often. */
 export const PEER_EXPIRY_CHECK_MS = 1000;
+/** An updatePresence call not settled after this long counts as failed (the store re-subscribes). */
+export const PRESENCE_TIMEOUT_MS = 10000;
 /** Request ids are `${clientId}:${seq}`, at most this long, of [A-Za-z0-9:_-]. */
 export const REQUEST_ID_MAX = 64;
 
@@ -167,6 +169,10 @@ export async function createStore(options) {
   let lastPresenceSent = -Infinity;
   /** @type {any} */
   let presenceTimer = null;
+  /** @type {{token: number, timer: any}|null} the one updatePresence call awaiting its result */
+  let presenceInflight = null;
+  let presenceDirty = false;
+  let presenceToken = 0;
   /** @type {any} */
   let heartbeat = null;
   /** @type {any} */
@@ -1090,23 +1096,57 @@ export async function createStore(options) {
     if (removed.length) emit({ kind: "presence", peers: removed });
   }
 
+  /**
+   * Sends the current presence. At most one updatePresence is in flight per client (a gadget
+   * serves inbound calls one at a time, so unawaited 30 Hz sends queue up for seconds on the real
+   * platform): while one is in flight the presence is only marked dirty, and the latest state is
+   * sent once it settles, still at most one send per PRESENCE_SEND_MS.
+   */
   function sendPresence() {
     if (presenceTimer) {
       timers.clearTimeout(presenceTimer);
       presenceTimer = null;
     }
     if (disposed || state.connection !== "live") return;
+    if (presenceInflight) {
+      presenceDirty = true;
+      return;
+    }
+    presenceDirty = false;
     lastPresenceSent = timers.now();
     const gen = generation;
+    const token = ++presenceToken;
     const payload = { ...clientInfo(), ...presence };
+    const timer = timers.setTimeout(() => settlePresence(token, gen, null, true), PRESENCE_TIMEOUT_MS);
+    presenceInflight = { token, timer };
     Promise.resolve()
       .then(() => gadget.updatePresence(payload))
       .then(
-        (/** @type {{known: boolean, revision: number}} */ res) => onPresenceResult(gen, res),
-        () => {
-          if (gen === generation) resubscribe();
-        },
+        (/** @type {{known: boolean, revision: number}} */ res) => settlePresence(token, gen, res, false),
+        () => settlePresence(token, gen, null, true),
       );
+  }
+
+  /**
+   * @param {number} token
+   * @param {number} gen
+   * @param {{known: boolean, revision: number}|null} res
+   * @param {boolean} failed  rejected or not settled within PRESENCE_TIMEOUT_MS
+   */
+  function settlePresence(token, gen, res, failed) {
+    if (!presenceInflight || presenceInflight.token !== token) return; // late, after a timeout
+    timers.clearTimeout(presenceInflight.timer);
+    presenceInflight = null;
+    if (disposed) return;
+    if (failed) {
+      if (gen === generation) resubscribe();
+    } else {
+      onPresenceResult(gen, /** @type {any} */ (res));
+    }
+    if (presenceDirty) {
+      presenceDirty = false;
+      schedulePresence();
+    }
   }
 
   /**
@@ -1152,7 +1192,9 @@ export async function createStore(options) {
   });
   failures = 0;
 
-  heartbeat = timers.setInterval(sendPresence, PRESENCE_HEARTBEAT_MS);
+  heartbeat = timers.setInterval(() => {
+    if (!presenceInflight) sendPresence(); // a call still in flight already proves liveness
+  }, PRESENCE_HEARTBEAT_MS);
   expiryTimer = timers.setInterval(expirePeers, PEER_EXPIRY_CHECK_MS);
 
   // -----------------------------------------------------------------------------------------
@@ -1308,7 +1350,7 @@ export async function createStore(options) {
     dispose() {
       if (disposed) return;
       disposed = true;
-      for (const t of [retryTimer, gapTimer, presenceTimer, unrecoverableTimer, inflight?.timer]) {
+      for (const t of [retryTimer, gapTimer, presenceTimer, unrecoverableTimer, inflight?.timer, presenceInflight?.timer]) {
         if (t) timers.clearTimeout(t);
       }
       if (heartbeat) timers.clearInterval(heartbeat);

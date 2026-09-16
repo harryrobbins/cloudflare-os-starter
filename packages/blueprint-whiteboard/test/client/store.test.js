@@ -580,7 +580,7 @@ describe("presence", () => {
     expect(kinds(a, "presence").at(-1).change).toEqual({ kind: "presence", peers: [b.clientId] });
     // flushPresence sends at once, even inside the throttle window.
     b.store.setPresence({ cursor: { x: 4, y: 4 } }); // leading edge
-    await settle(0);
+    await settle(15); // settled (5 ms each way)
     b.store.setPresence({ cursor: { x: 5, y: 5 } }); // would be trailing
     const mid = sends().length;
     b.store.flushPresence();
@@ -618,6 +618,77 @@ describe("presence", () => {
     server.silentDrop(c.clientId);
     await settle(PRESENCE_STALE_MS + 1100);
     expect([...a.store.getState().peers.keys()]).toEqual([b.clientId]);
+  });
+});
+
+describe("presence gating", () => {
+  /** A store whose updatePresence calls are held until released. */
+  async function slowPresence() {
+    const server = new FakeServer({ latency: 5 });
+    server.seed({ type: "sticky" });
+    const real = server.connect();
+    const held = [];
+    let hold = false;
+    const gadget = {
+      ...real,
+      updatePresence: (p) => {
+        if (!hold) return real.updatePresence(p);
+        return new Promise((resolve, reject) => held.push({ p: structuredClone(p), resolve, reject }));
+      },
+    };
+    const a = await startStore(server, "a", { gadget });
+    await settle(100);
+    return { server, a, held, real, setHold: (v) => { hold = v; } };
+  }
+
+  it("keeps at most one updatePresence in flight and sends the latest state once it settles", async () => {
+    const { a, held, real, setHold } = await slowPresence();
+    setHold(true);
+    a.store.setPresence({ cursor: { x: 1, y: 1 } });
+    await settle(0);
+    expect(held).toHaveLength(1);
+    for (let i = 2; i <= 20; i++) {
+      a.store.setPresence({ cursor: { x: i, y: i } });
+      await settle(20);
+    }
+    a.store.flushPresence();
+    await settle(PRESENCE_HEARTBEAT_MS + 100); // heartbeats skip while one is in flight
+    expect(held).toHaveLength(1);
+    expect(a.store.getState().connection).toBe("live");
+    const first = held.shift();
+    first.resolve(await Promise.all([real.updatePresence(first.p), settle(20)]).then(([r]) => r));
+    await settle(PRESENCE_SEND_MS + 5);
+    expect(held).toHaveLength(1);
+    expect(held[0].p.cursor).toEqual({ x: 20, y: 20 });
+    // Nothing further is dirty: settling it sends nothing more until presence changes.
+    held.shift().resolve({ known: true, revision: 0 });
+    await settle(200);
+    expect(held).toHaveLength(0);
+  });
+
+  it("treats an updatePresence unsettled for PRESENCE_TIMEOUT_MS as failed and re-subscribes", async () => {
+    const { server, a, held, setHold } = await slowPresence();
+    const subscribes = () => server.callsOf("subscribe").length;
+    const before = subscribes();
+    setHold(true);
+    a.store.setPresence({ cursor: { x: 1, y: 1 } });
+    await settle(9900);
+    expect(subscribes()).toBe(before);
+    setHold(false);
+    await settle(300);
+    expect(subscribes()).toBe(before + 1);
+    expect(a.store.getState().connection).toBe("live");
+    // Sends resume once the stuck call is abandoned; its late result is ignored.
+    a.store.setPresence({ cursor: { x: 2, y: 2 } });
+    await settle(100);
+    const sent = server.callsOf("updatePresence").at(-1).args[0];
+    expect(sent.cursor).toEqual({ x: 2, y: 2 });
+    held[0].resolve({ known: false, revision: 0 });
+    await settle(100);
+    expect(subscribes()).toBe(before + 1);
+    a.store.dispose();
+    await settle(100);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 
