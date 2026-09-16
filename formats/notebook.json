@@ -1,6 +1,6 @@
 {
   "blueprintId": "format.notebook",
-  "title": "Notebook",
+  "title": "Python Notebook",
   "description": "Explore ideas in Python cells and Markdown. Save and share results; connect your own Python kernel to execute code.",
   "output": {
     "id": "notebook",
@@ -13,5 +13,5 @@
     "name": "Surprisingly Ltd",
     "id": "harryrobbins@gmail.com"
   },
-  "revision": 12
+  "revision": 13
 }

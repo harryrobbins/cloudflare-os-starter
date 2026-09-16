@@ -1,4 +1,4 @@
-# Notebook blueprint
+# Python Notebook blueprint
 
 A Cloudflare OS notebook with Python, Markdown and raw cells, saved results, CodeMirror editing and `.ipynb` import/export. Application source lives in `src/`; the generated archive is `formats/notebook.gadget`.
 

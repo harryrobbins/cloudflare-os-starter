@@ -14,7 +14,7 @@ The selected first version deliberately allows collaborators to read shared resu
 
 | Area | Current source behavior |
 | --- | --- |
-| Notebook blueprint | [`packages/blueprint-notebook`](../../packages/blueprint-notebook/src/README.md), bundled as `formats/notebook.gadget` with stable `format.notebook` metadata. Code/Markdown/raw cells, revision checks, bounded saved outputs, import/export and document methods for agents. |
+| Python Notebook blueprint | [`packages/blueprint-notebook`](../../packages/blueprint-notebook/src/README.md), bundled as `formats/notebook.gadget` with stable `format.notebook` metadata. Its archive declares the required `PYTHON` binding so creation prompts for a Notebook Python kernel. Code/Markdown/raw cells, revision checks, bounded saved outputs, import/export and document methods for agents. |
 | Python runtime | [`packages/gatekeeper-runtime`](../../packages/gatekeeper-runtime/src/gatekeeper.ts), an explicit `PYTHON` resource binding. A random facet-owned runtime ID selects a private coordinator and Python sandbox; callers cannot choose another runtime ID. |
 | Owner authority | Authenticated [`GadgetClient`](../../cloudflare-os/packages/workshop-backend/src/overseer.ts) mints an expiring one-use permit for the exact intent; the iframe host forwards only the reserved permit operation. Gatekeeper consumption checks resource/gadget scope and digest before queueing a mutation. This requires the accompanying fork patch, not merely installing the archive. |
 | Approval | Execute and stop/reset are immutable queued actions reviewed in Workshop Activity. The connector declares no autoapprovable action kinds. Agents may edit notebook documents but cannot mint execution permits in this version. |

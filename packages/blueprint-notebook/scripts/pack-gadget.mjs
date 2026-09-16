@@ -26,6 +26,16 @@ export const paths = {
   lock: join(pkg, "gadget.lock.json"),
 };
 
+export const NOTEBOOK_BINDINGS = {
+  PYTHON: {
+    title: "Python kernel",
+    description: "A private Python kernel for running notebook cells and sharing saved results.",
+    type: "gatekeeper",
+    gatekeeperName: "runtime",
+    typeUrlPattern: "python://notebook/:name",
+  },
+};
+
 /** @param {string} distDir */
 export async function readDist(distDir) {
   /** @type {Record<string, string>} */
@@ -53,7 +63,7 @@ export function packArchive(files, sidecar) {
     created: FIXED_DATE,
     lastUpdated: FIXED_DATE,
     version: sidecar.revision,
-    bindings: {},
+    bindings: NOTEBOOK_BINDINGS,
     output: sidecar.output,
   };
   return serializeArchive(metadata, encodeContent(files));

@@ -102,3 +102,9 @@ Recovery: the previous Workshop and runtime remain API-compatible; restoring the
 | `cfos-router` | `33ccab52-1815-4b30-b94d-a72f94f90b9b` | `6d9a2ee7-fde8-4d10-aac9-b2b1c5c5508d` |
 
 Post-rollout verification: all seven Workers have the exact same bindings as before, and workers.dev/preview URLs remain disabled. Container health reports five healthy slots and no failures/errors. Unauthenticated HTTPS `/` and `/api` still redirect to Access (302). The real local browser test covered immediate owner execution and audit attribution; signed-in production execution remains unverified because no authenticated production browser session is available.
+
+## Python connection metadata follow-up
+
+Authorized by the user's request to commit and deploy the corrected blueprint. Bundled revision 13 is displayed as **Python Notebook** and declares one required `PYTHON` Gatekeeper binding for the `runtime` connector's `python://notebook/:name` resource. The blueprint creation page therefore provisions and configures a Notebook Python kernel before creating the Gadget instead of claiming that no connections are required.
+
+This changes bundled blueprint metadata and its archive only. It does not change Worker identities, routes, Access policy, service bindings, storage resources, container images, Durable Object migrations, runtime capacity, AI configuration, or observability. Existing Notebook gadgets and their connections are unchanged; the corrected requirement applies when creating a Gadget from the updated bundled blueprint.
