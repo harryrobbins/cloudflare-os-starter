@@ -131,6 +131,23 @@ describe("placement through the store", () => {
 });
 
 describe("conflicts", () => {
+  it("does not retry a move over a newer move that arrived before the conflict result", async () => {
+    // Results travel slower than events: the conflict's `current` (a content edit) is already
+    // outdated by a later move when A decides whether its own move may be retried.
+    const { server, todo, done, cardId, clients: [a] } = await setup({ n: 1, latency: 100, eventLatency: 5 });
+    const later = server.seedColumn("Later");
+    await settle(20);
+    a.store.moveCard(cardId, done, null);            // reaches the server at +100 with baseVersion 1
+    await settle(50);
+    server.doApply({ senderId: "b", cardOps: [{ op: "upsert", cardId, baseVersion: 1, card: { title: "B" } }] });
+    await settle(55);                                 // A's move has now conflicted with the edit
+    server.doApply({ senderId: "c", cardOps: [{ op: "move", cardId, baseVersion: 2, toColumnId: later }] });
+    await settle(1000);
+    expect(server.cards[cardId].columnId).toBe(later);
+    expect(a.store.getState().board.cards[cardId].columnId).toBe(later);
+    expect(a.store.getState().pending).toBe(0);
+  });
+
   it("retries a stale move once and lands it", async () => {
     const { server, done, cardId, clients: [a, b] } = await setup();
     server.holdEvents(a.clientId);

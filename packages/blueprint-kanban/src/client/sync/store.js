@@ -648,7 +648,10 @@ export async function createStore(options) {
       const current = conflicts.get(key) ?? null;
       if (cardId) applyCardState(model, cardId, /** @type {Card|null} */ (current), revision);
       else applyColumnState(model, /** @type {any} */ (op).columnId, /** @type {Column|null} */ (current));
-      if (!handleConflict(op, current, report)) done.add(op);
+      // Decide against the newest state we hold: an event may already have brought a change newer
+      // than this conflict's `current`, and retrying on the stale one would overwrite that change.
+      const latest = cardId ? model.board.cards[cardId] ?? null : model.board.columns[/** @type {any} */ (op).columnId] ?? null;
+      if (!handleConflict(op, latest, report)) done.add(op);
       else if (cardId) conflictCards.push(cardId);
     }
 
