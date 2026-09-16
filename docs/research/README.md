@@ -18,3 +18,7 @@ node docs/research/bundled-blueprints/extract-gadget.mjs \
 ```
 
 The script reads the 24-byte prefix, the JSON metadata and the gzip-compressed Yjs V2 snapshot, and writes one file per entry in the Yjs map. It resolves `yjs` from the submodule's `workshop-backend` package, so run `pnpm --dir cloudflare-os install` first.
+
+The same archives are also in [`formats/`](../../formats), next to the deployment's own `board.gadget`. To go the other way and write an archive, use `packages/blueprint-kanban/scripts/archive.mjs` (`serializeArchive`, `encodeContent`, `parseArchive`). Its output is deterministic and its tests check that it decodes upstream's archives.
+
+What the research could not show, and the kanban build found on a real instance, is in the master plan's gaps table ([collaborative-blueprints.md](../plans/collaborative-blueprints.md#what-the-platform-does-not-give-us)): the prefix bindings, no `allow-forms`, dead stubs after a code edit, and no `onRpcBroken`.

@@ -1,6 +1,14 @@
 # Plan: Whiteboard blueprint (Miro)
 
-Part of the [master plan](collaborative-blueprints.md). Build after the [kanban board](kanban-blueprint.md); it reuses that server skeleton and presence code and adds the two hard things: many small objects and high-frequency ephemeral state.
+Part of the [master plan](collaborative-blueprints.md). Build after the [kanban board](kanban-blueprint.md), which is now deployed. Start from a copy of [`packages/blueprint-kanban`](../../packages/blueprint-kanban/README.md): its hub, sync store, harness, packer and platform e2e scripts carry over (see [Reusing the kanban build](collaborative-blueprints.md#reusing-the-kanban-build)). This plan adds the two hard things: many small objects and high-frequency ephemeral state.
+
+**Lessons from the kanban build that change this plan:**
+
+- **Re-subscribe.** Re-subscribe via the heartbeat (`updatePresence` returning `{known, revision}`) and a frame reload when the stub is dead, not via `[Symbol.dispose]`, which never fired on the real platform.
+- **Platform quirks.** Read `gadget`/`RpcTarget` as module bindings, and use no `<form>` elements; see the gaps table in the master plan.
+- **Sessions and idempotency.** Presence and subscriptions need session tokens, and writes need `requestId`s. The kanban `Hub` and store already do both.
+- **Sizes.** Size the caps against the whole snapshot, not only per value: a `getBoard()` over the RPC message limit makes the board unloadable for everyone. Add a total byte budget, as the kanban board has.
+- **Presence throttle.** The kanban hub drops identical presence updates within 100 ms. Cursor updates change every time, so revisit that throttle and the 500-delivery backpressure limit for 30 Hz cursors.
 
 Reference: presence rendering in the Docs client (see [bundled-blueprint-sync-patterns.md](../research/bundled-blueprint-sync-patterns.md), "Docs in detail") and the per-item versioning in [`workspace-sheets.server.js`](../research/bundled-blueprints/workspace-sheets.server.js). Do **not** copy the Slides gadget's full-snapshot rebroadcast; it will not scale to a board with hundreds of objects.
 
@@ -83,7 +91,7 @@ Document all of this in the gadget README under "Programmatic use".
 - **Connectors**: recompute endpoints on the client from the current (committed or ghost) geometry of the two endpoints; store only ids and an anchor side.
 - **Undo/redo**: local stack of inverses for own ops; the server `undo` is the fallback for undoing the last own change after a reload.
 - **Presence**: throttle `updatePresence` to 33 ms while the pointer moves, plus the 4 s heartbeat; expire at 12 s. Cursor labels are the collaborator's name in their colour. "Follow" sets the local camera to the followed user's `viewport` on each presence event until the user pans.
-- **Re-subscribe** on `[Symbol.dispose]`, replaying unsent ops.
+- **Re-subscribe** when the heartbeat reports `known: false` or a revision gap, replaying unsent ops with their original `requestId`. Reload the frame when the stub is permanently dead (the kanban store's `onUnrecoverable`).
 - **Export mode**: when `gadgetExportFormatId` is set, fit the camera to the bounding box of all objects, hide presence, and stop.
 - **Phones**: touch pan and zoom, tap to select, long-press for the context menu; drawing works with one finger when the pen tool is chosen.
 

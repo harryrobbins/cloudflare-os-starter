@@ -1,6 +1,12 @@
 # Plan: Wave blueprint (Google Wave)
 
-Part of the [master plan](collaborative-blueprints.md). Build last. It reuses the [kanban](kanban-blueprint.md) skeleton and the [whiteboard](whiteboard-blueprint.md) presence work, and adds the one thing neither needed: several people typing in the same paragraph at the same time.
+Part of the [master plan](collaborative-blueprints.md). Build last. It reuses the [kanban](kanban-blueprint.md) package ([`packages/blueprint-kanban`](../../packages/blueprint-kanban/README.md): hub, sync store, harness, esbuild and `.gadget` packing, platform e2e) and the [whiteboard](whiteboard-blueprint.md) presence work. It adds the one thing neither needed: several people typing in the same paragraph at the same time.
+
+**Kanban lessons that apply here:**
+
+- **Bundle Yjs with esbuild.** The kanban `scripts/build.mjs` already bundles one `client.js` and one `server.js` with esbuild, so Yjs is just an import in the source tree. The hand concatenation described below is unnecessary.
+- **Reconnect via the heartbeat, not dispose.** `[Symbol.dispose]` never fired on the real platform. Detect restarts with the heartbeat, and reload the frame when the stub is dead. On reload, re-open blips from server state: the Yjs merge makes that safe, but unsent local updates are lost.
+- **Platform quirks.** Read `gadget`/`RpcTarget` as module bindings, and use no `<form>` elements.
 
 Reference: the Docs gadget's block model and caret presence ([bundled-blueprint-sync-patterns.md](../research/bundled-blueprint-sync-patterns.md), "Docs in detail"). Docs stops at block-level conflicts, which is exactly the limit Wave has to get past.
 
@@ -109,7 +115,7 @@ setBlipText({blipId, text, by})                  -> { clock }   (for the agent; 
 - **Unread**: blips whose clock exceeds the participant's `read` record get a marker; scrolling a blip fully into view for a second marks it read.
 - **Playback**: a slider in the header; dragging it swaps the live docs for replay docs built from `getPlayback()`.
 - **Presence**: carets and selections per blip, Docs-style; participants in the header with a coloured dot on whoever is typing.
-- **Re-subscribe** on `[Symbol.dispose]`: re-run `subscribe`, then `openBlip` for every open blip and merge (Yjs makes the merge trivial).
+- **Re-subscribe** when the heartbeat reports `known: false`: re-run `subscribe`, then `openBlip` for every open blip and merge (Yjs makes the merge trivial). Reload the frame when the stub is permanently dead, as the kanban store does.
 - **Export**: when `gadgetExportFormatId` is set, render every blip expanded and read-only.
 
 ## Server hardening checklist
@@ -135,7 +141,7 @@ Then append the collaboration-pattern sentence from the master plan. Before givi
 5. Playback slider replays a five-minute session in order.
 6. A kills the tab; the caret disappears within 15 s.
 7. A blip with 20 KB of text: typing stays responsive; check update sizes are small (bytes, not the whole document).
-8. Edit `server.js` to force a facet restart while both are typing; both windows resume without reload and without divergence.
+8. Edit `server.js` to force a facet restart while both are typing; both windows resume without divergence. A `use`-role window may reload its own frame; that is expected, as the kanban board showed.
 9. Agent chat: "summarise this wave as a new root blip"; the blip appears live.
 
 ## Promotion

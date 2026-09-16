@@ -27,6 +27,12 @@ What differs from the plan below, and why:
   - fix agents;
   - two rounds of local platform e2e.
 
+- **Harness.** It is a static Node server (`harness/serve.mjs`), not a Vite dev server, so nothing watches files. It has "Restart server", "Restart + dispose" and "Restart (stale stub)" controls. It has no forced-conflict control; conflicts are tested with latency races.
+- **Worktrees, verifiers, extra reviews.** None were used. Instead, file ownership was kept disjoint, the orchestrator ran integration tests itself, and the local platform suite acted as the verifier. `/code-review` and `/security-review` were not run on top of the three reviewers.
+- **Files not in the planned layout.** `gadget.lock.json` records the content hash each revision was packed from. `e2e/start-local-platform.sh` and `stop-local-platform.sh` run a local Cloudflare OS on WSL.
+
+The phases below are the plan as written before the build. They are kept for reference; read them together with the list above.
+
 Test status at deploy:
 
 | Suite | Tests passing |
@@ -302,9 +308,11 @@ The part that is genuinely new work later, and why it is not a v1 concern: an ex
 
 ## Harry's checklist
 
-- [ ] Phase 0: second Access identity added and verified
-- [ ] Phase 1: contract and README RPC section reviewed
-- [ ] Phase 2: optional Stream E, Workshop-agent draft on production, notes taken
-- [ ] Phase 4: final README read
-- [ ] Phase 5: two-browser production test, blueprint published, format promoted
-- [ ] Phase 6: approve `pnpm deploy`, remove the duplicate uploaded format
+Status after the 2026-09-16 delivery. Phases 1, 4 and 6 ran without Harry's review gates; Harry asked for delivery and deployment end to end.
+
+- [ ] Phase 0: second Access identity added and verified. **Still needed** for the production two-browser tests.
+- [ ] Phase 1: contract and README RPC section reviewed. Optional now; the contract is in `packages/blueprint-kanban/src/shared/protocol.js` and `src/README.md`.
+- [ ] Phase 2: optional Stream E, a Workshop-agent draft on production, notes taken.
+- [ ] Phase 4: final README read (`packages/blueprint-kanban/src/README.md`).
+- [ ] Phase 5: two-browser production test and agent-chat test 7. Blueprint publishing and promotion are no longer needed, because the format is bundled.
+- [x] Phase 6: `pnpm deploy` run 2026-09-16. `format.board` is installed from the bundle, so there is no uploaded duplicate to remove.

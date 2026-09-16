@@ -2,118 +2,170 @@
 
 Part of the [master plan](collaborative-blueprints.md). Build this one first: it needs nothing the platform does not already give, and it proves the whole draft, share, promote pipeline.
 
-Execution order, agent orchestration and deployment are in the [delivery plan](kanban-delivery.md), which builds the board in this repo rather than in the Workshop editor.
+**Status: built and deployed (2026-09-16).** The source is [`packages/blueprint-kanban`](../../packages/blueprint-kanban/README.md). It ships as the bundled format `format.board` (revision 2) on cfos.surprisingly.ltd. How it was built, and every departure from the original plan, is recorded in the [delivery plan](kanban-delivery.md). This page now describes the board as built.
 
-Reference: the Sheets server in [`../research/bundled-blueprints/workspace-sheets.server.js`](../research/bundled-blueprints/workspace-sheets.server.js) and the pattern summary in [bundled-blueprint-sync-patterns.md](../research/bundled-blueprint-sync-patterns.md).
+**The authoritative RPC and storage reference** is the gadget's own [`src/README.md`](../../packages/blueprint-kanban/src/README.md). Where this page and that file disagree, the file wins.
+
+Reference patterns: the Sheets server in [`../research/bundled-blueprints/workspace-sheets.server.js`](../research/bundled-blueprints/workspace-sheets.server.js), summarised in [bundled-blueprint-sync-patterns.md](../research/bundled-blueprint-sync-patterns.md).
 
 ## Scope
 
-v1:
+v1, all delivered:
 
-- Board with ordered columns; cards with title, description (Markdown-ish plain text), labels, assignee name, due date, checklist.
-- Drag cards between and within columns; drag columns to reorder.
-- Card detail panel with comments (append-only) and activity.
+- A board of ordered columns. Cards have a title, a Markdown-ish plain-text description, labels, an assignee name, a due date, a checklist and an append-only comment thread.
+- Drag cards between and within columns, and drag columns to reorder them. There are keyboard equivalents: a "Move to" control in the card panel, Alt+Arrow on a focused card, and Move left/right in the column menu.
+- A card detail panel, and an activity panel with undo.
 - Filter by label or assignee; search by title.
-- Live sync: card and column changes appear in every open browser; presence shows who has the board open and which card each person has open.
-- AI-usable: the agent can list, create, move and edit cards from chat.
-- Exports: CSV of cards; the platform's HTML/PDF export renders the board read-only.
+- **Live sync.** Card and column changes appear in every open browser. Presence shows who has the board open, which card each person has open, and a ghost of any card being dragged.
+- **AI-usable.** The agent can list, find, create, move, edit and delete cards, and add columns, from chat.
+- **Exports.** A server-side CSV of all cards, plus browser-rendered HTML and PDF of a static, expanded board.
 
-Not in v1: swimlanes, WIP limits, sprints, story points, attachments (no file storage in gadgets), notifications (no outbound network), cross-board links.
+Not in v1: swimlanes, WIP limits, sprints, story points, attachments (gadgets have no file storage), notifications (no outbound network), cross-board links.
 
 ## Data model
 
-Stored in `ctx.storage` as a small number of keys, the way Sheets does, rather than one key per card. A board of a few thousand cards is well under the 128 KiB per-value limit if cards are split by column, so:
+Stored in the gadget's Durable Object storage, one key per card and per comment:
 
 ```
-"meta"              -> { revision, title, columnOrder: [colId], columns: { colId: { id, name, version, collapsed } }, lastModified }
-"cards:<colId>"     -> { cardId: { id, title, description, labels: [], assignee, due, checklist: [{id, text, done}], order, version, createdAt, updatedAt, createdBy } }
-"comments:<cardId>" -> [ { id, author, text, at } ]
-"history"           -> [ { at, by, summary, inverse? } ]   (bounded, newest last, 200 entries)
-"labels"            -> { labelId: { id, name, color } }
+"meta"                              -> { schemaVersion, revision, title, columnOrder: [colId], columns: { colId: { id, name, version, collapsed } }, lastModified }
+"labels"                            -> { labelId: { id, name, color } }
+"card:<cardId>"                     -> { id, columnId, order, title, description, labels: [], assignee, due, checklist: [{id, text, done}], version, createdAt, updatedAt, createdBy }
+"comment:<cardId>:<13-digit ms>:<commentId>" -> { id, cardId, author, text, at }
+"history"                           -> [ { id, at, by, summary, inverse } ]   (bounded, newest last)
+"requests"                          -> [ { requestId, revision, status, conflicts, errors } ]  (idempotency records)
 ```
 
-`order` is a fractional string key (`"a0"`, `"a0V"`, ...) so a move is one card write, not a renumbering. Use a small LexoRank-style helper in `lib/order.js`; the agent can write it or copy one.
+Why not the originally planned `cards:<colId>` layout: a full column would exceed the per-value size limit, and one key per card makes a move a single write. Keys are listed by prefix (`card:`, `comment:<cardId>:`).
 
-Ids: `crypto.randomUUID().slice(0, 8)` with a prefix (`c_`, `k_`), like Sheets.
+- **Order.** `order` is a fractional base-62 key (`src/shared/order.js`), so a move is one card write; ties break on id.
+- **Ids.** Ids are a one-letter prefix plus 8 hex digits (`c_`, `k_`, `l_`, `i_`, `m_`, `h_`). The client generates ids so that creates can be optimistic; the server validates every id.
+- **Schema version.** `schemaVersion` plus the `migrate(meta)` hook in `src/core/board.js` are how later code upgrades existing boards.
+
+All board rules live in `src/core/` behind a `Repository` interface (`src/core/repository.js`). The Durable Object adapter is `src/server/do-repository.js`. That seam is where a Jira, Grist, Git or database backend would plug in. Gadgets have no network access, so any such backend has to go through a Gatekeeper binding.
 
 ## Concurrency policy
 
-- **Cards: per-card version.** Every `cardOps` entry carries `baseVersion`. Server rejects a stale write with `conflict` and returns the authoritative card. The client rebases trivially for moves (re-apply the move against the new version) and shows a "someone else edited this card" banner for content edits, offering to overwrite or reload.
-- **Columns: per-column version** for rename, last-writer-wins for `columnOrder` and `collapsed`.
-- **Comments: append-only,** no versions, no conflicts.
-- **Checklist items:** part of the card, so a card-level version. Two people ticking different items simultaneously will conflict; the client retries once automatically against the fresh version, which resolves it.
-- **Moves across columns** are one operation with two writes (`delete from cards:A, insert into cards:B`) inside one `enqueueMutation`, so no client ever sees the card in both or neither.
+- **Cards: per-card version.** Every card op carries `baseVersion`. A stale write returns a conflict with the authoritative card, or `null` if the card was deleted.
+  - Moves and deletes are retried automatically, up to 5 times, while only other fields changed.
+  - Checklist-only edits merge item by item.
+  - A content edit is rebased field by field. It becomes a "someone else changed this card" banner only when the same field was changed.
+  - Comparisons run after the server's cleaning, so trimming never causes a false conflict.
+- **Columns: per-column version** for rename and delete; last-writer-wins for order and `collapsed`.
+- **Comments are append-only**, so they have no versions and cannot conflict.
+- **Moves across columns** are a single card write, and all ops in a request commit atomically.
+- **Idempotent requests.** Each client request carries a `requestId`. A request replayed after a lost response or a server restart returns the recorded outcome and is not applied twice.
+- A request cannot delete a card and recreate the same id.
 
 ## Server RPC surface
 
+Summary; full detail is in the gadget README.
+
 ```
-getBoard()                                    -> full snapshot {revision, meta, columns, cards, labels}
-applyOperation({senderId, by, cardOps?, columnOps?, structure?, labelOps?})
-                                              -> {status, revision, upserts, deletes, conflicts, moved}
-addComment({cardId, author, text})            -> comment
-getComments(cardId)                           -> [comment]
-getHistory(limit)                             -> [entry]
-subscribe(callback, {clientId, name, color})  -> snapshot
-updatePresence({clientId, name, color, openCardId, hoverColumnId})
-leavePresence(clientId)
+getBoard()                                            -> BoardSnapshot
+applyOperation({senderId, by, requestId, cardOps?, columnOps?, labelOps?, structure?})
+                                                      -> {status, revision, upserts, deletes, moved, structure, labels, history, conflicts, errors, duplicate?}
+undo({senderId, by, historyId, requestId})            -> OperationResult
+addComment({senderId, cardId, author, text})          -> Comment
+getComments(cardId) / getHistory(limit)
+subscribe(callback, {clientId, name, color, session}) -> BoardSnapshot + session
+updatePresence({clientId, session, name, color, openCardId, dragCardId, hoverColumnId}) -> {known, revision}
+leavePresence(clientId, session)
+
+# Convenience methods for the agent (columns and labels by id or name; versions read for you)
+findCards({column, label, assignee, text}) / addCards({cards, by}) / updateCard({cardId, fields, by})
+moveCard({cardId, toColumn, position, by}) / deleteCard({cardId, by}) / addColumn({name, index, by})
 ```
 
-`cardOps` entries: `{op: "upsert"|"delete"|"move", columnId, cardId, baseVersion, card?, toColumnId?, order?}`.
+Broadcasts reach each subscriber as `callback.operation(event)`, where `event.type` is `"operation"`, `"comment"` or `"snapshot"` and carries `senderId` for echo suppression. Presence goes to `callback.presence(event)` with `join`, `update` or `leave`.
 
-Broadcast event shape mirrors Sheets: `{type: "operation", senderId, revision, upserts: [{columnId, card}], deletes: [{columnId, cardId}], structure?, labels?}`. Presence events: `{type: "join"|"leave"|"cursor", clientId, name, color, openCardId, hoverColumnId}`.
-
-Document all of this in the gadget's `README.md` under "Programmatic use", as Sheets does, because that README is what the agent reads before editing.
+- **Sessions.** The session token stops anyone who only knows a `clientId` from taking over that subscription or its presence.
+- **Heartbeat.** `updatePresence` doubles as the heartbeat. `known: false` means the server restarted, and a `revision` ahead of the client's means it missed events. Either way the client re-subscribes.
 
 ## Client architecture
 
-Plain DOM, one file, following Sheets' structure (styles at top, model, renderers, event handlers, callbacks, init with top-level `await`).
+Plain DOM in one bundled `client.js`, built with esbuild from `src/client/`:
 
-- **Model** in memory: the snapshot from `subscribe`, mutated optimistically, re-rendered per column.
-- **Rendering**: one `renderColumn(colId)` that rebuilds that column's DOM; `renderBoard()` for structure changes. Cards render from a template function; keep it cheap because remote operations re-render the affected columns.
-- **Drag and drop**: pointer events, not the HTML5 DnD API (unreliable inside sandboxed iframes and on touch). While dragging, send `updatePresence` with the dragged card id so others see a ghost outline; commit with one `move` op on drop.
-- **Card panel**: a side panel with fields that save on blur or after a 400 ms debounce, each save a single `upsert` with `baseVersion`.
-- **Presence**: avatars in the header; a coloured ring on a card someone has open; a ghost where someone is dragging. Heartbeat 4 s, stale 12 s, exactly the Docs constants.
-- **Re-subscribe**: `class Callbacks extends RpcTarget { ...; [Symbol.dispose]() { resubscribe(); } }` where `resubscribe` calls `gadget.subscribe` again, applies the fresh snapshot, and replays any unsent local ops.
-- **Name prompt** on first load (until [viewer identity](collaborative-blueprints.md#phase-0-optional-but-recommended-viewer-identity) lands): a small dialog, stored only in memory.
-- **Responsive**: columns scroll horizontally; on phones, one column at a time with a tab strip.
-- **Export**: when `gadgetExportFormatId` is defined, render a static, expanded board (all card details visible) for the platform's HTML/PDF capture.
+- **Store** (`src/client/sync/store.js`, contract in `store-contract.js`). It holds server state plus pending local ops, applies changes optimistically, and sends one request at a time, with coalescing. Replays keep their original base version and `requestId`. The store handles conflict rebase, presence (4 s heartbeat, 12 s stale expiry) and re-subscribe with backoff.
+- **UI** (`src/client/ui/`). It re-renders narrowly per change, reusing card elements so remote updates never clobber a field being typed in. It also provides:
+  - pointer-event drag and drop;
+  - the card panel, with 400 ms debounced saves and the conflict banner;
+  - activity with undo, filters, and a phone layout of one column at a time with tabs;
+  - a static export view;
+  - a live region for remote changes, focus restoration, and inert backgrounds behind dialogs.
+- **Identity.** A name prompt on first load. The name is kept in `window.name`, which survives the frame reloading itself (below) and is the only storage the iframe has. When viewer identity lands, the viewer built in `src/client/main.js` is the place to swap in a real one.
 
-## Server hardening checklist
+What only the real platform showed:
 
-- Cap: 50 columns, 5,000 cards per board, 20 KiB description, 100 checklist items, 50 labels, 500 comments per card, 200 history entries.
-- Validate ids against `/^[a-z]_[0-9a-f]{8}$/` and card refs against known columns.
-- Strip unknown keys from cards; whitelist label colours as hex.
-- `senderId` echo: the originating client ignores its own broadcast.
-- All mutations through `enqueueMutation`.
-- `broadcast` drops stubs that throw.
-- History entries carry an `inverse` op where cheap (move, delete) to support board-level undo of the last few actions from the activity panel.
+- **Globals.** `gadget` and `RpcTarget` are module-level variables in the prefix the platform prepends, not globals.
+- **No forms.** The sandbox has no `allow-forms`, so there are no `<form>` elements; buttons and Enter handlers only.
+- **Stale connection after a code edit.** After an edit to `server.js`, the iframe's `gadget` stub fails for good; neither `onRpcBroken` nor `[Symbol.dispose]` fires. The store reports this as unrecoverable, and `main.js` reloads the frame (at most 3 times a minute). Changes not yet sent are lost; the in-app README says so.
+
+## Server hardening (as built)
+
+- **Caps** (see `LIMITS` in `src/shared/protocol.js`):
+
+  | Item | Cap |
+  | --- | --- |
+  | Columns | 50 |
+  | Cards | 2,000 |
+  | Labels | 50 (20 per card) |
+  | Description | 10,000 characters |
+  | Checklist | 50 items, 200 characters each |
+  | Comments per card | 200, and at most 256 KiB |
+  | History | 200 entries, at most 100 KiB |
+  | Ops per request | 500 |
+  | Board budget | 8 MiB of cards in total |
+
+- **Column delete.** Refused above 200 cards or 5,000 comments, so the cascade fits in one transaction.
+- **Validation.** Every id is checked against its pattern. Unknown keys are stripped. Label colours must be hex. Text is cleaned of control characters and truncated. CSV fields are guarded against formula injection.
+- **Atomic writes.** One transaction per request, with the idempotency record in the same commit. A failed commit drops cached state, and a throwing op cannot stall the mutation queue.
+- **Hub** (`src/core/hub.js`):
+  - Session-guarded subscribe, presence and leave.
+  - At most 200 subscribers.
+  - A subscriber is dropped after 500 unacknowledged deliveries or 30 s behind.
+  - Identical presence updates within 100 ms are not fanned out.
+  - Dead subscribers are detected when a delivery fails, because `onRpcBroken` is not implemented by the runtime.
+- **Echo suppression** by `senderId`.
+- **Undo inverses** are kept for card create, edit, move and delete, and for column rename and move. Inverses larger than 4 KiB are not kept.
 
 ## Agent brief
 
-Give this to the agent in step 1 of the common path:
+The board was built in the repo rather than drafted from this brief. The brief is kept to run the platform's own vibe-coding against the same spec as a comparison:
 
-> Build a Trello-style kanban board gadget. Columns hold cards; cards have a title, description, labels, an assignee name, a due date and a checklist. Cards and columns can be dragged to reorder or move. Clicking a card opens a side panel with its fields and an append-only comment thread. Multiple people use the same board at once: changes must appear live in every open browser, and I want to see who has the board open and which card each person is looking at. Store everything in Durable Object storage using a few keys (`meta`, `cards:<columnId>`, `comments:<cardId>`), with a per-card version number so two people editing the same card get a conflict instead of a silent overwrite. Expose `getBoard()` and `applyOperation()` RPCs so an agent can create and move cards from chat, and document them in README.md. Provide a CSV export of all cards. Use pointer events for drag and drop. Make it work on phones.
+> Build a Trello-style kanban board gadget. Columns hold cards; cards have a title, description, labels, an assignee name, a due date and a checklist. Cards and columns can be dragged to reorder or move. Clicking a card opens a side panel with its fields and an append-only comment thread. Multiple people use the same board at once: changes must appear live in every open browser, and I want to see who has the board open and which card each person is looking at. Store everything in Durable Object storage using one key per card and per comment, with a per-card version number so two people editing the same card get a conflict instead of a silent overwrite. Expose `getBoard()` and `applyOperation()` RPCs so an agent can create and move cards from chat, and document them in README.md. Provide a CSV export of all cards. Use pointer events for drag and drop. Make it work on phones.
 
 Then append the collaboration-pattern sentence from the master plan.
 
-## Tests (two-browser session)
+## Tests
 
-1. A creates a card, B sees it within a second without reload.
-2. A and B drag different cards at once; both land correctly.
-3. A and B edit the same card's title; the second saver gets the conflict banner with A's value.
-4. A opens a card; B sees A's ring on it. A closes the tab; the ring disappears within 15 s.
-5. B, as a `use`-role share-link collaborator, can do everything above but cannot open the code editor.
-6. A edits `server.js` in the code editor (any no-op change); B's board reconnects and continues syncing without reload.
-7. Agent chat: "add three cards to Backlog for onboarding tasks"; they appear live in both browsers.
-8. Export CSV; open in a spreadsheet.
+The two-browser tests from the original plan are automated. Three suites cover them:
+
+- **Harness:** `e2e/harness.test.mjs`, 19 tests, runs the real client over the real core in several panes.
+- **Local platform:** `e2e/platform.test.mjs`, 11 tests, runs against a local Cloudflare OS instance.
+- **Unit:** node and workerd, plus a real-core network fuzz test.
+
+| # | Test | Automated in |
+| --- | --- | --- |
+| 1 | A creates a card; B sees it within a second | harness 1, platform T1 (~160 ms) |
+| 2 | A and B drag different cards at once; both land | harness 2, platform T2 |
+| 3 | Same card title edited by both; second saver gets the banner | harness 3, platform T3 |
+| 4 | A opens a card, B sees the ring; A's tab dies, the ring goes within 15 s | harness 4, platform T4 (~1–4 s) |
+| 5 | B at `use` role can do all of this but has no code editor | platform T5 |
+| 6 | A edits `server.js`; B recovers without a manual reload | harness 6 and 9b, platform T6 (frame self-reload, ~4.5 s) |
+| 7 | Agent chat: "add three cards to Backlog for onboarding tasks" | **manual, on production** (needs a model) |
+| 8 | Export CSV and HTML | harness 8, platform T8 |
+
+Still to do on production: tests 1–6 in two real browsers with two Access identities, and test 7.
 
 ## Promotion
 
-`output`: `{ id: "board", noun: "Board", plural: "Boards", icon: "kanban" }`. `kanban` is in the closed `OUTPUT_ICONS` set. Blueprint id if bundled: `format.board`.
+Shipped as a bundled format from [`formats/board.json`](../../formats/board.json): `blueprintId` `format.board` (never change it), and `output` `{ id: "board", noun: "Board", plural: "Boards", icon: "kanban" }`. `pnpm --filter blueprint-kanban pack:gadget` rebuilds the archive and bumps `revision`.
 
 ## Follow-ups after v1
 
-- WIP limits per column (one number in column meta, enforced in the client only).
+- WIP limits per column (one number in column meta, enforced only in the client).
 - Swimlanes by label or assignee (client-side grouping, no model change).
-- Bulk import from CSV via a `sheetReplacements`-style `replaceColumn` op.
-- With viewer identity: real assignees, "assigned to me" filter, `use`-role read-only mode.
+- Bulk import from CSV (an `addCards` batch from a parsed file).
+- With viewer identity: real assignees, an "assigned to me" filter, and read-only mode for `use` role.
+- A second storage backend behind the `Repository` interface, through a Gatekeeper.
+- Publish a blueprint with a screenshot, so the board can be featured in `/admin`.

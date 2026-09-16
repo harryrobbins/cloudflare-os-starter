@@ -55,6 +55,8 @@ Every mutating RPC carries `senderId: clientId`, and `applyRemoteOperation` igno
 
 Note the bundled clients do *not* implement the `[Symbol.dispose]` re-subscribe the agent prompt recommends. They rely on the page reloading after a facet restart. The plans should add it.
 
+> **Update 2026-09-16:** the kanban build found that `[Symbol.dispose]` and `onRpcBroken` never fire on the real runtime. It detects restarts with a heartbeat that returns `{known, revision}`, and reloads the frame when the stub is dead. See `packages/blueprint-kanban/src/client/sync/store.js` and the master plan's gaps table.
+
 ## Side by side
 
 | | Docs (`format.document`) | Sheets (`format.spreadsheet`) | Slides (`format.slides`) |

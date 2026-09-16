@@ -6,13 +6,13 @@ Background research is in [`../research/`](../research/README.md). Read [gadget-
 
 ## The three blueprints
 
-| Plan | Product analogue | Hard part | Est. server size |
+| Plan | Product analogue | Hard part | Status |
 | --- | --- | --- | --- |
-| [Kanban board](kanban-blueprint.md) | Trello, Jira board | Nothing new; the Sheets pattern applied to cards and columns | ~400 lines |
-| [Whiteboard](whiteboard-blueprint.md) | Miro | High-frequency ephemeral state (drags, cursors) kept off storage; many small versioned objects | ~600 lines |
-| [Wave](wave-blueprint.md) | Google Wave | Character-level co-editing inside many threaded messages, which needs a CRDT inlined into the gadget | ~500 lines plus an inlined Yjs build |
+| [Kanban board](kanban-blueprint.md) | Trello, Jira board | Nothing new; the Sheets pattern applied to cards and columns | **Deployed 2026-09-16** as `format.board` from [`packages/blueprint-kanban`](../../packages/blueprint-kanban/README.md), about 2,500 lines of shared, core and server code and 5,400 of client |
+| [Whiteboard](whiteboard-blueprint.md) | Miro | High-frequency ephemeral state (drags, cursors) kept off storage; many small versioned objects | Not started |
+| [Wave](wave-blueprint.md) | Google Wave | Character-level co-editing inside many threaded messages, which needs a CRDT inlined into the gadget | Not started |
 
-Build them in that order. Each plan reuses the previous one's server skeleton and presence code, and the kanban board is the one that proves the deployment, sharing and promotion pipeline end to end at the lowest cost.
+Build them in that order. The kanban board proved the deployment, sharing and promotion pipeline end to end, and its package is the base for the other two (see [Reusing the kanban build](#reusing-the-kanban-build)).
 
 ## Why this works on the platform
 
@@ -31,7 +31,10 @@ Each plan has to handle these, and the master plan tracks the cross-cutting fixe
 | --- | --- | --- |
 | No viewer identity reaches gadget code (upstream Discussion #455) | Collaborators show as "Guest A1B2" unless they type a name; nothing can be attributed to a real user | Phase 0 option below patches the kernel in our fork. Until then every plan has a name prompt on first load. |
 | No client-side storage (opaque-origin iframe) | The name prompt repeats on every reload; no local drafts survive a reload | Accept for v1. With the identity patch the prompt disappears. |
-| Facet restarts on code deploy, chat-branch switch and revocation drop every subscription | Clients go stale silently | Every plan implements `[Symbol.dispose]` re-subscribe plus a heartbeat, which the bundled gadgets skip. |
+| Facet restarts on code deploy, chat-branch switch and revocation drop every subscription | Clients go stale silently | Neither `[Symbol.dispose]` nor `onRpcBroken` fires in practice (the runtime does not implement `onRpcBroken`). The kanban board's heartbeat (`updatePresence` returns `{known, revision}`) detects the restart, and the client re-subscribes. |
+| After a code edit, a `use`-role iframe's `gadget` stub fails permanently (verified locally) | Re-subscribing cannot help; the connection itself is dead | The client reloads its own frame after repeated failures, carrying the viewer's name in `window.name`. Unsent local changes are lost. |
+| The platform prepends `gadget` and `RpcTarget` as module-level `let` bindings, not globals | Code reading `globalThis.gadget` crashes on start | Read them with `typeof gadget !== "undefined"`. |
+| The iframe sandbox has no `allow-forms` | Native form submission is silently blocked before `submit` fires | No `<form>` elements; use button and Enter handlers. |
 | No CRDT library, no `typed-storage`, no npm at runtime; `client.js` is served as one file and cannot import siblings | Text co-editing needs a library inlined: a module file for the server, concatenated into `client.js` for the browser | Only Wave needs this; see its plan for the Yjs build step. |
 | Sharing is workspace-wide, not per gadget | A workspace with a board and a whiteboard shares both or neither | Keep one tool per workspace for now. Upstream `plans/multi-gadget.md` defers per-gadget sharing. |
 | Open RPC channel keeps the DO billable (upstream issue #338) | A tab left open all day costs DO wall-clock time | Acceptable at team scale. Revisit if the deployment grows. |
@@ -41,6 +44,8 @@ Each plan has to handle these, and the master plan tracks the cross-cutting fixe
 ## Common build and ship path
 
 Each plan follows the same seven steps. The plan pages only describe what differs.
+
+**What the kanban board actually did.** It replaced step 1 with building in this repo. Claude Code agents wrote a package with unit tests, a multi-pane browser harness and a local-platform e2e suite, then packed it into a `.gadget` archive. It shipped through step 6 directly. The [delivery plan](kanban-delivery.md) explains why. Use that route for the whiteboard and Wave too: the platform-only bugs above were invisible in the Workshop editor and would have been hard to find without the e2e suite. Steps 1 to 3 below still describe the Workshop-agent route, which is useful as a quick comparison.
 
 ### 1. Draft with the agent
 
@@ -64,7 +69,7 @@ Gadget header, **Blueprint**, create with title, description and a screenshot. A
 
 ### 6. Ship as a bundled format (optional, durable)
 
-Once stable, export the `.gadget` from `/blueprint/<id>` and check it into this repo so a fresh deployment gets it on first request. Upstream's mechanism is the `FORMAT_BLUEPRINTS_DIR` variable read by `workshop-backend`'s build, and the submodule's `format-blueprints/README.md` says a fork should point it at its own directory rather than editing the submodule. This needs one small starter change, tracked below.
+Once stable, put the `.gadget` and its `.json` sidecar in [`formats/`](../../formats). A repo-built gadget packs straight there; a Workshop-built one is exported from `/blueprint/<id>` first. `pnpm deploy` then installs it on the deployment's first request. This uses upstream's `FORMAT_BLUEPRINTS_DIR`, wired through `formatBlueprintsDir` in `deployment.jsonc` (done; see [Bundled formats](../customization.md#bundled-formats)). Bump the sidecar's `revision` on every code change, and never change its `blueprintId`.
 
 ### 7. Sync upstream
 
@@ -80,18 +85,32 @@ Cost: a day. Benefit: every plan drops its name prompt, presence shows real name
 
 If you do this, keep the diff in `workshop-backend` and `workshop-shared` small and separate, per upstream's AGENTS.md rule for kernel changes.
 
-### Starter change: own formats directory
+### Starter change: own formats directory (done)
 
-Add `formatBlueprintsDir` to `deployment.jsonc` (default `null`). In `scripts/deploy.ts`, when set, pass `FORMAT_BLUEPRINTS_DIR=<absolute path>` in the env of the `@gadgets/workshop-backend` build command. The build already runs with `--no-cache`, which restores the full environment, so no `env:` declaration on the task is needed. Add a `formats/` directory at the repo root holding `<name>.gadget` plus `<name>.json` pairs, starting with copies of the three upstream ones so nothing disappears. Cover it in `scripts/deploy.test.ts` and document it in `docs/customization.md`.
+`deployment.jsonc` sets `"formatBlueprintsDir": "formats"`. When the key is set, `scripts/deploy.ts` passes an absolute `FORMAT_BLUEPRINTS_DIR` to the `@gadgets/workshop-backend` build. It also refuses a directory that has no archives, or an archive without a sidecar. `formats/` holds the Board plus copies of upstream's Docs, Sheets and Slides, because the directory replaces upstream's set. Covered by `scripts/deploy.test.ts` and documented in [Bundled formats](../customization.md#bundled-formats).
 
-### Shared presence and sync module
+**When the submodule is upgraded**, re-copy upstream's three format pairs into `formats/` if their `revision` changed. Otherwise the deployment keeps shipping the old Docs, Sheets and Slides.
 
-After the kanban board is done, lift its `subscribe`/`broadcast`/presence code into a snippet kept at `docs/plans/snippets/` (or, better, wait for upstream's `libraries/sync` to arrive via step 7) so the whiteboard and Wave plans start from tested code rather than an agent draft.
+### Reusing the kanban build
+
+Rather than a snippet, [`packages/blueprint-kanban`](../../packages/blueprint-kanban/README.md) is the tested starting point for the next gadgets. Copy it and replace the board-specific parts. The reusable parts:
+
+| Part | What it gives the next gadget |
+| --- | --- |
+| `src/core/hub.js` | Subscribers, presence and sessions, with backpressure and dead-subscriber detection. Transport-agnostic |
+| `src/core/repository.js` | The storage seam |
+| `src/shared/order.js` | Fractional ordering keys |
+| `src/client/sync/store.js` | Optimistic queue, serial send, idempotent replay, heartbeat restart detection and frame reload; the conflict rules are board-specific |
+| `harness/` | Multi-pane simulator mirroring the platform's prefix, sandbox, CSP and stale stubs |
+| `scripts/` | esbuild bundling, deterministic `.gadget` packing, the revision lock |
+| `e2e/` | Local platform start and stop scripts for WSL, plus Playwright helpers for sign-up, upload, share and export |
+
+If upstream's `libraries/sync` arrives through step 7, compare the two and adopt upstream's only where it removes code without changing the wire protocol.
 
 ## Sequencing
 
-1. Kanban board: draft, two-browser test, harden, publish, promote. One to two days.
-2. Starter change for the formats directory, and ship the board as a bundled format. Half a day.
+1. ~~Kanban board: draft, two-browser test, harden, publish, promote.~~ Done 2026-09-16. It was built in the repo, not drafted, and took one day with parallel agents. Production two-browser checks and the agent-chat test are still Harry's to run.
+2. ~~Starter change for the formats directory, and ship the board as a bundled format.~~ Done 2026-09-16 (`format.board` revision 2).
 3. Phase 0 viewer identity, if wanted. One day. Re-test the board with real names.
 4. Whiteboard. Two to three days, most of it in the client.
 5. Wave. Two to three days, the first of which is getting a Yjs build that loads under the gadget module rules.
@@ -104,4 +123,4 @@ After the kanban board is done, lift its `subscribe`/`broadcast`/presence code i
 - A killed tab disappears from presence within fifteen seconds.
 - No edit is lost when two people change the same item; the loser sees a conflict and the authoritative value.
 - The AI agent can read and modify each tool's content from chat through the documented RPC surface.
-- A server-side restart (code edit, revocation) recovers without a page reload.
+- A server-side restart (code edit, revocation) recovers without the user reloading the page. Revised after the kanban build: the platform leaves a `use`-role iframe's connection dead after a code edit, so the gadget reloads its own frame, keeping the viewer's name, and recovers in about 5 s.

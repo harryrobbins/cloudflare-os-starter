@@ -27,6 +27,7 @@ Audit the old-to-new change for:
 - Error reporting and frontend reporting.
 - Dependencies, lockfiles, build commands, and generated artifacts.
 - The submodule's `pnpm-workspace.yaml` `catalog:` block, and its build scripts vs Vite+ tasks.
+- Bundled formats. When `deployment.jsonc` sets `formatBlueprintsDir`, that directory replaces upstream's `format-blueprints/`. Upstream revisions of Docs, Sheets and Slides then only ship if their `.gadget`/`.json` pairs are re-copied into it. Also check that the gadget runtime contract that `packages/blueprint-kanban` relies on still holds: the client prefix globals, the iframe sandbox flags, facet loading, and `ExportHandler`. Run `packages/blueprint-kanban/e2e/platform.test.mjs` against a local instance of the new commit.
 
 Inspect every base-config section that `scripts/deploy.ts` replaces or reconstructs. New upstream fields can otherwise be silently dropped. Generate and review sanitized old/new derived-config diffs, but never commit or hand-edit generated Wrangler files.
 

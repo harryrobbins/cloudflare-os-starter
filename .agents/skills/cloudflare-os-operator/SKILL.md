@@ -315,6 +315,7 @@ Success requires evidence for every applicable item:
 - Each Workshop service binding targets the intended service, entrypoint, and props, and each Router service binding targets the intended service with no entrypoint. The Context binding's `sharingDomain` prop matches the boundary the existing collections live under.
 - The Custom Gatekeeper is disabled or behaves according to its reviewed policy; approved reads appear as observations.
 - The model picker lists the configured providers' models, and one approved low-cost request proves the runtime path, with separate evidence for billing ownership, provider/Gateway selection, prompt collection, retention, and log access, plus token scope where a token is required. An empty picker is a failure, not an absence of evidence: see `references/troubleshooting.md`.
+- Every format listed under **New** instantiates. When `formatBlueprintsDir` is set, that includes the repository's own formats, such as the Board. A Board created before the deploy still loads its cards.
 - Existing schedules are still listed and a newly created one fires. Both come from the Scheduler's own Durable Objects, so an empty list on an upgraded or migrated deployment points at its Worker name, not at its storage.
 - Router, Workshop, Context, Scheduler, Custom Gatekeeper, and Reporter logs are available with the expected sampling.
 - The Reporter query surface exists; absence of events is not a failure without an explicit capture.

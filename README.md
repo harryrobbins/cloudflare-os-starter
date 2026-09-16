@@ -117,6 +117,7 @@ Backend error reporting is enabled without a vendor account. Explicit upstream i
 | Sign-in, routes, AI, storage, observability, Worker identities | [`deployment.jsonc`](deployment.jsonc) | Yes |
 | Logs, traces, error destinations, browser reporting | [Observability guide](docs/observability.md) | Sometimes |
 | Organization APIs and capabilities | [`packages/custom-gatekeeper`](packages/custom-gatekeeper/README.md) | Yes |
+| Formats offered under **New** (this deployment ships a live kanban Board beside Docs, Sheets and Slides) | [`formats/`](formats) and [Bundled formats](docs/customization.md#bundled-formats); ad hoc promotion in `/admin` | Yes for bundled, no for promoted |
 | Product behavior unavailable through Worker boundaries | Pinned upstream fork/commit | Yes |
 
 The complete control reference and recipes live in [Customization](docs/customization.md). The upstream [`write-gatekeeper` skill](https://github.com/cloudflare/cloudflare-os/blob/main/.agents/skills/write-gatekeeper/SKILL.md) covers richer integrations.

@@ -214,6 +214,15 @@ Real gaps:
 - Gadget code has no viewer identity (see the public-docs research, Discussion #455).
 - Gadget backends cannot use real WebSockets or hibernation. Live subscriptions die whenever the facet is aborted (code version change, chat-branch switch, revocation restart) and clients must re-subscribe, which is why the prompt's pattern re-subscribes in `[Symbol.dispose]`.
 
+> **Update 2026-09-16 (verified by the kanban build on local workerd and a local Cloudflare OS):**
+> - `onRpcBroken` is not implemented by workerd's built-in RPC, so a dead subscriber is only noticed when a delivery to it fails.
+> - `[Symbol.dispose]` never fired on a facet restart.
+> - After a `server.js` edit, a `use`-role iframe's `gadget` stub fails permanently until the frame reloads.
+> - `gadget` and `RpcTarget` are module-level bindings in the injected prefix, not globals.
+> - The iframe sandbox lacks `allow-forms`.
+>
+> The workarounds are in the [master plan's gaps table](../plans/collaborative-blueprints.md#what-the-platform-does-not-give-us).
+
 ## Not found
 
 - Any explicit statement about alarms in gadget code.

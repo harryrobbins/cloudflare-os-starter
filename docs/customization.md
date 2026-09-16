@@ -253,7 +253,8 @@ Prefer wrapper-owned Workers and [service bindings](https://developers.cloudflar
 3. Review Workshop and Context Wrangler base-config changes and Gatekeeper contracts.
 4. Diff `cloudflare-os/pnpm-workspace.yaml`'s `catalog:` against this repository's and re-sync it. Two submodule packages are members of this workspace and resolve `catalog:` here, so a missing entry fails the install and a *stale* one silently gives the tree two copies of `capnweb` — a failure that only appears once the two installs are separate, as they are in CI.
 5. Run `pnpm install`, `pnpm --dir cloudflare-os install`, `pnpm lint`, and `pnpm check`.
-6. Deploy and verify Access, administrator access, storage, configured AI, Context, custom observations, and the Error Reporter query surface.
-7. If needed, restore the previous gitlink and redeploy, or use [Workers rollback](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/) when bindings remain compatible.
+6. If `formatBlueprintsDir` is set, compare `cloudflare-os/packages/workshop-backend/format-blueprints/*.json` with the copies in `formats/`. Re-copy any `.gadget`/`.json` pair whose `revision` moved, or the deployment keeps shipping the old Docs, Sheets and Slides.
+7. Deploy and verify Access, administrator access, storage, configured AI, Context, custom observations, the Error Reporter query surface, and that every bundled format still instantiates from **New**.
+8. If needed, restore the previous gitlink and redeploy, or use [Workers rollback](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/) when bindings remain compatible.
 
 Do not update the submodule blindly. The deployment script derives from upstream configs so incompatible base changes remain visible during review and checks.
