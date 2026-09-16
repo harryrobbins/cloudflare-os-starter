@@ -1,5 +1,48 @@
 # Delivery plan: Kanban board, from empty repo to cfos.surprisingly.ltd
 
+## Delivery record (2026-09-16)
+
+`format.board` revision 2 was deployed to cfos.surprisingly.ltd on 2026-09-16 via the durable path (Phase 6). The upload fast path (Phase 5) was skipped because production testing needs a second Access identity. Commits: `6f8407e`, `f0d1e67`, `b58527e`.
+
+What differs from the plan below, and why:
+
+- **Storage layout.** Cards are stored one key each (`card:<id>`), and so are comments. There is no `cards:<columnId>` key. A full column would exceed the per-value limit.
+- **Size caps.**
+  - The caps are lower than the kanban plan's: 2,000 cards, a 10,000-character description, 50 checklist items, 200 comments per card.
+  - There is also an 8 MiB budget for the whole board. A review showed one collaborator could otherwise make the board too large to load.
+- **`onRpcBroken`** is not implemented by the Workers runtime. Dead subscribers are dropped when a delivery to them fails, and clients also expire stale peers after 12 s.
+- **Protocol additions:**
+  - Session tokens on `subscribe` and presence, so no one can take over another person's subscription.
+  - A `requestId` on writes, so a request replayed after a restart is never applied twice.
+  - A heartbeat that returns `{known, revision}`, so clients notice a server restart.
+- **Found only on the real platform (local run):**
+  - `gadget` and `RpcTarget` are module-level variables, not globals.
+  - The iframe sandbox blocks form submission.
+  - After a code edit, a `use`-role iframe's connection fails for good, so the board reloads its own frame and keeps the viewer's name in `window.name`.
+
+  The harness now mirrors all three.
+- **Parallelism.** It came from background agents rather than a Workflow:
+  - four spikes and three build streams sharing one checkout, with no overlapping files;
+  - three read-only reviewers;
+  - fix agents;
+  - two rounds of local platform e2e.
+
+Test status at deploy:
+
+| Suite | Tests passing |
+| --- | --- |
+| Node unit | 166 |
+| workerd | 15 |
+| Harness e2e | 19 |
+| Local platform e2e | 11 |
+| Deploy scripts | 31 |
+
+**Still to do, by Harry:**
+
+1. Add a second identity to the Access policy.
+2. Run kanban test 7 (the agent edits the board from chat) and the two-browser checks on production.
+3. Optionally publish a blueprint with a screenshot for `/admin` featuring.
+
 Written 2026-09-16. This is the *how and in what order* for [kanban-blueprint.md](kanban-blueprint.md), which remains the source for scope, data model, RPC surface and the test list. Where this page disagrees with the [master plan](collaborative-blueprints.md)'s seven-step path, this page wins for the kanban board, for the reasons in "Decisions" below.
 
 Storage for v1 is the gadget's own Durable Object facet storage (`ctx.storage`), which the platform calls private gadget storage. Other backends (Jira, Grist, Git, a standalone DB) are designed for but not built; see [Future backends](#future-backends).
