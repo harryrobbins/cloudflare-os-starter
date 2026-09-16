@@ -131,20 +131,31 @@ describe("Hub", () => {
     expect(h.size).toBe(1);
   });
 
-  it("registers onRpcBroken defensively", async () => {
+  it("never calls onRpcBroken and disposes every removed stub exactly once", async () => {
     const h = hub();
-    let broken;
-    const stub = { operation() {}, presence() {}, onRpcBroken: (fn) => { broken = fn; } };
+    const disposed = [];
+    const make = (name, extra = {}) => ({
+      operation() {}, presence() {}, onRpcBroken: () => { throw new Error("must not be called"); },
+      [Symbol.dispose]: () => { disposed.push(name); }, ...extra,
+    });
     const other = new Sub("o");
     h.add(other, { clientId: "O" });
-    h.add(stub, { clientId: "S" });
-    h.add({ operation() {}, presence() {}, onRpcBroken: () => Promise.reject(new Error("unsupported")) }, { clientId: "R" });
-    h.add({ operation() {}, presence() {}, onRpcBroken: () => { throw new Error("unsupported"); } }, { clientId: "T" });
-    broken();
+    const first = make("first");
+    const { session } = h.add(first, { clientId: "S" });
+    h.add(make("second"), { clientId: "S", session }); // replaces first
+    expect(disposed).toEqual(["first"]);
+    await h.leave("S", session);
+    expect(disposed).toEqual(["first", "second"]);
+    await h.leave("S", session); // already gone: no double dispose
+    expect(disposed).toEqual(["first", "second"]);
+    h.add(make("dead", { operation: () => Promise.reject(new Error("gone")) }), { clientId: "D" });
+    h.broadcast({ type: "snapshot", board: {} });
     await h.settled();
-    expect(h.has("S")).toBe(false);
-    expect(h.has("R") && h.has("T")).toBe(true);
-    expect(other.presences.some((p) => p.type === "leave" && p.clientId === "S")).toBe(true);
+    expect(h.has("D")).toBe(false);
+    expect(disposed).toEqual(["first", "second", "dead"]);
+    const t = h.add(make("throws", { [Symbol.dispose]: () => { throw new Error("broken"); } }), { clientId: "T" });
+    await expect(h.leave("T", t.session)).resolves.toBeUndefined();
+    expect(h.has("T")).toBe(false);
   });
 
   it("assigns an id to clients without one", () => {

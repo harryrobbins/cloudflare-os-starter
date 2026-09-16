@@ -4,8 +4,8 @@
 // `operation(event)` and `presence(event)` methods that may return a promise.
 //
 // Dead subscribers are detected by a delivery rejecting (or throwing): the subscriber is removed
-// and a presence "leave" is broadcast for it. `onRpcBroken` is also registered defensively, but
-// local workerd does not implement it.
+// and a presence "leave" is broadcast for it. `onRpcBroken` is not used: the runtime never fires it,
+// and passing it a function sends a function stub to the client that nothing disposes.
 //
 // Sessions: each entry holds a random session token that subscribe() hands only to its caller.
 // Replacing a live entry, updating its presence or leaving needs that token, so knowing another
@@ -16,8 +16,10 @@
 // dropped (and "leave" broadcast) when the next delivery to it would start. Identical presence
 // updates less than PRESENCE_THROTTLE_MS apart are accepted but not fanned out.
 //
-// Stubs are never disposed here. A client may treat its callback's disposal as "reconnect", so
-// disposing a replaced stub could start a resubscribe loop; dropped references are released by GC.
+// Every stub is disposed exactly once, when its entry is removed (leave, drop, or replaced by a
+// re-subscribe). A dup'd stub that is garbage-collected undisposed makes the runtime log "An RPC stub
+// was not disposed properly" (and crashes local workerd). Disposal never reaches the client's
+// RpcTarget [Symbol.dispose] on the platform, and the client ignores an old generation's anyway.
 
 import { LIMITS, cleanColor, cleanLine, cleanName, isId, isSession, newSession } from "../shared/protocol.js";
 
@@ -106,16 +108,13 @@ export class Hub {
       session = isSession(raw.session) ? raw.session : newSession();
     }
     this.entries.delete(clientId);
+    if (existing && existing.stub !== stub) disposeStub(existing.stub);
     const others = [...this.entries.values()];
     /** @type {Entry} */
     const entry = {
       stub, info: cleanInfo({ ...raw, clientId }, null), session, inflight: new Set(), lastPresence: null,
     };
     this.entries.set(clientId, entry);
-
-    try {
-      Promise.resolve(stub?.onRpcBroken?.(() => { this.#drop(entry); })).catch(() => {});
-    } catch { /* not supported by this transport */ }
 
     const at = this.now();
     const tasks = others.map((o) => this.#deliver(entry, "presence", { type: "join", ...o.info, at }));
@@ -176,6 +175,7 @@ export class Hub {
     const entry = id ? this.entries.get(id) : undefined;
     if (!entry || session !== entry.session) return Promise.resolve();
     this.entries.delete(id);
+    disposeStub(entry.stub);
     return this.presence({ type: "leave", clientId: id, at: this.now() });
   }
 
@@ -220,6 +220,7 @@ export class Hub {
     const { clientId } = entry.info;
     if (this.entries.get(clientId) !== entry) return Promise.resolve();
     this.entries.delete(clientId);
+    disposeStub(entry.stub);
     return this.presence({ type: "leave", clientId, at: this.now() });
   }
 
@@ -229,6 +230,13 @@ export class Hub {
     promise.finally(() => this.pending.delete(promise)).catch(() => {});
     return promise;
   }
+}
+
+/** Releases an RPC stub; ignores stubs that are not disposable or already broken. @param {any} stub */
+function disposeStub(stub) {
+  try {
+    stub?.[Symbol.dispose]?.();
+  } catch { /* already disposed or broken */ }
 }
 
 /**
