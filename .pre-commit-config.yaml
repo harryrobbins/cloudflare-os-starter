@@ -1,0 +1,8 @@
+# Secret scanning before every commit. Install once per clone: `pre-commit install`.
+# Provider keys never belong in this repository: the OpenRouter key lives on AI Gateway (BYOK),
+# and the Access audience in deployment.jsonc is an identifier, not a credential.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks

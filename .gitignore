@@ -1,5 +1,31 @@
+# Dependencies and build output
 node_modules/
 packages/*/dist/
 packages/*/.wrangler/
+.wrangler/
+dist/
+
+# Generated per-deploy config and local overrides
 packages/*/wrangler.prod.jsonc
 deployment.local.jsonc
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Editors and IDEs
+.idea/
+.vscode/
+*.swp
+*~
+
+# Python tooling (research scripts, pre-commit helpers)
+.venv/
+venv/
+__pycache__/
+
+# OS and logs
+.DS_Store
+Thumbs.db
+*.log
