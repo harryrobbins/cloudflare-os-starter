@@ -40,7 +40,7 @@ The whiteboard is the newer and more hardened copy of the same skeleton. Copy it
 - **Unguessable request ids.** Client ids are broadcast, so request ids must not be derived from them. Replay records must match per `senderId`, or a peer can make another user's writes vanish as duplicates.
 - **Undo inside a `contenteditable`.** In the sandboxed iframe, Ctrl+Z outside a text field runs the browser's native undo, which moves focus into the last edited field. Inside the editor you want `Y.UndoManager`, not native undo. Intercept Ctrl/Cmd+Z, Shift+Z and Y in a capture-phase `keydown` in both cases. See `src/client/ui/canvas/index.js` in the whiteboard.
 - **Clipboard.** `navigator.clipboard` is blocked by permissions policy. Handle paste with the `paste` event's `clipboardData`, and sanitise it to the tiny rich-text model.
-- **Accessibility.** The UI review is part of the gate, and it failed both earlier builds on keyboard alternatives. Plan from the start:
+- **Accessibility.** The UI review is part of the gate. In the whiteboard it found that resize, rotate and connect had no keyboard path, which cost a fix round. Plan from the start:
   - a keyboard path to every blip and reply action;
   - roving tabindex in toolbars;
   - focus restored after dialogs and deletes;
