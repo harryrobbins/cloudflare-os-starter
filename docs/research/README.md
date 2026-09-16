@@ -8,6 +8,11 @@ Background research behind the plans in [`../plans/`](../plans/collaborative-blu
 | [bundled-blueprint-sync-patterns.md](bundled-blueprint-sync-patterns.md) | How the three shipped format blueprints (Docs, Sheets, Slides) implement multi-user sync, with the wire protocol, conflict policy and presence handling side by side. The reference for the plans. |
 | [cloudflare-os-collaboration-public-docs.md](cloudflare-os-collaboration-public-docs.md) | What Cloudflare says publicly about collaboration in gadgets, known gaps and open issues, where upstream `main` has moved since our pin, and Cloudflare's general 2026 guidance for realtime on Workers. |
 | [bundled-blueprints/](bundled-blueprints/) | The decoded `server.js` and `README.md` of each bundled blueprint, plus `extract-gadget.mjs`, the script that decodes any `.gadget` archive into its source files. |
+| [notebook-ide-blueprint-integration.md](notebook-ide-blueprint-integration.md) | Notebook/IDE integration against this checkout: runtime and iframe boundaries, RPC, authorization, storage, packaging and deployment extension points. |
+| [notebook-blueprint-runtime-options.md](notebook-blueprint-runtime-options.md) | Native notebooks, JupyterLite/Pyodide and remote Jupyter kernels; compatibility, persistence, execution semantics and primary sources. |
+| [browser-ide-runtime-options.md](browser-ide-runtime-options.md) | code-server/OpenVSCode hosting, Cloudflare Sandbox and external runtimes; authentication, WebSockets, durable files, extensions and validation. |
+
+The notebook/IDE recommendation and proposed delivery sequence are in [Notebook and IDE blueprints](../plans/notebook-ide-blueprints.md). These three research documents review the pinned checkout and current product documentation; they do not claim a tested integration or an upstream `main` comparison.
 
 ## Decoding a `.gadget` archive
 
