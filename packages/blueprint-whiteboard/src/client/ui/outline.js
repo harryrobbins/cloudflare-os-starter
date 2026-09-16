@@ -2,9 +2,12 @@
 // The Objects panel: every object as a list (type and a text excerpt) with Select and Show
 // buttons, so keyboard and screen-reader users can find, select and reach any object without
 // pointing at the canvas.
+//
+// Like the Activity panel, it is a non-modal side panel (a complementary landmark): the board stays
+// usable beside it, Tab moves in and out of it freely, and Escape or the close button closes it.
 
 import { sortedObjects } from "../../shared/protocol.js";
-import { h, icon, trapTab } from "./dom.js";
+import { h, icon } from "./dom.js";
 import { typeLabel } from "./stylebar.js";
 
 /** @typedef {import("./app.js").App} App */
@@ -53,13 +56,12 @@ export function createOutline(app) {
     filter = /** @type {HTMLInputElement} */ (h("input", { type: "text", class: "outline-filter", placeholder: "Filter by text or type", "aria-label": "Filter objects", autocomplete: "off" }));
     filter.addEventListener("input", () => { key = ""; render(store.getState()); });
     list = h("ul", { class: "panel-list outline-list", "aria-label": "Objects" });
-    panel = h("aside", { class: "wb-panel outline-panel", role: "dialog", "aria-label": "Objects", tabindex: "-1" },
+    panel = h("aside", { class: "wb-panel outline-panel", "aria-label": "Objects", tabindex: "-1" },
       h("div", { class: "panel-head" }, h("h2", null, "Objects"), h("span", { class: "muted outline-count" }), closeBtn),
       h("div", { class: "panel-filter" }, filter),
       list);
     panel.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); return; }
-      trapTab(/** @type {HTMLElement} */ (panel), e);
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
     });
     document.body.appendChild(panel);
     app.outlineOpen = true;

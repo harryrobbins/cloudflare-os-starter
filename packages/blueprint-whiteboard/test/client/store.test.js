@@ -2,6 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LIMITS, PRESENCE_HEARTBEAT_MS, PRESENCE_SEND_MS, PRESENCE_STALE_MS } from "../../src/shared/protocol.js";
 import { FakeServer, fakeId, settle, startStore } from "./helpers.js";
+import { FakeRpcTarget } from "./fake-gadget.js";
+import {
+  createStore, PRESENCE_FAILURES_TO_RESUBSCRIBE, PRESENCE_RETRY_MS, PRESENCE_TIMEOUT_MS, SUBSCRIBE_HANG_MS,
+} from "../../src/client/sync/store.js";
 
 // Captured before fake timers replace the clocks.
 const realHrtime = process.hrtime.bigint.bind(process.hrtime);
@@ -666,14 +670,17 @@ describe("presence gating", () => {
     expect(held).toHaveLength(0);
   });
 
-  it("treats an updatePresence unsettled for PRESENCE_TIMEOUT_MS as failed and re-subscribes", async () => {
+  it("re-subscribes only after PRESENCE_FAILURES_TO_RESUBSCRIBE timeouts of an unsettled updatePresence", async () => {
     const { server, a, held, setHold } = await slowPresence();
     const subscribes = () => server.callsOf("subscribe").length;
     const before = subscribes();
     setHold(true);
     a.store.setPresence({ cursor: { x: 1, y: 1 } });
-    await settle(9900);
+    await settle(PRESENCE_TIMEOUT_MS * (PRESENCE_FAILURES_TO_RESUBSCRIBE - 1) + PRESENCE_TIMEOUT_MS - 100);
+    // A slow server is not a dead one: no re-subscribe, and heartbeats skip instead of piling up.
     expect(subscribes()).toBe(before);
+    expect(held).toHaveLength(1);
+    expect(a.store.getState().connection).toBe("live");
     setHold(false);
     await settle(300);
     expect(subscribes()).toBe(before + 1);
@@ -689,6 +696,41 @@ describe("presence gating", () => {
     a.store.dispose();
     await settle(100);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("does not re-subscribe when a slow updatePresence settles after one timeout", async () => {
+    const { server, a, held, setHold } = await slowPresence();
+    const subscribes = () => server.callsOf("subscribe").length;
+    const before = subscribes();
+    setHold(true);
+    a.store.setPresence({ cursor: { x: 1, y: 1 } });
+    await settle(PRESENCE_TIMEOUT_MS + 1000);
+    held.shift().resolve({ known: true, revision: 0 });
+    setHold(false);
+    await settle(PRESENCE_TIMEOUT_MS * 3);
+    expect(subscribes()).toBe(before);
+    expect(a.store.getState().connection).toBe("live");
+  });
+
+  it("re-subscribes after PRESENCE_FAILURES_TO_RESUBSCRIBE rejected updatePresence calls, retrying quickly", async () => {
+    const { server, a, held, setHold } = await slowPresence();
+    const subscribes = () => server.callsOf("subscribe").length;
+    const before = subscribes();
+    setHold(true);
+    a.store.setPresence({ cursor: { x: 1, y: 1 } });
+    await settle(0);
+    held.shift().reject(new Error("overloaded"));
+    await settle(PRESENCE_RETRY_MS + 10);
+    expect(held).toHaveLength(1); // retried without waiting for the heartbeat
+    expect(subscribes()).toBe(before);
+    held.shift().reject(new Error("overloaded"));
+    await settle(PRESENCE_RETRY_MS + 10);
+    expect(subscribes()).toBe(before);
+    setHold(false);
+    held.shift().reject(new Error("overloaded"));
+    await settle(200);
+    expect(subscribes()).toBe(before + 1);
+    expect(a.store.getState().connection).toBe("live");
   });
 });
 
@@ -783,7 +825,7 @@ describe("unrecoverable connection", () => {
     expect(a.store.getState().connection).toBe("live");
   });
 
-  it("calls it when the connection stays non-live for 8 s with calls hanging", async () => {
+  it("calls it when a subscribe call hangs for SUBSCRIBE_HANG_MS", async () => {
     const server = new FakeServer({ latency: 5 });
     const real = server.connect();
     let hang = false;
@@ -792,9 +834,46 @@ describe("unrecoverable connection", () => {
     const a = await startStore(server, "a", { gadget, onUnrecoverable });
     hang = true;
     server.disposeSubscriber(a.clientId);
-    await settle(7900);
+    await settle(SUBSCRIBE_HANG_MS - 100);
     expect(onUnrecoverable).not.toHaveBeenCalled();
     await settle(200);
+    expect(onUnrecoverable).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not count time waiting on a slow subscribe (first load, or a resubscribe)", async () => {
+    const server = new FakeServer({ latency: 5 });
+    const real = server.connect();
+    let delay = 9000;
+    const gadget = {
+      ...real,
+      subscribe: async (...args) => {
+        const r = await real.subscribe(...args);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return r;
+      },
+    };
+    const onUnrecoverable = vi.fn();
+    const pending = createStore({ gadget, RpcTarget: FakeRpcTarget, viewer: { clientId: "client-slow", name: "a", color: "#123456" }, onUnrecoverable });
+    await settle(12000);
+    const store = await pending;
+    expect(store.getState().connection).toBe("live");
+    delay = 20000;
+    server.disposeSubscriber("client-slow");
+    await settle(25000);
+    expect(store.getState().connection).toBe("live");
+    expect(onUnrecoverable).not.toHaveBeenCalled();
+  });
+
+  it("calls it within a few seconds when a live store's stub rejects every call (stale platform stub)", async () => {
+    const server = new FakeServer({ latency: 5 });
+    const real = server.connect();
+    let stale = false;
+    const gadget = Object.fromEntries(Object.entries(real).map(([k, fn]) => [k,
+      (/** @type {any[]} */ ...args) => (stale ? Promise.reject(new Error("stub broken")) : /** @type {any} */ (fn)(...args))]));
+    const onUnrecoverable = vi.fn();
+    await startStore(server, "a", { gadget, onUnrecoverable });
+    stale = true;
+    await settle(PRESENCE_HEARTBEAT_MS + 4000);
     expect(onUnrecoverable).toHaveBeenCalledTimes(1);
   });
 });

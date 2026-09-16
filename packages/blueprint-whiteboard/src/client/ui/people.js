@@ -1,14 +1,25 @@
 // @ts-check
 // Top right: who else is here (click or Enter on an avatar follows that person's viewport), and
-// your own name and colour. Plus the "Following X — Stop" chip.
+// your own name and colour. Plus the "Following X — Stop" chip. When more people are here than
+// fit (6 avatars, 3 on phones), a "+N" button lists everyone in a menu, each with Follow.
 
 import { h, avatar } from "./dom.js";
-import { nameDialog } from "./dialogs.js";
+import { nameDialog, openMenu } from "./dialogs.js";
 
 /** @typedef {import("./app.js").App} App */
 /** @typedef {import("../store-contract.js").ClientState} ClientState */
 
 const MAX_SHOWN = 6;
+const MAX_SHOWN_PHONE = 3;
+
+/**
+ * How many avatars to show for `count` people when `max` fit: all of them, or max - 1 plus the
+ * "+N" button (so the button never hides just one person).
+ * @param {number} count @param {number} max
+ */
+export function shownPeople(count, max) {
+  return count <= max ? count : Math.max(1, max - 1);
+}
 
 /** @param {App} app */
 export function createPeople(app) {
@@ -31,6 +42,16 @@ export function createPeople(app) {
   const chip = h("div", { class: "wb-float follow-chip", role: "status", hidden: true },
     h("span", null, "Following ", followName), stopBtn);
 
+  const phone = typeof matchMedia === "function" ? matchMedia("(max-width: 600px)") : null;
+  phone?.addEventListener?.("change", () => { listKey = ""; render(store.getState()); });
+
+  /** @param {string} clientId @param {string} name */
+  function toggleFollow(clientId, name) {
+    if (canvas.getFollowing() === clientId) canvas.follow(null);
+    else { canvas.follow(clientId); app.announce(`Following ${name}`); }
+    render(store.getState());
+  }
+
   let listKey = "";
   let meKey = "";
   let chipKey = "";
@@ -45,12 +66,15 @@ export function createPeople(app) {
     }
     const followingNow = canvas.getFollowing();
     const peers = [...state.peers.values()].sort((a, b) => (a.clientId < b.clientId ? -1 : 1));
-    const key = peers.map((p) => `${p.clientId}:${p.name}:${p.color}`).join("|") + "#" + followingNow;
+    const max = phone?.matches ? MAX_SHOWN_PHONE : MAX_SHOWN;
+    const key = peers.map((p) => `${p.clientId}:${p.name}:${p.color}`).join("|") + "#" + followingNow + "#" + max;
     if (key !== listKey) {
       listKey = key;
       const active = /** @type {HTMLElement|null} */ (document.activeElement);
       const focusedClient = active && list.contains(active) ? active.dataset.client : null;
-      const shown = peers.slice(0, MAX_SHOWN);
+      const moreFocused = !!active?.classList.contains("more-people");
+      const shown = peers.slice(0, shownPeople(peers.length, max));
+      const hiddenCount = peers.length - shown.length;
       list.replaceChildren(
         ...shown.map((p) => {
           const name = p.name || "Guest";
@@ -59,11 +83,7 @@ export function createPeople(app) {
             type: "button", class: "peer", "aria-pressed": String(on), dataset: { client: p.clientId },
             title: on ? `${name} (following; click to stop)` : `${name}: click to follow`,
             "aria-label": on ? `Stop following ${name}` : `Follow ${name}`,
-            onclick: () => {
-              if (canvas.getFollowing() === p.clientId) canvas.follow(null);
-              else { canvas.follow(p.clientId); app.announce(`Following ${name}`); }
-              render(store.getState());
-            },
+            onclick: () => toggleFollow(p.clientId, name),
           }, avatar(name, p.color, "peer-avatar"));
           // The avatar's own role/label would double up inside the button.
           const a = /** @type {HTMLElement} */ (b.firstChild);
@@ -72,14 +92,11 @@ export function createPeople(app) {
           a.setAttribute("aria-hidden", "true");
           return b;
         }),
-        peers.length > shown.length ? h("span", {
-          class: "avatar more", style: { background: "var(--border)" }, role: "img",
-          title: peers.slice(MAX_SHOWN).map((p) => p.name || "Guest").join(", "),
-          "aria-label": `and ${peers.length - MAX_SHOWN} more: ${peers.slice(MAX_SHOWN).map((p) => p.name || "Guest").join(", ")}`,
-        }, `+${peers.length - MAX_SHOWN}`) : "",
+        hiddenCount > 0 ? morePeopleButton(hiddenCount, peers.length) : "",
       );
       list.setAttribute("aria-label", peers.length ? `Also here: ${peers.map((p) => p.name || "Guest").join(", ")}` : "Nobody else is here");
       if (focusedClient) /** @type {HTMLElement|null} */ (list.querySelector(`[data-client="${focusedClient}"]`))?.focus();
+      else if (moreFocused) /** @type {HTMLElement|null} */ (list.querySelector(".more-people"))?.focus();
     }
 
     const v = state.viewer;
@@ -103,6 +120,28 @@ export function createPeople(app) {
         canvas.element.focus?.({ preventScroll: true });
       }
     }
+  }
+
+  /** @param {number} hiddenCount @param {number} total */
+  function morePeopleButton(hiddenCount, total) {
+    const b = h("button", {
+      type: "button", class: "peer more-people", "aria-haspopup": "menu",
+      "aria-label": `${hiddenCount} more ${hiddenCount === 1 ? "person" : "people"}: list all ${total} and follow`,
+      title: "Everyone here",
+    }, h("span", { class: "avatar more", "aria-hidden": "true" }, `+${hiddenCount}`));
+    b.addEventListener("click", () => {
+      const following = canvas.getFollowing();
+      const everyone = [...store.getState().peers.values()].sort((x, y) => (x.clientId < y.clientId ? -1 : 1));
+      openMenu(b, everyone.map((p) => {
+        const name = p.name || "Guest";
+        return {
+          label: p.clientId === following ? `Stop following ${name}` : `Follow ${name}`,
+          className: "follow-item",
+          onSelect: () => toggleFollow(p.clientId, name),
+        };
+      }), { label: "Everyone here" });
+    });
+    return b;
   }
 
   return { el, chip, render };

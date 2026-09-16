@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   anchor, boardBounds, connectorRoute, distanceToPolyline, elbowPoints, facingSide, fitCamera, normalizeStroke,
-  penWorldPoints, pointInObjectBox, rotatedBounds, strokePathD, textLayout, textObjectHeight, wrapText,
+  MAX_TEXT_LINES, penWorldPoints, pointInObjectBox, rotatedBounds, strokePathD, textLayout, textObjectHeight, textWidth,
+  wrapText,
 } from "../../src/shared/geometry.js";
 
 const close = (a, b) => expect(Math.abs(a - b)).toBeLessThan(1e-6);
@@ -101,6 +102,61 @@ describe("text", () => {
     expect(textLayout(o)).toEqual(l);
     expect(l.anchor).toBe("middle");
   });
+  it("wraps exactly like the straightforward quadratic algorithm it replaced", () => {
+    // The previous implementation, kept as the reference: re-measures the whole line per token.
+    const reference = (text, maxWidth, fontSize, maxLines = Infinity) => {
+      const width = Math.max(fontSize, maxWidth);
+      const lines = [];
+      for (const para of String(text).split("\n")) {
+        let line = "";
+        for (const token of para.split(/(\s+)/)) {
+          if (token === "") continue;
+          if (/^\s+$/.test(token)) { if (line !== "") line += token; continue; }
+          if (textWidth(line + token, fontSize) <= width) { line += token; continue; }
+          if (line.trim() !== "") lines.push(line.trimEnd());
+          line = "";
+          if (textWidth(token, fontSize) <= width) { line = token; continue; }
+          for (const ch of token) {
+            if (line && textWidth(line + ch, fontSize) > width) { lines.push(line); line = ""; }
+            line += ch;
+          }
+        }
+        lines.push(line.trimEnd());
+      }
+      if (lines.length > maxLines) {
+        const kept = lines.slice(0, Math.max(1, maxLines));
+        kept[kept.length - 1] = kept[kept.length - 1].replace(/\s*\S?$/, "") + "…";
+        return kept;
+      }
+      return lines;
+    };
+    let seed = 5;
+    const rand = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+    const pieces = ["a", "i", "m", "W", "Q", " ", "  ", "\n", "\t", "é", "日", "\u{1F600}", "\u00a0", "llll", "wide", "\ud83d"];
+    for (let k = 0; k < 5000; k++) {
+      let text = "";
+      for (let n = Math.floor(rand() * 60); n > 0; n--) text += pieces[Math.floor(rand() * pieces.length)];
+      const width = rand() * 300, fontSize = 8 + Math.floor(rand() * 40);
+      const maxLines = rand() < 0.5 ? Infinity : Math.floor(rand() * 6);
+      expect(wrapText(text, width, fontSize, maxLines)).toEqual(reference(text, width, fontSize, maxLines));
+    }
+  });
+
+  it("lays out crafted text in linear time and caps the lines of text objects", () => {
+    const text = "i ".repeat(2000);
+    const style = { fontSize: 8, align: "left" };
+    let t = performance.now();
+    for (let i = 0; i < 100; i++) textLayout({ type: "text", x: 0, y: 0, w: 100_000, h: 40, text, style });
+    expect(performance.now() - t).toBeLessThan(500); // was ~55 ms per layout
+    t = performance.now();
+    const lines = textLayout({ type: "text", x: 0, y: 0, w: 1, h: 40, text: "x".repeat(4000), style });
+    expect(performance.now() - t).toBeLessThan(100);
+    expect(lines.lines).toHaveLength(MAX_TEXT_LINES);
+    expect(lines.lines.at(-1).endsWith("…")).toBe(true);
+    const sticky = textLayout({ type: "sticky", x: 0, y: 0, w: 1, h: 200, text: "x".repeat(4000), style: { fontSize: 8, align: "center" } });
+    expect(sticky.lines.length).toBeLessThanOrEqual(Math.ceil(200 / (8 * 1.25)));
+  });
+
   it("sizes text objects to their content", () => {
     expect(textObjectHeight("a", 200, 20)).toBe(25);
     expect(textObjectHeight("a\nb\nc", 200, 20)).toBe(75);

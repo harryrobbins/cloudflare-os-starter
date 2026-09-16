@@ -25,7 +25,6 @@ export const SHELL_CSS = String.raw`
   --shadow-3: 0 16px 48px rgba(16, 24, 40, .28);
   --radius: 10px;
   --radius-sm: 6px;
-  --focus: 0 0 0 3px rgba(37, 99, 235, .5);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 @media (prefers-color-scheme: dark) {
@@ -47,7 +46,6 @@ export const SHELL_CSS = String.raw`
     --shadow-1: 0 1px 2px rgba(0, 0, 0, .4), 0 2px 6px rgba(0, 0, 0, .3);
     --shadow-2: 0 8px 24px rgba(0, 0, 0, .5);
     --shadow-3: 0 16px 48px rgba(0, 0, 0, .6);
-    --focus: 0 0 0 3px rgba(109, 158, 255, .6);
   }
 }
 * { box-sizing: border-box; }
@@ -61,8 +59,9 @@ body {
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 :focus:not(:focus-visible) { outline: none; }
-/* Transparent outline: invisible normally, but drawn in forced-colors mode where shadows are not. */
-:focus-visible { outline: 2px solid transparent; outline-offset: 2px; box-shadow: var(--focus); border-radius: var(--radius-sm); }
+/* One focus ring everywhere: an outline (never a box-shadow, which other rules also use and would
+   override), in the accent colour, which has at least 3:1 contrast on the surfaces in both schemes. */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .icon { flex: none; display: block; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
@@ -86,7 +85,7 @@ input[type="text"], input:not([type]) {
   border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-sm);
   padding: 6px 8px; min-width: 0;
 }
-input:focus { border-color: var(--accent); box-shadow: var(--focus); }
+input:focus { border-color: var(--accent); }
 
 /* Layout: the canvas fills the frame; everything else floats above it. */
 .wb-app { position: fixed; inset: 0; overflow: hidden; }
@@ -121,13 +120,14 @@ input:focus { border-color: var(--accent); box-shadow: var(--focus); }
 
 .wb-topright { top: 10px; right: 10px; display: flex; align-items: center; gap: 6px; padding: 4px; }
 .people { display: flex; align-items: center; padding: 0 2px; }
+/* Avatars overlap a little but stay at least 24px apart centre to centre (target spacing). */
 .people .peer {
-  margin-left: -6px; border: 0; padding: 0; background: transparent; border-radius: 50%;
+  margin-left: -2px; border: 0; padding: 0; background: transparent; border-radius: 50%;
 }
 .people .peer:first-child { margin-left: 0; }
 .people .peer .avatar { box-shadow: 0 0 0 2px var(--surface); }
 .people .peer[aria-pressed="true"] .avatar { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
-.people .peer:focus-visible { border-radius: 50%; }
+.people .more-people .avatar { background: var(--surface-2); color: var(--text); box-shadow: 0 0 0 1px var(--text-3); }
 .avatar {
   display: inline-flex; align-items: center; justify-content: center; flex: none;
   width: 28px; height: 28px; border-radius: 50%; font-size: 11px; font-weight: 700; letter-spacing: .02em;
@@ -143,7 +143,14 @@ input:focus { border-color: var(--accent); box-shadow: var(--focus); }
 /* Tools */
 .wb-toolbar {
   left: 10px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 2px; padding: 4px;
-  max-height: calc(100vh - 140px); overflow-y: auto; scrollbar-width: none;
+  max-height: calc(100vh - 140px); overflow-y: auto; scrollbar-width: thin; overscroll-behavior: contain;
+  /* Scroll shadows: a visible edge where more buttons are scrolled out of view (and none otherwise). */
+  background:
+    linear-gradient(var(--surface) 30%, transparent) top / 100% 24px no-repeat local,
+    linear-gradient(transparent, var(--surface) 70%) bottom / 100% 24px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgba(127, 127, 127, .55), transparent) top / 100% 12px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(127, 127, 127, .55), transparent) bottom / 100% 12px no-repeat scroll,
+    var(--surface);
 }
 .wb-toolbar .btn { min-width: 36px; min-height: 36px; padding: 6px; }
 .tool-btn[aria-pressed="true"][data-locked="true"] { box-shadow: inset 0 0 0 2px var(--accent); }
@@ -153,19 +160,25 @@ input:focus { border-color: var(--accent); box-shadow: var(--focus); }
   top: 58px; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
   padding: 4px 6px; max-width: calc(100vw - 120px);
 }
-.wb-app.following .wb-stylebar { top: 100px; }
+@media (min-width: 601px) {
+  .wb-app.following .wb-stylebar { top: 100px; }
+}
 .style-group { display: flex; align-items: center; gap: 2px; }
 .style-group-label { font-size: 11px; color: var(--text-3); padding: 0 4px 0 2px; text-transform: uppercase; letter-spacing: .04em; }
 .swatches { display: flex; gap: 3px; flex-wrap: wrap; align-items: center; }
+/* The border has at least 3:1 contrast in both schemes, so white and near-black swatches show too. */
 .swatch {
-  width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(127, 127, 127, .35); padding: 0; flex: none;
+  width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--text-3); padding: 0; flex: none;
 }
-.swatch[aria-checked="true"], .swatch[aria-pressed="true"] { border-color: var(--text); box-shadow: inset 0 0 0 2px var(--surface); }
+.swatch[aria-checked="true"], .swatch[aria-pressed="true"] { border-color: var(--text); box-shadow: inset 0 0 0 2px var(--surface); border-width: 3px; }
 .swatch.none { background: linear-gradient(135deg, transparent 45%, var(--danger) 45%, var(--danger) 55%, transparent 55%), var(--surface); }
-.swatch-chip { width: 18px; height: 18px; min-height: 0; border-width: 1px; }
+.swatch-chip { width: 18px; height: 18px; min-height: 0; border-width: 1px; border-color: var(--text-3); }
 .wb-stylebar .btn { min-height: 30px; }
 .wb-stylebar .btn.small { min-width: 30px; }
-.move-group .btn { padding: 4px; min-width: 30px; }
+.move-group .btn, .size-group .btn { padding: 4px; min-width: 30px; }
+.size-field { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--text-3); margin-left: 4px; }
+.size-field input { width: 6ch; padding: 3px 5px; font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums; }
+.size-field input::placeholder { color: var(--text-3); }
 
 /* Bottom right: zoom and minimap */
 .wb-zoom { right: 10px; bottom: 10px; display: flex; align-items: center; gap: 2px; padding: 3px; }
@@ -227,11 +240,16 @@ input:focus { border-color: var(--accent); box-shadow: var(--focus); }
   .wb-topright { top: 6px; right: 6px; }
   .me-btn .me-name { display: none; }
   .me-btn { padding: 2px; }
-  .people .peer:nth-child(n+4) { display: none; }
   .wb-toolbar {
     top: auto; left: 0; right: 0; bottom: 0; transform: none; flex-direction: row; max-height: none;
     border-radius: 0; border-width: 1px 0 0; overflow-x: auto; overflow-y: hidden;
     padding: 4px 6px calc(4px + env(safe-area-inset-bottom, 0px)); justify-content: flex-start;
+    background:
+      linear-gradient(to right, var(--surface) 30%, transparent) left / 24px 100% no-repeat local,
+      linear-gradient(to right, transparent, var(--surface) 70%) right / 24px 100% no-repeat local,
+      radial-gradient(farthest-side at 0 50%, rgba(127, 127, 127, .6), transparent) left / 14px 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, rgba(127, 127, 127, .6), transparent) right / 14px 100% no-repeat scroll,
+      var(--surface);
   }
   .wb-toolbar .wb-sep { width: 1px; height: auto; margin: 4px 2px; }
   .wb-toolbar .btn { min-width: 44px; min-height: 44px; }
@@ -245,8 +263,14 @@ input:focus { border-color: var(--accent); box-shadow: var(--focus); }
     justify-content: flex-start; row-gap: 8px;
   }
   .wb-stylebar ~ .wb-history, .wb-app.has-selection .wb-history, .wb-app.has-selection .wb-zoom { display: none; }
-  .wb-stylebar .btn { min-height: 36px; }
-  .swatch-pop .swatch { width: 32px; height: 32px; }
+  .wb-stylebar .style-group { flex-wrap: wrap; row-gap: 4px; }
+  /* Touch targets of at least 44px. */
+  .wb-stylebar .btn, .wb-stylebar .btn.small { min-height: 44px; min-width: 44px; }
+  .size-field input { min-height: 44px; }
+  .menu .btn { min-height: 44px; }
+  .swatch-pop .swatch { width: 44px; height: 44px; }
+  .modal .swatch { width: 44px; height: 44px; }
+  .modal-actions .btn { min-height: 44px; }
   .follow-chip { top: 50px; }
   .wb-panel { width: 100vw; }
 }

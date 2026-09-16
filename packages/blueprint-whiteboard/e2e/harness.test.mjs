@@ -583,4 +583,229 @@ describe("whiteboard harness", { concurrency: false }, () => {
       await A.locator(".activity").waitFor({ state: "detached" });
     });
   });
+
+  test("keyboard resize and rotate: Alt+Arrow, comma and period, and the style bar's Size group", async () => {
+    await withHarness({ panes: 1 }, async ({ page, frames: { A } }) => {
+      const [id] = await h.createObjects(page, [{ type: "sticky", x: 300, y: 250, w: 200, h: 200, text: "Size me" }]);
+      await A.locator(SEL.object(id)).waitFor();
+      await h.inPane(A, (_, canvas, oid) => { canvas.setSelection([oid]); canvas.element.focus(); }, id);
+      const server = async () => (await h.serverBoard(page)).objects[id];
+      const rev0 = (await h.serverBoard(page)).revision;
+
+      await page.keyboard.press("Alt+Shift+ArrowRight");
+      await h.until(async () => (await server()).w === 210, { message: "Alt+Shift+Right widens by 10" });
+      assert.equal((await h.serverBoard(page)).revision, rev0 + 1, "one change per key press");
+      const o1 = await server();
+      assert.deepEqual([o1.x, o1.y, o1.h], [300, 250, 200], "top-left corner and height kept");
+      await page.keyboard.press("Alt+ArrowDown");
+      await h.until(async () => (await server()).h === 201, { message: "Alt+Down makes it taller by 1" });
+      await h.until(async () => /Height 201/.test(await h.liveText(A)), { message: "resize announced" });
+
+      await page.keyboard.press(".");
+      await h.until(async () => (await server()).rot === 15, { message: ". rotates clockwise" });
+      await page.keyboard.press(",");
+      await page.keyboard.press(",");
+      await h.until(async () => (await server()).rot === 345, { message: ", rotates back" });
+      await h.until(async () => /Rotation 345 degrees/.test(await h.liveText(A)), { message: "rotation announced" });
+
+      // The style bar: steppers, a typed width (Enter, no form) and rotate buttons.
+      const bar = A.locator(SEL.styleBar);
+      await bar.locator(".size-w-inc").focus();
+      await page.keyboard.press("Enter");
+      await h.until(async () => (await server()).w === 220, { message: "Wider button" });
+      await h.until(async () => /Width 220/.test(await h.liveText(A)), { message: "width announced" });
+      assert.ok(await bar.locator(".size-w-inc").evaluate((el) => el === document.activeElement), "focus stays on the stepper");
+      await bar.locator(".size-w").fill("320");
+      await page.keyboard.press("Enter");
+      await h.until(async () => (await server()).w === 320, { message: "typed width applied" });
+      await bar.locator(".size-h").fill("150");
+      await page.keyboard.press("Enter");
+      await h.until(async () => (await server()).h === 150, { message: "typed height applied" });
+      await bar.locator(".rotate-cw").click();
+      await h.until(async () => (await server()).rot === 0, { message: "Rotate right button" });
+      // Escape in the style bar returns to the canvas.
+      await bar.locator(".rotate-cw").focus();
+      await page.keyboard.press("Escape");
+      assert.match(await h.focusedClass(A), /wb-canvas/);
+      assert.deepEqual(await h.inPane(A, (_, canvas) => canvas.getSelection()), [id], "selection kept");
+    });
+  });
+
+  test("connect without dragging: two selected objects, Connect in the style bar and the context menu", async () => {
+    await withHarness({ names: ["Alice", "Bob"] }, async ({ page, frames: { A, B } }) => {
+      const [s1, s2, s3] = await h.createObjects(page, [
+        { type: "sticky", x: 300, y: 250, text: "One" },
+        { type: "sticky", x: 700, y: 250, text: "Two" },
+        { type: "rect", x: 300, y: 600, text: "Three" },
+      ]);
+      await A.locator(SEL.object(s3)).waitFor();
+      await h.inPane(A, (_, canvas, ids) => canvas.setSelection(ids), [s2]);
+      assert.equal(await A.locator(SEL.connectButton).count(), 0, "no Connect for one object");
+      // Selection order is kept: s2 first, then s1.
+      await h.inPane(A, (_, canvas, ids) => canvas.setSelection(ids), [s2, s1]);
+      await A.locator(SEL.connectButton).focus();
+      await page.keyboard.press("Enter");
+      const conn = await h.until(async () => Object.values((await h.serverBoard(page)).objects).find((o) => o.type === "connector"),
+        { message: "connector created" });
+      assert.deepEqual([conn.from, conn.to], [s2, s1]);
+      await B.locator(SEL.object(conn.id)).waitFor({ timeout: 3000 });
+      assert.deepEqual(await h.inPane(A, (_, canvas) => canvas.getSelection()), [conn.id], "the new connector is selected");
+      assert.ok(await A.locator(SEL.styleBar).evaluate((el) => el.contains(document.activeElement)), "focus stays in the style bar");
+      await h.until(async () => /Connected/.test(await h.liveText(A)), { message: "connection announced" });
+
+      // The context menu (keyboard) offers Connect too.
+      await h.inPane(A, (_, canvas, ids) => { canvas.setSelection(ids); canvas.element.focus(); }, [s1, s3]);
+      await page.keyboard.press("Shift+F10");
+      await A.locator(SEL.menuItem("connect")).waitFor({ timeout: 3000 });
+      await A.locator(SEL.menuItem("connect")).focus();
+      await page.keyboard.press("Enter");
+      await h.until(async () => Object.values((await h.serverBoard(page)).objects)
+        .some((o) => o.type === "connector" && o.from === s1 && o.to === s3), { message: "second connector from the menu" });
+    });
+  });
+
+  for (const key of ["ContextMenu", "Shift+F10"]) {
+    test(`${key} opens the menu for the current selection, beside it, never the object at the view centre`, async () => {
+      await withHarness({ panes: 1, viewport: { width: 1300, height: 820 } }, async ({ page, frames: { A } }) => {
+        const [centre, other] = await h.createObjects(page, [
+          { type: "rect", x: -100, y: -60, w: 200, h: 120, text: "Centre" },
+          { type: "sticky", x: 150, y: 120, w: 160, h: 120, text: "Other" },
+        ]);
+        await A.locator(SEL.object(other)).waitFor();
+        await h.inPane(A, (_, canvas) => {
+          const vp = canvas.getViewport();
+          canvas.setCamera({ x: -vp.w / 2, y: -vp.h / 2, zoom: 1 }, false);
+        });
+        await h.inPane(A, (_, canvas, oid) => { canvas.setSelection([oid]); canvas.element.focus(); }, other);
+        await page.waitForTimeout(100);
+        await page.keyboard.press(key);
+        const menu = A.locator(SEL.menu);
+        await menu.waitFor({ timeout: 3000 });
+        assert.deepEqual(await h.inPane(A, (_, canvas) => canvas.getSelection()), [other], "selection unchanged");
+        assert.equal(await menu.count(), 1, "one menu");
+        const m = await h.pageRect(A, SEL.menu);
+        const o = await h.pageRect(A, SEL.object(other));
+        const overlaps = m.left < o.right && m.right > o.left && m.top < o.bottom && m.bottom > o.top;
+        assert.ok(!overlaps, `menu ${JSON.stringify(m)} beside the selection ${JSON.stringify(o)}`);
+        assert.match(await h.focusedClass(A), /btn/, "menu has focus");
+        await A.locator(SEL.menuItem("delete")).focus();
+        await page.keyboard.press("Enter");
+        await h.until(async () => !(await h.serverBoard(page)).objects[other], { message: "the selected object is deleted" });
+        assert.ok((await h.serverBoard(page)).objects[centre], "the object at the centre is untouched");
+        assert.match(await h.focusedClass(A), /wb-canvas/, "focus back on the canvas");
+      });
+    });
+  }
+
+  test("touch long-press: the menu opens clear of the finger and lifting it activates nothing", async () => {
+    await withHarness({ panes: 1, viewport: { width: 414, height: 860 }, hasTouch: true, isMobile: true }, async ({ page, frames: { A } }) => {
+      const [id] = await h.createObjects(page, [{ type: "sticky", x: 0, y: 0, w: 200, h: 200, text: "Hold me" }]);
+      await A.locator(SEL.object(id)).waitFor();
+      // Near the bottom right, where a menu under the finger used to open.
+      await h.inPane(A, (_, canvas) => canvas.setCamera({ x: -150, y: -480, zoom: 1 }, false));
+      await page.waitForTimeout(150);
+      const { box } = await h.objectCenter(A, id);
+      const at = { x: box.x + 60, y: box.y + 50 };
+      const press = await h.touchPress(page, at, { ms: 800, hold: true });
+      const menu = A.locator(SEL.menu);
+      await menu.waitFor({ timeout: 3000 });
+      const m = await h.pageRect(A, SEL.menu);
+      const clear = at.x < m.left - 20 || at.x > m.right + 20 || at.y < m.top - 20 || at.y > m.bottom + 20;
+      assert.ok(clear, `menu ${JSON.stringify(m)} keeps clear of the finger at ${JSON.stringify(at)}`);
+      await page.screenshot({ path: `${SHOTS}/longpress-menu.png` });
+      await press.release();
+      await page.waitForTimeout(400);
+      const count = async () => Object.keys((await h.serverBoard(page)).objects).length;
+      assert.equal(await count(), 1, "lifting the finger ran nothing");
+      assert.equal(await menu.count(), 1, "the menu stays open");
+      assert.ok(await A.locator(SEL.menuItem("duplicate")).evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return r.height >= 44;
+      }), "menu items are at least 44px tall on phones");
+      // A new tap on an item does run it.
+      const dup = await A.locator(SEL.menuItem("duplicate")).boundingBox();
+      await h.touchPress(page, { x: dup.x + dup.width / 2, y: dup.y + dup.height / 2 });
+      await h.until(async () => (await count()) === 2, { message: "a fresh tap duplicates" });
+    });
+  });
+
+  test("arrow keys pan the view with nothing selected; nudges are announced", async () => {
+    await withHarness({ panes: 1 }, async ({ page, frames: { A } }) => {
+      const [id] = await h.createObjects(page, [{ type: "sticky", x: 300, y: 250, text: "Nudge" }]);
+      await A.locator(SEL.object(id)).waitFor();
+      await h.setCamera(A, { x: 0, y: 0, zoom: 2 });
+      await h.inPane(A, (_, canvas) => { canvas.setSelection([]); canvas.element.focus(); });
+      await page.keyboard.press("ArrowRight");
+      await h.until(async () => (await h.inPane(A, (_, canvas) => canvas.getCamera())).x === 20, { message: "ArrowRight pans right by 40 px" });
+      await page.keyboard.press("Shift+ArrowDown");
+      await h.until(async () => (await h.inPane(A, (_, canvas) => canvas.getCamera())).y === 100, { message: "Shift+ArrowDown pans down by 200 px" });
+      assert.equal((await h.serverBoard(page)).objects[id].x, 300, "nothing moved");
+
+      await h.inPane(A, (_, canvas, oid) => canvas.setSelection([oid]), id);
+      await page.keyboard.press("ArrowRight");
+      await page.keyboard.press("ArrowRight");
+      await h.until(async () => (await h.serverBoard(page)).objects[id].x === 302, { message: "nudged" });
+      await h.until(async () => /Moved right/.test(await h.liveText(A)), { message: "nudge announced" });
+      const cam = await h.inPane(A, (_, canvas) => canvas.getCamera());
+      assert.deepEqual([cam.x, cam.y], [20, 100], "a nudge does not pan");
+    });
+  });
+
+  test("low zoom: dragging a small selected object moves it instead of resizing it", async () => {
+    await withHarness({ panes: 1, viewport: { width: 1300, height: 820 } }, async ({ page, frames: { A } }) => {
+      const [id] = await h.createObjects(page, [{ type: "rect", x: 2000, y: 2000, w: 200, h: 120 }]);
+      await A.locator(SEL.object(id)).waitFor();
+      for (const zoom of [0.12, 0.08]) {
+        const before = (await h.serverBoard(page)).objects[id];
+        await h.inPane(A, (_, canvas, a) => {
+          const vp = canvas.getViewport(), cam = canvas.getCamera();
+          const w = vp.w * cam.zoom, hh = vp.h * cam.zoom;
+          canvas.setCamera({ x: a.cx - w / 2 / a.zoom, y: a.cy - hh / 2 / a.zoom, zoom: a.zoom }, false);
+        }, { zoom, cx: before.x + before.w / 2, cy: before.y + before.h / 2 });
+        await h.inPane(A, (_, canvas, oid) => canvas.setSelection([oid]), id);
+        await page.waitForTimeout(150);
+        const { x, y } = await h.objectCenter(A, id);
+        await h.dragBy(page, { x, y }, 40, 24, { steps: 8 });
+        const after = await h.until(async () => {
+          const o = (await h.serverBoard(page)).objects[id];
+          return o.version !== before.version && o;
+        }, { message: `committed at zoom ${zoom}` });
+        assert.deepEqual([after.w, after.h], [before.w, before.h], `zoom ${zoom}: size unchanged`);
+        assert.ok(Math.abs(after.x - before.x - 40 / zoom) < 2 / zoom, `zoom ${zoom}: moved by the drag (${before.x} -> ${after.x})`);
+      }
+    });
+  });
+
+  test("focus: on the canvas after joining and after deleting from the style bar; roving toolbar keys", async () => {
+    await withHarness({ names: ["Alice", "Bob"] }, async ({ page, frames: { A, B } }) => {
+      // B joined last (with the Join button); A's frame lost focus to it. Rejoin A with Enter.
+      assert.match(await h.focusedClass(B), /wb-canvas/, "B: focus on the canvas after joining");
+      await page.evaluate(() => window.harness.reloadPane("A"));
+      const input = A.locator(SEL.nameInput);
+      await input.waitFor({ timeout: 10_000 });
+      await input.fill("Alice");
+      await input.press("Enter");
+      await input.waitFor({ state: "detached", timeout: 3000 });
+      await h.waitLive(A);
+      await h.until(async () => /wb-canvas/.test(await h.focusedClass(A)), { timeout: 3000, message: "A: focus on the canvas after joining" });
+
+      const [id] = await h.createObjects(page, [{ type: "sticky", x: 300, y: 250, text: "Delete me" }]);
+      await A.locator(SEL.object(id)).waitFor();
+      await h.inPane(A, (_, canvas, oid) => canvas.setSelection([oid]), id);
+      await A.locator(".wb-stylebar .delete-btn").focus();
+      await page.keyboard.press("Enter");
+      await B.locator(SEL.object(id)).waitFor({ state: "detached", timeout: 3000 });
+      assert.match(await h.focusedClass(A), /wb-canvas/, "focus on the canvas after Delete");
+
+      // The tool bar is one Tab stop; arrow keys move between its buttons.
+      const tools = A.locator(SEL.toolbar);
+      assert.equal(await tools.locator('button[tabindex="0"]').count(), 1, "one Tab stop");
+      await tools.locator('[data-tool="select"]').focus();
+      await page.keyboard.press("ArrowDown");
+      assert.equal(await tools.locator('[data-tool="hand"]').evaluate((el) => el === document.activeElement), true, "ArrowDown moves to Hand");
+      await page.keyboard.press("End");
+      assert.match(await h.focusedClass(A), /activity-toggle/, "End moves to the last button");
+      assert.equal(await tools.locator('button[tabindex="0"]').count(), 1, "still one Tab stop");
+    });
+  });
 });

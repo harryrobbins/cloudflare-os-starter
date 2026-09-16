@@ -57,7 +57,9 @@ import { isValidOrderKey } from "./order.js";
  * @property {string} z
  * @property {string|null} frameId the frame this object belongs to, or null. Always null for
  *   frames and connectors. May name a frame that has since been deleted: readers treat such an
- *   id as null, and the server clears it on the object's next write (see "Frames").
+ *   id as null, and the server clears it on the object's next write (see "Frames"). A create or
+ *   update naming an object that does not exist (a frame deleted concurrently) stores null and
+ *   applies the rest of the op; naming an existing object that is not a frame is invalid_ref.
  * @property {string} text         sticky/rect/ellipse/text: content (LIMITS.text chars, newlines
  *   kept); frame: its name (LIMITS.frameName, one line); connector: a label (LIMITS.connectorLabel,
  *   one line); pen: always "".
@@ -115,6 +117,9 @@ import { isValidOrderKey } from "./order.js";
  * @property {string} summary  human-readable, e.g. 'Moved 3 objects'
  * @property {Inverse|null} inverse  what server undo applies; null when not undoable (too large,
  *   or a title/background change)
+ * @property {string} [undoOf]    set on an undo's own entry: the id of the entry it undid
+ * @property {string} [undoneBy]  set on an entry once undone: the id of that undo's entry; cleared
+ *   again when that undo is itself undone (the change is back)
  */
 
 /**
@@ -160,8 +165,11 @@ import { isValidOrderKey } from "./order.js";
  * @property {string} [senderId]  the client's id, echoed in the broadcast so it can skip its own
  * @property {string} [by]        display name recorded in history and createdBy
  * @property {string} [requestId] idempotency key, 1-64 chars of [A-Za-z0-9:_-] (anything else is
- *   ignored as if absent). A request whose requestId is already recorded is not applied again;
- *   the recorded outcome is returned with `duplicate: true`.
+ *   ignored as if absent). A request whose requestId is already recorded FOR THE SAME senderId is
+ *   not applied again; the recorded outcome is returned with `duplicate: true`. Records are shared
+ *   by everyone on the board and senderId is broadcast, so requestIds must be unguessable (the
+ *   client uses a per-store random secret plus a counter): a peer that knows a future requestId
+ *   could record it first and have that request answered as a duplicate.
  * @property {ObjectOp[]} [objectOps]
  * @property {{title?: string, background?: "dots"|"grid"|"plain"}} [structure]  last-writer-wins,
  *   applied after objectOps
@@ -172,6 +180,8 @@ import { isValidOrderKey } from "./order.js";
  * atomic commit as its changes.
  * @typedef {object} RequestRecord
  * @property {string} requestId
+ * @property {string} senderId  the request's cleaned senderId ("" when absent); a replay matches
+ *   only a record with the same requestId AND senderId
  * @property {number} revision
  * @property {"applied"|"conflict"|"unchanged"} status
  * @property {string[]} conflicts  object ids
@@ -188,7 +198,8 @@ import { isValidOrderKey } from "./order.js";
  * @typedef {object} OpError
  * @property {number} index  position in objectOps; -1 for structure or the whole request
  * @property {"invalid_id"|"invalid_op"|"unknown_object"|"exists"|"invalid_ref"|"limit"} code
- *   invalid_ref: a connector endpoint or frameId that does not name a suitable existing object.
+ *   invalid_ref: a connector endpoint that does not name a suitable existing object, or a frameId
+ *   naming an existing object that is not a frame (a frameId naming nothing is cleared instead).
  *   limit: a count cap, the per-object or whole-board byte budget, or LIMITS.commitObjects.
  * @property {string} message
  */
@@ -320,9 +331,15 @@ export const LIMITS = Object.freeze({
   connectorLabel: 200,
   boardTitle: 200,
   displayName: 40,
+  /** Longest order key stored (order.js accepts up to this). */
   orderKey: 128,
+  /**
+   * Longest `z` a client may set directly (see isAcceptableOrderKey); leaves the server headroom
+   * to generate keys above and below any accepted key.
+   */
+  orderKeyAccept: 64,
   summary: 200,
-  /** Conservative stored size (see storedBytes) of one object. */
+  /** Stored size (storedBytes: an upper bound of its JSON and of its V8 serialisation) of one object. */
   objectBytes: 64 * 1024,
   /** Same measure, all objects together. Keeps the snapshot far below the RPC message limit. */
   boardBytes: 8 * 1024 * 1024,
@@ -330,6 +347,7 @@ export const LIMITS = Object.freeze({
   /** Objects one request may create, change or delete, cascaded connectors included. */
   commitObjects: 2000,
   historyEntries: 200,
+  /** storedBytes of the whole "history" value; Durable Object storage allows 128 KiB per value. */
   historyBytes: 100 * 1024,
   inverseBytes: 16 * 1024,
   requestRecords: 500,
@@ -534,6 +552,19 @@ export function isOrderKey(value) {
   return typeof value === "string" && value.length <= LIMITS.orderKey && ORDER_RE.test(value) && isValidOrderKey(value);
 }
 
+/**
+ * An order key a client may set directly: well-formed, at most LIMITS.orderKeyAccept chars, with
+ * an integer head from "B" to "y". Honest keys ("a0", "a1", "Zz", ...) never come near those ends
+ * (reaching "y" from "a0" takes some 62^24 steps), and the server can always step the integer part
+ * of such a key up or down, so a short key above and below any accepted key exists. The server
+ * turns other valid keys into keys of its own (see "Order keys" in src/core/whiteboard.js).
+ * @param {unknown} value
+ * @returns {value is string}
+ */
+export function isAcceptableOrderKey(value) {
+  return isOrderKey(value) && value.length <= LIMITS.orderKeyAccept && value[0] >= "B" && value[0] <= "y";
+}
+
 /** @param {unknown} v @returns {v is ObjectType} */
 export function isObjectType(v) {
   return typeof v === "string" && /** @type {readonly string[]} */ (OBJECT_TYPES).includes(v);
@@ -698,15 +729,59 @@ export function effectiveFrameId(obj, objects) {
   return f && Object.hasOwn(objects, f) && objects[f].type === "frame" ? f : null;
 }
 
+const ASCII_RE = /^[\u0000-\u007f]*$/;
+const LATIN1_RE = /^[\u0000-\u00ff]*$/;
+const encoder = new TextEncoder();
+
+/** Largest V8 serialisation of a number: a tag and an 8-byte double. */
+const V8_NUMBER = 9;
+/** V8 overhead of a string beyond its code units: a tag, a length varint and alignment padding. */
+const V8_STRING = 5;
+/** V8 overhead of an array or object: begin and end tags, length and count varints. */
+const V8_CONTAINER = 10;
+/** V8 overhead per array element: a holey array is written sparse, each value after its index. */
+const V8_ELEMENT = 4;
+
+/** @param {string} str */
+function stringBytes(str) {
+  const json = JSON.stringify(str);
+  const utf8 = ASCII_RE.test(json) ? json.length : encoder.encode(json).length;
+  const v8 = (LATIN1_RE.test(str) ? str.length : 2 * str.length) + V8_STRING;
+  return Math.max(utf8, v8);
+}
+
+/** @param {unknown} value */
+function valueBytes(value) {
+  switch (typeof value) {
+    case "string": return stringBytes(value);
+    case "number": return Math.max(V8_NUMBER, String(value).length);
+    case "object": {
+      if (value === null) return 5;
+      let n = V8_CONTAINER;
+      if (Array.isArray(value)) {
+        for (let i = 0; i < value.length; i++) n += valueBytes(value[i]) + V8_ELEMENT;
+        return n;
+      }
+      for (const key of Object.keys(value)) {
+        n += stringBytes(key) + 2 + valueBytes(/** @type {any} */ (value)[key]);
+      }
+      return n;
+    }
+    default: return 5; // booleans, undefined, anything else
+  }
+}
+
 /**
- * Upper bound of the stored size of `value`: UTF-8 bytes of its JSON, or two bytes per UTF-16
- * unit when any character is outside Latin-1 (how V8 serialises such strings).
+ * Upper bound of the stored size of `value` in bytes: at least the UTF-8 length of its JSON and at
+ * least its V8 serialisation (what Durable Object storage and RPC write). A number counts as
+ * 9 bytes or its JSON length, whichever is more (V8 writes a double as 9 bytes where JSON may need
+ * 3); a string as its UTF-8 JSON or its code units (2 bytes each once any character is outside
+ * Latin-1), whichever is more; arrays and objects add their tags and separators, and each array
+ * element 4 more (V8 writes a holey array sparse, as index and value pairs).
  * @param {unknown} value
  */
 export function storedBytes(value) {
-  const json = JSON.stringify(value) ?? "";
-  const utf8 = new TextEncoder().encode(json).length;
-  return /[^\u0000-\u00ff]/.test(json) ? Math.max(utf8, json.length * 2) : utf8;
+  return valueBytes(value) + 2; // + the serialisation header
 }
 
 /**

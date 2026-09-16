@@ -11,6 +11,10 @@
 // Rendering is incremental: objects patch per id on store changes, pan and zoom only change the
 // camera transform, and all per-frame work (camera, gestures, overlay, presence) is batched into
 // one requestAnimationFrame. window.__wbRenderStats counts object renders and full rebuilds.
+//
+// "wb-contextmenu" detail (see ../ui-contract.js) also carries `pointerType` ("mouse", "pen",
+// "touch" or "keyboard") and, for the keyboard, `rect`: the selection's client rect to anchor the
+// menu beside rather than on top of.
 
 import { TYPE_DEFAULTS, sortedObjects, newId } from "../../../shared/protocol.js";
 import { center, corners, boardBounds, unionRects } from "../../../shared/geometry.js";
@@ -20,10 +24,10 @@ import {
 } from "./camera.js";
 import {
   topObjectAt, boundsOf, connectorPoints, validIds, expandMoveIds, moveUpdates, buildDuplicates,
-  frameAtPoint, TEXT_EDITABLE, EDIT_ON_CREATE, round2,
+  frameAtPoint, TEXT_EDITABLE, EDIT_ON_CREATE, round2, resizeUpdates, rotateUpdates,
 } from "./model.js";
-import { handlePositions, handleAt, cursorForHandle } from "./handles.js";
-import { keyAction, SHORTCUTS_HINT } from "./keymap.js";
+import { handleForPress, visibleHandles, cursorForHandle } from "./handles.js";
+import { keyAction, panStep, directionWord, SHORTCUTS_HINT } from "./keymap.js";
 import { ObjectLayer, svgEl } from "./layers.js";
 import { PresenceLayer } from "./presence-layer.js";
 import { TextEditor, textPatch } from "./text-editor.js";
@@ -34,6 +38,7 @@ import {
 
 export { CANVAS_CSS } from "./canvas.css.js";
 export { SHORTCUTS_HINT } from "./keymap.js";
+export { expandMoveIds, moveUpdates, resizeUpdates, rotateUpdates } from "./model.js";
 
 /** @typedef {import("../ui-contract.js").CanvasController} CanvasController */
 /** @typedef {import("../ui-contract.js").CanvasOptions} CanvasOptions */
@@ -57,6 +62,10 @@ const DOUBLE_CLICK_MS = 450;
 const CAMERA_ANIM_MS = 260;
 const FOLLOW_ANIM_MS = 180;
 const ZOOM_STEP = 1.25;
+/** Keyboard moves, resizes and rotations are announced once the keys pause for this long. */
+const ANNOUNCE_DEBOUNCE_MS = 350;
+/** A contextmenu event this soon after the context menu key was handled is its echo. */
+const KEY_MENU_ECHO_MS = 1000;
 
 let instances = 0;
 
@@ -154,6 +163,12 @@ export function createCanvas(store, options = {}) {
   let lastClick = null;
   /** @type {{sx: number, sy: number, pointerType: string}|null} */
   let hoverPoint = null;
+  /** The last pointer type pressed on the canvas: sizes handle hit areas. */
+  let lastPointerType = "mouse";
+  let lastPointerDownAt = -Infinity;
+  let keyMenuAt = -Infinity;
+  /** @type {ReturnType<typeof setTimeout>|0} */
+  let announceTimer = 0;
   let background = "dots";
   let destroyed = false;
   /** @type {Set<(event: CanvasEvents) => void>} */
@@ -282,7 +297,7 @@ export function createCanvas(store, options = {}) {
       stopFollowing();
     }
     const target = cleanCamera(next);
-    if (animate && size.w && size.h && !exportMode) {
+    if (animate && size.w && size.h && !exportMode && !reducedMotion()) {
       cameraAnim = { from: camera, to: target, start: performance.now(), duration };
     } else {
       cameraAnim = null;
@@ -359,7 +374,7 @@ export function createCanvas(store, options = {}) {
     if (selection.length === 1 && !editing && !busy) {
       const o = resolve(selection[0]);
       if (o) {
-        const handles = handlePositions(o, camera);
+        const handles = visibleHandles(o, camera, handleRadius(lastPointerType));
         const rot = o.rot || 0;
         const rotateHandle = handles.find((hd) => hd.name === "rotate");
         if (rotateHandle) {
@@ -403,8 +418,7 @@ export function createCanvas(store, options = {}) {
     if (selection.length !== 1 || editor?.isOpen) return null;
     const o = resolve(selection[0]);
     if (!o) return null;
-    const radius = HANDLE_RADIUS[/** @type {keyof typeof HANDLE_RADIUS} */ (s.pointerType)] ?? 8;
-    const name = handleAt(handlePositions(o, camera), { x: s.sx, y: s.sy }, radius);
+    const name = handleForPress(o, camera, { x: s.sx, y: s.sy }, handleRadius(s.pointerType));
     return name ? { id: o.id, name, rot: o.rot || 0 } : null;
   }
 
@@ -601,9 +615,48 @@ export function createCanvas(store, options = {}) {
     };
   }
 
-  /** @param {number} clientX @param {number} clientY @param {string[]} ids */
-  function dispatchContextMenu(clientX, clientY, ids) {
-    element.dispatchEvent(new CustomEvent("wb-contextmenu", { bubbles: true, detail: { clientX, clientY, ids: [...ids] } }));
+  /**
+   * @param {number} clientX @param {number} clientY @param {string[]} ids
+   * @param {string} [pointerType] @param {{left: number, top: number, right: number, bottom: number}} [rect]
+   */
+  function dispatchContextMenu(clientX, clientY, ids, pointerType = "mouse", rect) {
+    element.dispatchEvent(new CustomEvent("wb-contextmenu", {
+      bubbles: true, detail: { clientX, clientY, ids: [...ids], pointerType, rect: rect ?? null },
+    }));
+  }
+
+  /**
+   * The keyboard path of the context menu: the current selection's actions (never a hit test),
+   * anchored beside the selection's on-screen bounds, or the view centre with nothing selected.
+   */
+  function openKeyboardMenu() {
+    keyMenuAt = performance.now();
+    if (!cameraReady) measure();
+    const box = element.getBoundingClientRect();
+    const rects = [];
+    for (const id of selection) {
+      const o = resolve(id);
+      const b = o && boundsOf(o, resolve);
+      if (b) rects.push(b);
+    }
+    const u = unionRects(rects);
+    if (!u) {
+      const cx = box.left + size.w / 2, cy = box.top + size.h / 2;
+      dispatchContextMenu(cx, cy, [], "keyboard", { left: cx, top: cy, right: cx, bottom: cy });
+      return;
+    }
+    const a = worldToScreen(camera, u), b = worldToScreen(camera, { x: u.x + u.w, y: u.y + u.h });
+    const clampX = (/** @type {number} */ v) => Math.min(box.right, Math.max(box.left, v));
+    const clampY = (/** @type {number} */ v) => Math.min(box.bottom, Math.max(box.top, v));
+    const rect = { left: clampX(box.left + a.x), top: clampY(box.top + a.y), right: clampX(box.left + b.x), bottom: clampY(box.top + b.y) };
+    dispatchContextMenu(rect.left, rect.bottom, selection, "keyboard", rect);
+  }
+
+  /** Polite announcement of the latest keyboard change, once the keys pause. @param {string} message */
+  function announceLater(message) {
+    if (!options.announce) return;
+    clearTimeout(announceTimer);
+    announceTimer = setTimeout(() => { announceTimer = 0; if (!destroyed) options.announce?.(message); }, ANNOUNCE_DEBOUNCE_MS);
   }
 
   /** @param {PointerEvent} e */
@@ -611,6 +664,8 @@ export function createCanvas(store, options = {}) {
     if (destroyed || e.target instanceof HTMLTextAreaElement) return;
     if (editor?.isOpen) editor.commit();
     canvasActive = true;
+    lastPointerType = e.pointerType || "mouse";
+    lastPointerDownAt = performance.now();
     if (document.activeElement !== element) element.focus({ preventScroll: true });
     if (!cameraReady) measure();
     if (e.pointerType === "touch") {
@@ -747,10 +802,20 @@ export function createCanvas(store, options = {}) {
     if (e.target instanceof HTMLTextAreaElement) return;
     e.preventDefault();
     if (gesture) return;
+    const now = performance.now();
+    // The context menu key and Shift+F10 were handled on keydown; this is their echo.
+    if (now - keyMenuAt < KEY_MENU_ECHO_MS) { keyMenuAt = -Infinity; return; }
+    // Only a pointer-originated right-click picks what is under the pointer. A keyboard-generated
+    // event (no right button, no recent press) opens the menu for the current selection.
+    if (e.button !== 2 && !e.ctrlKey && now - lastPointerDownAt > KEY_MENU_ECHO_MS) {
+      openKeyboardMenu();
+      keyMenuAt = -Infinity;
+      return;
+    }
     const p = sample(e);
     const hit = topObjectAt(sorted(), p, camera.zoom, resolve);
     if (hit && !selection.includes(hit.id)) setSelectionInternal([hit.id], { announce: true });
-    dispatchContextMenu(e.clientX, e.clientY, hit ? selection : []);
+    dispatchContextMenu(e.clientX, e.clientY, hit ? selection : [], /** @type {any} */ (e).pointerType || "mouse");
   }
 
   // ------------------------------------------------------------------------------------------
@@ -783,10 +848,41 @@ export function createCanvas(store, options = {}) {
         break;
       case "nudge": {
         if (gesture) return;
+        if (!selection.length) {
+          if (!cameraReady) measure();
+          const step = panStep(action);
+          moveCamera(panBy(camera, step.x, step.y));
+          break;
+        }
         const ids = expandMoveIds(all, selection);
-        if (ids.length) store.updateObjects(moveUpdates(all, ids, action.dx, action.dy));
+        if (!ids.length) break;
+        store.updateObjects(moveUpdates(all, ids, action.dx, action.dy));
+        announceLater(`Moved ${directionWord(action.dx, action.dy)}`);
         break;
       }
+      case "resize": {
+        if (gesture || !selection.length) return;
+        const updates = resizeUpdates(all, selection, (o) => ({ w: o.w + action.dw, h: o.h + action.dh }));
+        if (!updates.length) break;
+        store.updateObjects(updates);
+        if (updates.length === 1) {
+          const o = objects()[updates[0].id];
+          if (o) announceLater(action.dw ? `Width ${o.w}` : `Height ${o.h}`);
+        } else announceLater(`Resized ${updates.length} objects`);
+        break;
+      }
+      case "rotate": {
+        if (gesture || !selection.length) return;
+        const updates = rotateUpdates(all, selection, action.deg);
+        if (!updates.length) break;
+        store.updateObjects(updates);
+        announceLater(updates.length === 1 ? `Rotation ${updates[0].patch.rot} degrees` : `Rotated ${updates.length} objects`);
+        break;
+      }
+      case "contextMenu":
+        if (gesture) return;
+        openKeyboardMenu();
+        break;
       case "undo": cancelGesture(); store.undo(); break;
       case "redo": cancelGesture(); store.redo(); break;
       case "duplicate": if (!gesture) api.duplicate(selection); break;
@@ -937,6 +1033,12 @@ export function createCanvas(store, options = {}) {
     on(element, "pointerleave", onPointerLeave);
     on(element, "wheel", onWheel, { passive: false });
     on(element, "contextmenu", onContextMenu);
+    // The echo of a context menu key handled on keydown lands wherever focus went (the menu, or
+    // <body> when the key arrived there): no native menu on top of ours.
+    on(window, "contextmenu", (e) => {
+      if (element.contains(/** @type {Node} */ (e.target))) return;
+      if (performance.now() - keyMenuAt < KEY_MENU_ECHO_MS) { e.preventDefault(); keyMenuAt = -Infinity; }
+    });
     on(element, "keydown", onKeyDown);
     on(element, "keyup", onKeyUp);
     on(element, "blur", releaseSpace);
@@ -1060,6 +1162,7 @@ export function createCanvas(store, options = {}) {
       if (editor?.isOpen) editor.commit();
       destroyed = true;
       if (rafId) cancelAnimationFrame(rafId);
+      clearTimeout(announceTimer);
       unsubscribe();
       resizeObserver?.disconnect();
       for (const [target, type, fn, opts] of bound) target.removeEventListener(type, fn, opts);
@@ -1073,6 +1176,19 @@ export function createCanvas(store, options = {}) {
   };
 
   return api;
+}
+
+/** @param {string} pointerType */
+function handleRadius(pointerType) {
+  return HANDLE_RADIUS[/** @type {keyof typeof HANDLE_RADIUS} */ (pointerType)] ?? HANDLE_RADIUS.mouse;
+}
+
+function reducedMotion() {
+  try {
+    return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
 }
 
 /** @param {WhiteboardObject} o */

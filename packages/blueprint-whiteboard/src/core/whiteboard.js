@@ -17,16 +17,29 @@
 //   frames       number of frames (LIMITS.frames)
 //   members      frameId -> objects naming it (raw, so an undone frame delete regains its count)
 //   adj          object id -> connectors attached to it (copy-on-write per request)
-//   top          highest valid z per stacking group ("frame" | "other"), an upper bound
+//   top/bottom   highest and lowest bounded z (valid, at most LIMITS.orderKeyAccept chars) per
+//                stacking group ("frame" | "other"); undefined when unknown (the holder was
+//                removed or re-keyed), recomputed by one scan when next needed
 //
-// Idempotency: a request carrying a valid requestId is recorded ("requests", bounded) in the same
-// commit as its changes, or in a records-only commit when nothing changed. A replay of a recorded
-// requestId returns the recorded outcome with duplicate: true and applies nothing.
+// Order keys: a client may set `z` directly only to an isAcceptableOrderKey (at most
+// LIMITS.orderKeyAccept chars, integer head B..y, far from both ends of the key space). Any other
+// valid key above the group's top becomes a server key above the top, below the bottom a server
+// key below the bottom (what a client's "bring to front" or "send to back" meant), and anything
+// else is ignored (a create then goes on top). Server keys step the integer part of the top or
+// bottom, so they stay short: no key stored is invalid, and no client can plant a key that leaves
+// no room above or below it. Should a top or bottom left over from older data have no short
+// neighbour, the new key is that key itself (ties stack by id).
+//
+// Idempotency: a request carrying a valid requestId is recorded ("requests", bounded) with its
+// senderId, in the same commit as its changes, or in a records-only commit when nothing changed.
+// A replay of a recorded (senderId, requestId) returns the recorded outcome with duplicate: true
+// and applies nothing. The same requestId from another senderId is a new request (its record
+// replaces nothing of the other sender's).
 
 import {
   BACKGROUNDS, COLORS, DEFAULT_TITLE, LIMITS as DEFAULT_LIMITS, SCHEMA_VERSION, TYPE_DEFAULTS,
   cleanColor, cleanCoord, cleanLine, cleanName, cleanNumber, cleanObjectPatch, cleanSize, compareObjects,
-  isId, isObject, isObjectType, isRequestId, newId as protocolNewId, normalizeNewObject,
+  isAcceptableOrderKey, isId, isObject, isObjectType, isRequestId, newId as protocolNewId, normalizeNewObject,
   storedBytes,
 } from "../shared/protocol.js";
 import { isValidOrderKey, keyBetween } from "../shared/order.js";
@@ -112,6 +125,36 @@ function fieldEqual(field, a, b) {
 /** @param {WhiteboardObject} o */
 const groupOf = (o) => (o.type === "frame" ? "frame" : "other");
 
+/** @param {unknown} v @returns {string} a request's cleaned senderId, "" when absent */
+const senderOf = (v) => (typeof v === "string" ? cleanLine(v, 64) : "");
+
+/** storedBytes per list item, cached: history entries and request records are never mutated. */
+const itemBytes = new WeakMap();
+/** @param {object} item */
+function bytesOf(item) {
+  let n = itemBytes.get(item);
+  if (n === undefined) itemBytes.set(item, n = storedBytes(item));
+  return n;
+}
+
+/**
+ * Drops the oldest items (keeping at least one) until storedBytes(list) fits `max`. Linear: each
+ * item is measured once (storedBytes of an array is storedBytes([]) plus, per item, its
+ * storedBytes less the header and plus the element overhead).
+ * @template {object} T
+ * @param {T[]} list @param {number} max
+ * @returns {T[]}
+ */
+function trimToBytes(list, max) {
+  const empty = storedBytes([]);
+  const perItem = storedBytes([0]) - empty - storedBytes(0);
+  let total = empty;
+  for (const item of list) total += bytesOf(item) + perItem;
+  let drop = 0;
+  while (list.length - drop > 1 && total > max) total -= bytesOf(list[drop++]) + perItem;
+  return drop ? list.slice(drop) : list;
+}
+
 /** @param {string} s */
 const lowerFirst = (s) => s.charAt(0).toLowerCase() + s.slice(1);
 
@@ -148,8 +191,12 @@ export function migrate(meta) {
  * @property {Map<string, number>} members
  * @property {Map<string, Set<string>>} adj
  * @property {Set<string>} adjCopied   sets in adj that belong to this copy (safe to mutate)
- * @property {{frame: string|null, other: string|null}} top
+ * @property {{frame: string|null|undefined, other: string|null|undefined}} top  undefined: unknown
+ * @property {{frame: string|null|undefined, other: string|null|undefined}} bottom
  */
+
+/** @param {unknown} z a key that may bound its group: valid and not over-long */
+const boundedKey = (z) => isValidOrderKey(z) && /** @type {string} */ (z).length <= DEFAULT_LIMITS.orderKeyAccept;
 
 /** @param {Index} w @param {string|undefined} target @param {string} connectorId @param {boolean} add */
 function edge(w, target, connectorId, add) {
@@ -176,15 +223,23 @@ function indexAdd(w, o, size) {
     edge(w, o.from, o.id, true);
     edge(w, o.to, o.id, true);
   }
-  if (isValidOrderKey(o.z)) {
+  if (boundedKey(o.z)) {
     const g = groupOf(o);
-    const top = w.top[g];
-    if (top === null || o.z > top) w.top[g] = o.z;
+    const top = w.top[g], bottom = w.bottom[g];
+    if (top === null || (top !== undefined && o.z > top)) w.top[g] = o.z;
+    if (bottom === null || (bottom !== undefined && o.z < bottom)) w.bottom[g] = o.z;
   }
 }
 
-/** @param {Index} w @param {WhiteboardObject} o */
-function indexRemove(w, o) {
+/**
+ * @param {Index} w @param {WhiteboardObject} o
+ * @param {boolean} [sameZ] the object is being replaced by a version with the same z, so the
+ *   group's top and bottom stay known
+ */
+function indexRemove(w, o, sameZ = false) {
+  const g = groupOf(o);
+  if (!sameZ && w.top[g] === o.z) w.top[g] = undefined;
+  if (!sameZ && w.bottom[g] === o.z) w.bottom[g] = undefined;
   w.objects.delete(o.id);
   w.bytes -= w.sizes.get(o.id) ?? 0;
   w.sizes.delete(o.id);
@@ -205,7 +260,7 @@ function buildIndex(objects) {
   /** @type {Index} */
   const w = {
     objects: new Map(), sizes: new Map(), bytes: 0, frames: 0, members: new Map(), adj: new Map(),
-    adjCopied: new Set(), top: { frame: null, other: null },
+    adjCopied: new Set(), top: { frame: null, other: null }, bottom: { frame: null, other: null },
   };
   for (const o of Object.values(objects ?? {})) {
     if (isObject(o) && typeof o.id === "string") indexAdd(w, o, storedBytes(o));
@@ -218,20 +273,57 @@ function copyIndex(s) {
   return {
     objects: new Map(s.objects), sizes: new Map(s.sizes), bytes: s.bytes, frames: s.frames,
     members: new Map(s.members), adj: new Map(s.adj), adjCopied: new Set(), top: { ...s.top },
+    bottom: { ...s.bottom },
   };
 }
 
 /**
- * An order key above every key of the group.
- * @param {Index} w @param {"frame"|"other"} g
+ * The highest (or lowest) bounded z of a group, recomputed with one scan when unknown.
+ * @param {Index} w @param {"frame"|"other"} g @param {"top"|"bottom"} end
+ * @returns {string|null}
  */
-function zAbove(w, g) {
-  const top = w.top[g];
+function endOf(w, g, end) {
+  let key = w[end][g];
+  if (key === undefined) {
+    key = null;
+    for (const o of w.objects.values()) {
+      if (groupOf(o) !== g || !boundedKey(o.z)) continue;
+      if (key === null || (end === "top" ? o.z > key : o.z < key)) key = o.z;
+    }
+    w[end][g] = key;
+  }
+  return key;
+}
+
+/**
+ * A server key above every bounded key of the group ("top") or below it ("bottom"). Always valid
+ * and at most LIMITS.orderKeyAccept chars; when the end key (from data stored before keys were
+ * bounded) has no short neighbour, that key itself, so the objects tie and stack by id.
+ * @param {Index} w @param {"frame"|"other"} g @param {"top"|"bottom"} end
+ */
+function zBeyond(w, g, end) {
+  const edge = endOf(w, g, end);
+  if (edge === null) return keyBetween(null, null);
   try {
-    const key = keyBetween(top, null);
-    if (isValidOrderKey(key)) return key;
+    const key = end === "top" ? keyBetween(edge, null) : keyBetween(null, edge);
+    if (boundedKey(key)) return key;
   } catch { /* fall through */ }
-  return top ? top + "V" : "a0";
+  return edge;
+}
+
+/**
+ * Where a client-supplied z (valid, or "") actually goes; see "Order keys" above.
+ * @param {Index} w @param {"frame"|"other"} g @param {string} z
+ * @returns {string} the key to store, or "" to ignore it
+ */
+function placeZ(w, g, z) {
+  if (isAcceptableOrderKey(z)) return z;
+  if (!isValidOrderKey(z)) return "";
+  const top = endOf(w, g, "top");
+  if (top === null || z > top) return zBeyond(w, g, "top");
+  const bottom = endOf(w, g, "bottom");
+  if (bottom !== null && z < bottom) return zBeyond(w, g, "bottom");
+  return "";
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -310,13 +402,20 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
   // --- Request records (idempotency) ---------------------------------------------------------
 
   /**
-   * @param {State} s @param {string} requestId @param {OperationResult} result
+   * @param {RequestRecord} r @param {string} requestId @param {string} senderId
+   * A record from before senderIds were recorded matches any sender.
+   */
+  const recordMatches = (r, requestId, senderId) =>
+    r.requestId === requestId && (typeof r.senderId !== "string" || r.senderId === senderId);
+
+  /**
+   * @param {State} s @param {string} requestId @param {string} senderId @param {OperationResult} result
    * @returns {RequestRecord[]}
    */
-  function withRecord(s, requestId, result) {
+  function withRecord(s, requestId, senderId, result) {
     /** @type {RequestRecord} */
     const record = structuredClone({
-      requestId, revision: result.revision, status: result.status,
+      requestId, senderId, revision: result.revision, status: result.status,
       conflicts: result.conflicts.map((c) => c.id), errors: result.errors,
     });
     while (storedBytes(record) > RECORD_MAX_BYTES && record.errors.length > 1) {
@@ -325,19 +424,17 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
     while (storedBytes(record) > RECORD_MAX_BYTES && record.conflicts.length > 1) {
       record.conflicts = record.conflicts.slice(0, Math.ceil(record.conflicts.length / 2));
     }
-    const requests = [...s.requests.filter((r) => r.requestId !== requestId), record];
-    while (requests.length > L.requestRecords) requests.shift();
-    while (requests.length > 1 && storedBytes(requests) > L.requestRecordBytes) requests.shift();
-    return requests;
+    const requests = [...s.requests.filter((r) => !recordMatches(r, requestId, senderId)), record];
+    return trimToBytes(requests.slice(Math.max(0, requests.length - L.requestRecords)), L.requestRecordBytes);
   }
 
   /**
-   * @param {State} s @param {string|null} requestId
+   * @param {State} s @param {string|null} requestId @param {string} senderId
    * @returns {OperationResult|null}
    */
-  function duplicateOf(s, requestId) {
+  function duplicateOf(s, requestId, senderId) {
     if (!requestId) return null;
-    const record = s.requests.find((r) => r.requestId === requestId);
+    const record = s.requests.find((r) => recordMatches(r, requestId, senderId));
     if (!record) return null;
     return structuredClone({
       status: record.status, revision: s.meta.revision, upserts: [], deletes: [], structure: null, history: null,
@@ -348,12 +445,12 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
 
   /**
    * Records a request that changed nothing (records-only commit, no revision bump).
-   * @param {State} s @param {string|null} requestId @param {OperationResult} result
+   * @param {State} s @param {string|null} requestId @param {string} senderId @param {OperationResult} result
    * @returns {Promise<{result: OperationResult, event: null}>}
    */
-  async function finishUnchanged(s, requestId, result) {
+  async function finishUnchanged(s, requestId, senderId, result) {
     if (requestId) {
-      const requests = withRecord(s, requestId, result);
+      const requests = withRecord(s, requestId, senderId, result);
       try {
         await repo.commit({ requests });
       } catch (e) {
@@ -374,13 +471,15 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
    *   version}`; a frameId naming a missing frame is cleared instead of refused; update/delete of
    *   a missing object is skipped with an error. Never reachable from the public applyOperation.
    *   summary: replaces the generated history summary.
+   *   undoOf: the history entry this request undoes (see HistoryEntry.undoOf and undoneBy).
    * @returns {Promise<{result: OperationResult, event: BoardEvent|null}>}
    */
-  async function applyLocked(rawReq, { force = false, summary: summaryOverride } = {}) {
+  async function applyLocked(rawReq, { force = false, summary: summaryOverride, undoOf } = {}) {
     const s = await load();
     const req = isObject(rawReq) ? rawReq : {};
     const requestId = isRequestId(req.requestId) ? req.requestId : null;
-    const duplicate = duplicateOf(s, requestId);
+    const senderId = senderOf(req.senderId);
+    const duplicate = duplicateOf(s, requestId, senderId);
     if (duplicate) return { result: duplicate, event: null };
     /** @type {OpError[]} */
     const errors = [];
@@ -396,10 +495,9 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
     if (ops.length > L.opsPerRequest) {
       errors.push(opError(-1, "limit",
         `A request may carry at most ${L.opsPerRequest} ops; this one has ${ops.length}. Nothing was applied.`));
-      return finishUnchanged(s, requestId, emptyResult(s.meta.revision, errors));
+      return finishUnchanged(s, requestId, senderId, emptyResult(s.meta.revision, errors));
     }
 
-    const senderId = typeof req.senderId === "string" ? cleanLine(req.senderId, 64) : "";
     const by = cleanName(req.by, ANONYMOUS);
     const at = now();
     const w = copyIndex(s);
@@ -417,6 +515,8 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       touched.has(id) && current.version !== startVersion(id) ? current.version : current.version + 1;
     /** @param {unknown} id */
     const isFrame = (id) => typeof id === "string" && w.objects.get(id)?.type === "frame";
+    /** @param {string} id an existing object that is not a frame */
+    const notAFrame = (id) => `frameId ${id} names ${withArticle(/** @type {WhiteboardObject} */ (w.objects.get(id)).type)}, not a frame`;
     /** @param {number} extra ids not yet touched */
     const overCommit = (extra) => touched.size + extra > L.commitObjects;
     const commitMessage = `One change may touch at most ${L.commitObjects} objects, deleted connectors included. Split it up.`;
@@ -426,7 +526,7 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
     /** @param {WhiteboardObject} o @param {number} size */
     const put = (o, size) => {
       const prev = w.objects.get(o.id);
-      if (prev) indexRemove(w, prev);
+      if (prev) indexRemove(w, prev, prev.z === o.z);
       indexAdd(w, o, size);
       touched.add(o.id);
     };
@@ -491,8 +591,8 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       if (!obj) return void errors.push(opError(i, "invalid_op", "Invalid object"));
       if (!isValidOrderKey(obj.z)) obj.z = "";
       if (obj.frameId !== null && !isFrame(obj.frameId)) {
-        if (!force) return void errors.push(opError(i, "invalid_ref", `frameId ${obj.frameId} does not name a frame`));
-        obj.frameId = null;
+        if (!force && w.objects.has(obj.frameId)) return void errors.push(opError(i, "invalid_ref", notAFrame(obj.frameId)));
+        obj.frameId = null; // the frame is gone (perhaps deleted concurrently): create it loose
       }
       if (obj.type === "pen" && !(Array.isArray(obj.points) && obj.points.length >= 4)) {
         return void errors.push(opError(i, "invalid_op", "A pen stroke needs points: at least 2 points, each coordinate a number"));
@@ -511,7 +611,7 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
         return void errors.push(opError(i, "limit", `A frame may hold at most ${L.objectsPerFrame} objects; add a new frame`));
       }
       if (overCommit(1)) return void errors.push(opError(i, "limit", commitMessage));
-      if (!obj.z) obj.z = zAbove(w, groupOf(obj));
+      if (!force || !obj.z) obj.z = placeZ(w, groupOf(obj), obj.z) || zBeyond(w, groupOf(obj), "top");
       const restore = force && isObject(op.restore) ? op.restore : {};
       obj.version = Number.isSafeInteger(restore.version) && restore.version > 0 ? restore.version + 1 : 1;
       obj.createdAt = typeof restore.createdAt === "number" && Number.isFinite(restore.createdAt) ? restore.createdAt : at;
@@ -530,15 +630,19 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       const id = current.id;
       /** @type {Record<string, any>} */
       const patch = cleanObjectPatch(op.patch, current.type);
-      if ("z" in patch && !isValidOrderKey(patch.z)) delete patch.z;
+      if ("z" in patch) {
+        const z = !isValidOrderKey(patch.z) ? "" : force ? patch.z : placeZ(w, groupOf(current), patch.z);
+        if (z) patch.z = z;
+        else delete patch.z;
+      }
       const keys = Object.keys(patch);
       if (!keys.length) return;
       /** @type {any} */
       const next = { ...current, ...patch };
       if (patch.style) next.style = { ...current.style, ...patch.style };
       if (patch.frameId && !isFrame(patch.frameId)) {
-        if (!force) return void errors.push(opError(i, "invalid_ref", `frameId ${patch.frameId} does not name a frame`));
-        next.frameId = null;
+        if (!force && w.objects.has(patch.frameId)) return void errors.push(opError(i, "invalid_ref", notAFrame(patch.frameId)));
+        next.frameId = null; // the frame is gone (perhaps deleted concurrently): keep the rest of the op
       }
       if (next.frameId && !isFrame(next.frameId)) next.frameId = null;
       if (current.type === "connector" && ("from" in patch || "to" in patch)) {
@@ -646,7 +750,7 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
     const titleChanged = title !== s.meta.title;
     const backgroundChanged = background !== s.meta.background;
     const changed = upserts.length > 0 || deletes.length > 0 || titleChanged || backgroundChanged;
-    if (!changed) return finishUnchanged(s, requestId, structuredClone(emptyResult(s.meta.revision, errors, conflicts)));
+    if (!changed) return finishUnchanged(s, requestId, senderId, structuredClone(emptyResult(s.meta.revision, errors, conflicts)));
 
     // ---- History entry ----
     /** @type {string[]} */
@@ -680,10 +784,21 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       inverse = storedBytes(inv) <= L.inverseBytes ? structuredClone(inv) : null;
     }
     /** @type {HistoryEntry} */
-    const entry = { id: newId("history"), at, by, summary, inverse };
-    const history = [...s.history, entry];
-    while (history.length > L.historyEntries) history.shift();
-    while (history.length > 1 && storedBytes(history) > L.historyBytes) history.shift();
+    const entry = { id: newId("history"), at, by, summary, inverse, ...(undoOf ? { undoOf } : {}) };
+    let history = [...s.history, entry];
+    if (undoOf) {
+      // Mark the undone entry; when it was itself an undo, the change that one undid is back.
+      const target = s.history.find((h) => h.id === undoOf);
+      history = history.map((h) => {
+        if (h.id === undoOf) return { ...h, undoneBy: entry.id };
+        if (target?.undoOf && h.id === target.undoOf && h.undoneBy === target.id) {
+          const { undoneBy: _u, ...rest } = h;
+          return rest;
+        }
+        return h;
+      });
+    }
+    history = trimToBytes(history.slice(Math.max(0, history.length - L.historyEntries)), L.historyBytes);
 
     // ---- Commit ----
     /** @type {BoardMeta} */
@@ -694,7 +809,7 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       status: conflicts.length ? "conflict" : "applied", revision: meta.revision, upserts, deletes,
       structure, history: entry, conflicts, errors,
     });
-    const requests = requestId ? withRecord(s, requestId, result) : s.requests;
+    const requests = requestId ? withRecord(s, requestId, senderId, result) : s.requests;
     try {
       await repo.commit({
         meta, putObjects: upserts, deleteObjects: deletes, history, ...(requestId ? { requests } : {}),
@@ -705,7 +820,7 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
     }
     state = {
       objects: w.objects, sizes: w.sizes, bytes: w.bytes, frames: w.frames, members: w.members, adj: w.adj,
-      adjCopied: new Set(), top: w.top, meta, history, requests,
+      adjCopied: new Set(), top: w.top, bottom: w.bottom, meta, history, requests,
     };
 
     /** @type {BoardEvent} */
@@ -794,6 +909,30 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
   const idList = (ids) => [...new Set((Array.isArray(ids) ? ids : []).filter((id) => typeof id === "string"))];
 
   /**
+   * Moves a grid's top-left so every cell lies within ±LIMITS.coord where it can (a grid wider
+   * than the whole range starts at its low end).
+   * @param {{x: number, y: number}} origin @param {number} n @param {number} columns
+   * @param {number} cellW @param {number} cellH @param {number} gap
+   */
+  function fitGrid(origin, n, columns, cellW, cellH, gap) {
+    const cols = Math.max(1, Math.min(columns, n));
+    const rows = Math.max(1, Math.ceil(n / cols));
+    const gridW = cols * cellW + (cols - 1) * gap;
+    const gridH = rows * cellH + (rows - 1) * gap;
+    const C = DEFAULT_LIMITS.coord;
+    return { x: Math.max(-C, Math.min(origin.x, C - gridW)), y: Math.max(-C, Math.min(origin.y, C - gridH)) };
+  }
+
+  /**
+   * An error when a convenience list would need more ops than one request may carry.
+   * @param {unknown} list @param {string} name
+   * @returns {OpError|null}
+   */
+  const tooMany = (list, name) => Array.isArray(list) && list.length > L.opsPerRequest
+    ? opError(-1, "limit", `${name} may hold at most ${L.opsPerRequest} items per call; this one has ${list.length}. Nothing was applied.`)
+    : null;
+
+  /**
    * Runs `objectOps` through the normal apply path and re-bases op errors onto caller indexes.
    * @param {any} a caller args (by, senderId)
    * @param {any[]} objectOps @param {number[]} indexOf caller index per op
@@ -847,24 +986,27 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       const s = await load();
       const a = isObject(args) ? args : {};
       const requestId = isRequestId(a.requestId) ? a.requestId : null;
-      const duplicate = duplicateOf(s, requestId);
+      const senderId = senderOf(a.senderId);
+      const duplicate = duplicateOf(s, requestId, senderId);
       if (duplicate) return { result: duplicate, event: null };
       /** @type {HistoryEntry|undefined} */
       let entry;
       if (a.historyId !== undefined && a.historyId !== null) {
         entry = s.history.find((h) => h.id === a.historyId);
-        if (!entry) return finishUnchanged(s, requestId, emptyResult(s.meta.revision, [opError(-1, "invalid_op", "No such history entry")]));
+        if (!entry) return finishUnchanged(s, requestId, senderId, emptyResult(s.meta.revision, [opError(-1, "invalid_op", "No such history entry")]));
       } else {
+        // The caller's latest change that is still in effect: undos and undone entries are
+        // skipped, so repeated calls walk back through the caller's changes.
         const by = cleanName(a.by, ANONYMOUS);
-        entry = s.history.findLast((h) => h.inverse && h.by === by);
-        if (!entry) return finishUnchanged(s, requestId, emptyResult(s.meta.revision, [opError(-1, "invalid_op", `Nothing to undo for ${by}`)]));
+        entry = s.history.findLast((h) => h.inverse && h.by === by && !h.undoOf && !h.undoneBy);
+        if (!entry) return finishUnchanged(s, requestId, senderId, emptyResult(s.meta.revision, [opError(-1, "invalid_op", `Nothing to undo for ${by}`)]));
       }
       if (!entry.inverse) {
-        return finishUnchanged(s, requestId, emptyResult(s.meta.revision, [opError(-1, "invalid_op", "That change cannot be undone")]));
+        return finishUnchanged(s, requestId, senderId, emptyResult(s.meta.revision, [opError(-1, "invalid_op", "That change cannot be undone")]));
       }
       return applyLocked(
         { ...entry.inverse, senderId: a.senderId, by: a.by, requestId },
-        { force: true, summary: ("Undid: " + lowerFirst(entry.summary)) },
+        { force: true, summary: ("Undid: " + lowerFirst(entry.summary)), undoOf: entry.id },
       );
     }),
 
@@ -924,6 +1066,8 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       const a = isObject(args) ? args : {};
       /** @type {OpError[]} */
       const errors = [];
+      const over = tooMany(a.objects, "objects");
+      if (over) return { created: [], errors: [over], event: null };
       if (!Array.isArray(a.objects)) errors.push(opError(-1, "invalid_op", "objects must be an array"));
       const input = Array.isArray(a.objects) ? a.objects : [];
       /** @type {any[]} */
@@ -953,6 +1097,8 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       const a = isObject(args) ? args : {};
       /** @type {OpError[]} */
       const errors = [];
+      const over = tooMany(a.stickies, "stickies");
+      if (over) return { created: [], errors: [over], event: null };
       if (!Array.isArray(a.stickies)) errors.push(opError(-1, "invalid_op", "stickies must be an array"));
       /** @type {string|null} */
       let frameId = null;
@@ -975,10 +1121,16 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       const n = items.length;
       const columns = columnsOf(a.columns, n);
       const gap = gapOf(a.gap);
-      const cellW = Math.max(d.w, ...items.map((it) => cleanSize(it.fields.w) ?? d.w));
-      const cellH = Math.max(d.h, ...items.map((it) => cleanSize(it.fields.h) ?? d.h));
+      let cellW = d.w, cellH = d.h;
+      for (const it of items) {
+        cellW = Math.max(cellW, cleanSize(it.fields.w) ?? d.w);
+        cellH = Math.max(cellH, cleanSize(it.fields.h) ?? d.h);
+      }
       const frame = frameId ? s.objects.get(frameId) : undefined;
-      const origin = cleanAt(a.at) ?? (frame ? { x: frame.x + PLACE_GAP, y: frame.y + PLACE_GAP } : besideContent(s));
+      const origin = fitGrid(
+        cleanAt(a.at) ?? (frame ? { x: frame.x + PLACE_GAP, y: frame.y + PLACE_GAP } : besideContent(s)),
+        n, columns, cellW, cellH, gap,
+      );
       const objectOps = items.map((it, k) => ({
         op: "create",
         object: {
@@ -1004,6 +1156,8 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       const a = isObject(args) ? args : {};
       /** @type {OpError[]} */
       const errors = [];
+      const over = tooMany(a.updates, "updates");
+      if (over) return applyMapped(a, [], [], [over]);
       if (!Array.isArray(a.updates)) errors.push(opError(-1, "invalid_op", "updates must be an array"));
       /** @type {[string, number, Record<string, any>][]} */
       const patches = [];
@@ -1064,11 +1218,14 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       if (!items.length) return applyMapped(a, [], [], errors);
       const columns = columnsOf(a.columns, items.length);
       const gap = gapOf(a.gap);
-      const cellW = Math.max(...items.map((it) => it.o.w));
-      const cellH = Math.max(...items.map((it) => it.o.h));
-      const origin = cleanAt(a.at) ?? {
-        x: Math.min(...items.map((it) => it.o.x)), y: Math.min(...items.map((it) => it.o.y)),
-      };
+      let cellW = 0, cellH = 0, minX = Infinity, minY = Infinity;
+      for (const { o } of items) {
+        cellW = Math.max(cellW, o.w);
+        cellH = Math.max(cellH, o.h);
+        minX = Math.min(minX, o.x);
+        minY = Math.min(minY, o.y);
+      }
+      const origin = fitGrid(cleanAt(a.at) ?? { x: minX, y: minY }, items.length, columns, cellW, cellH, gap);
       /** @type {[string, number, Record<string, any>][]} */
       const patches = items.map((it, k) => [it.o.id, it.i, {
         x: origin.x + (k % columns) * (cellW + gap), y: origin.y + Math.floor(k / columns) * (cellH + gap),

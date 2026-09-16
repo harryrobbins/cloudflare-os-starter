@@ -351,17 +351,30 @@ export const LINE_HEIGHT = 1.25;
 /** Inner padding of text inside shapes and stickies, as a fraction of the font size. */
 export const TEXT_PAD_EM = 0.6;
 
-/** @param {string} ch */
-function charWidth(ch) {
-  const code = ch.codePointAt(0) ?? 0;
+const NARROW = " il.,:;'|!ftjI";
+const WIDE = "mwMW@";
+/** Widths of the ASCII range, precomputed (same values as the rules in charWidth). */
+const ASCII_WIDTH = Array.from({ length: 128 }, (_, code) => {
+  const ch = String.fromCharCode(code);
+  if (NARROW.includes(ch)) return 0.32;
+  if (WIDE.includes(ch)) return 0.9;
+  if (ch >= "A" && ch <= "Z") return 0.68;
+  return CHAR_WIDTH_EM;
+});
+
+/** @param {number} code a code point */
+function codeWidth(code) {
+  if (code < 128) return ASCII_WIDTH[code];
   // CJK, Hangul, fullwidth forms and emoji are roughly square.
   if ((code >= 0x1100 && code <= 0x115f) || (code >= 0x2e80 && code <= 0xa4cf) ||
       (code >= 0xac00 && code <= 0xd7a3) || (code >= 0xf900 && code <= 0xfaff) ||
       (code >= 0xff00 && code <= 0xff60) || code >= 0x1f300) return 1;
-  if (" il.,:;'|!ftjI".includes(ch)) return 0.32;
-  if ("mwMW@".includes(ch)) return 0.9;
-  if (ch >= "A" && ch <= "Z") return 0.68;
   return CHAR_WIDTH_EM;
+}
+
+/** @param {string} ch one code point */
+function charWidth(ch) {
+  return codeWidth(ch.codePointAt(0) ?? 0);
 }
 
 /**
@@ -370,13 +383,24 @@ function charWidth(ch) {
  */
 export function textWidth(text, fontSize) {
   let w = 0;
-  for (const ch of text) w += charWidth(ch);
+  for (let i = 0; i < text.length; i++) {
+    const code = /** @type {number} */ (text.codePointAt(i));
+    if (code > 0xffff) i++;
+    w += codeWidth(code);
+  }
   return w * fontSize;
 }
+
+/** Most lines a text object lays out; beyond this the last line ends with "…". */
+export const MAX_TEXT_LINES = 400;
 
 /**
  * Greedy word wrap using the approximate glyph widths above. Explicit newlines are kept; words
  * wider than the line are broken by character. Deterministic on server and client alike.
+ *
+ * Linear in the text length: the width of the current line is kept as a running sum (added in
+ * the same order as textWidth would, so results are bit-identical), and wrapping stops as soon
+ * as more than `maxLines` lines exist.
  * @param {string} text
  * @param {number} maxWidth  world units available for text
  * @param {number} fontSize
@@ -387,34 +411,65 @@ export function wrapText(text, maxWidth, fontSize, maxLines = Infinity) {
   const width = Math.max(fontSize, maxWidth);
   /** @type {string[]} */
   const lines = [];
-  for (const para of String(text).split("\n")) {
+  const full = () => lines.length > maxLines;
+  paragraphs: for (const para of String(text).split("\n")) {
     let line = "";
-    for (const token of para.split(/(\s+)/)) {
+    let lineUnits = 0; // sum of charWidth over `line`, in order
+    // split with a capture group alternates words (even indexes) and whitespace runs (odd).
+    const tokens = para.split(/(\s+)/);
+    for (let t = 0; t < tokens.length; t++) {
+      const token = tokens[t];
       if (token === "") continue;
-      if (/^\s+$/.test(token)) {
-        if (line !== "") line += token;
+      if (t % 2 === 1) {
+        if (line !== "") {
+          line += token;
+          for (let i = 0; i < token.length; i++) {
+            const code = /** @type {number} */ (token.codePointAt(i));
+            if (code > 0xffff) i++;
+            lineUnits += codeWidth(code);
+          }
+        }
         continue;
       }
-      if (textWidth(line + token, fontSize) <= width) {
+      let joined = lineUnits, alone = 0;
+      for (let i = 0; i < token.length; i++) {
+        const code = /** @type {number} */ (token.codePointAt(i));
+        if (code > 0xffff) i++;
+        const cw = codeWidth(code);
+        joined += cw;
+        alone += cw;
+      }
+      if (joined * fontSize <= width) {
         line += token;
+        lineUnits = joined;
         continue;
       }
-      if (line.trim() !== "") lines.push(line.trimEnd());
+      if (line.trim() !== "") {
+        lines.push(line.trimEnd());
+        if (full()) break paragraphs;
+      }
       line = "";
-      if (textWidth(token, fontSize) <= width) {
+      lineUnits = 0;
+      if (alone * fontSize <= width) {
         line = token;
+        lineUnits = alone;
         continue;
       }
       // A single word wider than the line: break it by character.
       for (const ch of token) {
-        if (line && textWidth(line + ch, fontSize) > width) {
+        const cw = charWidth(ch);
+        if (line && (lineUnits + cw) * fontSize > width) {
           lines.push(line);
+          if (full()) break paragraphs;
           line = "";
+          lineUnits = 0;
         }
         line += ch;
+        lineUnits += cw;
       }
     }
     lines.push(line.trimEnd());
+    if (full()) break;
   }
   if (lines.length > maxLines) {
     const kept = lines.slice(0, Math.max(1, maxLines));
@@ -428,7 +483,8 @@ export function wrapText(text, maxWidth, fontSize, maxLines = Infinity) {
  * Where an object's text goes: the inner box (world, unrotated) and wrapped lines that fit it.
  * Sticky, rect, ellipse: centred vertically in the padded box (ellipses use the inscribed
  * rectangle). Text objects: top-aligned, no padding. Frames: their name sits above the frame
- * (one line). Connectors: see connector labels in render.js.
+ * (one line). Connectors: see connector labels in render.js. Stickies and shapes lay out only the
+ * lines that fit the box, text objects at most MAX_TEXT_LINES.
  * @param {WhiteboardObject} o
  * @returns {{x: number, y: number, w: number, h: number, lines: string[], lineHeight: number,
  *   anchor: "start"|"middle"|"end", firstBaseline: number}}
@@ -449,7 +505,7 @@ export function textLayout(o) {
       w: Math.max(1, o.w * (1 - 2 * inset) - 2 * pad), h: Math.max(1, o.h * (1 - 2 * inset) - 2 * pad),
     };
   }
-  const maxLines = o.type === "frame" ? 1 : o.type === "text" ? Infinity : Math.max(1, Math.floor(box.h / lineHeight));
+  const maxLines = o.type === "frame" ? 1 : o.type === "text" ? MAX_TEXT_LINES : Math.max(1, Math.floor(box.h / lineHeight));
   const lines = o.text ? wrapText(o.text, box.w, fontSize, maxLines) : [];
   const align = o.type === "frame" ? "left" : o.style.align;
   const anchorName = align === "center" ? "middle" : align === "right" ? "end" : "start";

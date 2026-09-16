@@ -9,6 +9,7 @@
 /** @typedef {import("../../shared/protocol.js").ObjectPatch} ObjectPatch */
 /** @typedef {import("../../shared/protocol.js").ObjectOp} ObjectOp */
 /** @typedef {import("../../shared/protocol.js").OperationRequest} OperationRequest */
+/** @typedef {import("./undo.js").Action} Action */
 /** @typedef {{title?: string, background?: "dots"|"grid"|"plain"}} StructurePatch */
 /** @typedef {Omit<WhiteboardObject, "version"|"createdAt"|"updatedAt"|"createdBy">} NewObject */
 
@@ -28,6 +29,8 @@
  * @property {number} retries    automatic conflict retries so far
  * @property {boolean} replayed  sent before, outcome unknown (request failed or timed out)
  * @property {number} [sendFailures]  requests carrying this op that failed outright
+ * @property {boolean} [frameRetried]  already re-sent once without its frameId after invalid_ref
+ * @property {Action[]} [undoEntry]  the undo (or redo) entry that re-creates what this delete removes
  * @property {WhiteboardObject|null} [baseObject]  server object this update/delete was last sent against
  */
 

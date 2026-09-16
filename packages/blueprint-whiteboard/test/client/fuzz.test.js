@@ -11,7 +11,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Net, mulberry32 } from "./net.js";
 
 beforeEach(() => { vi.useFakeTimers(); });
-afterEach(() => { vi.useRealTimers(); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 const SEEDS = (process.env.SEEDS ?? "1,2,3").split(",").map(Number);
 const STEPS = Number(process.env.STEPS ?? 200);
@@ -97,6 +97,14 @@ function act(rng, store, net, log) {
 for (const seed of SEEDS) {
   it(`fuzz seed=${seed} steps=${STEPS} fifo=${FIFO} restarts=${RESTARTS}`, async () => {
     const rng = mulberry32(seed);
+    // Ids, client ids and request secrets from seeded generators too, so a seed replays exactly.
+    const idRng = mulberry32(seed * 31 + 7);
+    vi.spyOn(globalThis.crypto, "getRandomValues").mockImplementation((arr) => {
+      const bytes = /** @type {Uint8Array} */ (arr);
+      for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(idRng() * 256);
+      return arr;
+    });
+    vi.spyOn(Math, "random").mockImplementation(mulberry32(seed * 97 + 3));
     const net = new Net({ rng: mulberry32(seed * 7919), minLat: 0, maxLat: MAXLAT, fifo: FIFO });
     const stores = [await net.startStore("a"), await net.startStore("b"), await net.startStore("c")];
     const log = [];
@@ -113,15 +121,21 @@ for (const seed of SEEDS) {
     await vi.advanceTimersByTimeAsync(10000); // heartbeats, gap detection, trailing events
     const server = await net.board.getBoard();
     const context = () => JSON.stringify({ seed, tail: log.slice(-30) });
+    const restarts = log.filter((l) => l[0] === "restart").length;
+    const requests = new Set(net.calls.filter((c) => c.method === "applyOperation").map((c) => c.args[0].requestId)).size;
     if (process.env.FUZZ_DEBUG) {
       process.stderr.write(JSON.stringify({
         seed, revision: server.revision, objects: Object.keys(server.objects).length,
-        restarts: log.filter((l) => l[0] === "restart").length,
+        restarts, requests,
         subscribes: net.calls.filter((c) => c.method === "subscribe").length,
         errors: stores.map((st) => st.getState().lastError),
       }) + "\n");
     }
-    expect(server.revision).toBeGreaterThan(STEPS / 4);
+    // Sanity: the run did real work, and most distinct requests were applied. (Not a fraction of
+    // STEPS: changes made while a request is in flight coalesce, so short gaps, high latency and
+    // restarts legitimately mean far fewer requests than steps.)
+    expect(requests).toBeGreaterThan(Math.min(20, STEPS / 50));
+    expect(server.revision).toBeGreaterThan(requests / 2);
     for (const st of stores) {
       const s = st.getState();
       expect(s.pending, context()).toBe(0);

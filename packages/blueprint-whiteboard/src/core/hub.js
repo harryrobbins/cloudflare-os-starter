@@ -20,11 +20,22 @@
 // rejected one, or one unsettled for INFLIGHT_TIMEOUT_MS, drops the subscriber. A client's own
 // presence is never delivered back to it.
 //
+// Presence volume: one delivery carries at most PRESENCE_FLUSH_BYTES (estimated JSON) of events;
+// the rest stay pending, still latest-wins, for the next flush. Each client may publish
+// PRESENCE_RATE updates per second (bursts up to PRESENCE_BURST): an update beyond that is merged
+// into its state at once but only fanned out by the next scheduled flush, so a flood costs one
+// fan-out per flush interval rather than one per call.
+//
+// Slots: a subscriber that has not called updatePresence (clients heartbeat every
+// PRESENCE_HEARTBEAT_MS) for SUBSCRIBER_IDLE_MS is idle. When the hub is full, add() first removes
+// idle subscribers (disposed, "leave" broadcast), so subscriptions nobody keeps alive cannot hold
+// every slot.
+//
 // Stubs: onRpcBroken is never called (the runtime does not implement it, and passing a function
 // over RPC creates a stub nobody disposes). Whenever an entry is removed (leave, drop, or replaced
 // by a re-subscribe) its stub is disposed with [Symbol.dispose], errors ignored.
 
-import { LIMITS, cleanLine, cleanPresence, isSession, newSession } from "../shared/protocol.js";
+import { LIMITS, PRESENCE_STALE_MS, cleanLine, cleanPresence, isSession, newSession } from "../shared/protocol.js";
 
 /** @typedef {import("../shared/protocol.js").BoardEvent} BoardEvent */
 /** @typedef {import("../shared/protocol.js").PresenceEvent} PresenceEvent */
@@ -38,6 +49,10 @@ import { LIMITS, cleanLine, cleanPresence, isSession, newSession } from "../shar
  * @property {Set<{at: number}>} inflight      unsettled operation deliveries, oldest first
  * @property {Set<{at: number}>} presenceInflight  unsettled presence deliveries, oldest first
  * @property {Map<string, PresenceEvent>} pending  presence waiting for the next flush
+ * @property {number} seen      when it subscribed or last called updatePresence
+ * @property {number} tokens    presence rate-limit bucket
+ * @property {number} tokensAt  when `tokens` was last refilled
+ * @property {boolean} unsent   its state changed without being queued for the others (rate limited)
  */
 
 // High enough that a script firing hundreds of writes within one round trip does not drop every
@@ -48,7 +63,24 @@ export const PRESENCE_MAX_INFLIGHT = 4;
 // Measured on the local platform (spike, 3 clients): coalescing at 50 ms added ~40 ms p50 over direct
 // fan-out; 33 ms keeps cursors near 30 Hz while capping outbound calls per subscriber.
 export const DEFAULT_COALESCE_MS = 33;
+/** A subscriber silent this long (no updatePresence) may be removed to make room. */
+export const SUBSCRIBER_IDLE_MS = PRESENCE_STALE_MS + 20_000;
+/** Estimated JSON bytes of presence one delivery carries; more waits for the next flush. */
+export const PRESENCE_FLUSH_BYTES = 512 * 1024;
+/** Presence updates per second a client may fan out, with bursts up to PRESENCE_BURST. */
+export const PRESENCE_RATE = 40;
+export const PRESENCE_BURST = 40;
 const CLIENT_ID_MAX = 64;
+
+/** Estimated (upper bound) JSON bytes of a presence event, without serialising it. @param {PresenceEvent} ev */
+export function presenceBytes(ev) {
+  if (ev.type === "leave") return 120;
+  let n = 640; // type, at, clientId, name (UTF-8), colour, cursor, viewport, editingId, keys
+  n += ev.selection.length * 18;
+  n += ev.transforms.length * 110;
+  if (ev.stroke) n += 80 + ev.stroke.points.length * 12;
+  return n;
+}
 
 /** @param {unknown} v */
 function cleanClientId(v) {
@@ -119,6 +151,7 @@ export class Hub {
       if (raw.session !== existing.session) throw new Error("clientId in use");
       session = existing.session;
     } else {
+      if (this.entries.size >= this.maxSubscribers) this.#evictIdle();
       if (this.entries.size >= this.maxSubscribers) throw new Error("board is full");
       session = isSession(raw.session) ? raw.session : newSession();
     }
@@ -128,11 +161,12 @@ export class Hub {
     }
     const { session: _s, clientId: _c, ...fields } = raw;
     /** @type {Entry} */
+    const at = this.now();
     const entry = {
       stub, state: cleanPresence(fields, clientId, null), session,
       inflight: new Set(), presenceInflight: new Set(), pending: new Map(),
+      seen: at, tokens: PRESENCE_BURST, tokensAt: at, unsent: false,
     };
-    const at = this.now();
     for (const other of this.entries.values()) entry.pending.set(other.state.clientId, { type: "join", ...structuredClone(other.state), at });
     this.entries.set(clientId, entry);
     this.#enqueuePresence({ type: "join", ...structuredClone(entry.state), at });
@@ -163,7 +197,20 @@ export class Hub {
     if (!entry || typeof raw.session !== "string" || raw.session !== entry.session) return { known: false };
     const { session: _s, clientId: _c, ...fields } = raw;
     entry.state = cleanPresence(fields, entry.state.clientId, entry.state);
-    this.#enqueuePresence({ type: "update", ...structuredClone(entry.state), at: this.now() });
+    const now = this.now();
+    entry.seen = now;
+    entry.tokens = Math.min(PRESENCE_BURST, entry.tokens + ((now - entry.tokensAt) * PRESENCE_RATE) / 1000);
+    entry.tokensAt = now;
+    if (entry.tokens >= 1) {
+      entry.tokens -= 1;
+      entry.unsent = false;
+      this.#enqueuePresence({ type: "update", ...structuredClone(entry.state), at: now });
+    } else {
+      // Over the rate: the state is kept and goes out with the next flush, which is scheduled no
+      // sooner than a token is due.
+      entry.unsent = true;
+      this.#schedule(Math.max(this.coalesceMs, Math.ceil(1000 / PRESENCE_RATE)));
+    }
     return { known: true };
   }
 
@@ -190,7 +237,7 @@ export class Hub {
         await Promise.all([...this.pending]);
         continue;
       }
-      const waiting = [...this.entries.values()].some((e) => e.pending.size);
+      const waiting = [...this.entries.values()].some((e) => e.pending.size || e.unsent);
       if (!waiting) {
         if (this.timer !== null) { this.timers.clearTimeout(this.timer); this.timer = null; }
         return;
@@ -205,8 +252,9 @@ export class Hub {
   /**
    * Queues a presence event for every subscriber except the client it is about.
    * @param {PresenceEvent} event
+   * @param {boolean} [schedule]
    */
-  #enqueuePresence(event) {
+  #enqueuePresence(event, schedule = true) {
     for (const entry of this.entries.values()) {
       if (entry.state.clientId === event.clientId) continue;
       const previous = entry.pending.get(event.clientId);
@@ -214,11 +262,12 @@ export class Hub {
         ? { ...event, type: "join" }
         : event);
     }
-    this.#schedule();
+    if (schedule) this.#schedule();
   }
 
-  #schedule() {
-    if (this.coalesceMs <= 0) {
+  /** @param {number} [delay] */
+  #schedule(delay = this.coalesceMs) {
+    if (delay <= 0) {
       this.#flush();
       return;
     }
@@ -226,11 +275,18 @@ export class Hub {
     this.timer = this.timers.setTimeout(() => {
       this.timer = null;
       this.#flush();
-    }, this.coalesceMs);
+    }, delay);
   }
 
   #flush() {
     const now = this.now();
+    // Rate-limited states go out now, once each, however many updates they merged.
+    for (const entry of this.entries.values()) {
+      if (!entry.unsent) continue;
+      entry.unsent = false;
+      this.#enqueuePresence({ type: "update", ...structuredClone(entry.state), at: now }, false);
+    }
+    let more = false;
     for (const entry of [...this.entries.values()]) {
       if (!entry.pending.size || this.entries.get(entry.state.clientId) !== entry) continue;
       const oldest = entry.presenceInflight.values().next().value;
@@ -239,9 +295,29 @@ export class Hub {
         continue;
       }
       if (entry.presenceInflight.size >= PRESENCE_MAX_INFLIGHT) continue;
-      const events = [...entry.pending.values()];
-      entry.pending.clear();
+      /** @type {PresenceEvent[]} */
+      const events = [];
+      let bytes = 0;
+      for (const [clientId, event] of entry.pending) {
+        const size = presenceBytes(event);
+        if (events.length && bytes + size > PRESENCE_FLUSH_BYTES) break;
+        events.push(event);
+        bytes += size;
+        entry.pending.delete(clientId);
+      }
+      if (entry.pending.size) more = true;
       this.#track(this.#deliverPresence(entry, events, now));
+    }
+    // The rest waits for the next flush (coalesceMs 0: at most PRESENCE_MAX_INFLIGHT deep, after
+    // which a settling delivery reschedules).
+    if (more) this.#schedule();
+  }
+
+  /** Removes (disposes, broadcasts "leave") every subscriber idle for SUBSCRIBER_IDLE_MS. */
+  #evictIdle() {
+    const now = this.now();
+    for (const entry of [...this.entries.values()]) {
+      if (now - entry.seen > SUBSCRIBER_IDLE_MS) this.#remove(entry);
     }
   }
 

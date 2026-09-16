@@ -35,6 +35,9 @@ import { showToast, ensureToastHost, closeMenu } from "./dialogs.js";
  * @property {() => void} refreshChrome
  * @property {() => void} focusStyleBar
  * @property {(visible: boolean) => void} [onStyleBarToggle]
+ * @property {(type: import("../../shared/protocol.js").ObjectType) => Partial<import("../../shared/protocol.js").Style>} toolStyle
+ *   colours new objects of `type` get: the last fill / line / text colour chosen for that type
+ * @property {(types: Set<string>, colours: Partial<import("../../shared/protocol.js").Style>) => void} rememberStyle
  */
 
 /** Gap between announcements of other people's changes. */
@@ -106,7 +109,11 @@ export function mountApp(root, store) {
 
   const appEl = h("div", { class: "wb-app" });
   const canvasHost = h("div", { class: "wb-canvas-host" });
-  const canvas = createCanvas(uiStore, { announce });
+  /** Last colours chosen in the style bar, per object type; new objects of that type use them. @type {Map<string, Record<string, any>>} */
+  const lastColours = new Map();
+  /** @type {App["toolStyle"]} */
+  const toolStyle = (type) => ({ ...(lastColours.get(type) ?? {}) });
+  const canvas = createCanvas(uiStore, { announce, toolStyle });
   canvasHost.appendChild(canvas.element);
   // Debug and test handle, like window.whiteboardStore.
   /** @type {any} */ (globalThis).whiteboardCanvas = canvas;
@@ -123,6 +130,18 @@ export function mountApp(root, store) {
     toggleActivity: () => activity.toggle(),
     refreshChrome: () => toolbar.render(),
     focusStyleBar: () => styleBar.focusFirst(),
+    toolStyle,
+    rememberStyle(types, colours) {
+      for (const type of types) {
+        /** @type {Record<string, any>} */
+        const next = { ...(lastColours.get(type) ?? {}), ...colours };
+        // Sticky notes and pen strokes need a real colour; "none" is not remembered for them.
+        for (const [k, v] of Object.entries(next)) {
+          if (v === "none" && (type === "sticky" || type === "pen" || type === "connector")) delete next[k];
+        }
+        lastColours.set(type, next);
+      }
+    },
   };
 
   // ---- top left: title, connection, pending
@@ -146,7 +165,9 @@ export function mountApp(root, store) {
   const outline = createOutline(app);
   const activity = createActivity(app);
 
-  appEl.append(canvasHost, topbar, toolbar.el, toolbar.history, styleBar.el, people.el, people.chip, minimap.el, minimap.zoom);
+  // The style bar follows the canvas in DOM (and Tab) order: selecting on the canvas, then Tab,
+  // reaches the selection's actions first.
+  appEl.append(canvasHost, styleBar.el, topbar, toolbar.el, toolbar.history, people.el, people.chip, minimap.el, minimap.zoom);
   root.replaceChildren(appEl);
 
   // ---- canvas events
@@ -176,7 +197,7 @@ export function mountApp(root, store) {
     const d = /** @type {CustomEvent} */ (e).detail ?? {};
     const x = d.clientX ?? d.x ?? window.innerWidth / 2;
     const y = d.clientY ?? d.y ?? window.innerHeight / 2;
-    styleBar.openContextMenu({ x, y });
+    styleBar.openContextMenu({ x, y, pointerType: d.pointerType, rect: d.rect ?? null });
   });
 
   // ---- global shortcuts that are the shell's (the canvas handles its own when focused)

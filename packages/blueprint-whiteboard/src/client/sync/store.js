@@ -62,13 +62,28 @@ export const MAX_CLIENT_ID_RENAMES = 3;
  * retrying on it cannot succeed; only a reload of the frame gets a new stub.
  */
 export const UNRECOVERABLE_FAILURES = 3;
-/** ... or after the connection has been non-live this long without any call succeeding. */
+/**
+ * ... or after the connection has been non-live this long without any call succeeding. Time spent
+ * waiting on a subscribe call that has not failed is not counted (a slow server or a large
+ * snapshot is not a dead connection); see SUBSCRIBE_HANG_MS for that.
+ */
 export const UNRECOVERABLE_AFTER_MS = 8000;
+/** ... or when one subscribe call has been left unsettled this long. */
+export const SUBSCRIBE_HANG_MS = 45000;
+/** Peers not re-confirmed this long after a re-subscribe went live (and no presence came) are dropped. */
+export const PRESENCE_CONFIRM_MS = 2000;
 /** Peers are checked for staleness this often. */
 export const PEER_EXPIRY_CHECK_MS = 1000;
-/** An updatePresence call not settled after this long counts as failed (the store re-subscribes). */
+/**
+ * An updatePresence call not settled after this long counts as one presence failure (heartbeats
+ * keep skipping while it is outstanding); so does a rejected call.
+ */
 export const PRESENCE_TIMEOUT_MS = 10000;
-/** Request ids are `${clientId}:${seq}`, at most this long, of [A-Za-z0-9:_-]. */
+/** Presence failures in a row (timeouts or rejections) after which the store re-subscribes. */
+export const PRESENCE_FAILURES_TO_RESUBSCRIBE = 3;
+/** After a rejected updatePresence, the next one is sent this soon rather than at the next heartbeat. */
+export const PRESENCE_RETRY_MS = 500;
+/** Request ids are `${secret}:${seq}` (see nextRequestId), at most this long, of [A-Za-z0-9:_-]. */
 export const REQUEST_ID_MAX = 64;
 
 const PRESENCE_KEYS = /** @type {const} */ (["cursor", "viewport", "selection", "transforms", "stroke", "editingId"]);
@@ -144,6 +159,13 @@ export async function createStore(options) {
   const everSeen = new Set();
   /** @type {Set<string>} object ids our own requests deleted (cascades included) */
   const ownDeleted = new Set();
+  /**
+   * Connectors our own outstanding request deleted, as they were just before (from its result or
+   * its echo, whichever came first), so a local undo of the delete can restore cascaded connectors
+   * this client had not seen when it deleted the endpoint. Cleared when the request settles.
+   * @type {Map<string, WhiteboardObject>}
+   */
+  const ownCascade = new Map();
 
   // Subscription generations. Events from an older generation's callbacks are ignored; events
   // for the current generation that arrive before its snapshot is installed are buffered.
@@ -157,6 +179,13 @@ export async function createStore(options) {
   /** @type {any} */
   let unrecoverableTimer = null;
   let unrecoverableFired = false;
+  // Non-live time counted towards UNRECOVERABLE_AFTER_MS: `nonLiveMs` from finished stretches plus
+  // the current stretch since `nonLiveSince` (null while a subscribe call is outstanding).
+  let nonLiveMs = 0;
+  /** @type {number|null} */
+  let nonLiveSince = null;
+  /** @type {number|null} when the outstanding subscribe call was made */
+  let subscribeSentAt = null;
   /** @type {any} */
   let retryTimer = null;
   /** @type {any} */
@@ -173,6 +202,15 @@ export async function createStore(options) {
   let presenceInflight = null;
   let presenceDirty = false;
   let presenceToken = 0;
+  let presenceFailuresInRow = 0;
+  /**
+   * Peers known before the current (re-)subscribe, not yet confirmed by a join or update from it.
+   * The hub's first presence delivery to a new subscription carries a join for everyone present,
+   * so whoever it does not name left while we were away and is dropped then (or, if no delivery
+   * comes, PRESENCE_CONFIRM_MS after the subscription went live).
+   * @type {{gen: number, ids: Set<string>, deadline: number|null}|null}
+   */
+  let unconfirmedPeers = null;
   /** @type {any} */
   let heartbeat = null;
   /** @type {any} */
@@ -332,8 +370,16 @@ export async function createStore(options) {
   /**
    * @param {any} update
    * @param {number} revision
+   * @param {boolean} [own]  the result or echo of this client's own request
    */
-  function applyServerUpdate(update, revision) {
+  function applyServerUpdate(update, revision, own = false) {
+    if ((own || (update.senderId && update.senderId === clientId && (inflight || replay))) &&
+        Array.isArray(update.deletes)) {
+      for (const id of update.deletes) {
+        const o = typeof id === "string" ? model.board.objects[id] : undefined;
+        if (o && o.type === "connector") ownCascade.set(id, o);
+      }
+    }
     const res = applyUpdate(model, update, revision);
     for (const o of update.upserts ?? []) if (o && typeof o.id === "string") everSeen.add(o.id);
     return res;
@@ -366,11 +412,21 @@ export async function createStore(options) {
     return info;
   }
 
-  /** `${clientId}:${seq}`, restricted to the characters and length the server accepts. */
+  /**
+   * `${secret}:${seq}`: a random secret of 96 bits (24 hex), made once per store and never sent
+   * except inside requestIds, plus a counter. Request records are shared by the whole board and
+   * our clientId is broadcast, so an id built from it could be predicted and recorded first by a
+   * peer, making the server answer our request as a duplicate without applying it.
+   */
   function nextRequestId() {
-    const suffix = ":" + ++requestSeq;
-    const prefix = clientId.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, REQUEST_ID_MAX - suffix.length);
-    return prefix + suffix;
+    let secret = /** @type {any} */ (nextRequestId).secret;
+    if (!secret) {
+      const bytes = new Uint8Array(12);
+      if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(bytes);
+      else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+      secret = /** @type {any} */ (nextRequestId).secret = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+    }
+    return (secret + ":" + ++requestSeq).slice(0, REQUEST_ID_MAX);
   }
 
   /** Our clientId is held by another session: take a fresh identity. */
@@ -420,6 +476,8 @@ export async function createStore(options) {
     const gen = ++generation;
     generationReady = false;
     buffered = [];
+    unconfirmedPeers = state.peers.size ? { gen, ids: new Set(state.peers.keys()), deadline: null } : null;
+    subscribeStarted();
     try {
       const snapshot = await gadget.subscribe(new Callbacks(gen), clientInfo());
       if (disposed || gen !== generation) return;
@@ -427,16 +485,21 @@ export async function createStore(options) {
       if (typeof issued === "string" && issued) session = issued;
       clientIdRenames = 0;
       subscribeFailuresInRow = 0;
+      presenceFailuresInRow = 0;
       if (unrecoverableTimer) {
         timers.clearTimeout(unrecoverableTimer);
         unrecoverableTimer = null;
       }
+      nonLiveMs = 0;
+      nonLiveSince = null;
+      subscribeSentAt = null;
       generationReady = true;
       const events = buffered;
       buffered = [];
       resubscribing = false;
       installSnapshot(snapshot);
       for (const event of events) applyEvent(event);
+      if (unconfirmedPeers?.gen === gen) unconfirmedPeers.deadline = timers.now() + PRESENCE_CONFIRM_MS;
       setConnection("live");
       onFirstLive?.();
       onFirstLive = null;
@@ -444,6 +507,7 @@ export async function createStore(options) {
       sendPresence();
     } catch (err) {
       if (disposed || gen !== generation) return;
+      subscribeSettled();
       const message = String(/** @type {any} */ (err)?.message ?? err);
       if (message.includes("clientId in use") && clientIdRenames < MAX_CLIENT_ID_RENAMES) {
         clientIdRenames++;
@@ -459,15 +523,47 @@ export async function createStore(options) {
 
   /**
    * Arms the "non-live for too long" check. Only a successful subscribe makes the connection
-   * live again (and nothing else is sent while it is not), so still being non-live when the timer
-   * fires means no call has succeeded in that time.
+   * live again (and nothing else is sent while it is not), so still being non-live when the budget
+   * runs out means no call has succeeded in that time. Time waiting on an outstanding subscribe is
+   * not counted; that call instead gets SUBSCRIBE_HANG_MS before it counts as hung.
    */
   function watchUnrecoverable() {
     if (!options.onUnrecoverable || unrecoverableFired || unrecoverableTimer || disposed) return;
+    if (nonLiveSince === null && subscribeSentAt === null) nonLiveSince = timers.now();
+    armUnrecoverable();
+  }
+
+  /** (Re)arms the check for whichever limit applies now. Only while watching. */
+  function armUnrecoverable() {
+    if (unrecoverableTimer) timers.clearTimeout(unrecoverableTimer);
+    unrecoverableTimer = null;
+    if (unrecoverableFired || disposed) return;
+    const now = timers.now();
+    const wait = subscribeSentAt !== null
+      ? subscribeSentAt + SUBSCRIBE_HANG_MS - now
+      : UNRECOVERABLE_AFTER_MS - nonLiveMs - (nonLiveSince === null ? 0 : now - nonLiveSince);
+    if (wait <= 0) {
+      giveUp();
+      return;
+    }
     unrecoverableTimer = timers.setTimeout(() => {
       unrecoverableTimer = null;
-      if (!disposed && state.connection !== "live") giveUp();
-    }, UNRECOVERABLE_AFTER_MS);
+      if (!disposed && state.connection !== "live") armUnrecoverable();
+    }, wait);
+  }
+
+  function subscribeStarted() {
+    const now = timers.now();
+    if (nonLiveSince !== null) nonLiveMs += now - nonLiveSince;
+    nonLiveSince = null;
+    subscribeSentAt = now;
+    if (unrecoverableTimer) armUnrecoverable();
+  }
+
+  function subscribeSettled() {
+    subscribeSentAt = null;
+    nonLiveSince = timers.now();
+    if (unrecoverableTimer) armUnrecoverable();
   }
 
   /** Tells the owner, once, that this connection is not coming back. Retries continue. */
@@ -540,19 +636,20 @@ export async function createStore(options) {
    * Queues one op, merging it into the last pending op on the same object when that one has not
    * been sent and nothing queued after it depends on the order.
    * @param {OpBody} body
+   * @returns {PendingOp|null} the queued (or merged-into) op; null when it cancelled out
    */
   function enqueueBody(body) {
     if (body.kind === "structure") {
       const target = structureOps.at(-1);
       if (target && !target.inflight && !target.replayed && target.kind === "structure") {
         target.structure = { ...target.structure, ...body.structure };
-        return;
+        return target;
       }
       /** @type {PendingOp} */
       const op = { ...body, seq: ++seq, inflight: false, retries: 0, replayed: false };
       queue.push(op);
       structureOps.push(op);
-      return;
+      return op;
     }
     const list = opsById.get(body.id);
     const target = list?.at(-1);
@@ -560,7 +657,7 @@ export async function createStore(options) {
       const merged = mergeOps(target, body);
       if (merged === "cancel") {
         removeOps(new Set([target]));
-        return;
+        return null;
       }
       if (merged) {
         const t = /** @type {any} */ (target);
@@ -568,7 +665,7 @@ export async function createStore(options) {
         delete t.patch;
         Object.assign(t, merged);
         indexRefs(target);
-        return;
+        return target;
       }
     }
     /** @type {PendingOp} */
@@ -577,6 +674,7 @@ export async function createStore(options) {
     if (list) list.push(op);
     else opsById.set(body.id, [op]);
     indexRefs(op);
+    return op;
   }
 
   /**
@@ -798,7 +896,7 @@ export async function createStore(options) {
     // outcome (errors, conflicts with present values) is used.
     const duplicate = /** @type {any} */ (result).duplicate === true;
     if (!duplicate) {
-      const res = applyServerUpdate(result, revision);
+      const res = applyServerUpdate(result, revision, true);
       for (const id of res.objects) touched.add(id);
       for (const id of result.deletes ?? []) ownDeleted.add(id);
       const changedSomething = (result.upserts?.length ?? 0) > 0 || (result.deletes?.length ?? 0) > 0 ||
@@ -843,6 +941,13 @@ export async function createStore(options) {
       const index = refs.get(op);
       const error = wholeRequest ?? (index !== undefined ? errors.get(index) : undefined);
       if (error) {
+        if (error.code === "invalid_ref" && !op.frameRetried && clearFrameId(op)) {
+          // The frame was deleted meanwhile (the server clears a missing frame itself; this covers
+          // one that still refuses it): keep the rest of the change and try once more without it.
+          op.frameRetried = true;
+          op.replayed = false;
+          continue;
+        }
         done.add(op);
         const benign = op.replayed && ((error.code === "exists" && op.kind === "create") ||
           (error.code === "unknown_object" && op.kind === "delete"));
@@ -864,14 +969,20 @@ export async function createStore(options) {
       }
       if (!conflicts.has(op.id)) {
         done.add(op);
+        if (op.kind === "delete") restoreCascadeOnUndo(op);
         continue;
       }
       const current = conflicts.get(op.id) ?? null;
       if (typeof revision === "number") applyObjectState(model, op.id, current, revision);
       if (current) everSeen.add(op.id);
-      if (!handleConflict(op, current, flashes, report)) done.add(op);
+      // Rebase against what the model holds now, not the raw `current`: an event newer than this
+      // result may already have landed (and `current` was then ignored). The retry is sent against
+      // the model's version, so rebasing against an older `current` would overwrite that change.
+      const latest = typeof revision === "number" ? (model.board.objects[op.id] ?? null) : current;
+      if (!handleConflict(op, latest, flashes, report)) done.add(op);
     }
 
+    ownCascade.clear();
     removeOps(done);
     refresh(touched);
     appendHistory([result.history]);
@@ -924,6 +1035,38 @@ export async function createStore(options) {
     }
   }
 
+  /**
+   * A delete went through: connectors it cascaded to that its undo entry does not re-create (they
+   * were made by someone else after this client last saw the endpoint) are added to that entry,
+   * endpoints first, so undoing the delete brings them back as a server undo would.
+   * @param {PendingOp} op
+   */
+  function restoreCascadeOnUndo(op) {
+    const entry = op.undoEntry;
+    if (!entry || !ownCascade.size) return;
+    for (const c of ownCascade.values()) {
+      if (c.from !== op.id && c.to !== op.id) continue;
+      if (entry.some((a) => a.kind === "create" && a.object.id === c.id)) continue;
+      entry.push({ kind: "create", object: c });
+    }
+  }
+
+  /**
+   * Sets a create's or update's frameId to null. Returns false when the op names no frame.
+   * @param {PendingOp} op
+   */
+  function clearFrameId(op) {
+    if (op.kind === "create" && typeof op.object.frameId === "string" && op.object.frameId) {
+      op.object = { ...op.object, frameId: null };
+      return true;
+    }
+    if (op.kind === "update" && typeof op.patch.frameId === "string" && op.patch.frameId) {
+      op.patch = { ...op.patch, frameId: null };
+      return true;
+    }
+    return false;
+  }
+
   /** @param {PendingOp} op */
   function retry(op) {
     op.retries++;
@@ -951,6 +1094,8 @@ export async function createStore(options) {
     const inverse = [];
     /** @type {Action[]} */
     const inverseConnectors = [];
+    /** @type {PendingOp[]} */
+    const deletes = [];
     /** @type {Set<string>} */
     const touched = new Set();
     const now = timers.now();
@@ -983,7 +1128,8 @@ export async function createStore(options) {
           inverseConnectors.push({ kind: "create", object: view.objects[c] });
         }
         (obj.type === "connector" ? inverseConnectors : inverse).push({ kind: "create", object: obj });
-        enqueueBody({ kind: "delete", id: obj.id });
+        const op = enqueueBody({ kind: "delete", id: obj.id });
+        if (op) deletes.push(op);
         touch(obj.id);
       }
     }
@@ -991,8 +1137,10 @@ export async function createStore(options) {
     const pendingChanged = state.pending !== queue.length;
     state.pending = queue.length;
     if (touched.size || pendingChanged) emit({ kind: "objects", objects: [...touched] });
+    const entry = [...inverse, ...inverseConnectors];
+    for (const op of deletes) op.undoEntry = entry;
     pump();
-    return [...inverse, ...inverseConnectors];
+    return entry;
   }
 
   /** @param {Action[]} actions  a new change: recorded for undo, clears redo */
@@ -1079,6 +1227,11 @@ export async function createStore(options) {
       };
       state.peers.set(e.clientId, peer);
       changed.add(e.clientId);
+      unconfirmedPeers?.ids.delete(e.clientId);
+    }
+    if (unconfirmedPeers?.gen === generation) {
+      for (const id of unconfirmedPeers.ids) if (state.peers.delete(id)) changed.add(id);
+      unconfirmedPeers = null;
     }
     if (changed.size) emit({ kind: "presence", peers: [...changed] });
   }
@@ -1087,6 +1240,10 @@ export async function createStore(options) {
     const now = timers.now();
     /** @type {string[]} */
     const removed = [];
+    if (unconfirmedPeers?.deadline != null && now >= unconfirmedPeers.deadline) {
+      for (const id of unconfirmedPeers.ids) if (state.peers.delete(id)) removed.push(id);
+      unconfirmedPeers = null;
+    }
     for (const [id, peer] of state.peers) {
       if (now - peer.lastSeen > PRESENCE_STALE_MS) {
         state.peers.delete(id);
@@ -1117,7 +1274,7 @@ export async function createStore(options) {
     const gen = generation;
     const token = ++presenceToken;
     const payload = { ...clientInfo(), ...presence };
-    const timer = timers.setTimeout(() => settlePresence(token, gen, null, true), PRESENCE_TIMEOUT_MS);
+    const timer = timers.setTimeout(() => presenceTimedOut(token, gen), PRESENCE_TIMEOUT_MS);
     presenceInflight = { token, timer };
     Promise.resolve()
       .then(() => gadget.updatePresence(payload))
@@ -1125,6 +1282,24 @@ export async function createStore(options) {
         (/** @type {{known: boolean, revision: number}} */ res) => settlePresence(token, gen, res, false),
         () => settlePresence(token, gen, null, true),
       );
+  }
+
+  /**
+   * An updatePresence call has been outstanding for another PRESENCE_TIMEOUT_MS. A slow server
+   * is not a dead one: the call stays outstanding (so heartbeats keep skipping rather than queueing
+   * more calls behind it) until it settles or PRESENCE_FAILURES_TO_RESUBSCRIBE timeouts in a row,
+   * when it is abandoned and the store re-subscribes.
+   * @param {number} token
+   * @param {number} gen
+   */
+  function presenceTimedOut(token, gen) {
+    if (!presenceInflight || presenceInflight.token !== token || disposed) return;
+    if (gen === generation && state.connection === "live" && presenceFailuresInRow + 1 < PRESENCE_FAILURES_TO_RESUBSCRIBE) {
+      presenceFailuresInRow++;
+      presenceInflight.timer = timers.setTimeout(() => presenceTimedOut(token, gen), PRESENCE_TIMEOUT_MS);
+      return;
+    }
+    settlePresence(token, gen, null, true);
   }
 
   /**
@@ -1139,7 +1314,12 @@ export async function createStore(options) {
     presenceInflight = null;
     if (disposed) return;
     if (failed) {
-      if (gen === generation) resubscribe();
+      if (gen === generation && state.connection === "live" && ++presenceFailuresInRow >= PRESENCE_FAILURES_TO_RESUBSCRIBE) {
+        presenceFailuresInRow = 0;
+        resubscribe();
+      } else if (gen === generation && !presenceTimer) {
+        presenceTimer = timers.setTimeout(sendPresence, PRESENCE_RETRY_MS);
+      }
     } else {
       onPresenceResult(gen, /** @type {any} */ (res));
     }
@@ -1159,6 +1339,7 @@ export async function createStore(options) {
       resubscribe();
       return;
     }
+    presenceFailuresInRow = 0;
     failures = 0;
     if (typeof res.revision === "number" && res.revision > lastRevision && !inflight) {
       gapTarget = Math.max(gapTarget, res.revision);

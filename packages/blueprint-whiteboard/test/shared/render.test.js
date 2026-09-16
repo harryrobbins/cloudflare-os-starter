@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boardToSvg, escapeXml, objectNode, serialize } from "../../src/shared/render.js";
+import { EXPORT_TEXT_BUDGET, boardToSvg, escapeXml, objectNode, serialize } from "../../src/shared/render.js";
 import { normalizeNewObject } from "../../src/shared/protocol.js";
 
 const oid = (n) => "o_" + n.toString(16).padStart(12, "0");
@@ -54,6 +54,21 @@ describe("render", () => {
     expect(serialize(node)).not.toBe(serialize(objectNode(conn, (id) => (id === oid(2) ? ellipse : sticky))));
     expect(serialize(node)).toContain("M200 100L1070");
     expect(objectNode(conn, () => undefined)).toBeNull();
+  });
+
+  it("lays out at most EXPORT_TEXT_BUDGET characters of text, cutting with an ellipsis", () => {
+    const text = "word ".repeat(800); // 4000 chars
+    const n = Math.ceil(EXPORT_TEXT_BUDGET / text.length) + 3;
+    const list = Array.from({ length: n }, (_, i) => make({ id: oid(i + 1), type: "text", x: 0, y: i * 50, w: 100_000, h: 40, text, z: "a" + String(i % 10) }));
+    list[Math.floor(EXPORT_TEXT_BUDGET / text.length)] = { ...list[Math.floor(EXPORT_TEXT_BUDGET / text.length)], text: "x".repeat(10) + text };
+    const t = performance.now();
+    const svg = boardToSvg(board(list));
+    expect(performance.now() - t).toBeLessThan(1000);
+    for (let i = 1; i <= n; i++) expect(svg).toContain(`data-id="${oid(i)}"`);
+    expect((svg.match(/<text /g) ?? []).length).toBeLessThanOrEqual(Math.ceil(EXPORT_TEXT_BUDGET / text.length) + 1);
+    expect(svg).toContain("…");
+    // A small board is unaffected.
+    expect(boardToSvg(board([sticky]))).not.toContain("…");
   });
 
   it("renders an empty board", () => {

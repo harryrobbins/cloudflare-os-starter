@@ -10,7 +10,7 @@ export const CANVAS_CSS = `
   background: var(--wb-canvas-bg, #f7f7f4);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
-.wb-canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--wb-accent, #2563eb); }
+.wb-canvas:focus-visible { outline: 2px solid var(--wb-accent, #2563eb); outline-offset: -2px; box-shadow: none; }
 .wb-canvas > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: hidden; }
 .wb-canvas > svg.wb-presence-svg { pointer-events: none; }
 .wb-canvas .wb-bg-dot { fill: var(--wb-grid, #c4c8cf); }

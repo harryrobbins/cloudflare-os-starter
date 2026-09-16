@@ -221,9 +221,10 @@ export class FakeServer {
       (/^[0-9a-f]{32}$/.test(info.session ?? "") ? info.session : (++this.sessionCounter).toString(16).padStart(32, "0"));
     /** @type {Subscriber} */
     const sub = { callback, state: cleanPresence(info, info.clientId, null), session };
-    for (const [id, other] of this.subscribers) {
-      if (id !== info.clientId) this.deliver(sub, "presence", { type: "join", ...other.state, at: Date.now() });
-    }
+    // Like the hub, the newcomer's first presence delivery carries a join for everyone present.
+    const joins = [...this.subscribers].filter(([id]) => id !== info.clientId)
+      .map(([, other]) => ({ type: "join", ...other.state, at: Date.now() }));
+    if (joins.length) this.deliver(sub, "presence", joins);
     this.subscribers.set(info.clientId, sub);
     this.broadcast("presence", { type: "join", ...sub.state, at: Date.now() });
     return { ...this.board(), session };
@@ -338,7 +339,10 @@ export class FakeServer {
           return error(i, "invalid_ref");
         }
         if (norm.type === "pen" && norm.points.length < 4) return error(i, "invalid_op");
-        if (norm.frameId && this.objects[norm.frameId]?.type !== "frame") norm.frameId = null;
+        // Like the core: a frameId naming no object is cleared (the frame was deleted meanwhile);
+        // one naming an object that is not a frame is refused.
+        if (norm.frameId && this.objects[norm.frameId] && this.objects[norm.frameId].type !== "frame") return error(i, "invalid_ref");
+        if (norm.frameId && !this.objects[norm.frameId]) norm.frameId = null;
         if (!norm.z) norm.z = this.topZ();
         remember(norm.id);
         const obj = { ...norm, version: 1, createdAt: now, updatedAt: now, createdBy: req.by ?? "" };
@@ -357,7 +361,8 @@ export class FakeServer {
         if (!baseOk(op.id, op.baseVersion)) return conflict(op.id);
         const patch = /** @type {any} */ (cleanObjectPatch(op.patch, obj.type));
         if ((patch.from && !endpoint(patch.from)) || (patch.to && !endpoint(patch.to))) return error(i, "invalid_ref");
-        if (patch.frameId && this.objects[patch.frameId]?.type !== "frame") patch.frameId = null;
+        if (patch.frameId && this.objects[patch.frameId] && this.objects[patch.frameId].type !== "frame") return error(i, "invalid_ref");
+        if (patch.frameId && !this.objects[patch.frameId]) patch.frameId = null;
         const next = { ...obj, ...patch, style: patch.style ? { ...obj.style, ...patch.style } : obj.style };
         if (JSON.stringify(next) === JSON.stringify(obj)) return;
         /** @type {any} */

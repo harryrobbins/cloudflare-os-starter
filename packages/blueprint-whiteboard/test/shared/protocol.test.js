@@ -1,6 +1,7 @@
+import { serialize } from "node:v8";
 import { describe, expect, it } from "vitest";
 import {
-  LIMITS, TYPE_DEFAULTS, cleanColor, cleanNumber, cleanObjectPatch, cleanPoints, cleanPresence, cleanRotation,
+  LIMITS, isAcceptableOrderKey, isOrderKey, TYPE_DEFAULTS, cleanColor, cleanNumber, cleanObjectPatch, cleanPoints, cleanPresence, cleanRotation,
   cleanStylePatch, compareObjects, effectiveFrameId, isId, isSession, newId, newSession, normalizeNewObject,
   storedBytes,
 } from "../../src/shared/protocol.js";
@@ -147,8 +148,50 @@ describe("presence", () => {
 
 describe("storedBytes", () => {
   it("counts two bytes per unit beyond Latin-1", () => {
-    expect(storedBytes({ a: "abc" })).toBe(JSON.stringify({ a: "abc" }).length);
-    const wide = { a: "日本" };
-    expect(storedBytes(wide)).toBeGreaterThanOrEqual(JSON.stringify(wide).length * 2);
+    expect(storedBytes({ a: "abc" })).toBeGreaterThanOrEqual(JSON.stringify({ a: "abc" }).length);
+    const wide = { a: "日本語テキスト".repeat(100) };
+    expect(storedBytes(wide)).toBeGreaterThanOrEqual(wide.a.length * 2);
+  });
+
+  it("is an upper bound of both the UTF-8 JSON and the V8 serialisation", () => {
+    let seed = 11;
+    const rand = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+    const pick = (arr) => arr[Math.floor(rand() * arr.length)];
+    const leaves = [0, 1, -1, 0.5, 0.1429, 1e6, 2 ** 31, -999999.99, 1700000000000.5, 1.2345678901234567e-300,
+      true, false, null, "", "a", "é", "日本", "\u{1F600}", 'q"\\n', "x".repeat(300), "é".repeat(200), "日".repeat(300)];
+    const gen = (depth) => {
+      const r = rand();
+      if (depth > 3 || r < 0.5) return pick(leaves);
+      if (r < 0.75) {
+        const holey = new Array(Math.floor(rand() * (depth ? 8 : 400)));
+        for (let i = 0; i < holey.length; i++) holey[i] = gen(depth + 1);
+        return holey;
+      }
+      const o = {};
+      for (let i = 0; i < rand() * 12; i++) o[pick(["k", "é", "日本", "points"]) + i] = gen(depth + 1);
+      return o;
+    };
+    for (let i = 0; i < 1500; i++) {
+      const v = gen(0);
+      const bytes = storedBytes(v);
+      expect(bytes).toBeGreaterThanOrEqual(serialize(v).length);
+      expect(bytes).toBeGreaterThanOrEqual(new TextEncoder().encode(JSON.stringify(v)).length);
+    }
+    // Doubles in a holey array cost V8 about 13 bytes each, against 4 to 7 in JSON.
+    const points = new Array(4000);
+    for (let i = 0; i < points.length; i++) points[i] = 0.1429;
+    expect(storedBytes(points)).toBeGreaterThanOrEqual(serialize(points).length);
+  });
+});
+
+describe("isAcceptableOrderKey", () => {
+  it("accepts ordinary keys up to orderKeyAccept chars with an integer head from B to y", () => {
+    for (const k of ["a0", "a1", "Zz", "b0V", "a0" + "V".repeat(LIMITS.orderKeyAccept - 2), "y" + "z".repeat(25), "B" + "0".repeat(24) + "1"]) {
+      expect(isOrderKey(k)).toBe(true);
+      expect(isAcceptableOrderKey(k)).toBe(true);
+    }
+    for (const k of ["a0" + "V".repeat(LIMITS.orderKeyAccept - 1), "z".repeat(27), "z" + "0".repeat(26), "A1" + "0".repeat(25), "A0" + "0".repeat(25) + "1", "", "not valid", 5]) {
+      expect(isAcceptableOrderKey(k)).toBe(false);
+    }
   });
 });

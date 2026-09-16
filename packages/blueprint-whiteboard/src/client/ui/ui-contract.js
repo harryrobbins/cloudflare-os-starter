@@ -34,7 +34,9 @@
  *   The "tool" event also carries {tool, locked}.
  *
  * The canvas element also dispatches a bubbling CustomEvent "wb-contextmenu" with detail
- * {clientX, clientY, ids} on right-click, the context menu key and touch long-press.
+ * {clientX, clientY, ids, pointerType: "mouse"|"touch"|"keyboard", rect?} on right-click, the
+ * context menu key / Shift+F10 (for the current selection; `rect` is its client rect) and touch
+ * long-press.
  * Marquee selection picks objects it touches, but a frame only when fully enclosed.
  */
 

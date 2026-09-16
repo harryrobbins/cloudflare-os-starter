@@ -113,7 +113,11 @@ if (exportFormatId !== undefined) {
   // Ask for a name while the whiteboard connects behind the dialog, unless a reload carried it over.
   const namePromise = carried.name
     ? Promise.resolve({ name: carried.name, color: viewer.color })
-    : nameDialog({ name: "", color: viewer.color });
+    : nameDialog({
+      name: "", color: viewer.color,
+      // The canvas is mounted while the dialog is open; joining lands on it rather than <body>.
+      returnFocus: () => /** @type {HTMLElement|null} */ (document.querySelector(".wb-canvas")),
+    });
   /** @type {import("./store-contract.js").Store|undefined} */
   let store;
   const onUnrecoverable = () => {
@@ -139,7 +143,11 @@ if (exportFormatId !== undefined) {
     root.replaceChildren(message);
     throw err;
   }
-  mountApp(root, store);
+  const { app } = mountApp(root, store);
+  // Joined before the board had mounted: the dialog could not hand focus to the canvas yet.
+  if (!document.querySelector(".name-dialog") && (!document.activeElement || document.activeElement === document.body)) {
+    app.canvas.element.focus({ preventScroll: true });
+  }
   const liveStore = store;
   liveStore.subscribe((state, change) => {
     if (change.kind === "connection" && state.connection === "live") {

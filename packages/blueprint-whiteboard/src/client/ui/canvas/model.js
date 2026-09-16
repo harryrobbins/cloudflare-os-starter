@@ -12,7 +12,8 @@ import {
   center, rotatedBounds, pointInObjectBox, distanceToPolyline, penWorldPoints, connectorRoute,
   pointsBounds, rectsIntersect, rectContains, rectContainsPoint, textLayout, textWidth, textObjectHeight,
 } from "../../../shared/geometry.js";
-import { effectiveFrameId, compareObjects, TYPE_DEFAULTS, LIMITS } from "../../../shared/protocol.js";
+import { effectiveFrameId, compareObjects, TYPE_DEFAULTS, LIMITS, ROTATABLE } from "../../../shared/protocol.js";
+import { sizedBox, rotatedBy } from "./handles.js";
 
 /** @typedef {import("../../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("../../../shared/protocol.js").ObjectType} ObjectType */
@@ -213,6 +214,47 @@ export function moveUpdates(objects, ids, dx, dy) {
     const patch = { x: g.x, y: g.y };
     withFrameMembership(objects, o, g, patch, geom);
     out.push({ id, patch });
+  }
+  return out;
+}
+
+/**
+ * One updateObjects batch resizing each resizable object of `ids` (connectors are skipped) to the
+ * size `sizeOf` returns for it, keeping its top-left corner fixed, with frame membership. Frames
+ * keep their members where they are, as with the resize handles.
+ * @param {Record<string, WhiteboardObject>} objects @param {Iterable<string>} ids
+ * @param {(o: WhiteboardObject) => {w: number, h: number}} sizeOf
+ * @returns {Array<{id: string, patch: ObjectPatch}>}
+ */
+export function resizeUpdates(objects, ids, sizeOf) {
+  const out = [];
+  for (const id of ids) {
+    const o = objects[id];
+    if (!o || o.type === "connector") continue;
+    const want = sizeOf(o);
+    const b = sizedBox({ x: o.x, y: o.y, w: o.w, h: o.h, rot: o.rot || 0 }, want.w, want.h);
+    /** @type {ObjectPatch} */
+    const patch = {};
+    for (const k of /** @type {const} */ (["x", "y", "w", "h"])) if (b[k] !== o[k]) patch[k] = b[k];
+    if (!Object.keys(patch).length) continue;
+    withFrameMembership(objects, o, b, patch);
+    out.push({ id, patch });
+  }
+  return out;
+}
+
+/**
+ * One updateObjects batch rotating each rotatable object of `ids` by `deg` degrees.
+ * @param {Record<string, WhiteboardObject>} objects @param {Iterable<string>} ids @param {number} deg
+ * @returns {Array<{id: string, patch: ObjectPatch}>}
+ */
+export function rotateUpdates(objects, ids, deg) {
+  const out = [];
+  for (const id of ids) {
+    const o = objects[id];
+    if (!o || !/** @type {readonly string[]} */ (ROTATABLE).includes(o.type)) continue;
+    const rot = rotatedBy(o.rot || 0, deg);
+    if (rot !== (o.rot || 0)) out.push({ id, patch: { rot } });
   }
   return out;
 }

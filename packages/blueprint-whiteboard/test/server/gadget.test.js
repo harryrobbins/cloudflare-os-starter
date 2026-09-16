@@ -114,7 +114,7 @@ describe("storage", () => {
     const req = { requestId: "client:1", objectOps: [{ op: "create", object: { id, type: "sticky", text: "Once" } }] };
     expect((await stub.applyOperation(req)).status).toBe("applied");
     const stored = await runInDurableObject(stub, async (_i, state) => state.storage.get("requests"));
-    expect(stored).toEqual([{ requestId: "client:1", revision: 1, status: "applied", conflicts: [], errors: [] }]);
+    expect(stored).toEqual([{ requestId: "client:1", senderId: "", revision: 1, status: "applied", conflicts: [], errors: [] }]);
     await stub.deleteObjects({ ids: [id] });
     await abortAllDurableObjects();
     const replay = await again().applyOperation(req);

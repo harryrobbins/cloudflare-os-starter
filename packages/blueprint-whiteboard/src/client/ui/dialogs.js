@@ -9,7 +9,8 @@ import { h, icon, trapTab, PALETTE, avatar, colorName, inertOthers } from "./dom
  * @template T
  * @param {(close: (value: T) => void) => HTMLElement} build
  * @param {T} escapeValue
- * @param {HTMLElement|null} [returnFocus]  where focus goes on close (default: what had it before)
+ * @param {HTMLElement|null|(() => HTMLElement|null)} [returnFocus]  where focus goes on close
+ *   (default: what had it before); a function is called at close time, for elements created later
  * @returns {Promise<T>}
  */
 export function modal(build, escapeValue, returnFocus = null) {
@@ -23,7 +24,8 @@ export function modal(build, escapeValue, returnFocus = null) {
       closed = true;
       scrim.remove();
       restoreInert();
-      const target = returnFocus?.isConnected ? returnFocus : previous;
+      const wanted = typeof returnFocus === "function" ? returnFocus() : returnFocus;
+      const target = wanted?.isConnected ? wanted : previous;
       if (target && target.isConnected) target.focus();
       resolve(value);
     };
@@ -45,10 +47,11 @@ export function modal(build, escapeValue, returnFocus = null) {
 
 /**
  * Asks for a display name and colour.
- * @param {{name: string, color: string, title?: string, skippable?: boolean}} opts
+ * @param {{name: string, color: string, title?: string, skippable?: boolean,
+ *   returnFocus?: HTMLElement|null|(() => HTMLElement|null)}} opts
  * @returns {Promise<{name: string, color: string}|null>}  null when skipped/cancelled
  */
-export function nameDialog({ name, color, title = "Who's here?", skippable = true }) {
+export function nameDialog({ name, color, title = "Who's here?", skippable = true, returnFocus = null }) {
   return modal((close) => {
     let chosen = color;
     const input = /** @type {HTMLInputElement} */ (h("input", {
@@ -59,17 +62,35 @@ export function nameDialog({ name, color, title = "Who's here?", skippable = tru
     const refreshPreview = () => {
       preview.replaceChildren(avatar(input.value || "Guest", chosen));
     };
+    // A radio group: one Tab stop (the checked colour), arrow keys move and choose.
+    const choose = (/** @type {number} */ i, /** @type {boolean} */ focus) => {
+      chosen = PALETTE[i];
+      [...swatches.children].forEach((sw, j) => {
+        sw.setAttribute("aria-checked", String(j === i));
+        sw.setAttribute("tabindex", j === i ? "0" : "-1");
+      });
+      if (focus) /** @type {HTMLElement} */ (swatches.children[i]).focus();
+      refreshPreview();
+    };
     const swatches = h("div", { class: "swatches", role: "radiogroup", "aria-label": "Colour" },
-      PALETTE.map((c) => h("button", {
+      PALETTE.map((c, i) => h("button", {
         type: "button", class: "swatch", role: "radio", "aria-checked": String(c === chosen),
+        tabindex: c === chosen || (i === 0 && !PALETTE.includes(chosen)) ? "0" : "-1",
         "aria-label": colorName(c), style: { background: c },
-        onclick: (/** @type {Event} */ e) => {
-          chosen = c;
-          for (const s of swatches.children) s.setAttribute("aria-checked", String(s === e.currentTarget));
-          refreshPreview();
-        },
+        onclick: () => choose(i, false),
       })),
     );
+    swatches.addEventListener("keydown", (e) => {
+      const i = [...swatches.children].indexOf(/** @type {any} */ (document.activeElement));
+      if (i < 0) return;
+      const n = PALETTE.length;
+      const next = e.key === "ArrowRight" || e.key === "ArrowDown" ? (i + 1) % n
+        : e.key === "ArrowLeft" || e.key === "ArrowUp" ? (i - 1 + n) % n
+          : e.key === "Home" ? 0 : e.key === "End" ? n - 1 : null;
+      if (next === null) return;
+      e.preventDefault();
+      choose(next, true);
+    });
     input.addEventListener("input", refreshPreview);
     refreshPreview();
     // No <form>: the platform iframe's sandbox lacks allow-forms, so native submission is blocked
@@ -95,15 +116,51 @@ export function nameDialog({ name, color, title = "Who's here?", skippable = tru
     );
     requestAnimationFrame(() => input.select());
     return form;
-  }, null);
+  }, null, returnFocus);
 }
 
 /** @type {HTMLElement|null} */
 let openMenuEl = null;
 
 /**
+ * @typedef {{left: number, top: number, right: number, bottom: number}} ClientRect
+ */
+
+/** Distance (px) a touch-opened menu keeps from the finger. */
+export const TOUCH_CLEARANCE = 48;
+
+/**
+ * Where to put a menu of size (w, h) so it does not cover `avoid` (e.g. the finger, or the
+ * selection it acts on): below it, else above, else to the right, else to the left, else clamped.
+ * `prefer: "above"` tries above first (a finger hides what is below it). Pure.
+ * @param {{w: number, h: number}} menu @param {ClientRect} avoid @param {{w: number, h: number}} view
+ * @param {{prefer?: "below"|"above", margin?: number, gap?: number}} [opts]
+ * @returns {{left: number, top: number}}
+ */
+export function placeMenu(menu, avoid, view, { prefer = "below", margin = 8, gap = 4 } = {}) {
+  const clampX = (/** @type {number} */ x) => Math.max(margin, Math.min(x, view.w - menu.w - margin));
+  const clampY = (/** @type {number} */ y) => Math.max(margin, Math.min(y, view.h - menu.h - margin));
+  const below = avoid.bottom + gap, above = avoid.top - gap - menu.h;
+  const fitsBelow = below + menu.h <= view.h - margin, fitsAbove = above >= margin;
+  const vertical = prefer === "above"
+    ? (fitsAbove ? above : fitsBelow ? below : null)
+    : (fitsBelow ? below : fitsAbove ? above : null);
+  if (vertical !== null) return { left: clampX(avoid.left), top: vertical };
+  const right = avoid.right + gap, left = avoid.left - gap - menu.w;
+  if (right + menu.w <= view.w - margin) return { left: right, top: clampY(avoid.top) };
+  if (left >= margin) return { left, top: clampY(avoid.top) };
+  return { left: clampX(avoid.left), top: clampY(avoid.bottom) };
+}
+
+/**
  * A small popup menu anchored to an element or a point (client coordinates).
- * @param {HTMLElement|{x: number, y: number, returnFocus?: HTMLElement|null}} anchor
+ *
+ * Items activate only by keyboard or by a press that STARTS after the menu opened: a touch
+ * long-press opens the menu while the finger is still down, and lifting that finger must not pick
+ * whatever item ended up under it.
+ * @param {HTMLElement|{x: number, y: number, returnFocus?: HTMLElement|null, avoid?: ClientRect|null, pointerType?: string}} anchor
+ *   `avoid`: a client rect the menu is placed beside (default: the point itself). A touch
+ *   anchor keeps TOUCH_CLEARANCE from the point and prefers to sit above it.
  * @param {{label: string, onSelect: () => void, danger?: boolean, className?: string}[]} items
  * @param {{label?: string}} [opts]
  */
@@ -113,12 +170,19 @@ export function openMenu(anchor, items, { label = "Actions" } = {}) {
   const previous = /** @type {HTMLElement|null} */ (document.activeElement);
   const returnTo = isEl ? anchor : (anchor.returnFocus ?? previous);
   const refocus = () => { if (returnTo && returnTo.isConnected) returnTo.focus({ preventScroll: true }); };
+  let armed = false;
   const menu = h("div", { class: "menu", role: "menu", "aria-label": label },
     items.map((item) => h("button", {
       type: "button", role: "menuitem", class: "btn" + (item.danger ? " danger-text" : "") + (item.className ? " " + item.className : ""),
-      onclick: () => { closeMenu(); refocus(); item.onSelect(); },
+      onclick: (/** @type {MouseEvent} */ e) => {
+        // detail 0: keyboard (Enter/Space) or assistive technology activation.
+        if (!armed && e.detail !== 0) return;
+        closeMenu(); refocus(); item.onSelect();
+      },
     }, item.label)),
   );
+  // Arm on a press inside the menu (the capture listener below sees it before the item's click).
+  menu.addEventListener("pointerdown", () => { armed = true; }, true);
   document.body.appendChild(menu);
   const width = menu.offsetWidth;
   const height = menu.offsetHeight;
@@ -127,8 +191,13 @@ export function openMenu(anchor, items, { label = "Actions" } = {}) {
     menu.style.top = Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - height - 8)) + "px";
     menu.style.left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)) + "px";
   } else {
-    menu.style.top = Math.max(8, Math.min(anchor.y, window.innerHeight - height - 8)) + "px";
-    menu.style.left = Math.max(8, Math.min(anchor.x, window.innerWidth - width - 8)) + "px";
+    const touch = anchor.pointerType === "touch";
+    const c = touch ? TOUCH_CLEARANCE : 0;
+    const avoid = anchor.avoid ?? { left: anchor.x - c, top: anchor.y - c, right: anchor.x + c, bottom: anchor.y + c };
+    const at = placeMenu({ w: width, h: height }, avoid, { w: window.innerWidth, h: window.innerHeight },
+      { prefer: touch ? "above" : "below" });
+    menu.style.top = at.top + "px";
+    menu.style.left = at.left + "px";
   }
   openMenuEl = menu;
   const onDown = (/** @type {Event} */ e) => {

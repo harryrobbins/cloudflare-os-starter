@@ -2,7 +2,7 @@
 // The Activity panel: recent changes from the server history, newest first, with Undo where the
 // server recorded an inverse.
 
-import { h, icon, formatTime, trapTab } from "./dom.js";
+import { h, icon, formatTime } from "./dom.js";
 import { showToast } from "./dialogs.js";
 
 /** @typedef {import("../store-contract.js").ClientState} ClientState */
@@ -24,12 +24,11 @@ export function createActivity(app) {
     if (drawer) return;
     const closeBtn = h("button", { type: "button", class: "btn icon-only activity-close", "aria-label": "Close activity", onclick: () => close() }, icon("close", 18));
     list = h("ol", { class: "panel-list activity-list" });
-    drawer = h("aside", { class: "wb-panel activity", role: "dialog", "aria-label": "Activity", tabindex: "-1" },
+    drawer = h("aside", { class: "wb-panel activity", "aria-label": "Activity", tabindex: "-1" },
       h("div", { class: "panel-head" }, h("h2", null, "Activity"), closeBtn),
       list);
     drawer.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); return; }
-      trapTab(/** @type {HTMLElement} */ (drawer), e);
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
     });
     document.body.appendChild(drawer);
     app.activityOpen = true;

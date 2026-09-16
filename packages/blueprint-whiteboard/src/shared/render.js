@@ -190,7 +190,15 @@ export function serialize(node) {
 }
 
 /**
- * The whole board (or one frame and its members) as a standalone SVG document.
+ * Characters of text (object text, frame names, connector labels) one SVG export lays out in
+ * total. Text beyond it is cut and ends with "…", so a board crafted to be expensive to wrap
+ * cannot hold the server's mutation queue for long. Far above any board people write by hand.
+ */
+export const EXPORT_TEXT_BUDGET = 2_000_000;
+
+/**
+ * The whole board (or one frame and its members) as a standalone SVG document. At most
+ * EXPORT_TEXT_BUDGET characters of text are laid out, in stacking order.
  * @param {BoardSnapshot} board
  * @param {{padding?: number, frameId?: string|null}} [options]
  * @returns {string}
@@ -218,8 +226,17 @@ export function boardToSvg(board, { padding = 40, frameId = null } = {}) {
     { tag: "title", attrs: {}, text: board.title || DEFAULT_TITLE },
     h("rect", { x: box.x, y: box.y, width: box.w, height: box.h, fill: "#ffffff" }),
   ];
+  let budget = EXPORT_TEXT_BUDGET;
   for (const o of sortedObjects(objects)) {
-    const node = objectNode(o, resolve);
+    const text = typeof o.text === "string" ? o.text : "";
+    let shown = o;
+    if (text.length > budget) {
+      // Never cut between the halves of a surrogate pair.
+      const end = budget > 0 && /[\ud800-\udbff]/.test(text[budget - 1]) ? budget - 1 : budget;
+      shown = { ...o, text: end > 0 ? text.slice(0, end) + "…" : "" };
+    }
+    budget = Math.max(0, budget - text.length);
+    const node = objectNode(shown, resolve);
     if (node) children.push(node);
   }
   const root = h("svg", {

@@ -110,10 +110,11 @@ describe("create", () => {
       createOp({ type: "connector", from: frame.id, to: b.id }),
     ] });
     expect(r.errors.map((e) => [e.index, e.code])).toEqual([
-      [0, "invalid_ref"], [1, "invalid_ref"], [2, "invalid_ref"], [4, "invalid_ref"], [5, "invalid_ref"], [6, "invalid_ref"],
+      [0, "invalid_ref"], [1, "invalid_ref"], [2, "invalid_ref"], [4, "invalid_ref"], [5, "invalid_ref"],
     ]);
-    expect(r.upserts.map((o) => o.type)).toEqual(["connector", "sticky", "connector"]);
-    expect(r.upserts[1].frameId).toBe(frame.id);
+    expect(r.errors[4].message).toMatch(/not a frame/);
+    // A frameId naming nothing (a frame deleted meanwhile) is cleared; the create still applies.
+    expect(r.upserts.map((o) => [o.type, o.frameId])).toEqual([["connector", null], ["sticky", null], ["sticky", frame.id], ["connector", null]]);
   });
 
   it("an op sees objects created earlier in the same request", async () => {
@@ -239,11 +240,36 @@ describe("update", () => {
     expect(r.upserts[0]).toMatchObject({ frameId: null, x: 3 });
     r = await apply(board, { objectOps: [updateOp(id, 2, { frameId: frame.id })] });
     expect(r.upserts[0].frameId).toBe(frame.id);
+    // A frameId naming nothing is cleared and the rest of the update applies.
+    r = await apply(board, { objectOps: [updateOp(id, 3, { frameId: oid(), x: 7 })] });
+    expect(r.errors).toEqual([]);
+    expect(r.upserts[0]).toMatchObject({ frameId: null, x: 7, version: 4 });
+    r = await apply(board, { objectOps: [updateOp(id, 4, { frameId: frame.id })] });
+    expect(r.upserts[0]).toMatchObject({ frameId: frame.id, version: 5 });
     // Deleting the frame leaves the member dangling until its next write.
     await apply(board, { objectOps: [deleteOp(frame.id, 1)] });
     expect((await board.getBoard()).objects[id].frameId).toBe(frame.id);
-    r = await apply(board, { objectOps: [updateOp(id, 3, { text: "moved" })] });
+    r = await apply(board, { objectOps: [updateOp(id, 5, { text: "moved" })] });
     expect(r.upserts[0]).toMatchObject({ frameId: null, text: "moved" });
+  });
+
+  it("a move or create into a frame deleted concurrently keeps everything but the frameId", async () => {
+    const { board } = setup();
+    const frame = await create(board, { type: "frame", x: 0, y: 0, w: 1000, h: 1000 });
+    const x = await create(board, { x: 2000, y: 2000 });
+    await apply(board, { by: "A", objectOps: [deleteOp(frame.id, 1)] });
+    // B has not seen the delete: drags X into the frame and creates a sticky inside it.
+    const created = createOp({ x: 100, y: 100, text: "important", frameId: frame.id });
+    const r = await apply(board, { by: "B", objectOps: [updateOp(x.id, 1, { x: 100, y: 100, frameId: frame.id }), created] });
+    expect(r).toMatchObject({ status: "applied", errors: [] });
+    const snap = await board.getBoard();
+    expect(snap.objects[x.id]).toMatchObject({ x: 100, y: 100, frameId: null });
+    expect(snap.objects[created.object.id]).toMatchObject({ text: "important", frameId: null });
+    // Deleted earlier in the same request counts as gone too.
+    const f2 = await create(board, { type: "frame" });
+    const r2 = await apply(board, { objectOps: [deleteOp(f2.id, 1), createOp({ frameId: f2.id })] });
+    expect(r2.errors).toEqual([]);
+    expect(r2.upserts[0].frameId).toBeNull();
   });
 
   it("connector endpoints can change but must stay valid", async () => {
@@ -386,8 +412,8 @@ describe("history and undo", () => {
     expect(snap.objects[conn.id]).toMatchObject({ from: a.id, to: b.id, text: "x", version: 2 });
     // A client holding the pre-delete version conflicts rather than overwriting.
     expect((await apply(board, { objectOps: [updateOp(a.id, 1, { x: 1 })] })).status).toBe("conflict");
-    // Undo of the undo deletes them again.
-    const redo = await board.undo({ by: "Ann" });
+    // Undo of the undo (by its history id) deletes them again.
+    const redo = await board.undo({ by: "Ann", historyId: u.result.history.id });
     expect(redo.result.deletes.sort()).toEqual([a.id, conn.id].sort());
   });
 
@@ -449,7 +475,7 @@ describe("idempotent requests", () => {
     const op = createOp({});
     const first = await apply(board, { requestId: "c:1", objectOps: [op] });
     expect(first.status).toBe("applied");
-    expect(repo.requests).toEqual([{ requestId: "c:1", revision: 1, status: "applied", conflicts: [], errors: [] }]);
+    expect(repo.requests).toEqual([{ requestId: "c:1", senderId: "", revision: 1, status: "applied", conflicts: [], errors: [] }]);
     const commits = repo.commits;
     const again = await apply(board, { requestId: "c:1", objectOps: [op] });
     expect(again).toMatchObject({ status: "applied", revision: 1, duplicate: true, upserts: [], deletes: [], history: null });

@@ -3,7 +3,9 @@
 // src/server/index.js wires them. Every call and delivery is structuredClone'd and delayed by a
 // random latency on per-client FIFO channels (results and events share the down channel, as they
 // share one connection). `restart()` models a facet restart: a new whiteboard and hub over the
-// same storage; calls in flight and events for the old instance are lost. Requires fake timers.
+// same storage; calls in flight and events for the old instance are lost, and the old instance's
+// storage is fenced (as a Durable Object facet's is), so work it still has in progress cannot
+// commit after the new instance has read the state. Requires fake timers.
 import { vi } from "vitest";
 import { createWhiteboard } from "../../src/core/whiteboard.js";
 import { Hub } from "../../src/core/hub.js";
@@ -45,7 +47,20 @@ export class Net {
     this.epoch++;
     const hub = new Hub({ coalesceMs: this.coalesceMs });
     this.hub = hub;
-    this.board = createWhiteboard(this.repo, { onEvent: (e) => { hub.broadcast(e); } });
+    const epoch = this.epoch;
+    const net = this;
+    const repo = this.repo;
+    // Fenced storage: once replaced, an instance can no longer read or write.
+    const fenced = new Proxy(repo, {
+      get(target, key) {
+        const value = Reflect.get(target, key);
+        if (typeof value !== "function") return value;
+        return (/** @type {any[]} */ ...args) => (net.epoch !== epoch
+          ? Promise.reject(new Error("instance replaced"))
+          : value.apply(target, args));
+      },
+    });
+    this.board = createWhiteboard(fenced, { onEvent: (e) => { hub.broadcast(e); } });
   }
 
   /** A facet restart: new whiteboard over the same storage, new hub, nothing disposed. */

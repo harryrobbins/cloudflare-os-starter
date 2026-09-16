@@ -56,6 +56,89 @@ export function handlePositions(o, cam) {
   return out;
 }
 
+/** Below this many handle hit radii (screen size of the smaller side), only corner handles show. */
+export const SMALL_OBJECT_RADII = 3;
+
+/**
+ * Which handles a selected object gets at this zoom, so that handles never cover a small object:
+ * "all" normally; "corners" (plus rotate) when its smaller side on screen is under
+ * SMALL_OBJECT_RADII hit radii; "none" when both sides are under one radius. With "corners" and
+ * "none", a press inside the object's box moves it rather than grabbing a handle.
+ * @param {{w: number, h: number}} o @param {number} zoom @param {number} radius  hit radius, screen px
+ * @returns {"all"|"corners"|"none"}
+ */
+export function handleMode(o, zoom, radius) {
+  const sw = o.w * zoom, sh = o.h * zoom;
+  if (Math.max(sw, sh) < radius) return "none";
+  if (Math.min(sw, sh) < SMALL_OBJECT_RADII * radius) return "corners";
+  return "all";
+}
+
+/**
+ * handlePositions filtered by handleMode.
+ * @param {WhiteboardObject|Box & {type: string}} o @param {{x: number, y: number, zoom: number}} cam @param {number} radius
+ */
+export function visibleHandles(o, cam, radius) {
+  const mode = handleMode(o, cam.zoom, radius);
+  if (mode === "none") return [];
+  const all = handlePositions(o, cam);
+  return mode === "all" ? all : all.filter((hd) => hd.name.length === 2 || hd.name === "rotate");
+}
+
+/**
+ * The handle a press at screen point `s` grabs, or null: the nearest visible handle within
+ * `radius`, except that presses inside a small object's box (handleMode not "all") never grab.
+ * @param {WhiteboardObject|Box & {type: string}} o @param {{x: number, y: number, zoom: number}} cam
+ * @param {Point} s @param {number} radius
+ * @returns {Handle|null}
+ */
+export function handleForPress(o, cam, s, radius) {
+  const handles = visibleHandles(o, cam, radius);
+  if (!handles.length) return null;
+  if (handleMode(o, cam.zoom, radius) !== "all") {
+    const w = { x: s.x / cam.zoom + cam.x, y: s.y / cam.zoom + cam.y };
+    if (insideBox(o, w)) return null;
+  }
+  return handleAt(handles, s, radius);
+}
+
+/**
+ * Whether world point `p` lies inside the object's (rotated) box.
+ * @param {{x: number, y: number, w: number, h: number, rot?: number}} o @param {Point} p
+ */
+export function insideBox(o, p) {
+  const lp = rotatePoint(p, center(o), -(o.rot ?? 0));
+  return lp.x >= o.x && lp.x <= o.x + o.w && lp.y >= o.y && lp.y <= o.y + o.h;
+}
+
+/**
+ * The box of `o` resized to (w, h) with its top-left corner (in its own rotated frame) fixed:
+ * the keyboard and style-bar alternative to dragging the south-east handle. Sizes are clamped to
+ * LIMITS.
+ * @param {Box} o @param {number} w @param {number} h
+ * @returns {Box}
+ */
+export function sizedBox(o, w, h) {
+  const rot = o.rot ?? 0;
+  const nw = round2(Math.min(LIMITS.sizeMax, Math.max(LIMITS.sizeMin, Number.isFinite(w) ? w : o.w)));
+  const nh = round2(Math.min(LIMITS.sizeMax, Math.max(LIMITS.sizeMin, Number.isFinite(h) ? h : o.h)));
+  const c0 = center(o);
+  const topLeft = rotatePoint({ x: o.x, y: o.y }, c0, rot);
+  // The new centre is the top-left corner plus the rotated half-diagonal.
+  const half = rotatePoint({ x: nw / 2, y: nh / 2 }, { x: 0, y: 0 }, rot);
+  const c = { x: topLeft.x + half.x, y: topLeft.y + half.y };
+  return { x: round2(c.x - nw / 2), y: round2(c.y - nh / 2), w: nw, h: nh, rot };
+}
+
+/**
+ * `rot` turned by `deg` degrees, normalised to [0, 360).
+ * @param {number} rot @param {number} deg
+ */
+export function rotatedBy(rot, deg) {
+  const r = Math.round((((rot || 0) + deg) % 360 + 360) % 360 * 10) / 10;
+  return r >= 360 ? 0 : r;
+}
+
 /**
  * The handle within `radius` screen pixels of `s` (nearest wins; rotate loses ties).
  * @param {Array<{name: Handle, x: number, y: number}>} handles @param {Point} s @param {number} radius

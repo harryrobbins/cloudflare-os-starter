@@ -62,7 +62,7 @@ import { svgEl } from "./layers.js";
  * @property {(type: ObjectType) => Partial<Style>} toolStyle
  * @property {(id: string|undefined, type: ObjectType) => void} finishCreate
  * @property {(id: string) => void} editText
- * @property {(clientX: number, clientY: number, ids: string[]) => void} contextMenu
+ * @property {(clientX: number, clientY: number, ids: string[], pointerType?: string) => void} contextMenu
  * @property {(id: string, p: PointerSample) => boolean} registerClick  true on a double click
  * @property {() => void} announceSelection
  */
@@ -156,7 +156,7 @@ export function objectPressGesture(ctx, p, hit) {
       if (drag || dead) return;
       dead = true;
       if (!ctx.getSelection().includes(hit.id)) ctx.setSelection([hit.id], { announce: true });
-      ctx.contextMenu(p.clientX, p.clientY, ctx.getSelection());
+      ctx.contextMenu(p.clientX, p.clientY, ctx.getSelection(), p.pointerType);
     }, LONG_PRESS_MS);
   }
 

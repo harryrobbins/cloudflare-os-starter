@@ -1,13 +1,19 @@
 // @ts-check
 // The contextual style bar for the current selection: colours, stroke width, font size,
 // alignment, connector routing and arrows, stacking, duplicate, delete, edit text, and a Move
-// group (the keyboard alternative to dragging). Every change applies to all applicable selected
-// objects in ONE store call. Also the long-press / right-click context menu.
+// group and a Size group (the keyboard alternatives to dragging, resizing and rotating), and Connect
+// for two selected objects (the alternative to dragging a connector). Every change applies to all
+// applicable selected objects in ONE store call. Also the long-press / right-click / context-menu
+// key menu.
+//
+// Keyboard: the bar sits right after the canvas in DOM order, is one Tab stop with arrow keys
+// between its buttons (the width and height fields keep their own Tab stops), and Escape returns
+// focus to the canvas.
 
-import { COLORS, INK } from "../../shared/protocol.js";
-import { h, icon } from "./dom.js";
+import { COLORS, INK, ROTATABLE } from "../../shared/protocol.js";
+import { h, icon, rovingFocus } from "./dom.js";
 import { openMenu } from "./dialogs.js";
-import { expandMoveIds, moveUpdates } from "./canvas/model.js";
+import { expandMoveIds, moveUpdates, resizeUpdates, rotateUpdates } from "./canvas/index.js";
 
 /** @typedef {import("./app.js").App} App */
 /** @typedef {import("../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
@@ -22,8 +28,23 @@ const FONT_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame", "conne
 const ALIGN_TYPES = new Set(["sticky", "rect", "ellipse", "text"]);
 const TEXT_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame", "connector"]);
 const MOVABLE = (/** @type {WhiteboardObject} */ o) => o.type !== "connector";
+const RESIZABLE = MOVABLE;
+const ROTATABLE_TYPES = new Set(/** @type {readonly string[]} */ (ROTATABLE));
+const COLOR_PROPS = new Set(["fill", "stroke", "textColor"]);
 
 export const NUDGE = 10;
+/** Style bar size steppers change width or height by this much. */
+export const SIZE_STEP = 10;
+/** Style bar rotate buttons turn by this many degrees. */
+export const ROTATE_STEP = 15;
+
+/**
+ * Whether the selection can be connected: exactly two objects, neither a connector.
+ * @param {WhiteboardObject[]} objs
+ */
+export function canConnect(objs) {
+  return objs.length === 2 && objs.every((o) => o.type !== "connector") && objs[0].id !== objs[1].id;
+}
 const WIDTHS = [1, 2, 4, 8];
 const FONT_SIZES = [{ label: "S", size: 14 }, { label: "M", size: 20 }, { label: "L", size: 32 }, { label: "XL", size: 48 }];
 
@@ -45,6 +66,14 @@ export function typeLabel(type) {
 export function createStyleBar(app) {
   const { store, canvas } = app;
   const el = h("div", { class: "wb-float wb-stylebar", role: "toolbar", "aria-label": "Selection", hidden: true });
+  const roving = rovingFocus(el);
+  el.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || e.defaultPrevented) return;
+    e.preventDefault();
+    const t = /** @type {HTMLElement} */ (e.target);
+    if (t instanceof HTMLInputElement) t.value = t.defaultValue;
+    canvas.element.focus({ preventScroll: true });
+  });
   /** @type {HTMLElement|null} */
   let popover = null;
   let renderKey = "";
@@ -67,6 +96,11 @@ export function createStyleBar(app) {
 
   /** @param {Set<string>} types @param {Partial<Style>} style */
   function setStyle(types, style) {
+    const applicable = selected().filter((o) => types.has(o.type));
+    if (Object.keys(style).some((k) => COLOR_PROPS.has(k))) {
+      const colours = Object.fromEntries(Object.entries(style).filter(([k]) => COLOR_PROPS.has(k)));
+      app.rememberStyle?.(new Set(applicable.map((o) => o.type)), colours);
+    }
     update((o) => types.has(o.type), () => ({ style }));
   }
 
@@ -85,6 +119,47 @@ export function createStyleBar(app) {
     app.announce(`Moved ${n === 1 ? "1 object" : n + " objects"} ${dx < 0 ? "left" : dx > 0 ? "right" : dy < 0 ? "up" : "down"}`);
   }
 
+  /**
+   * Resizes every resizable selected object to `sizeOf(o)` (top-left corner fixed) in one call.
+   * @param {(o: WhiteboardObject) => {w: number, h: number}} sizeOf @param {"w"|"h"} axis
+   */
+  function resize(sizeOf, axis) {
+    const objects = store.getState().board.objects;
+    const updates = resizeUpdates(objects, canvas.getSelection(), sizeOf);
+    if (!updates.length) return;
+    store.updateObjects(updates);
+    const after = store.getState().board.objects;
+    const values = [...new Set(updates.map((u) => after[u.id]?.[axis]))];
+    const name = axis === "w" ? "Width" : "Height";
+    app.announce(values.length === 1 ? `${name} ${values[0]}` : `Resized ${updates.length} objects`);
+  }
+
+  /** @param {number} deg */
+  function rotate(deg) {
+    const updates = rotateUpdates(store.getState().board.objects, canvas.getSelection(), deg);
+    if (!updates.length) return;
+    store.updateObjects(updates);
+    const values = [...new Set(updates.map((u) => u.patch.rot))];
+    app.announce(values.length === 1 ? `Rotation ${values[0]} degrees` : `Rotated ${updates.length} objects`);
+  }
+
+  function connect() {
+    const objs = selected();
+    if (!canConnect(objs)) return;
+    const [from, to] = objs;
+    /** @type {any} */
+    const obj = { type: "connector", from: from.id, to: to.id };
+    const style = app.toolStyle?.("connector") ?? {};
+    if (Object.keys(style).length) obj.style = style;
+    const hadFocus = el.contains(document.activeElement);
+    const [id] = store.createObjects([obj]);
+    if (!id) return;
+    canvas.setSelection([id]);
+    const name = (/** @type {WhiteboardObject} */ o) => (o.text ? `${typeLabel(o.type).toLowerCase()} ${o.text.slice(0, 40)}` : typeLabel(o.type).toLowerCase());
+    app.announce(`Connected ${name(from)} to ${name(to)}`);
+    if (hadFocus) focusFirst();
+  }
+
   function duplicate() {
     const ids = canvas.getSelection();
     if (ids.length) canvas.duplicate(ids);
@@ -94,6 +169,9 @@ export function createStyleBar(app) {
     if (!ids.length) return;
     store.deleteObjects(ids);
     app.announce(ids.length === 1 ? "Deleted 1 object" : `Deleted ${ids.length} objects`);
+    canvas.setSelection([]);
+    // The bar (and the button that had focus) is gone: keep focus on the board, not <body>.
+    canvas.element.focus({ preventScroll: true });
   }
   /** @param {"front"|"back"} where */
   function reorder(where) {
@@ -197,14 +275,16 @@ export function createStyleBar(app) {
     const state = store.getState();
     if (!objs.length || state.board === undefined) {
       if (!el.hidden) {
+        const hadFocus = el.contains(document.activeElement);
         el.hidden = true;
+        if (hadFocus) canvas.element.focus({ preventScroll: true });
         closePopover();
         renderKey = "";
         app.onStyleBarToggle?.(false);
       }
       return;
     }
-    const key = objs.map((o) => `${o.id}:${o.version}:${JSON.stringify(o.style)}:${o.routing ?? ""}`).join("|");
+    const key = objs.map((o) => `${o.id}:${o.version}:${JSON.stringify(o.style)}:${o.routing ?? ""}:${o.w}:${o.h}:${o.rot}`).join("|");
     if (key === renderKey && !el.hidden) return;
     renderKey = key;
     const types = new Set(objs.map((o) => o.type));
@@ -213,7 +293,11 @@ export function createStyleBar(app) {
 
     // Keep focus on the same control across the rebuild.
     const active = /** @type {HTMLElement|null} */ (document.activeElement);
-    const focusKey = active && el.contains(active) ? active.dataset.key ?? null : null;
+    const hadFocus = !!active && el.contains(active);
+    const focusKey = active && hadFocus ? active.dataset.key ?? null : null;
+    // A half-typed size keeps its text across a rebuild.
+    const typed = active instanceof HTMLInputElement && hadFocus && active.value !== active.defaultValue
+      ? { value: active.value, start: active.selectionStart, end: active.selectionEnd } : null;
 
     /** @type {any[]} */
     const groups = [];
@@ -285,7 +369,27 @@ export function createStyleBar(app) {
         btn("move-right", { class: "btn small icon-only move-right", "aria-label": "Move right", title: "Move right (Arrow key)", onclick: () => nudge(NUDGE, 0) }, icon("arrowRight", 16)),
       ));
     }
+    if (objs.some(RESIZABLE)) {
+      const sizable = objs.filter(RESIZABLE);
+      const w = common(sizable, (o) => o.w), hh = common(sizable, (o) => o.h);
+      groups.push(h("div", { class: "style-group size-group", role: "group", "aria-label": "Size" },
+        h("span", { class: "style-group-label", "aria-hidden": "true" }, "Size"),
+        sizeField("w", "Width", w, (v) => resize((o) => ({ w: v, h: o.h }), "w")),
+        btn("size-w-dec", { class: "btn small icon-only size-w-dec", "aria-label": `Narrower by ${SIZE_STEP}`, title: "Narrower (Alt+Left)", onclick: () => resize((o) => ({ w: o.w - SIZE_STEP, h: o.h }), "w") }, icon("minus", 16)),
+        btn("size-w-inc", { class: "btn small icon-only size-w-inc", "aria-label": `Wider by ${SIZE_STEP}`, title: "Wider (Alt+Right)", onclick: () => resize((o) => ({ w: o.w + SIZE_STEP, h: o.h }), "w") }, icon("plus", 16)),
+        sizeField("h", "Height", hh, (v) => resize((o) => ({ w: o.w, h: v }), "h")),
+        btn("size-h-dec", { class: "btn small icon-only size-h-dec", "aria-label": `Shorter by ${SIZE_STEP}`, title: "Shorter (Alt+Up)", onclick: () => resize((o) => ({ w: o.w, h: o.h - SIZE_STEP }), "h") }, icon("minus", 16)),
+        btn("size-h-inc", { class: "btn small icon-only size-h-inc", "aria-label": `Taller by ${SIZE_STEP}`, title: "Taller (Alt+Down)", onclick: () => resize((o) => ({ w: o.w, h: o.h + SIZE_STEP }), "h") }, icon("plus", 16)),
+        objs.some((o) => ROTATABLE_TYPES.has(o.type)) ? [
+          btn("rotate-ccw", { class: "btn small icon-only rotate-ccw", "aria-label": `Rotate left ${ROTATE_STEP} degrees`, title: "Rotate left (,)", onclick: () => rotate(-ROTATE_STEP) }, icon("rotateCcw", 16)),
+          btn("rotate-cw", { class: "btn small icon-only rotate-cw", "aria-label": `Rotate right ${ROTATE_STEP} degrees`, title: "Rotate right (.)", onclick: () => rotate(ROTATE_STEP) }, icon("rotateCw", 16)),
+        ] : null,
+      ));
+    }
     groups.push(h("div", { class: "style-group arrange-group", role: "group", "aria-label": "Arrange" },
+      canConnect(objs)
+        ? btn("connect", { class: "btn small connect-btn", title: "Connect the two selected objects", onclick: connect }, icon("connector", 16), "Connect")
+        : null,
       objs.length === 1 && TEXT_TYPES.has(objs[0].type)
         ? btn("edit-text", { class: "btn small icon-only edit-text-btn", "aria-label": "Edit text", title: "Edit text (Enter)", onclick: editText }, icon("edit", 16))
         : null,
@@ -299,15 +403,51 @@ export function createStyleBar(app) {
     el.replaceChildren(...groups);
     el.hidden = false;
     if (wasHidden) app.onStyleBarToggle?.(true);
-    if (focusKey) {
-      const again = /** @type {HTMLElement|null} */ (el.querySelector(`[data-key="${focusKey}"]`));
-      again?.focus({ preventScroll: true });
+    const again = focusKey ? /** @type {HTMLElement|null} */ (el.querySelector(`[data-key="${focusKey}"]`)) : null;
+    if (again) {
+      again.focus({ preventScroll: true });
+      if (typed && again instanceof HTMLInputElement) {
+        again.value = typed.value;
+        again.setSelectionRange(typed.start, typed.end);
+      }
     }
+    roving.refresh(again);
+    // The focused control went away with the rebuild (e.g. Connect): stay in the bar.
+    if (hadFocus && !el.contains(document.activeElement)) roving.first()?.focus({ preventScroll: true });
   }
 
   /**
-   * Context menu for the selection (right-click or long-press on the canvas).
-   * @param {{x: number, y: number}} at  client coordinates
+   * A number field for width or height: Enter or leaving the field applies it; Escape reverts.
+   * @param {string} key @param {string} label @param {number|null} value  null when mixed
+   * @param {(v: number) => void} apply
+   */
+  function sizeField(key, label, value, apply) {
+    const text = value === null ? "" : String(value);
+    const input = /** @type {HTMLInputElement} */ (h("input", {
+      type: "text", inputmode: "decimal", class: `size-input size-${key}`, "aria-label": label, title: label,
+      value: text, placeholder: value === null ? "mixed" : "", autocomplete: "off", dataset: { key: "size-" + key },
+    }));
+    input.defaultValue = text;
+    const commit = () => {
+      const v = Number.parseFloat(input.value);
+      if (input.value.trim() === input.defaultValue || !Number.isFinite(v) || v <= 0) {
+        input.value = input.defaultValue;
+        return;
+      }
+      input.defaultValue = input.value;
+      apply(v);
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); commit(); }
+    });
+    input.addEventListener("change", commit);
+    return h("label", { class: "size-field" }, h("span", { "aria-hidden": "true" }, key.toUpperCase()), input);
+  }
+
+  /**
+   * Context menu for the selection (right-click, long-press or the context menu key).
+   * @param {{x: number, y: number, pointerType?: string, rect?: import("./dialogs.js").ClientRect|null}} at
+   *   client coordinates; `rect` (keyboard) is the selection's bounds, which the menu is placed beside
    */
   function openContextMenu(at) {
     const objs = selected();
@@ -315,6 +455,7 @@ export function createStyleBar(app) {
     const items = [];
     if (objs.length) {
       if (objs.length === 1 && TEXT_TYPES.has(objs[0].type)) items.push({ label: "Edit text", className: "ctx-edit", onSelect: editText });
+      if (canConnect(objs)) items.push({ label: "Connect", className: "ctx-connect", onSelect: connect });
       items.push({ label: "Style…", className: "ctx-style", onSelect: () => focusFirst() });
       items.push({ label: "Duplicate", className: "ctx-duplicate", onSelect: duplicate });
       items.push({ label: "Bring to front", className: "ctx-front", onSelect: () => reorder("front") });
@@ -325,12 +466,13 @@ export function createStyleBar(app) {
       items.push({ label: "Zoom to fit", className: "ctx-fit", onSelect: () => canvas.zoomToFit() });
       items.push({ label: "Objects list", className: "ctx-outline", onSelect: () => app.toggleOutline() });
     }
-    openMenu({ x: at.x, y: at.y, returnFocus: canvas.element }, items, { label: objs.length ? "Selection actions" : "Board actions" });
+    openMenu({ x: at.x, y: at.y, returnFocus: canvas.element, avoid: at.rect ?? null, pointerType: at.pointerType },
+      items, { label: objs.length ? "Selection actions" : "Board actions" });
   }
 
   function focusFirst() {
     render();
-    /** @type {HTMLElement|null} */ (el.querySelector("button"))?.focus();
+    roving.first()?.focus();
   }
 
   return { el, render, openContextMenu, focusFirst, nudge, closePopover };

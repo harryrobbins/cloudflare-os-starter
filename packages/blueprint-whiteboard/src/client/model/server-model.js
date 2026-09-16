@@ -7,8 +7,10 @@
 // is tagged with the board revision it reflects, and each object remembers the revision its
 // current value (or deletion) came from. An update only lands when its revision is newer, which
 // makes applying the same change twice (ack plus echo) a no-op and stops an older state from
-// overwriting a newer one. Upserts are additionally refused if their version is lower than the one
-// held.
+// overwriting a newer one. The revision tag alone decides; as a belt-and-braces check an upsert is
+// also refused when its version is lower than the one held for the SAME incarnation of the object
+// (equal createdAt). A delete-then-recreate (a local undo of a delete re-creates the id at version
+// 1) is a new incarnation, so its lower version must not stop it landing.
 //
 // Cost: every update is O(objects it names). The objects record is mutated in place (keys set and
 // deleted); stored objects themselves are never mutated, only replaced.
@@ -65,7 +67,8 @@ export function applyObjectState(model, id, obj, revision) {
   const objects = model.board.objects;
   const existing = objects[id];
   if (obj) {
-    if (existing && typeof obj.version === "number" && obj.version < existing.version) return false;
+    if (existing && existing.createdAt === obj.createdAt && typeof obj.version === "number" &&
+        obj.version < existing.version) return false;
     model.objRev.set(id, revision);
     objects[id] = obj;
     return true;

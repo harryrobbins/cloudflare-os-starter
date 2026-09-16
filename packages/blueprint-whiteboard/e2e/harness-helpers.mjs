@@ -32,6 +32,10 @@ export const SEL = {
   peer: (/** @type {string} */ clientId) => `.people .peer[data-client="${clientId}"]`,
   peerNamed: (/** @type {string} */ name) => `.people .peer[aria-label="Follow ${name}"], .people .peer[aria-label="Stop following ${name}"]`,
   followChip: ".follow-chip",
+  morePeople: ".people .more-people",
+  connectButton: ".wb-stylebar .connect-btn",
+  menu: ".menu",
+  menuItem: (/** @type {string} */ name) => `.menu .ctx-${name}`,
   outlinePanel: ".outline-panel",
   minimap: ".wb-minimap",
   toolbar: ".wb-toolbar",
@@ -72,10 +76,10 @@ export function launch(opts = {}) {
  * Opens the harness and waits until every board pane is live.
  * @param {import("playwright").Browser} browser
  * @param {string} url
- * @param {{panes?: number, viewport?: {width: number, height: number}, query?: string, names?: string[], hasTouch?: boolean, colorScheme?: "light"|"dark"}} [opts]
+ * @param {{panes?: number, viewport?: {width: number, height: number}, query?: string, names?: string[], hasTouch?: boolean, isMobile?: boolean, colorScheme?: "light"|"dark", reducedMotion?: "reduce"|"no-preference"}} [opts]
  */
-export async function openHarness(browser, url, { panes = 2, viewport = { width: 1800, height: 900 }, query = "", names, hasTouch = false, colorScheme = "light" } = {}) {
-  const context = await browser.newContext({ viewport, hasTouch, colorScheme });
+export async function openHarness(browser, url, { panes = 2, viewport = { width: 1800, height: 900 }, query = "", names, hasTouch = false, isMobile = false, colorScheme = "light", reducedMotion = "no-preference" } = {}) {
+  const context = await browser.newContext({ viewport, hasTouch, isMobile, colorScheme, reducedMotion });
   const page = await context.newPage();
   /** @type {string[]} */
   const errors = [];
@@ -251,4 +255,46 @@ export function liveText(frame) {
 /** @param {string} s */
 export function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Class name of the focused element in a pane ("" for <body>).
+ * @param {import("playwright").FrameLocator} frame
+ */
+export function focusedClass(frame) {
+  return frame.locator("body").evaluate(() => {
+    const el = document.activeElement;
+    return !el || el === document.body ? "" : String(el.getAttribute("class") ?? el.tagName);
+  });
+}
+
+/**
+ * A touch press held for `ms` at a page point, through Chromium's touch emulation (the context
+ * needs hasTouch). Returns {release} to lift the finger later when `hold` is true.
+ * @param {import("playwright").Page} page
+ * @param {{x: number, y: number}} at
+ * @param {{ms?: number, hold?: boolean}} [opts]
+ */
+export async function touchPress(page, at, { ms = 80, hold = false } = {}) {
+  const cdp = await page.context().newCDPSession(page);
+  const point = { x: Math.round(at.x), y: Math.round(at.y) };
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point] });
+  await page.waitForTimeout(ms);
+  const release = async () => {
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await cdp.detach().catch(() => {});
+  };
+  if (!hold) await release();
+  return { release, point };
+}
+
+/**
+ * Client rect of the first element matching `selector` in a pane, in page coordinates.
+ * @param {import("playwright").FrameLocator} frame
+ * @param {string} selector
+ */
+export async function pageRect(frame, selector) {
+  const box = await frame.locator(selector).first().boundingBox();
+  if (!box) throw new Error(`${selector} not visible`);
+  return { left: box.x, top: box.y, right: box.x + box.width, bottom: box.y + box.height };
 }

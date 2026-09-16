@@ -90,7 +90,7 @@ export class PresenceLayer {
       if (!view) {
         view = {
           world: /** @type {SVGGElement} */ (svgEl("g", { class: "wb-peer" })),
-          cursor: /** @type {SVGGElement} */ (svgEl("g", { class: "wb-cursor" })),
+          cursor: /** @type {SVGGElement} */ (svgEl("g", { class: "wb-cursor", "data-client": peer.clientId })),
           badge: /** @type {SVGGElement} */ (svgEl("g", { class: "wb-badge" })),
           labelKey: "", shown: null,
         };

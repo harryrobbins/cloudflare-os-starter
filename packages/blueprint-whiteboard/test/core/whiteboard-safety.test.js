@@ -161,6 +161,11 @@ describe("hostile inputs", () => {
       expect(result.status).toMatch(/^(applied|unchanged|conflict)$/);
       for (const e of result.errors) expect(typeof e.message).toBe("string");
     }
+    // The long pen was truncated to the cap, the NaN pen refused.
+    expect(repo.objects.get("o_0000000000ad").points).toHaveLength(LIMITS.penPoints * 2);
+    expect(repo.objects.has("o_0000000000ae")).toBe(false);
+    expect(repo.objects.get("o_0000000000ac").text).toHaveLength(LIMITS.text);
+    // (The undos below walk back through the changes above.)
     for (const args of [undefined, null, 5, { historyId: {} }, { by: ["x"] }, { historyId: "__proto__" }]) {
       const { result } = await board.undo(args);
       expect(result.status).toMatch(/^(applied|unchanged)$/);
@@ -173,10 +178,6 @@ describe("hostile inputs", () => {
     }
     expect(repo.meta.title.length).toBeLessThanOrEqual(LIMITS.boardTitle);
     expect(BACKGROUNDS).toContain(repo.meta.background);
-    // The long pen was truncated to the cap, the NaN pen refused.
-    expect(repo.objects.get("o_0000000000ad").points).toHaveLength(LIMITS.penPoints * 2);
-    expect(repo.objects.has("o_0000000000ae")).toBe(false);
-    expect(repo.objects.get("o_0000000000ac").text).toHaveLength(LIMITS.text);
   });
 
   it("random op soup keeps every stored object valid", async () => {

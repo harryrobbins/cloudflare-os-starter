@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_COALESCE_MS, Hub, INFLIGHT_TIMEOUT_MS, MAX_INFLIGHT, PRESENCE_MAX_INFLIGHT } from "../../src/core/hub.js";
-import { LIMITS } from "../../src/shared/protocol.js";
+import {
+  DEFAULT_COALESCE_MS, Hub, INFLIGHT_TIMEOUT_MS, MAX_INFLIGHT, PRESENCE_BURST, PRESENCE_FLUSH_BYTES, PRESENCE_MAX_INFLIGHT,
+  PRESENCE_RATE, SUBSCRIBER_IDLE_MS, presenceBytes,
+} from "../../src/core/hub.js";
+import { LIMITS, PRESENCE_HEARTBEAT_MS } from "../../src/shared/protocol.js";
 
 class Sub {
   constructor(name, { failOperation = false, failPresence = false } = {}) {
@@ -324,5 +327,112 @@ describe("Hub operations and backpressure", () => {
     for (let r = 1; r <= MAX_INFLIGHT * 3; r++) await h.broadcast({ type: "operation", revision: r });
     expect(h.has("A")).toBe(true);
     expect(a.ops).toHaveLength(MAX_INFLIGHT * 3);
+  });
+});
+
+describe("Hub limits on a single caller", () => {
+  it("when full, removes subscribers idle for SUBSCRIBER_IDLE_MS (disposed, leave broadcast) before refusing", async () => {
+    const h = hub({ maxSubscribers: 3 });
+    const live = new Sub("live");
+    const squatters = [new Sub("s0"), new Sub("s1")];
+    const { session } = h.add(live, { clientId: "L" });
+    squatters.forEach((s, i) => h.add(s, { clientId: "S" + i }));
+    await flush();
+    // Nobody is idle yet: full.
+    t += SUBSCRIBER_IDLE_MS;
+    expect(() => h.add(new Sub("x"), { clientId: "X" })).toThrow("board is full");
+    // L heartbeats (as clients do every PRESENCE_HEARTBEAT_MS); the squatters never do.
+    h.updatePresence({ clientId: "L", session, cursor: { x: 1, y: 1 } });
+    t += 1;
+    const newcomer = new Sub("new");
+    expect(h.add(newcomer, { clientId: "N" }).session).toMatch(/^[0-9a-f]{32}$/);
+    expect([h.has("L"), h.has("S0"), h.has("S1"), h.has("N")]).toEqual([true, false, false, true]);
+    expect(squatters.map((s) => s.disposed)).toEqual([1, 1]);
+    await flush();
+    expect(live.presences.filter((p) => p.type === "leave").map((p) => p.clientId)).toEqual(["S0", "S1"]);
+    expect(newcomer.presences.map((p) => [p.type, p.clientId])).toEqual([["join", "L"]]);
+    // A subscriber that keeps heartbeating is never evicted.
+    for (let i = 0; i < 3; i++) {
+      t += PRESENCE_HEARTBEAT_MS;
+      h.updatePresence({ clientId: "L", session, cursor: { x: i, y: 1 } });
+    }
+    h.add(new Sub("y"), { clientId: "Y" });
+    t += SUBSCRIBER_IDLE_MS + 1 - 3 * PRESENCE_HEARTBEAT_MS;
+    h.updatePresence({ clientId: "L", session });
+    expect(() => h.add(new Sub("z"), { clientId: "Z" })).not.toThrow(); // N idle: evicted
+    expect([h.has("L"), h.has("N"), h.has("Y"), h.has("Z")]).toEqual([true, false, true, true]);
+  });
+
+  it("caps the presence bytes of one delivery and sends the rest, latest-wins, next flush", async () => {
+    const h = hub();
+    const watcher = new Sub("w");
+    h.add(watcher, { clientId: "W" });
+    await flush();
+    const stroke = { points: Array.from({ length: 2 * LIMITS.presenceStrokePoints }, (_, i) => -999999.99 + i), color: "#123456", width: 3 };
+    const sessions = [];
+    for (let i = 0; i < 80; i++) sessions.push(h.add(new Sub("b" + i), { clientId: "B" + i }).session);
+    await flush();
+    watcher.calls.length = 0;
+    for (let i = 0; i < 80; i++) h.updatePresence({ clientId: "B" + i, session: sessions[i], stroke, cursor: { x: i, y: 0 } });
+    await flush();
+    expect(watcher.calls).toHaveLength(1);
+    const bytes = (events) => events.reduce((n, e) => n + presenceBytes(e), 0);
+    expect(bytes(watcher.calls[0])).toBeLessThanOrEqual(PRESENCE_FLUSH_BYTES);
+    expect(JSON.stringify(watcher.calls[0]).length).toBeLessThanOrEqual(PRESENCE_FLUSH_BYTES);
+    const first = watcher.calls[0].length;
+    expect(first).toBeLessThan(80);
+    // A deferred client moves again before the next flush: only its latest state goes out.
+    h.updatePresence({ clientId: "B79", session: sessions[79], cursor: { x: 1234, y: 0 } });
+    for (let k = 0; k < 5 && watcher.presences.length < 80; k++) await flush();
+    const got = watcher.presences;
+    expect(got).toHaveLength(80);
+    expect(new Set(got.map((e) => e.clientId)).size).toBe(80);
+    expect(got.find((e) => e.clientId === "B79").cursor).toEqual({ x: 1234, y: 0 });
+    for (const call of watcher.calls) expect(bytes(call)).toBeLessThanOrEqual(PRESENCE_FLUSH_BYTES);
+  });
+
+  it("an estimate never below the JSON size of a presence event", () => {
+    const full = {
+      type: "update", clientId: "c".repeat(64), name: "名".repeat(40), color: "#123456", at: 1_700_000_000_000,
+      cursor: { x: -999999.99, y: -999999.99 }, viewport: { x: -999999.99, y: -999999.99, w: 1999999.99, h: 1999999.99 },
+      selection: Array.from({ length: LIMITS.presenceSelection }, () => "o_0123456789ab"),
+      transforms: Array.from({ length: LIMITS.presenceTransforms }, () => ({ id: "o_0123456789ab", x: -999999.99, y: -999999.99, w: 99999.99, h: 99999.99, rot: 359.9 })),
+      stroke: { points: Array.from({ length: 2 * LIMITS.presenceStrokePoints }, () => -999999.99), color: "#123456", width: 63.5 },
+      editingId: "o_0123456789ab",
+    };
+    expect(presenceBytes(full)).toBeGreaterThanOrEqual(new TextEncoder().encode(JSON.stringify(full)).length);
+    const empty = { ...full, selection: [], transforms: [], stroke: null };
+    expect(presenceBytes(empty)).toBeGreaterThanOrEqual(new TextEncoder().encode(JSON.stringify(empty)).length);
+  });
+
+  it("rate-limits fan-out per client: bursts beyond PRESENCE_BURST merge into one later update", async () => {
+    const h = hub({ coalesceMs: 0 });
+    const watcher = new Sub("w");
+    h.add(watcher, { clientId: "W" });
+    const { session } = h.add(new Sub("m"), { clientId: "M" });
+    watcher.calls.length = 0;
+    // (Awaiting lets each delivery settle, so the in-flight cap is not what limits them.)
+    for (let i = 0; i < 500; i++) {
+      expect(h.updatePresence({ clientId: "M", session, cursor: { x: i, y: 0 } })).toEqual({ known: true });
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(watcher.calls).toHaveLength(PRESENCE_BURST);
+    await vi.advanceTimersByTimeAsync(1000 / PRESENCE_RATE);
+    expect(watcher.calls).toHaveLength(PRESENCE_BURST + 1);
+    expect(watcher.calls.at(-1)).toEqual([expect.objectContaining({ type: "update", clientId: "M", cursor: { x: 499, y: 0 } })]);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(watcher.calls).toHaveLength(PRESENCE_BURST + 1);
+    // Tokens refill with time.
+    t += 1000;
+    for (let i = 0; i < 10; i++) {
+      h.updatePresence({ clientId: "M", session, cursor: { x: i, y: 1 } });
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(watcher.calls).toHaveLength(PRESENCE_BURST + 11);
+    // The merged state is what list() and newcomers see at once.
+    for (let i = 0; i < 100; i++) h.updatePresence({ clientId: "M", session, name: "Name " + i });
+    expect(h.list().find((p) => p.clientId === "M").name).toBe("Name 99");
+    await h.settled();
+    expect(watcher.presences.at(-1)).toMatchObject({ clientId: "M", name: "Name 99" });
   });
 });

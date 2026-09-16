@@ -91,6 +91,8 @@ const ICON_PATHS = {
   elbow: "M5 19v-7h14V5",
   arrowStart: "M19 12H5M10 7l-5 5 5 5",
   arrowEnd: "M5 12h14M14 7l5 5-5 5",
+  rotateCw: "M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5",
+  rotateCcw: "M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5",
 };
 
 /**
@@ -281,6 +283,55 @@ export function trapTab(root, event) {
     event.preventDefault();
     first.focus();
   }
+}
+
+/**
+ * Roving tabindex for a toolbar: one Tab stop, arrow keys (either axis), Home and End move focus
+ * between its buttons. Text inputs inside keep their own Tab stop and arrow keys. Call refresh()
+ * after rebuilding the buttons.
+ * @param {HTMLElement} container
+ * @param {{items?: () => HTMLElement[]}} [opts]  default: the visible buttons inside, in DOM order
+ */
+export function rovingFocus(container, { items } = {}) {
+  const list = () => (items ? items() : /** @type {HTMLElement[]} */ ([...container.querySelectorAll("button")]))
+    .filter((el) => el.isConnected && !el.hidden && !(/** @type {HTMLButtonElement} */ (el).disabled) && el.getClientRects().length > 0);
+  /** @param {HTMLElement} current */
+  const setCurrent = (current) => {
+    for (const el of container.querySelectorAll("button")) el.setAttribute("tabindex", el === current ? "0" : "-1");
+  };
+  container.addEventListener("keydown", (e) => {
+    const t = /** @type {HTMLElement} */ (e.target);
+    if (e.ctrlKey || e.metaKey || e.altKey || t.closest("input, textarea, select")) return;
+    const all = list();
+    const i = all.indexOf(t);
+    if (i < 0) return;
+    const n = all.length;
+    const next = e.key === "ArrowRight" || e.key === "ArrowDown" ? (i + 1) % n
+      : e.key === "ArrowLeft" || e.key === "ArrowUp" ? (i - 1 + n) % n
+        : e.key === "Home" ? 0 : e.key === "End" ? n - 1 : null;
+    if (next === null) return;
+    e.preventDefault();
+    setCurrent(all[next]);
+    all[next].focus();
+  });
+  container.addEventListener("focusin", (e) => {
+    const t = /** @type {HTMLElement} */ (e.target);
+    if (t instanceof HTMLButtonElement && container.contains(t)) setCurrent(t);
+  });
+  return {
+    /** Keeps exactly one Tab stop: the focused button, else the current one, else `preferred`, else the first. @param {HTMLElement|null} [preferred] */
+    refresh(preferred = null) {
+      const all = list();
+      const buttons = /** @type {HTMLElement[]} */ ([...container.querySelectorAll("button")]);
+      const active = /** @type {HTMLElement|null} */ (document.activeElement);
+      const current = (active && buttons.includes(active) && active)
+        || all.find((el) => el.getAttribute("tabindex") === "0")
+        || (preferred && all.includes(preferred) ? preferred : null)
+        || all[0] || buttons[0];
+      if (current) setCurrent(current);
+    },
+    first: () => list()[0] ?? null,
+  };
 }
 
 /**

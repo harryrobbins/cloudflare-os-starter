@@ -115,7 +115,8 @@
  * @property {{setTimeout: typeof setTimeout, clearTimeout: typeof clearTimeout,
  *   setInterval: typeof setInterval, clearInterval: typeof clearInterval, now: () => number}} [timers]
  * @property {() => void} [onUnrecoverable]  called at most once, when the connection looks dead
- *   for good (3 failed subscribes in a row, or 8 s non-live with no call succeeding). On the
+ *   for good (3 failed subscribes in a row, 8 s non-live with no call succeeding, not counting time
+ *   waiting on a subscribe call, or one subscribe call unsettled for 45 s). On the
  *   platform the iframe's `gadget` stub stays broken after a facet restart (code edit), so main.js
  *   reloads the frame. The store keeps retrying regardless.
  */

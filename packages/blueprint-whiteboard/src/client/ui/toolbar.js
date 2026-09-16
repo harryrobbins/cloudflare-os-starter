@@ -1,8 +1,12 @@
 // @ts-check
 // Tool palette (select, hand, the creation tools), the keyboard-reachable "Add" menu that creates
 // objects at the view centre without dragging, and undo/redo.
+//
+// Keyboard: one Tab stop, arrow keys move between the buttons. On phones the bar runs along the
+// bottom and Add, Objects and Activity come first (in DOM order too, so focus order matches), so
+// the actions that have no other touch path are never scrolled out of sight.
 
-import { h, icon } from "./dom.js";
+import { h, icon, rovingFocus } from "./dom.js";
 import { openMenu } from "./dialogs.js";
 
 /** @typedef {import("./app.js").App} App */
@@ -78,11 +82,28 @@ export function createToolbar(app) {
     "aria-pressed": "false", onclick: () => app.toggleActivity(),
   }, icon("activity", 20));
 
+  const sep = h("div", { class: "wb-sep", role: "separator" });
   const el = h("div", { class: "wb-float wb-toolbar", role: "toolbar", "aria-label": "Tools", "aria-orientation": "vertical" },
-    [...toolButtons.values()],
-    h("div", { class: "wb-sep", role: "separator" }),
-    addBtn, outlineBtn, activityBtn,
+    [...toolButtons.values()], sep, addBtn, outlineBtn, activityBtn,
   );
+  const roving = rovingFocus(el);
+
+  const phone = typeof matchMedia === "function" ? matchMedia("(max-width: 600px)") : null;
+  function layout() {
+    const small = !!phone?.matches;
+    const actions = [addBtn, outlineBtn, activityBtn];
+    const order = small ? [...actions, sep, ...toolButtons.values()] : [...toolButtons.values(), sep, ...actions];
+    if (order.some((node, i) => el.children[i] !== node)) {
+      const active = document.activeElement;
+      el.replaceChildren(...order);
+      if (active instanceof HTMLElement && el.contains(active)) active.focus({ preventScroll: true });
+    }
+    el.setAttribute("aria-orientation", small ? "horizontal" : "vertical");
+    el.scrollTop = 0;
+    el.scrollLeft = 0;
+  }
+  layout();
+  phone?.addEventListener?.("change", layout);
 
   /** @param {HTMLElement} anchor */
   function openAddMenu(anchor) {
@@ -122,6 +143,7 @@ export function createToolbar(app) {
     redoBtn.setAttribute("aria-disabled", String(!state.canRedo));
     outlineBtn.setAttribute("aria-pressed", String(app.outlineOpen));
     activityBtn.setAttribute("aria-pressed", String(app.activityOpen));
+    roving.refresh(toolButtons.get(current) ?? null);
   }
 
   return { el, history, render, openAddMenu: () => openAddMenu(addBtn) };
