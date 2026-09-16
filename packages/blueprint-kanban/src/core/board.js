@@ -260,15 +260,20 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
   /** @param {unknown} v @returns {string|null} */
   const requestIdOf = (v) => (isRequestId(v) ? v : null);
 
+  /** Records written before senderId was stored match only requests without a senderId. */
+  const sameRequest = (/** @type {RequestRecord} */ r, /** @type {string} */ requestId, /** @type {string} */ senderId) =>
+    r.requestId === requestId && (r.senderId ?? "") === senderId;
+
   /**
    * The request list with `result` recorded under `requestId`, trimmed to the LIMITS.
-   * @param {State} s @param {string} requestId @param {OperationResult} result
+   * Records are per sender: the same requestId from another senderId is a different request.
+   * @param {State} s @param {string} requestId @param {string} senderId @param {OperationResult} result
    * @returns {RequestRecord[]}
    */
-  function withRecord(s, requestId, result) {
+  function withRecord(s, requestId, senderId, result) {
     /** @type {RequestRecord} */
     const record = structuredClone({
-      requestId, revision: result.revision, status: result.status,
+      requestId, senderId, revision: result.revision, status: result.status,
       conflicts: result.conflicts.map(({ kind, id }) => ({ kind, id })), errors: result.errors,
     });
     while (storedBytes(record) > RECORD_MAX_BYTES && record.errors.length > 1) {
@@ -277,20 +282,22 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
     while (storedBytes(record) > RECORD_MAX_BYTES && record.conflicts.length > 1) {
       record.conflicts = record.conflicts.slice(0, Math.ceil(record.conflicts.length / 2));
     }
-    const requests = [...s.requests.filter((r) => r.requestId !== requestId), record];
+    const requests = [...s.requests.filter((r) => !sameRequest(r, requestId, senderId)), record];
     while (requests.length > LIMITS.requestRecords) requests.shift();
     while (requests.length > 1 && storedBytes(requests) > LIMITS.requestRecordBytes) requests.shift();
     return requests;
   }
 
   /**
-   * The recorded answer for a replayed requestId, or null when it has not been seen.
-   * @param {State} s @param {string|null} requestId
+   * The recorded answer for a replayed requestId from the same sender, or null when it has not
+   * been seen. Matching the sender stops a peer who guesses another client's requestIds from
+   * pre-recording them and so making that client's writes vanish as "duplicates".
+   * @param {State} s @param {string|null} requestId @param {string} senderId
    * @returns {OperationResult|null}
    */
-  function duplicateOf(s, requestId) {
+  function duplicateOf(s, requestId, senderId) {
     if (!requestId) return null;
-    const record = s.requests.find((r) => r.requestId === requestId);
+    const record = s.requests.find((r) => sameRequest(r, requestId, senderId));
     if (!record) return null;
     return structuredClone({
       status: record.status, revision: s.meta.revision, upserts: [], deletes: [], moved: [],
@@ -306,12 +313,12 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
   /**
    * Records a request that changed nothing (records-only commit, no revision bump) and returns
    * the outcome unchanged.
-   * @param {State} s @param {string|null} requestId @param {OperationResult} result
+   * @param {State} s @param {string|null} requestId @param {string} senderId @param {OperationResult} result
    * @returns {Promise<{result: OperationResult, event: null}>}
    */
-  async function finishUnchanged(s, requestId, result) {
+  async function finishUnchanged(s, requestId, senderId, result) {
     if (requestId) {
-      const requests = withRecord(s, requestId, result);
+      const requests = withRecord(s, requestId, senderId, result);
       try {
         await repo.commit({ requests });
       } catch (e) {
@@ -346,7 +353,8 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
     const s = await load();
     const req = isObject(rawReq) ? rawReq : {};
     const requestId = requestIdOf(req.requestId);
-    const duplicate = duplicateOf(s, requestId);
+    const senderId = cleanId(req.senderId);
+    const duplicate = duplicateOf(s, requestId, senderId);
     if (duplicate) return { result: duplicate, event: null };
     /** @type {OpError[]} */
     const errors = [];
@@ -367,10 +375,9 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
     if (total > LIMITS.opsPerRequest) {
       errors.push(opError("structure", -1, "limit",
         `A request may carry at most ${LIMITS.opsPerRequest} ops; this one has ${total}. Nothing was applied.`));
-      return finishUnchanged(s, requestId, emptyResult(s.meta.revision, errors));
+      return finishUnchanged(s, requestId, senderId, emptyResult(s.meta.revision, errors));
     }
 
-    const senderId = cleanId(req.senderId);
     const by = cleanName(req.by, "Anonymous");
     const at = now();
 
@@ -859,7 +866,7 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
     }
 
     const changed = upserts.length > 0 || deletes.length > 0 || structureChanged || labelsChanged;
-    if (!changed) return finishUnchanged(s, requestId, structuredClone(emptyResult(s.meta.revision, errors, conflicts)));
+    if (!changed) return finishUnchanged(s, requestId, senderId, structuredClone(emptyResult(s.meta.revision, errors, conflicts)));
 
     // ---- History entry ----
     let inverse = null;
@@ -890,7 +897,7 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
       status: conflicts.length ? "conflict" : "applied", revision: meta.revision, upserts, deletes,
       moved, structure, labels: labelsChanged ? labels : null, history: entry, conflicts, errors,
     });
-    const requests = requestId ? withRecord(s, requestId, result) : s.requests;
+    const requests = requestId ? withRecord(s, requestId, senderId, result) : s.requests;
     try {
       await repo.commit({
         meta,
@@ -980,11 +987,12 @@ export function createBoard(repo, { now = Date.now, newId = protocolNewId, onEve
       const s = await load();
       const a = isObject(args) ? args : {};
       const requestId = requestIdOf(a.requestId);
-      const duplicate = duplicateOf(s, requestId);
+      const senderId = cleanId(a.senderId);
+      const duplicate = duplicateOf(s, requestId, senderId);
       if (duplicate) return { result: duplicate, event: null };
       const entry = s.history.find((h) => h.id === a.historyId);
-      if (!entry) return finishUnchanged(s, requestId, emptyResult(s.meta.revision, [opError("structure", -1, "invalid_op", "No such history entry")]));
-      if (!entry.inverse) return finishUnchanged(s, requestId, emptyResult(s.meta.revision, [opError("structure", -1, "invalid_op", "That change cannot be undone")]));
+      if (!entry) return finishUnchanged(s, requestId, senderId, emptyResult(s.meta.revision, [opError("structure", -1, "invalid_op", "No such history entry")]));
+      if (!entry.inverse) return finishUnchanged(s, requestId, senderId, emptyResult(s.meta.revision, [opError("structure", -1, "invalid_op", "That change cannot be undone")]));
       return applyLocked({ ...entry.inverse, senderId: a.senderId, by: a.by, requestId }, { force: true, summaryPrefix: "Undid: " });
     }),
 

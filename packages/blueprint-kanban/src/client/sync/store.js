@@ -104,6 +104,7 @@ export async function createStore(options) {
   let queue = [];
   let seq = 0;
   let requestSeq = 0;
+  const requestSecret = randomClientId() + randomClientId().slice(0, 8);
   /**
    * One request as sent. A request whose outcome is unknown (it failed or timed out) is kept
    * as `replay` and re-sent verbatim, with the same requestId, before anything else: the server
@@ -322,11 +323,12 @@ export async function createStore(options) {
     return info;
   }
 
-  /** `${clientId}:${seq}`, restricted to the characters and length the server accepts. */
+  /**
+   * `${secret}:${seq}`. The secret is 96 random bits generated per store and never sent anywhere
+   * else, so a peer (who sees our clientId) cannot guess and pre-record our requestIds.
+   */
   function nextRequestId() {
-    const suffix = ":" + ++requestSeq;
-    const prefix = clientId.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, REQUEST_ID_MAX - suffix.length);
-    return prefix + suffix;
+    return requestSecret + ":" + ++requestSeq;
   }
 
   /** Our clientId is held by another session: take a fresh identity. */

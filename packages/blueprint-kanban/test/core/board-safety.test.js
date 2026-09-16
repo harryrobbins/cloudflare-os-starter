@@ -240,7 +240,7 @@ describe("request idempotency", () => {
     expect(first.status).toBe("conflict");
     expect(first.revision).toBe(1);
     expect((await repo.getMeta()).revision).toBe(1);
-    expect((await repo.getRequests())).toEqual([{ requestId: "r2", revision: 1, status: "conflict", conflicts: [{ kind: "card", id: cardId }], errors: first.errors }]);
+    expect((await repo.getRequests())).toEqual([{ requestId: "r2", senderId: "", revision: 1, status: "conflict", conflicts: [{ kind: "card", id: cardId }], errors: first.errors }]);
 
     await apply(board, { cardOps: [{ op: "upsert", cardId, baseVersion: 1, card: { title: "v2" } }] });
     const replay = await apply(board, req);
@@ -254,6 +254,18 @@ describe("request idempotency", () => {
     expect(colReplay.conflicts).toEqual([{ kind: "column", id: col.Done, current: expect.objectContaining({ name: "Done" }) }]);
     await apply(board, { cardOps: [{ op: "delete", cardId, baseVersion: 2 }] });
     expect((await apply(board, req)).conflicts[0].current).toBeNull();
+  });
+
+  it("does not let one sender pre-record another sender's requestIds", async () => {
+    const { board, col } = await ready();
+    const victimOp = { op: "upsert", cardId: cid(), columnId: col.Backlog, baseVersion: 0, card: { title: "Mine" } };
+    // The attacker knows the victim's clientId (it is broadcast) and records requestIds ahead.
+    await apply(board, { senderId: "attacker", requestId: "victim:1", cardOps: [] });
+    const r = await apply(board, { senderId: "victim", requestId: "victim:1", cardOps: [victimOp] });
+    expect(r.duplicate).toBeUndefined();
+    expect(r.upserts.map((c) => c.id)).toEqual([victimOp.cardId]);
+    const replay = await apply(board, { senderId: "victim", requestId: "victim:1", cardOps: [victimOp] });
+    expect(replay.duplicate).toBe(true);
   });
 
   it("ignores invalid requestIds", async () => {

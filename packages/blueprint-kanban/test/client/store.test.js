@@ -350,7 +350,7 @@ describe("restart recovery", () => {
     const sends = opsFrom(server, a.clientId);
     expect(sends).toHaveLength(2);
     expect(sends[1].args[0]).toEqual(sends[0].args[0]);
-    expect(sends[0].args[0].requestId).toMatch(new RegExp("^" + a.clientId + ":\\d+$"));
+    expect(sends[0].args[0].requestId).toMatch(/^[0-9a-f]{24}:\d+$/);
     expect(server.history).toHaveLength(1);
     expect(a.store.getState().lastError).toBeNull();
     expect(a.store.getState().conflicts.size).toBe(0);
@@ -699,7 +699,11 @@ describe("requests and replays", () => {
     await Promise.all([a.store.undo(server.history[1].id), settle(50)]);
     const ids = server.requestIds;
     expect(ids).toHaveLength(3);
-    expect(ids.map((id) => id.split(":")[0])).toEqual([a.clientId, a.clientId, a.clientId]);
+    // One unguessable per-store secret, never the (broadcast) clientId.
+    const secrets = new Set(ids.map((id) => id.split(":")[0]));
+    expect(secrets.size).toBe(1);
+    expect([...secrets][0]).toMatch(/^[0-9a-f]{24}$/);
+    expect([...secrets][0]).not.toContain(a.clientId);
     const seqs = ids.map((id) => Number(id.split(":")[1]));
     expect(seqs[0]).toBeLessThan(seqs[1]);
     expect(seqs[1]).toBeLessThan(seqs[2]);
@@ -714,7 +718,7 @@ describe("requests and replays", () => {
     await settle(100);
     expect(server.requestIds).toHaveLength(1);
     expect(server.requestIds[0].length).toBeLessThanOrEqual(64);
-    expect(server.requestIds[0]).toMatch(/^x_y_x+:1$/);
+    expect(server.requestIds[0]).toMatch(/^[0-9a-f]{24}:1$/);
   });
 
   it("replays a failed request against its original base, so a concurrent edit conflicts", async () => {
@@ -825,6 +829,6 @@ describe("sessions", () => {
     expect([...b.store.getState().peers.keys()]).toEqual([a.clientId]);
     b.store.updateCard(Object.keys(server.cards)[0], { title: "from b" });
     await settle(100);
-    expect(server.requestIds.at(-1).startsWith(bId + ":")).toBe(true);
+    expect(server.callsOf("applyOperation").at(-1).args[0].senderId).toBe(bId);
   });
 });

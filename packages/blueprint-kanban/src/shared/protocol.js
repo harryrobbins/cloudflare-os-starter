@@ -164,6 +164,8 @@
  * valid requestId, in the same atomic commit as the request's changes.
  * @typedef {object} RequestRecord
  * @property {string} requestId
+ * @property {string} [senderId]  the request's senderId ("" when absent); a replay only matches
+ *   a record from the same sender
  * @property {number} revision  the revision the original request returned
  * @property {"applied"|"conflict"|"unchanged"} status
  * @property {{kind: "card"|"column", id: string}[]} conflicts
