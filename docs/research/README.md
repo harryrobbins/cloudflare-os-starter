@@ -12,7 +12,7 @@ Background research behind the plans in [`../plans/`](../plans/collaborative-blu
 | [notebook-blueprint-runtime-options.md](notebook-blueprint-runtime-options.md) | Native notebooks, JupyterLite/Pyodide and remote Jupyter kernels; compatibility, persistence, execution semantics and primary sources. |
 | [browser-ide-runtime-options.md](browser-ide-runtime-options.md) | code-server/OpenVSCode hosting, Cloudflare Sandbox and external runtimes; authentication, WebSockets, durable files, extensions and validation. |
 
-The notebook/IDE recommendation and proposed delivery sequence are in [Notebook and IDE blueprints](../plans/notebook-ide-blueprints.md). These three research documents review the pinned checkout and current product documentation; they do not claim a tested integration or an upstream `main` comparison.
+The notebook/IDE recommendation, implementation status and remaining validation gates are in [Notebook and IDE blueprints](../plans/notebook-ide-blueprints.md). These three research documents retain the baseline feasibility research and now include the isolated notebook implementation update. Docker lifecycle and two-user browser checks have passed locally, and no deployed integration or upstream `main` comparison is claimed.
 
 ## Decoding a `.gadget` archive
 

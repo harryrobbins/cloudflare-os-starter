@@ -2,6 +2,13 @@
 
 Research date: 2026-09-16. This is a source-based feasibility assessment, not a deployed proof of concept.
 
+## Implementation update
+
+The isolated `feat/notebook` worktree now contains a notebook-specific [Python runtime Gatekeeper](../../packages/gatekeeper-runtime/src/gatekeeper.ts), optional wrapper deployment wiring and the matching Sandbox SDK/image pair `0.13.0-next.751.1`. This establishes a starting point for execution integration, not an implemented code-server service. There is still no IDE image, terminal, durable project filesystem, authenticated launch endpoint or HTTP/WebSocket IDE proxy.
+
+Notebook owner-action permits authorize queued notebook execution; they are not browser IDE login sessions. A future IDE still needs its own origin and resource authorization. The implemented copy flow is `.ipynb` export/import plus a fresh connection, not cloning a Linux environment. Docker lifecycle checks are ongoing and no deployed runtime or IDE verification is claimed. Follow the [updated recommendation](../plans/notebook-ide-blueprints.md).
+
+
 ## Conclusion
 
 A code-server-style IDE is feasible as a blueprint backed by a separately deployed runtime service. A lightweight editor is feasible inside an ordinary gadget. Full code-server is not a self-contained blueprint that runs inside the existing gadget Worker and iframe: it needs a Linux process, project filesystem, terminal, extension host, HTTP assets and WebSockets.
@@ -14,7 +21,7 @@ The recommended full-IDE shape is a small native blueprint that manages a worksp
 - [GadgetUI.tsx](../../cloudflare-os/packages/workshop-frontend/src/GadgetUI.tsx) renders a `srcDoc` iframe with `connect-src 'none'`, `frame-src 'none'`, and no `allow-same-origin`. A normal code-server iframe, direct browser API requests, and direct WebSockets therefore cannot work inside it. The allowed popup permissions make a user-initiated external launch a practical first integration.
 - [overseer.ts](../../cloudflare-os/packages/workshop-backend/src/overseer.ts) constructs dynamic gadget Workers with `globalOutbound: null`. A runtime service must be provided through a capability binding; arbitrary outbound connectivity is not available to gadget code.
 - [The router](../../cloudflare-os/packages/router/src/index.ts) already forwards `/gatekeeper/<name>` through matching `GATEKEEPER_*` service bindings. That is useful for runtime control endpoints, but does not itself provide workspace authorization or origin isolation for IDE content.
-- [The deploy script](../../scripts/deploy.ts) and [deployment schema](../../scripts/deployment-config.ts) have no Sandbox/container deployment path. Adding an image, runtime Worker, DO migrations, storage and routing is infrastructure work in addition to authoring the blueprint.
+- [The deploy script](../../scripts/deploy.ts) and [deployment schema](../../scripts/deployment-config.ts) now include an optional notebook Sandbox/container deployment path in this implementation worktree. IDE images, durable project storage and authenticated routing remain additional infrastructure work.
 
 ## Product and runtime choices
 

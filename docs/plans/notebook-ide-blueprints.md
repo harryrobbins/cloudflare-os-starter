@@ -1,146 +1,70 @@
 # Notebook and IDE blueprints: feasibility and implementation
 
-Status: research and proposed implementation only, 2026-09-16. Inspected starter `843848c` and pinned Cloudflare OS `90f05910`. No runtime prototype or deployment was performed.
+Status: implemented and locally validated, 2026-09-16. Work is isolated in `/tmp/cloudflare-os-notebook`, branch `feat/notebook`, including changes to the pinned Cloudflare OS fork. This is not a deployed or production-verified integration. Docker lifecycle checks and the owner/shared-user browser flow have passed; see the validation record below.
 
-**Yes, both are feasible as products built around blueprints. A notebook interface or lightweight code editor can be an ordinary blueprint; a real Python kernel or code-server needs a separately provisioned execution service.** Installing a `.gadget` archive cannot install a Linux runtime, grant container bindings, or make an existing Jupyter/code-server website work inside the gadget frame.
+**A native notebook blueprint with a separate Python runtime is now implemented.** Full code-server remains feasible as a separate authenticated application launched by a blueprint; it is not implemented here. Neither a Python process nor a complete IDE can run inside an ordinary gadget Worker and its current network-blocked iframe.
 
 ## Recommendation
 
-Build a native notebook blueprint first, with a narrowly scoped runtime Gatekeeper providing Python execution. Keep notebook cells and saved results in gadget storage; keep kernels and working files in a separate execution service. Then reuse that service for an IDE launcher blueprint that opens code-server on a dedicated, authenticated origin. Defer embedding the complete IDE inside Workshop until that is a demonstrated product requirement.
+Evaluate the locally validated notebook on an isolated deployment. Keep production runtime deployment disabled until account, resource and rollout review is complete. Retain the current gadget sandbox. Defer a full IDE until the notebook's execution service has demonstrated reliable cancellation, recovery and resource limits.
 
-This gives the notebook an integrated Workshop experience and lets the full IDE retain its filesystem, terminal, extensions, and normal browser networking. Neither requires weakening every gadget's sandbox. Cloudflare Sandbox is a plausible execution backend, but an external Linux service implementing the same broker contract is also viable. The current Cloudflare documentation recommends the Sandbox 1.0 preview for new applications; pin an SDK/image pair and evaluate that recommendation in a deployment spike rather than mixing stable and preview examples. [Sandbox overview](https://developers.cloudflare.com/sandbox/)
+The selected first version deliberately allows collaborators to read shared results while only the workspace owner can request Python execution or stop/reset. Collaborators who want an independent executable copy download `.ipynb`, create a new Notebook, import it and connect a fresh Python resource under their own workspace. This copies document data and outputs, not credentials, live variables or runtime identity.
 
-| Product | Feasibility in this checkout | Required work | Recommendation |
-| --- | --- | --- | --- |
-| Notebook editor, Markdown and saved outputs, `.ipynb` import/export | High; ordinary gadget UI and storage | New blueprint, document model and format adapter | First deliverable |
-| Python notebook with state across cells | High in principle; execution is outside the gadget | Runtime Gatekeeper, isolated kernel, job protocol and persistence | Preferred execution path |
-| JupyterLite/Pyodide inside the current gadget | Not a drop-in | WASM/worker/assets integration and narrowly reviewed host changes | Defer; useful if browser-only execution becomes a priority |
-| Complete JupyterLab | Feasible as a separate application | Jupyter server, kernels, authenticated HTTP/WebSocket proxy and durable files | Alternative when full Jupyter compatibility matters |
-| File tree and source editor with IDE-like layout | High as an ordinary blueprint | Editor bundle, file model and persistence | Useful, but does not supply shell/debugging/extensions |
-| Actual code-server/OpenVSCode Server | Feasible as a runtime-backed application | Linux service/container, auth, WebSockets, storage and lifecycle | Launch from a blueprint in another tab initially |
+## Implemented in this worktree
 
-Research supporting these conclusions:
+| Area | Current source behavior |
+| --- | --- |
+| Notebook blueprint | [`packages/blueprint-notebook`](../../packages/blueprint-notebook/src/README.md), bundled as `formats/notebook.gadget` with stable `format.notebook` metadata. Code/Markdown/raw cells, revision checks, bounded saved outputs, import/export and document methods for agents. |
+| Python runtime | [`packages/gatekeeper-runtime`](../../packages/gatekeeper-runtime/src/gatekeeper.ts), an explicit `PYTHON` resource binding. A random facet-owned runtime ID selects a private coordinator and Python sandbox; callers cannot choose another runtime ID. |
+| Owner authority | Authenticated [`GadgetClient`](../../cloudflare-os/packages/workshop-backend/src/overseer.ts) mints an expiring one-use permit for the exact intent; the iframe host forwards only the reserved permit operation. Gatekeeper consumption checks resource/gadget scope and digest before queueing a mutation. This requires the accompanying fork patch, not merely installing the archive. |
+| Approval | Execute and stop/reset are immutable queued actions reviewed in Workshop Activity. The connector declares no autoapprovable action kinds. Agents may edit notebook documents but cannot mint execution permits in this version. |
+| Shared results | The trusted connector declares `workspaceReadable: true`; Workshop persists this grant when creating the connection, allowing workspace collaborators to read without their own Python account. Reads still pass through observation authorization. Notebook results saved in gadget storage remain accessible to workspace collaborators independently of the live kernel. |
+| Runtime isolation | Sandbox internet access is disabled in code; HTTP execution/preview/filesystem routes are not exposed. Platform enforcement still needs integration verification. |
+| Lifecycle | Recorded run IDs, sequence/generation checks, bounded ledgers, stream/output caps, a 60-second execution watchdog and a 90-second recovery alarm. Stop/reset and kernel loss discard variables and temporary files. |
+| Deployment | Optional runtime configuration, Worker build, service binding, Container and Durable Object resources are wired through the wrapper. `runtime.enabled` is currently false. No live deployment was performed for this update. |
 
-- [Blueprint integration and source trace](../research/notebook-ide-blueprint-integration.md).
-- [Notebook runtime options](../research/notebook-blueprint-runtime-options.md).
-- [Browser IDE runtime options](../research/browser-ide-runtime-options.md).
+The exact preview dependency is `@cloudflare/sandbox@0.13.0-next.751.1`; the [Dockerfile](../../packages/gatekeeper-runtime/Dockerfile) pins the matching `0.13.0-next.751.1-python` image by digest. Keep that SDK/image pair together. Updating either is a compatibility change requiring lifecycle validation.
 
-## Why the blueprint alone is insufficient
+## Authority and sharing limits
 
-The current [gadget renderer](../../cloudflare-os/packages/workshop-frontend/src/GadgetUI.tsx) creates an opaque-origin iframe. Its CSP blocks direct network connections and nested frames, and it supplies neither normal remote asset loading nor WASM compilation permission. The backend's `loadGadgetWorker` in [overseer.ts](../../cloudflare-os/packages/workshop-backend/src/overseer.ts) loads JavaScript modules with `globalOutbound: null`; it does not provide Linux processes, a terminal, or a Python environment. Adding Node compatibility to the deployment Worker would not turn this gadget loader into a Linux host.
+Use the Workshop **use** role for people consuming notebook outputs. **Build** collaborators can change gadget application source and must be trusted accordingly: malicious application code opened in the owner's session could request owner permits. The permit proves an owner-authenticated session, not a physical button click; normal action approval remains a separate boundary.
 
-The existing RPC and Gatekeeper boundary is the useful extension point: the gadget calls a bound capability, whose trusted implementation talks to the execution service. The [router](../../cloudflare-os/packages/router/src/index.ts) can already dispatch `/gatekeeper/<name>` to a corresponding service binding, but this is routing, not workspace authorization. The [starter deploy script](../../scripts/deploy.ts) explicitly constructs its Worker and binding set, so a new execution Gatekeeper also requires wrapper configuration, build, validation and deployment changes.
+The `workspaceReadable` grant covers runtime status/live output as well as saved results. It is not public access: ordinary workspace sharing authorization still applies. Other private services in the same workspace keep their account/verifier requirements. The grant is immutable for an existing connection; removing the flag from future connector code does not revoke old grants. The connector cannot use per-observer exclusions for such a resource. Existing connections created before this fork change must be recreated to get the grant, which starts a fresh kernel while saved notebook data remains.
 
-Blueprints copy application source and binding requirements. They do not copy gadget storage, runtime files, credentials or a running kernel. A notebook **template** can seed example cells from its source on first launch; duplicating a user's actual notebook is a separate data export/import operation. Existing instances also do not automatically acquire new blueprint code. [Blueprint semantics](../../cloudflare-os/docs/blueprints.md)
+Owner-only **execution** is enforced separately from notebook document editing. The current document RPC methods allow shared gadget callers to edit cells/import data; the use role is not a general read-only document permission. Do not describe this release as enforcing immutable viewer access. Restricting document writes would require an additional trusted authorization path.
 
-## Proposed architecture
+Imported notebooks never autoexecute. The UI renders bounded safe output forms and sanitizes Markdown; active HTML/JavaScript is not run. A copied notebook can contain arbitrary Python source, which is why the new owner must deliberately request and approve execution.
 
-For the notebook, the path is: gadget client → existing gadget RPC → gadget server → bound runtime capability → isolated Python kernel. Results return through bounded subscriptions or polling, then become saved notebook outputs. The browser never receives infrastructure credentials or unrestricted container APIs.
+## Persistence and compatibility limits
 
-```mermaid
-flowchart TD
-  subgraph Browser["Browser: opaque-origin iframe (CSP blocks network, frames, WASM)"]
-    C["Gadget client<br/>cell editor, outputs"]
-  end
-  subgraph Backend["Workshop backend"]
-    S["Gadget server<br/>globalOutbound: null"]
-    GS[("Gadget storage<br/>cells, saved outputs")]
-  end
-  G["Runtime Gatekeeper (broker)<br/>authz, quotas, job records, credentials"]
-  subgraph Exec["Execution service: Sandbox or external Linux"]
-    K["Python kernel<br/>one per authorized notebook"]
-    F[("Working files<br/>snapshots")]
-  end
-  C <-->|gadget RPC| S
-  S <--> GS
-  S -->|bound capability| G
-  G -->|submit, cancel, restart| K
-  K -->|sequenced output, status| G
-  K <--> F
-  C -. direct connection blocked .-x K
-```
+Notebook cells and saved outputs live in gadget Durable Object storage. The Python filesystem and live namespace are ephemeral; there are no project snapshots, persistent datasets, package-install controls, terminal, public previews, active notebook widgets or full JupyterLab compatibility in this version. A stopped/expired kernel needs explicit reset and rerunning cells. Shared results are not a shared execution grant.
 
-For the IDE, the blueprint stores project metadata and provides start, stop, status and launch controls. A user-initiated link opens an authenticated broker on a dedicated origin, which authorizes access to that particular runtime before proxying code-server HTTP and WebSockets. The current frame permits such popup navigation. A launch ticket, if used, must be short-lived, single-use and tied to an authenticated authorized principal; a project ID alone is never authority. This identity handoff is a design/spike requirement, not an existing Workshop API.
+The document implementation caps cells, source and storage, and preserves bounded unsupported notebook metadata/MIME data for export without rendering it. Consult the [notebook API and limits](../../packages/blueprint-notebook/src/README.md) before promising lossless import of arbitrary `.ipynb` files. Output records identify source revisions; outputs from older revisions must remain visibly stale.
 
-```mermaid
-flowchart TD
-  subgraph W["Workshop origin"]
-    L["IDE launcher gadget<br/>project metadata, start, stop, status"]
-  end
-  subgraph I["Dedicated IDE origin"]
-    T["New browser tab"]
-    A["Cloudflare Access<br/>authenticates the user only"]
-  end
-  B["Runtime broker<br/>authorizes this principal for this runtime"]
-  subgraph E["Execution service"]
-    CS["code-server"]
-    PF[("Durable project files")]
-  end
-  L -->|user opens link with short-lived ticket| T
-  T --> A
-  A -->|HTTP + WebSocket| B
-  L -->|Gatekeeper RPC: start, stop, status| B
-  B -->|proxies| CS
-  CS <--> PF
-```
+Blueprint publication exports application source and binding requirements, not the user's notebook document. Updating the bundled format affects new instances; it is not an automatic migration of existing gadgets. Notebook download/import, blueprint publication and runtime backup are distinct operations; runtime backup is not implemented.
 
-Use a runtime per explicitly authorized project or notebook. Do not equate a cloud container ID, a user-supplied gadget ID, or a cursor display name with authorization. Start with owner-only execution and IDE launch; add shared execution only after the broker can verify collaborator grants and revocation. Workshop collaborators may already call exposed gadget methods: hiding a Run button does not enforce this policy.
+## Validation and rollout gates
 
-Use a separate origin for arbitrary IDE content and application previews so they do not acquire the Workshop application's browser origin. Access sign-in authenticates a user but does not decide which runtime they may open. New origin, Access and billing configuration require an explicit deployment decision during implementation.
+Local validation on 2026-09-16:
 
-## Notebook implementation
+- `pnpm check` passed both with the default disabled runtime and with runtime temporarily enabled, covering wrapper tests, package tests/builds, the Docker image and every generated Worker deployment dry-run. The disabled setting was restored afterward.
+- Runtime and notebook tests cover authorization, immutable digests, ambiguous submission recovery, bounded streams/storage, import/export, stale edits, persistence and rejection without a connection. Owner permit tests cover scope, expiry, replay and binding removal. Observer policy tests retain default/private-service verification.
+- Docker smoke checks passed: Python startup; variables across cells; duplicate submission; rejected requests; Python errors; internet denial; output caps; stopping active execution; and fresh-generation isolation.
+- The actual Workshop browser flow passed: notebook creation/edit/import/export; safe rendering; owner permit → Activity approval → container execution; a second user reading results without a Python account; direct forged-permit denial; and an imported copy running under its new owner in a fresh kernel without access to the original variables. Stop/reset also passed through owner approval.
+- Backend: 338 tests passed. Frontend: 173 tests passed. Notebook: 11 tests passed. Runtime: 5 tests passed. Local test ingress and browser RPC helpers are excluded from production bundles.
 
-Create `packages/blueprint-notebook` using the Board/Whiteboard package, bundle and archive conventions. Ship a stable `format.notebook` sidecar/archive pair in `formats/`; use an existing output icon from the closed icon set. Package UI dependencies at build time; do not depend on CDN imports from inside the frame.
+The checks establish local behavior, not live Cloudflare behavior. Remaining rollout/fault-injection work:
 
-Store an ordered list of cell IDs, individually versioned Markdown/code cells, notebook metadata, and bounded output records. Reuse the existing gadgets' revision checks, callback disposal and reconnect patterns. Start with per-cell conflict detection rather than simultaneous character-level editing. The Workshop's Yjs source history does not automatically synchronize the notebook's application data.
+1. Preserve the passing archive/build/type/configuration checks when merging. Publish submodule commit `c84d34df` (`feat/notebook-owner-permits`) to the configured fork before a fresh clone or deployment.
+2. Extend fault injection for cleanup failure, coordinator eviction/restart and stale watchdog delivery. The implemented alarm recovery has been reviewed but these failure combinations are not claimed as fully exercised.
+3. Exercise deployed reconnect/reload and idle-kernel expiry; local binding-change reconnection and normal Activity approvals have passed.
+4. Repeat the two-user permit, sharing, copy and output tests against the intended deployment, including an unshared outsider and deployment-specific connector permissions.
+5. Only then prepare an isolated deployment with explicit account/billing/resource limits and enable the runtime for that evaluation. Verify deployed authentication, service bindings, container startup, network denial and durable notebook recovery. Keep production rollout separate from local test success.
 
-Expose document methods such as `getNotebook`, `insertCells`, `updateCell`, `moveCell`, `deleteCell`, and `exportNotebook` for both humans and agents. These names are proposed, not existing platform APIs. Add execution methods only once the broker policy is defined.
+Do not record the feature as fully verified until the complete chain—owner UI permit, Activity approval, container execution, saved output and collaborator read—passes on the intended deployment. No IDE authentication/proxy path has been implemented or tested. No Cloudflare resources were deployed.
 
-Execution needs an asynchronous job contract: submit a cell ID, immutable code snapshot, source revision and deduplication key; return a run ID promptly; retrieve sequenced output and final status; support cancel and kernel restart. Serialize runs within a kernel. Associate outputs with their exact code revision and kernel generation so editing a cell or restarting the runtime cannot silently attach stale results to current code. A retry after an ambiguous disconnect must retrieve the prior run or show an unknown outcome, never blindly repeat side effects.
+## Subsequent IDE work
 
-```mermaid
-stateDiagram-v2
-  [*] --> Queued: submit cell, code snapshot, revision, dedup key (run ID returned)
-  Queued --> Running: serialized per kernel
-  Running --> Completed
-  Running --> Failed
-  Running --> Cancelled: interrupt or timeout
-  Running --> Unknown: client disconnect
-  Unknown --> Running: retry retrieves the run by dedup key, never re-runs
-  Completed --> Saved
-  Failed --> Saved
-  Cancelled --> Saved
-  Saved: Saved output bound to code revision and kernel generation
-  Saved --> Stale: cell edited or kernel restarted
-  Stale: Shown as stale, never attached to new code
-```
+A code-server/OpenVSCode launcher should use a dedicated authenticated origin, per-runtime authorization, HTTP/WebSocket proxying and an explicit durable filesystem strategy. Access login alone is not authorization to another user's runtime. The current notebook-only runtime has no terminal, launch-ticket endpoint or project storage contract; those are additional work, not hidden capabilities of the shipped blueprint.
 
-Persist the notebook document independently of the kernel. Show separate states for document saved, execution running, kernel disconnected and kernel reset. Python variables disappear on kernel/container loss; restoring files does not restore memory. Default to explicit Run and Restart actions, with no execution on import/open. Start with text, errors and capped images; sanitize rendered Markdown/HTML and defer active widgets, arbitrary scripts and complex MIME renderers.
-
-Implement bounded `.ipynb` import/export with explicit handling of unsupported cell metadata, attachments and MIME types. Preserve compatible metadata where practical and disclose dropped content. Exporting saved outputs is a user choice. Large datasets and artifacts belong in broker-owned object storage with authorized retrieval, not a single gadget storage value or the public blueprint-content bucket.
-
-## Runtime Gatekeeper and storage
-
-Create a dedicated wrapper-owned package, tentatively `packages/gatekeeper-runtime`. Do not inherit the permissive observer policy or read-only action handling of the [custom example](../../packages/custom-gatekeeper/README.md). Execution changes files, consumes resources and can make network requests: its agent approval, simulation and observation behavior needs an explicit contract. Prefer a capability restricted to one project and runtime profile over an arbitrary shell/network management API.
-
-The broker owns runtime allocation, authorization, job records, quotas, timeouts, output truncation, cancellation, idle suspension and cleanup. Infrastructure credentials stay in the broker. Define allowed outbound access and credential injection separately from the gadget's existing outbound restriction: Linux execution does not automatically inherit that restriction. Verify collaborator identity propagation and Gatekeeper resource scoping before enabling execution from a shared gadget; fail closed if that mapping is unavailable.
-
-Treat container disks and live processes as disposable. Choose an authoritative project snapshot/object store or durable external filesystem and specify checkpoint timing, recovery, concurrent-writer rules and deletion. Use a local working directory for Git and package installation; do not assume an object-store mount behaves like a complete POSIX development disk. Record the image/environment version alongside saved notebooks for reproducibility. Runtime backup, notebook export and blueprint publication are three different operations.
-
-Add an explicit execution-service configuration to `deployment.jsonc` and `scripts/deploy.ts`, including Worker/service bindings and any container/DO/storage resources. Keep generated Wrangler files generated. A remote runtime host avoids Cloudflare container provisioning but still needs broker authentication, outbound credentials and lifecycle integration. Both paths add ongoing operations and compute cost; enforce concurrency and idle limits before enabling general use.
-
-## Delivery sequence and acceptance gates
-
-1. **Prove the boundaries.** Bundle the intended cell editor inside a real local gadget; verify typing, imports/exports, callback recovery and capped rich outputs. Separately prove one Python kernel and one code-server session behind an authenticated runtime broker. Verify HTTP assets, WebSocket reconnect, authorization rejection and restart behavior. No production rollout is needed for these spikes.
-2. **Ship the document-only notebook.** Implement cells, conflict handling, persistence, import/export and agent document methods. Confirm a second gadget instance has independent data, and a new blueprint instantiation does not inherit prior notebooks or runtime identifiers.
-3. **Add owner-scoped Python execution.** Prove cross-cell state, ordered output, interrupt, timeout, duplicate submission handling, output flood limits, stale-result labeling and cold restart. Verify another user cannot execute against or read the runtime by guessing an ID or reusing a revoked capability. Resolve the identity bridge before calling this complete.
-4. **Add the IDE launcher.** Reuse runtime provisioning and persistence; verify saved files survive the advertised stop/start path, terminal behavior is correct, extension installation works for the chosen registry, and arbitrary previews stay isolated from Workshop. Define behavior when the gadget is deleted or its runtime binding is revoked.
-5. **Consider closer integration.** Add shared kernels, collaborative file editing, richer notebook MIME support or an embedded trusted IDE surface only after their requirements justify the extra authority and protocol work.
-
-Run meaningful package tests, the real-platform gadget harness and the starter's `pnpm check` during implementation. A browser harness alone cannot prove compatibility with the real gadget CSP. Before production, verify provider availability, current limits/pricing, pinned SDK/image compatibility, restoration after runtime loss, denied-user paths and cost controls on the actual account. None of those live checks was performed in this research task.
-
-## Decisions to settle when implementation starts
-
-The proposed default is Python first, native notebook UI, owner-only execution, runtime storage separate from gadget documents, and code-server opening in another tab. Decide whether full Jupyter compatibility, offline/browser-only Python, shared kernels, a specific extension registry, or embedding the IDE is essential before estimating the larger build. Those choices change the architecture substantially.
-
-The highest-risk unknowns are the broker's Workshop identity/capability handoff, crash-safe filesystem persistence, and authenticated HTTP/WebSocket proxy behavior. The notebook UI and blueprint packaging follow patterns already present in this repository. Resolve the three integration risks with small prototypes before committing to a full IDE implementation.
+Research: [blueprint integration](../research/notebook-ide-blueprint-integration.md), [notebook runtime choices](../research/notebook-blueprint-runtime-options.md), and [browser IDE choices](../research/browser-ide-runtime-options.md).

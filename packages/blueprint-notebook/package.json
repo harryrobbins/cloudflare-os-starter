@@ -1,0 +1,28 @@
+{
+  "name": "blueprint-notebook",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:gadget": "node scripts/build.mjs",
+    "pack:gadget": "node scripts/build.mjs && node scripts/pack-gadget.mjs",
+    "test:run": "vitest run && vitest run --config vitest.workers.config.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "catalog:",
+    "esbuild": "0.28.1",
+    "playwright": "1.61.0",
+    "vitest": "catalog:",
+    "wrangler": "catalog:",
+    "yjs": "13.6.31"
+  },
+  "dependencies": {
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/lang-python": "6.2.1",
+    "@codemirror/language": "6.12.4",
+    "@codemirror/state": "6.7.5",
+    "@codemirror/view": "6.43.12",
+    "dompurify": "3.4.15",
+    "marked": "18.0.13"
+  }
+}

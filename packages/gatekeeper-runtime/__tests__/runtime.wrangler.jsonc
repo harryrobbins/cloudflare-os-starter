@@ -1,0 +1,9 @@
+{
+  "name":"notebook-runtime-local-test",
+  "main":"runtime-worker.ts",
+  "compatibility_date":"2026-08-08",
+  "compatibility_flags":["nodejs_compat"],
+  "containers":[{"class_name":"PythonSandbox","image":"../Dockerfile","max_instances":5,"instance_type":"basic"}],
+  "durable_objects":{"bindings":[{"name":"PYTHON","class_name":"PythonSandbox"},{"name":"SESSIONS","class_name":"RuntimeSession"}]},
+  "migrations":[{"tag":"v1","new_sqlite_classes":["PythonSandbox","RuntimeSession"]}]
+}

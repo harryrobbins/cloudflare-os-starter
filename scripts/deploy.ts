@@ -28,6 +28,7 @@ const packageDirs = {
   scheduler: "cloudflare-os/packages/gatekeeper-scheduler",
   customGatekeeper: "packages/custom-gatekeeper",
   errorReporter: "packages/error-reporter",
+  runtime: "packages/gatekeeper-runtime",
 } as const;
 const generatedPaths = Object.fromEntries(
   Object.entries(packageDirs).map(([name, dir]) => [name, join(root, dir, generatedName)]),
@@ -213,6 +214,17 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
 
   if (!accountIdPattern.test(config.accountId)) {
     throw new Error("Cloudflare account IDs must be 32 hexadecimal characters.");
+  }
+  if (config.runtime !== undefined) {
+    const runtime = config.runtime;
+    if (!runtime || typeof runtime.enabled !== "boolean" ||
+        typeof runtime.workerName !== "string" || !/^[a-z0-9][a-z0-9-]{0,62}$/.test(runtime.workerName) ||
+        !Number.isInteger(runtime.maxInstances) || runtime.maxInstances < 1 || runtime.maxInstances > 20) {
+      throw new Error("runtime requires enabled (boolean), workerName, and maxInstances from 1 to 20.");
+    }
+    if (runtime.enabled && Object.values(config.workers).some(worker => worker?.name === runtime.workerName)) {
+      throw new Error("Runtime Worker name must be unique.");
+    }
   }
   const workerNames = Object.entries(config.workers)
     .filter(([key]) => key !== "errorReporter" || config.errorReporting.enabled)
@@ -516,6 +528,8 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
   const errorReporter = config.errorReporting.enabled
     ? structuredClone(bases.errorReporter)
     : undefined;
+  const runtime = config.runtime?.enabled ? structuredClone(bases.runtime) : undefined;
+  if (config.runtime?.enabled && !runtime) throw new Error("Python runtime base configuration is required.");
   const origin = publicOrigin(config);
 
   setCommon(router, config, config.workers.router.name, config.workers.router.route);
@@ -596,6 +610,12 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
       entrypoint: "GatekeeperVendor",
     },
   ];
+  if (runtime && config.runtime) {
+    setCommon(runtime, config, config.runtime.workerName);
+    runtime.containers = runtime.containers?.map(container => ({ ...container, max_instances: config.runtime!.maxInstances }));
+    // RPC only: no Router binding, HTTP ingress or preview URLs for Python execution.
+    workshop.services!.push({ binding: "GATEKEEPER_RUNTIME", service: config.runtime.workerName, entrypoint: "GatekeeperVendor" });
+  }
   workshop.kv_namespaces = [
     { binding: "BLUEPRINTS", ...(config.resources.blueprintsKvNamespaceId
       ? { id: config.resources.blueprintsKvNamespaceId } : {}) },
@@ -641,6 +661,7 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
   return {
     router, workshop, context, scheduler, customGatekeeper,
     ...(errorReporter && { errorReporter }),
+    ...(runtime && { runtime }),
   };
 }
 
@@ -700,6 +721,7 @@ export function buildCommands(config: DeploymentConfig): BuildCommand[] {
     { args: submoduleScript("@gadgets/gatekeeper-scheduler", "typecheck:app") },
     { args: submoduleExec("@gadgets/gatekeeper-scheduler", "tsc") },
     { args: ownBuild("custom-gatekeeper") },
+    ...(config.runtime?.enabled ? [{ args: ownBuild("gatekeeper-runtime") }] : []),
     ...(config.errorReporting.enabled ? [{ args: ownBuild("error-reporter") }] : []),
     // Access mode is a build-time constant in the frontend bundle (`src/useAuth.ts`), so it is set
     // here rather than inherited: a bundle built under a different value is wrong, not just stale.
@@ -856,6 +878,7 @@ async function main(): Promise<void> {
     scheduler: await readJsonc(join(root, packageDirs.scheduler, "wrangler.jsonc")),
     customGatekeeper: await readJsonc(join(root, packageDirs.customGatekeeper, "wrangler.jsonc")),
     errorReporter: await readJsonc(join(root, packageDirs.errorReporter, "wrangler.jsonc")),
+    ...(config.runtime?.enabled ? { runtime: await readJsonc(join(root, packageDirs.runtime, "wrangler.jsonc")) } : {}),
   });
   reportAiGateway(config);
 
@@ -875,6 +898,7 @@ async function main(): Promise<void> {
     deployWorker(packageDirs.context, deployArgs);
     deployWorker(packageDirs.scheduler, deployArgs);
     deployWorker(packageDirs.customGatekeeper, deployArgs);
+    if (config.runtime?.enabled) deployWorker(packageDirs.runtime, deployArgs);
     deployWorker(packageDirs.workshop, deployArgs);
     // Last: it binds every one of the above.
     deployWorker(packageDirs.router, deployArgs);

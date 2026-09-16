@@ -7,6 +7,7 @@ dist/
 
 # Generated per-deploy config and local overrides
 packages/*/wrangler.prod.jsonc
+packages/*/wrangler.dev.jsonc
 deployment.local.jsonc
 
 # Secrets and local environment

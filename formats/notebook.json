@@ -1,0 +1,17 @@
+{
+  "blueprintId": "format.notebook",
+  "title": "Notebook",
+  "description": "Explore ideas in Python cells and Markdown. Save and share results; connect your own Python kernel to execute code.",
+  "output": {
+    "id": "notebook",
+    "noun": "Notebook",
+    "plural": "Notebooks",
+    "icon": "notebook"
+  },
+  "author": {
+    "type": "user",
+    "name": "Surprisingly Ltd",
+    "id": "harryrobbins@gmail.com"
+  },
+  "revision": 9
+}

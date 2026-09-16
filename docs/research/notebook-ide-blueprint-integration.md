@@ -2,6 +2,15 @@
 
 Research date: 2026-09-16. Inspected `cloudflare-os` commit `90f05910`. This is a source review, not a deployed proof of concept. Links below are repository sources; conclusions labelled **Proposed** describe work still required.
 
+## Implementation update: owner execution and shared results
+
+The original source trace below describes the baseline pin. The isolated `feat/notebook` worktree at `/tmp/cloudflare-os-notebook` now adds a [notebook blueprint](../../packages/blueprint-notebook/src/README.md), a [runtime Gatekeeper](../../packages/gatekeeper-runtime/src/gatekeeper.ts), deployment wiring and a narrow owner-permit API in the Cloudflare OS fork. These changes retain the existing iframe/network policy.
+
+The authenticated gadget capability can mint a one-use digest-bound owner permit; the runtime consumes it before queueing execute/stop actions for normal approval. Observations intentionally allow workspace collaborators to read results. There is no private-workspace lockdown: that earlier alternative would conflict with the selected shared-output behavior. Agents cannot mint UI execution permits. Use-role sharing restricts execution, not all notebook document edits; build collaborators can change application code and remain trusted.
+
+Copy through `.ipynb` download → new Notebook → import → fresh Python connection. Neither a blueprint archive nor imported notebook data transfers runtime identity or live variables. The exact runtime dependency is Sandbox preview `0.13.0-next.751.1` with its matching digest-pinned Python image. Files/variables are ephemeral, and no IDE launcher is implemented. Docker lifecycle and two-user browser checks have passed locally; no deployed verification is claimed. See the [current plan and acceptance gates](../plans/notebook-ide-blueprints.md).
+
+
 ## Feasibility boundary
 
 A notebook-shaped application or lightweight code editor fits the existing blueprint model. A full Jupyter server or code-server process does not run inside the blueprint's current runtime. The practical extension is a blueprint UI plus a separately deployed execution service, reached through a capability-scoped Gatekeeper. For the complete upstream JupyterLab or code-server UI, a blueprint can act as a launcher into an authenticated separate application.
@@ -66,4 +75,6 @@ Changing the bundled archive changes what future instances receive. Do not assum
 4. For an external IDE launcher, test a user-clicked link, authenticated broker exchange, denied unrelated user, revoked collaborator, assets, WebSockets and reload. Do not regard loading the HTML shell as success.
 5. Prove project files survive runtime shutdown/recreation. Distinguish file persistence from restoration of the live Python namespace or running shell process.
 
-No application code, deployment configuration, remote resources or pinned submodule files were changed for this research.
+The initial research did not change application code or remote resources. The implementation update above describes subsequent local work; it does not establish deployed behavior.
+
+The implemented fork also adds an explicit `ResourceDescription.workspaceReadable?: true` grant, persisted when creating a connection. This removes the notebook viewer's service-account prerequisite without changing workspace membership checks or execution permits. Default/private connectors retain their verifier requirements. The grant includes all past/future runtime observations and cannot be narrowed by removing the flag in a later connector release; reconnect/migrate if the resource's data classification changes.

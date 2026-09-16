@@ -140,6 +140,8 @@ export interface DeploymentConfig {
     /** Only required when `errorReporting.enabled`. */
     errorReporter?: { name: string };
   };
+  /** Optional private Python execution service; disabled unless explicitly enabled. */
+  runtime?: { enabled: boolean; workerName: string; maxInstances: number };
   access: AccessConfig;
   aiGateway: AiGatewayConfigInput;
   context: ContextConfig;
@@ -185,6 +187,8 @@ export interface ProdObservabilityConfig extends ObservabilityConfig {
 export type ProdWranglerConfig =
   Omit<WranglerConfig, "observability" | "artifacts" | "kv_namespaces" | "r2_buckets">
   & {
+    /** Container images attached to this Worker. */
+    containers?: { class_name: string; image: string; instance_type: string; max_instances: number }[];
     /** KV bindings. `id` absent requests Wrangler automatic provisioning. */
     kv_namespaces?: (BindingDecl & { id?: string })[];
     /** R2 bindings. `bucket_name` absent requests Wrangler automatic provisioning. */
@@ -208,6 +212,8 @@ export type ProdWranglerConfig =
 
 /** The generated configs, keyed as `deployment.jsonc` keys them. */
 export interface GeneratedConfigs {
+  /** Present only when Python execution is enabled. */
+  runtime?: ProdWranglerConfig;
   router: ProdWranglerConfig;
   workshop: ProdWranglerConfig;
   context: ProdWranglerConfig;
@@ -219,6 +225,8 @@ export interface GeneratedConfigs {
 
 /** The upstream base configs the generated ones are derived from. */
 export interface BaseConfigs {
+  /** Python runner base; required only when execution is enabled. */
+  runtime?: ProdWranglerConfig;
   router: ProdWranglerConfig;
   workshop: ProdWranglerConfig;
   context: ProdWranglerConfig;

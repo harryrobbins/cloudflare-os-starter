@@ -78,6 +78,7 @@ async function baseConfigs(): Promise<BaseConfigs> {
     scheduler: await baseConfig("../cloudflare-os/packages/gatekeeper-scheduler/wrangler.jsonc"),
     customGatekeeper: await baseConfig("../packages/custom-gatekeeper/wrangler.jsonc"),
     errorReporter: await baseConfig("../packages/error-reporter/wrangler.jsonc"),
+    runtime: await baseConfig("../packages/gatekeeper-runtime/wrangler.jsonc"),
   };
 }
 
@@ -769,4 +770,23 @@ test("skips the Error Reporter build when error reporting is disabled", () => {
   });
   const commands = buildCommands(config).map(({ args }) => args.join(" "));
   assert.equal(commands.some((command) => command.includes("error-reporter")), false);
+});
+
+
+test("runtime is opt-in, private, bounded, and bound only to Workshop", async () => {
+  const bases = await baseConfigs();
+  assert.equal(generateConfigs(validConfig, bases).runtime, undefined);
+  const config = variant(c => { c.runtime = { enabled: true, workerName: 'acme-notebook-python', maxInstances: 3 }; });
+  validateConfig(config);
+  const generated = generateConfigs(config, bases);
+  assert.equal(generated.runtime!.name, 'acme-notebook-python');
+  assert.equal(generated.runtime!.workers_dev, false);
+  assert.equal(generated.runtime!.preview_urls, false);
+  assert.ok(!generated.runtime!.routes?.length);
+  assert.equal(generated.runtime!.containers![0].max_instances, 3);
+  assert.ok(generated.workshop.services!.some(s => s.binding === 'GATEKEEPER_RUNTIME' && s.entrypoint === 'GatekeeperVendor'));
+  assert.ok(!generated.router.services!.some(s => s.service === 'acme-notebook-python'));
+  assert.ok(buildCommands(config).some(c => c.args.includes('gatekeeper-runtime')));
+  for (const maxInstances of [0, 21, 1.5]) assert.throws(() => validateConfig(variant(c => { c.runtime = { ...config.runtime, maxInstances }; })), /runtime/);
+  assert.throws(() => validateConfig(variant(c => { c.runtime = { ...config.runtime, workerName: c.workers.workshop.name }; })), /unique|distinct|name/i);
 });

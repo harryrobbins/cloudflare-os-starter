@@ -2,6 +2,15 @@
 
 Research date: 2026-09-16. This is a source review and implementation proposal, not a tested integration. Upstream documentation linked below is current at research time; pin versions before implementation.
 
+## Implementation update
+
+The native-notebook option is now implemented in the isolated `/tmp/cloudflare-os-notebook` worktree (`feat/notebook`), with [document/editor code](../../packages/blueprint-notebook/src/README.md) and a [Python runtime Gatekeeper](../../packages/gatekeeper-runtime/src/gatekeeper.ts). The implementation pins `@cloudflare/sandbox@0.13.0-next.751.1` and the matching digest-pinned Python image. This is implementation evidence, not a verified deployment; Docker lifecycle and two-user browser checks have passed locally.
+
+The selected sharing policy is owner-only execute/stop through a one-use owner permit plus Activity approval, with collaborator-readable outputs. Agents edit documents but cannot independently execute. Use-role users cannot mint execution permits; build collaborators remain trusted application authors. Document editing is not made generally read-only by this execution guard.
+
+Cells and saved outputs persist in gadget storage. Python variables and files are ephemeral; persistent datasets, package installation, widgets and full JupyterLab are outside this version. Import does not execute. To obtain an independent kernel, download `.ipynb`, create/import into a new Notebook and connect a fresh Python resource. The [current implementation plan](../plans/notebook-ide-blueprints.md) supersedes the unimplemented milestones in the original research below.
+
+
 ## Feasibility
 
 A Jupyter-style notebook is feasible as a blueprint. A document containing ordered Markdown/code cells, saved outputs, import/export, and an agent-facing API fits the existing gadget model. Executing Python is a separate runtime decision: the current gadget is neither a Python process nor an unrestricted browser application.
