@@ -8,6 +8,8 @@ import { pnpmCommand } from "../cloudflare-os/scripts/pnpm-command.ts";
 import { resolveBinEntry } from "../cloudflare-os/scripts/bin-entry.ts";
 import { AI_GATEWAY_PROVIDERS } from "./deployment-config.ts";
 import type {
+  AiGatewayModels,
+  AiGatewayProvider,
   BaseConfigs,
   BuildCommand,
   DeploymentConfig,
@@ -389,6 +391,74 @@ function validateAiGateway(config: DeploymentConfig): void {
       "deployment's own account, which is what lets the Workers AI binding reach the gateway " +
       "without an API token.");
   }
+
+  validateAiGatewayModels(config);
+}
+
+/**
+ * The deployment-owned model allow-list. Every entry is checked here because the backend merges
+ * it over its catalogue without further validation: a malformed entry would reach the model
+ * picker as a model nobody can chat with.
+ */
+function validateAiGatewayModels(config: DeploymentConfig): void {
+  const models = config.aiGateway.models;
+  const providers = config.aiGateway.providers!;
+  if (models !== undefined) {
+    if (models === null || typeof models !== "object" || Array.isArray(models)) {
+      throw new Error("aiGateway.models must be an object keyed by provider when present.");
+    }
+    for (const [provider, entries] of Object.entries(models)) {
+      if (!AI_GATEWAY_PROVIDERS.includes(provider as AiGatewayProvider)) {
+        throw new Error(
+          `aiGateway.models names unknown provider "${provider}". Providers must be one of ` +
+          `${AI_GATEWAY_PROVIDERS.join(", ")}.`);
+      }
+      if (!providers.includes(provider as AiGatewayProvider)) {
+        throw new Error(
+          `aiGateway.models lists models for "${provider}", but that provider is not in ` +
+          "aiGateway.providers. The Workshop only serves models of enabled providers, so these " +
+          `would never appear. Add "${provider}" to aiGateway.providers or remove its models.`);
+      }
+      if (entries === null || typeof entries !== "object" || Array.isArray(entries)) {
+        throw new Error(`aiGateway.models.${provider} must be an object keyed by model id.`);
+      }
+      for (const [modelId, model] of Object.entries(entries)) {
+        const where = `aiGateway.models.${provider}["${modelId}"]`;
+        if (!modelId.trim() || modelId !== modelId.trim()) {
+          throw new Error(`${where}: model ids must not be blank or padded with whitespace.`);
+        }
+        if (model === null || typeof model !== "object" || Array.isArray(model)) {
+          throw new Error(`${where} must be an object with name and contextWindow.`);
+        }
+        // Hand-edited JSONC: the declared type says what is valid, not what is on disk.
+        const { name, contextWindow, outputLimit } = model as unknown as Record<string, unknown>;
+        if (typeof name !== "string" || !name.trim()) {
+          throw new Error(`${where}.name must be a non-empty string.`);
+        }
+        if (!Number.isInteger(contextWindow) || (contextWindow as number) <= 0) {
+          throw new Error(`${where}.contextWindow must be a positive integer.`);
+        }
+        if (outputLimit !== undefined &&
+            (!Number.isInteger(outputLimit) || (outputLimit as number) <= 0)) {
+          throw new Error(`${where}.outputLimit must be omitted or a positive integer.`);
+        }
+      }
+    }
+  }
+  if (providers.includes("openrouter") &&
+      Object.keys(models?.openrouter ?? {}).length === 0) {
+    throw new Error(
+      "The openrouter provider has no built-in models: list at least one under " +
+      "aiGateway.models.openrouter, keyed by OpenRouter model id. Without one the provider " +
+      "deploys with nothing in the model picker.");
+  }
+}
+
+/** `aiGateway.models` with empty providers dropped, or undefined when nothing remains. */
+function extraModels(config: DeploymentConfig): AiGatewayModels | undefined {
+  const entries = Object.entries(config.aiGateway.models ?? {})
+    .filter(([, models]) => models && Object.keys(models).length > 0);
+  return entries.length ? Object.fromEntries(entries) : undefined;
 }
 
 function routeConfig(route: RouterRoute) {
@@ -460,11 +530,15 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     PUBLIC_BASE_URL: origin,
   };
   const gateway = aiGatewayPlan(config);
+  const models = extraModels(config);
   if (gateway) {
     Object.assign(workshop.vars, {
       CF_AI_GATEWAY: config.aiGateway.name,
       CF_AI_GATEWAY_ACCOUNT_ID: gateway.gatewayAccountId,
       CF_AI_GATEWAY_PROVIDERS: config.aiGateway.providers!.join(","),
+      // A JSON object, like ADMINS is an array: wrangler passes structured vars through verbatim.
+      // Only when non-empty, so the common no-allow-list deployment carries no dormant key.
+      ...(models ? { CF_AI_GATEWAY_EXTRA_MODELS: models } : {}),
       ...(gateway.crossAccount ? { CF_AI_GATEWAY_USE_BINDING: "false" } : {}),
     });
     // Only when a token is genuinely needed. On the common path the WORKERS_AI binding is the
@@ -575,6 +649,16 @@ function ownBuild(pkg: string, task = "build"): string[] {
   return ["exec", "vp", "run", "-F", pkg, "--no-cache", task];
 }
 
+/** `pnpm run <script>` in one submodule package. For plain scripts that spawn no `vp` task. */
+function submoduleScript(pkg: string, script: string): string[] {
+  return ["--dir", "cloudflare-os", "--filter", pkg, "run", script];
+}
+
+/** `pnpm exec <command>` in one submodule package. */
+function submoduleExec(pkg: string, ...command: string[]): string[] {
+  return ["--dir", "cloudflare-os", "--filter", pkg, "exec", ...command];
+}
+
 /**
  * The build steps `pnpm check` and `pnpm deploy` run, in order, from the repository root.
  *
@@ -594,16 +678,19 @@ function ownBuild(pkg: string, task = "build"): string[] {
  */
 export function buildCommands(config: DeploymentConfig): BuildCommand[] {
   return [
-    // `build:app` first, and separately. `gatekeeper-context`'s `build` is a package.json script
-    // that spawns `vp run --cache build:app` itself, and the outer `--no-cache` does not reach a
-    // nested invocation carrying its own flag -- measured: the configurator app replayed from
-    // cache. Rebuilding it here from source is what upstream's own `deploy` script does; the
-    // `build` step below then type-checks and replays the bytes this step just wrote.
+    // `gatekeeper-context`'s `build` is a package.json script: `typecheck:app`, then a nested
+    // `vp run --cache build:app`, then `tsc`. The outer `--no-cache` does not reach a nested
+    // invocation carrying its own flag -- measured: the configurator app replayed from cache. So
+    // the script is not run at all; its three parts are, with the app rebuilt from source the way
+    // upstream's own `deploy` script does. A cached `vp` run also never starts on hosts whose
+    // kernel refuses Vite+'s seccomp-based file tracking (WSL2, at the time of writing).
     { args: submoduleBuild("@gadgets/gatekeeper-context", "build:app") },
-    { args: submoduleBuild("@gadgets/gatekeeper-context") },
-    // The Scheduler's `build` nests the same cached `vp run build:app`, so it needs the same pair.
+    { args: submoduleScript("@gadgets/gatekeeper-context", "typecheck:app") },
+    { args: submoduleExec("@gadgets/gatekeeper-context", "tsc") },
+    // The Scheduler's `build` is the same three-part script, so it gets the same treatment.
     { args: submoduleBuild("@gadgets/gatekeeper-scheduler", "build:app") },
-    { args: submoduleBuild("@gadgets/gatekeeper-scheduler") },
+    { args: submoduleScript("@gadgets/gatekeeper-scheduler", "typecheck:app") },
+    { args: submoduleExec("@gadgets/gatekeeper-scheduler", "tsc") },
     { args: ownBuild("custom-gatekeeper") },
     ...(config.errorReporting.enabled ? [{ args: ownBuild("error-reporter") }] : []),
     // Access mode is a build-time constant in the frontend bundle (`src/useAuth.ts`), so it is set
@@ -699,6 +786,16 @@ function reportAiGateway(config: DeploymentConfig): void {
       "supplies their own model API keys. A Workshop migrated from the hosted deploy will show an " +
       "empty model picker -- see docs/migrate-from-hosted.md.");
     return;
+  }
+  const models = extraModels(config);
+  if (models) {
+    const counts = Object.entries(models)
+      .map(([provider, entries]) => `${provider}: ${Object.keys(entries!).length}`)
+      .join(", ");
+    console.warn(
+      `\naiGateway.models adds deployment-owned models to the catalog (${counts}). Their ` +
+      `provider keys must be stored on the "${config.aiGateway.name}" gateway as BYOK -- see ` +
+      "docs/customization.md#ai-models.");
   }
   if (!gateway.needsToken) return;
   // CLOUDFLARE_ACCOUNT_ID pins the account the way the deploys themselves are pinned: every

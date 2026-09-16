@@ -14,11 +14,30 @@ import type {
 } from "../cloudflare-os/scripts/release/manifest-lib.ts";
 
 /** A model provider the Workshop can serve through AI Gateway with deployment-managed keys. */
-export type AiGatewayProvider = "anthropic" | "openai" | "google" | "cloudflare";
+export type AiGatewayProvider = "anthropic" | "openai" | "google" | "cloudflare" | "openrouter";
 
 /** Every provider {@link AiGatewayProvider} allows, for validation and for error messages. */
 export const AI_GATEWAY_PROVIDERS: readonly AiGatewayProvider[] =
-  ["anthropic", "openai", "google", "cloudflare"];
+  ["anthropic", "openai", "google", "cloudflare", "openrouter"];
+
+/** One entry of the deployment-owned model allow-list. Mirrors upstream's `SUGGESTED_MODELS` shape. */
+export interface AiGatewayModel {
+  /** Display name in the model picker. */
+  name: string;
+  /** Input context window, in tokens. */
+  contextWindow: number;
+  /** Output limit, in tokens. Omitted means the provider default. */
+  outputLimit?: number;
+}
+
+/**
+ * Deployment-owned model allow-list, keyed by provider and then by the model id the provider's
+ * API takes. Becomes the Workshop's `CF_AI_GATEWAY_EXTRA_MODELS` var, which the pinned fork merges
+ * over upstream's built-in `SUGGESTED_MODELS` catalogue. `openrouter` ships with no built-in
+ * models, so it is only ever served from here.
+ */
+export type AiGatewayModels =
+  Partial<Record<AiGatewayProvider, Record<string, AiGatewayModel>>>;
 
 /**
  * The public address of the router Worker. Exactly one field is set; `validateConfig` enforces
@@ -59,6 +78,12 @@ export interface AiGatewayConfigInput {
   accountId?: string | null;
   /** Providers to advertise. Must be non-empty when enabled. */
   providers?: AiGatewayProvider[];
+  /**
+   * Deployment-owned model allow-list, merged over upstream's catalogue for the providers listed
+   * in `providers`. Required for `openrouter`, which has no built-in models; optional for the rest.
+   * Model ids are what the provider's API takes; keys never live here, they live on the gateway.
+   */
+  models?: AiGatewayModels;
   /**
    * No longer configurable: Workers AI rides the same gateway route as every other provider.
    * Declared only so `validateConfig` can reject a leftover key loudly -- silently ignoring one

@@ -1,7 +1,7 @@
 {
   // Cloudflare account that owns every Worker and provisioned resource.
   // Find it: https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/
-  "accountId": "<CLOUDFLARE_ACCOUNT_ID>",
+  "accountId": "e1376e48400a20e631b61bbf16f555f1",
 
   // The deployment's public origin, used for PUBLIC_BASE_URL and to scope Context data.
   // null derives it from workers.router.route.customDomain.
@@ -16,24 +16,24 @@
     // Owns the public URL and serves the frontend. Proxies /api and /blueprint-screenshot to the
     // Workshop, and /gatekeeper/<name> to the matching Gatekeeper.
     "router": {
-      "name": "<ROUTER_WORKER_NAME>",
+      "name": "cfos-router",
 
       // Production: use a hostname in an active Cloudflare zone. Wrangler creates DNS and TLS.
       // Evaluation: replace this with "route": { "workersDev": true } and set publicBaseUrl above.
       // https://developers.cloudflare.com/workers/configuration/routing/custom-domains/
-      "route": { "customDomain": "os.example.com" }
+      "route": { "customDomain": "cfos.surprisingly.ltd" }
     },
 
     // The Workshop backend. No public route: the router reaches it over a service binding.
-    "workshop": { "name": "<WORKSHOP_WORKER_NAME>" },
-    "context": { "name": "<CONTEXT_WORKER_NAME>" },
+    "workshop": { "name": "cfos-workshop" },
+    "context": { "name": "cfos-context" },
 
     // The Scheduler Gatekeeper, which gives agents scheduled and recurring work. Ambient like
     // the Context Gatekeeper
-    "scheduler": { "name": "<SCHEDULER_WORKER_NAME>" },
+    "scheduler": { "name": "cfos-scheduler" },
 
-    "customGatekeeper": { "name": "<CUSTOM_GATEKEEPER_WORKER_NAME>" },
-    "errorReporter": { "name": "<ERROR_REPORTER_WORKER_NAME>" }
+    "customGatekeeper": { "name": "cfos-custom-gatekeeper" },
+    "errorReporter": { "name": "cfos-error-reporter" }
   },
 
   // This starter deploys Cloudflare Access mode. Cloudflare OS also supports built-in password
@@ -42,9 +42,9 @@
   // "admins" gates /admin in every sign-in method.
   // Reference: docs/customization.md#sign-in-methods
   "access": {
-    "issuer": "https://<TEAM_NAME>.cloudflareaccess.com",
-    "audience": "<ACCESS_AUDIENCE>",
-    "admins": ["<ADMIN_EMAIL>"]
+    "issuer": "https://surprisingly-pages.cloudflareaccess.com",
+    "audience": "2124f7e5979d2e5c0797a49861f6900feccd5190f10f640b35ff33839a357256",
+    "admins": ["harryrobbins@gmail.com"]
   },
 
   // Model catalog served through Cloudflare AI Gateway. Enabled by default: the Workshop reaches
@@ -57,15 +57,31 @@
     // Your account's AI Gateway. "default" is the one Cloudflare creates for the account.
     // Migrating from the hosted deploy? Use the gateway that flow created: "<instance>-ai"
     // (e.g. "cloudflareos-ai"), named after your instance. See docs/migrate-from-hosted.md.
-    "name": "default",
+    "name": "cfos-gateway",
 
     // null reuses the top-level accountId. Set only if the gateway lives in another account --
     // that requires CF_AI_GATEWAY_API_TOKEN, since the binding cannot reach across accounts.
     "accountId": null,
 
-    // "cloudflare" is Workers AI, which needs no key of your own. anthropic/openai need keys
-    // stored on the gateway; "google" additionally requires CF_AI_GATEWAY_API_TOKEN.
-    "providers": ["cloudflare"]
+    // "cloudflare" is Workers AI, which needs no key of your own. anthropic/openai/openrouter need
+    // keys stored on the gateway (BYOK); "google" additionally requires CF_AI_GATEWAY_API_TOKEN.
+    // "openrouter" has no built-in catalogue, so it also needs entries under "models" below.
+    "providers": ["openrouter"],
+
+    // Deployment-owned model allow-list, merged over upstream's built-in catalogue. Keys are the
+    // ids the provider's API takes -- for OpenRouter that is its own "vendor/model" id, and the
+    // "~" alias prefix is a real OpenRouter id, not a typo. Provider API keys never go here: store
+    // the OpenRouter key on the gateway named above as BYOK (docs/customization.md#ai-models).
+    "models": {
+      "openrouter": {
+        "qwen/qwen3.8-flash": {
+          "name": "Qwen 3.8 Flash (OpenRouter)", "contextWindow": 1000000, "outputLimit": 131072
+        },
+        "~deepseek/deepseek-flash-latest": {
+          "name": "DeepSeek Flash latest (OpenRouter)", "contextWindow": 1048576, "outputLimit": 393216
+        }
+      }
+    }
   },
 
   "context": {
@@ -89,8 +105,8 @@
   // Displayed to agents when the example custom integration is enabled in /admin.
   // Reference: docs/customization.md#custom-gatekeepers
   "customGatekeeper": {
-    "name": "<ORGANIZATION_DISPLAY_NAME>",
-    "message": "<ORGANIZATION_GUIDANCE>"
+    "name": "Surprisingly Ltd",
+    "message": "This deployment belongs to Surprisingly Ltd. Keep answers concise and never expose credentials."
   },
 
   // Explicit backend issue reports go to a private Worker that emits structured console errors.

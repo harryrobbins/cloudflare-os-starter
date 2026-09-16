@@ -186,6 +186,108 @@ test("rejects malformed AI Gateway providers and account", () => {
     /aiGateway.accountId must be null or 32 hexadecimal/i);
 });
 
+const openrouterModels = {
+  "qwen/qwen3.8-flash": { name: "Qwen 3.8 Flash", contextWindow: 1000000, outputLimit: 131072 },
+  "~deepseek/deepseek-flash-latest": { name: "DeepSeek Flash", contextWindow: 1048576 },
+};
+
+test("rejects a malformed AI Gateway model allow-list", () => {
+  const withModels = (mutate: (c: Record<string, any>) => void) => variant((c) => {
+    c.aiGateway.providers = ["cloudflare", "openrouter"];
+    c.aiGateway.models = { openrouter: structuredClone(openrouterModels) };
+    mutate(c);
+  });
+
+  // OpenRouter ships no built-in catalogue, so enabling it with no models is an empty picker.
+  assert.throws(
+    () => validateConfig(variant((c) => { c.aiGateway.providers = ["cloudflare", "openrouter"]; })),
+    /openrouter provider has no built-in models/i);
+  assert.throws(
+    () => validateConfig(withModels((c) => { c.aiGateway.models.openrouter = {}; })),
+    /openrouter provider has no built-in models/i);
+
+  assert.throws(
+    () => validateConfig(withModels((c) => { c.aiGateway.models = []; })),
+    /aiGateway\.models must be an object/i);
+  assert.throws(
+    () => validateConfig(withModels((c) => { c.aiGateway.models.mistral = { m: { name: "M", contextWindow: 1 } }; })),
+    /unknown provider "mistral"/i);
+  // A provider with models but not advertised: the Workshop would never show them.
+  assert.throws(
+    () => validateConfig(withModels((c) => {
+      c.aiGateway.models.anthropic = { "claude-x": { name: "X", contextWindow: 1 } };
+    })),
+    /"anthropic".*not in aiGateway\.providers/i);
+  assert.throws(
+    () => validateConfig(withModels((c) => { c.aiGateway.models.openrouter = ["x"]; })),
+    /models\.openrouter must be an object/i);
+  assert.throws(
+    () => validateConfig(withModels((c) => {
+      c.aiGateway.models.openrouter[" qwen/qwen3.8-flash"] = { name: "Q", contextWindow: 1 };
+    })),
+    /model ids must not be blank or padded/i);
+  assert.throws(
+    () => validateConfig(withModels((c) => {
+      c.aiGateway.models.openrouter["qwen/qwen3.8-flash"] = "Qwen";
+    })),
+    /must be an object with name and contextWindow/i);
+  assert.throws(
+    () => validateConfig(withModels((c) => {
+      c.aiGateway.models.openrouter["qwen/qwen3.8-flash"].name = "";
+    })),
+    /name must be a non-empty string/i);
+  assert.throws(
+    () => validateConfig(withModels((c) => {
+      c.aiGateway.models.openrouter["qwen/qwen3.8-flash"].contextWindow = "1000000";
+    })),
+    /contextWindow must be a positive integer/i);
+  assert.throws(
+    () => validateConfig(withModels((c) => {
+      c.aiGateway.models.openrouter["qwen/qwen3.8-flash"].contextWindow = 0;
+    })),
+    /contextWindow must be a positive integer/i);
+  assert.throws(
+    () => validateConfig(withModels((c) => {
+      c.aiGateway.models.openrouter["qwen/qwen3.8-flash"].outputLimit = -1;
+    })),
+    /outputLimit must be omitted or a positive integer/i);
+
+  // The valid shape passes, outputLimit present or not.
+  assert.equal(validateConfig(withModels(() => {})).aiGateway.providers!.length, 2);
+});
+
+test("emits the model allow-list as CF_AI_GATEWAY_EXTRA_MODELS only when it has entries", async () => {
+  const bases = await baseConfigs();
+
+  // Absent: no dormant key on the common path.
+  assert.equal(
+    generateConfigs(validConfig, bases).workshop.vars!.CF_AI_GATEWAY_EXTRA_MODELS, undefined);
+
+  // Present but empty for an enabled provider that has its own catalogue: still omitted.
+  const empty = variant((c) => { c.aiGateway.models = { anthropic: {} }; });
+  assert.equal(
+    generateConfigs(empty, bases).workshop.vars!.CF_AI_GATEWAY_EXTRA_MODELS, undefined);
+
+  const withModels = variant((c) => {
+    c.aiGateway.providers = ["cloudflare", "openrouter"];
+    c.aiGateway.models = { openrouter: structuredClone(openrouterModels), cloudflare: {} };
+  });
+  const vars = generateConfigs(withModels, bases).workshop.vars!;
+  assert.equal(vars.CF_AI_GATEWAY_PROVIDERS, "cloudflare,openrouter");
+  // A JSON object, not a string: the backend reads it structurally, the way ADMINS is an array.
+  assert.deepEqual(vars.CF_AI_GATEWAY_EXTRA_MODELS, { openrouter: openrouterModels });
+  // OpenRouter rides the Workers AI binding like anthropic/openai, so still no token.
+  assert.equal(generateConfigs(withModels, bases).workshop.secrets, undefined);
+  assert.equal(aiGatewayPlan(withModels)!.needsToken, false);
+
+  // Dormant when the catalog is off, like every other gateway var.
+  const off = variant((c) => {
+    c.aiGateway = { enabled: false, models: { openrouter: structuredClone(openrouterModels) } };
+  });
+  assert.equal(
+    generateConfigs(off, bases).workshop.vars!.CF_AI_GATEWAY_EXTRA_MODELS, undefined);
+});
+
 test("generates Access-mode Workshop, Context, and custom Gatekeeper configs", async () => {
   const generated = generateConfigs(validConfig, await baseConfigs());
   const vars = generated.workshop.vars!;
@@ -314,7 +416,7 @@ test("deploys the ambient Scheduler Gatekeeper the hosted flow preinstalls", asy
   const builds = buildCommands(validConfig)
     .map(({ args }) => args)
     .filter((args) => args.includes("@gadgets/gatekeeper-scheduler"));
-  assert.deepEqual(builds.map((args) => args.at(-1)), ["build:app", "build"]);
+  assert.deepEqual(builds.map((args) => args.at(-1)), ["build:app", "typecheck:app", "tsc"]);
 });
 
 test("keeps every Worker behind the router off the public internet", async () => {
@@ -569,10 +671,16 @@ test("never lets a deploy replay a cached build artifact", () => {
   assert.ok(commands.length > 0, "expected at least one build command");
   for (const { args } of commands) {
     const command = args.join(" ");
-    // `pnpm --filter <pkg> build` cannot see a Vite+ task, and two of the three submodule targets
-    // are now tasks rather than scripts. `vp run` runs both.
-    assert.ok(command.includes("vp run"),
-      `build step does not go through vp run: ${command}`);
+    // A plain `pnpm run <script>` / `pnpm exec <command>` step never touches the Vite+ cache. It
+    // is only allowed for the two Gatekeepers' type-check and `tsc` steps, whose package `build`
+    // script would otherwise nest a cached `vp run` of its own.
+    if (!command.includes("vp run")) {
+      assert.ok(args.includes("--filter") && (args.includes("run") || args.includes("exec")),
+        `build step neither goes through vp run nor is a pnpm script/exec: ${command}`);
+      assert.ok(!args.includes("build"),
+        `a package build script may nest a cached vp run; run its parts instead: ${command}`);
+      continue;
+    }
     assert.ok(command.includes("--no-cache"),
       `build step runs a vp task while deploying without --no-cache: ${command}\n` +
       "Deploys must not replay a cached artifact -- add --no-cache.");
@@ -585,13 +693,14 @@ test("never lets a deploy replay a cached build artifact", () => {
 
 test("rebuilds the Context configurator app rather than replaying it", () => {
   // `gatekeeper-context`'s `build` script spawns `vp run --cache build:app` of its own, which the
-  // outer --no-cache does not reach. Without this step a deploy ships whatever app.txt the cache
-  // last archived.
+  // outer --no-cache does not reach. Without the uncached `build:app` step a deploy ships whatever
+  // app.txt the cache last archived, so the `build` script is never run: its other two parts are.
   const context = buildCommands(validConfig)
     .map(({ args }) => args)
     .filter((args) => args.includes("@gadgets/gatekeeper-context"));
-  assert.deepEqual(context.map((args) => args.at(-1)), ["build:app", "build"]);
-  assert.ok(context.every((args) => args.at(-2) === "--no-cache"), context.join("\n"));
+  assert.deepEqual(context.map((args) => args.at(-1)), ["build:app", "typecheck:app", "tsc"]);
+  assert.deepEqual(context[0]!.at(-2), "--no-cache", context[0]!.join(" "));
+  assert.ok(context.every((args) => !args.includes("build")), context.join("\n"));
 });
 
 test("passes VITE_CF_ACCESS_MODE explicitly rather than inheriting it", () => {

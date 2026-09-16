@@ -30,7 +30,7 @@ The custom logo appears in the app chrome, sign-in screens, and browser tab on e
 | `workers.*.name` | Stable Worker service identities | Unique lowercase names; changing one creates a differently named Worker |
 | `workers.router.route` | The deployment's public address | `customDomain` for production or `workersDev: true` for evaluation |
 | `access` | Cloudflare Access trust and administrator list | Access team issuer, application audience, and verified email list |
-| `aiGateway` | Deployment-managed model catalog | Enabled by default over the Workers AI binding; which providers to advertise, and which gateway |
+| `aiGateway` | Deployment-managed model catalog | Enabled by default over the Workers AI binding; which providers to advertise, which gateway, and an optional model allow-list |
 | `context` | Context sharing boundary, snapshot KV, and optional Artifacts repositories | `null` to scope data to the public origin, or a pinned stable label; automatic or existing KV; Git-backed collections disabled or enabled |
 | `customGatekeeper` | Example integration identity and guidance | Organization-specific display text |
 | `errorReporting` | Private explicit-issue destination | Console Reporter enabled state, environment, and release metadata |
@@ -163,11 +163,36 @@ The binding stays bound whatever you configure here: as well as carrying gateway
 | --- | --- |
 | `enabled: true`, `providers: ["cloudflare"]` | Workers AI models over the binding. No token, no keys of your own. The default. |
 | Add `anthropic` or `openai` | Their models appear too. Keys live on the gateway ([Unified Billing or BYOK](https://developers.cloudflare.com/ai-gateway/get-started/#provider-authentication)), not in this repository. Still no token. |
+| Add `openrouter` | Rides the binding like the two above, so still no token, but it has no built-in catalogue: list its models under `aiGateway.models` and store the OpenRouter key on the gateway as BYOK. See [Storing the OpenRouter key](#storing-the-openrouter-key). |
 | Add `google` | Needs `CF_AI_GATEWAY_API_TOKEN`. pi's Google adapter refuses a custom fetch, so Google inference cannot ride the binding. |
 | `accountId` set to another account | Needs `CF_AI_GATEWAY_API_TOKEN`. The binding only reaches gateways in the Worker's own account, so the generated config sets `CF_AI_GATEWAY_USE_BINDING: "false"` and the HTTPS transport takes over. |
 | `enabled: false` | No deployment-managed catalog. Each user supplies their own model API keys — and a Workshop [migrated from the hosted deploy](migrate-from-hosted.md) will show an empty model picker. |
 
 `pnpm check` reports which of the last two applies before it deploys anything.
+
+#### Model allow-list
+
+`aiGateway.models` is a deployment-owned allow-list, keyed by provider and then by the model id the provider's API takes. The deploy emits it as the Workshop's `CF_AI_GATEWAY_EXTRA_MODELS` var, and the pinned Cloudflare OS fork merges it over upstream's built-in catalogue, so the picker shows both. Every provider named here must also be in `aiGateway.providers`.
+
+```jsonc
+"aiGateway": {
+  "enabled": true,
+  "name": "default",
+  "accountId": null,
+  "providers": ["cloudflare", "openrouter"],
+  "models": {
+    "openrouter": {
+      "qwen/qwen3.8-flash": { "name": "Qwen 3.8 Flash", "contextWindow": 1000000, "outputLimit": 131072 }
+    }
+  }
+}
+```
+
+`name` is what the picker shows, `contextWindow` is the input window in tokens, and `outputLimit` is optional. OpenRouter ids are its own `vendor/model` form, including the `~vendor/model` alias prefix it uses for "latest" pointers. `openrouter` ships with no built-in models, so `pnpm check` refuses to enable it without at least one entry here.
+
+#### Storing the OpenRouter key
+
+The key never enters this repository or a Worker secret. Store it on the gateway named in `aiGateway.name` as a [BYOK provider key](https://developers.cloudflare.com/ai-gateway/configuration/byok/): in the dashboard, open AI, then AI Gateway, choose the gateway, open Provider Keys, and add a key for the OpenRouter provider with the alias `default`. The Workshop's binding-routed requests carry no provider `Authorization` header, so the gateway attaches the stored key itself. A request that reaches OpenRouter unauthenticated means the key is missing, is under a different alias, or is stored on a different gateway than `aiGateway.name` names.
 
 #### When a token is required
 
@@ -207,7 +232,7 @@ Prefer wrapper-owned Workers and [service bindings](https://developers.cloudflar
 ## Upgrade
 
 1. Record the current `cloudflare-os` gitlink for rollback.
-2. Update the submodule to the intended upstream commit.
+2. Update the submodule to the intended upstream commit. The submodule tracks the `starter-openrouter` branch of this deployment's Cloudflare OS fork, which carries the `openrouter` provider and the `CF_AI_GATEWAY_EXTRA_MODELS` allow-list on top of upstream; rebase that branch onto the new upstream commit, push it, and pin the rebased commit here.
 3. Review Workshop and Context Wrangler base-config changes and Gatekeeper contracts.
 4. Diff `cloudflare-os/pnpm-workspace.yaml`'s `catalog:` against this repository's and re-sync it. Two submodule packages are members of this workspace and resolve `catalog:` here, so a missing entry fails the install and a *stale* one silently gives the tree two copies of `capnweb` — a failure that only appears once the two installs are separate, as they are in CI.
 5. Run `pnpm install`, `pnpm --dir cloudflare-os install`, `pnpm lint`, and `pnpm check`.
