@@ -108,3 +108,7 @@ Post-rollout verification: all seven Workers have the exact same bindings as bef
 Authorized by the user's request to commit and deploy the corrected blueprint. Bundled revision 13 is displayed as **Python Notebook** and declares one required `PYTHON` Gatekeeper binding for the `runtime` connector's `python://notebook/:name` resource. The blueprint creation page therefore provisions and configures a Notebook Python kernel before creating the Gadget instead of claiming that no connections are required.
 
 This changes bundled blueprint metadata and its archive only. It does not change Worker identities, routes, Access policy, service bindings, storage resources, container images, Durable Object migrations, runtime capacity, AI configuration, or observability. Existing Notebook gadgets and their connections are unchanged; the corrected requirement applies when creating a Gadget from the updated bundled blueprint.
+
+### Custom-scheme normalization hotfix
+
+The first revision 13 deployment exposed a frontend normalization bug: after configuration, `python://notebook/notebook` was displayed and submitted as `https://python://notebook/notebook`, which the runtime correctly rejected. Upstream submodule commit `c99aeb36` preserves any syntactically valid URI scheme while retaining the HTTPS default for schemeless web resources. A focused regression test covers both cases. This changes Workshop frontend behavior only; the blueprint, connector, runtime, infrastructure, and policies remain unchanged.
