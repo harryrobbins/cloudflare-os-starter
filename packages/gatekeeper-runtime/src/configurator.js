@@ -6,10 +6,11 @@ class Configurator extends RpcTarget {
     return 'python://notebook/' + input.value;
   }
   updateViewport() {}
+  windowResized() {}
 }
 const { port1, port2 } = new MessageChannel();
 const host = newMessagePortRpcSession(port1, new Configurator());
-window.parent.postMessage('handshake', '*', [port2]);
+window.parent.postMessage({ type: 'handshake' }, '*', [port2]);
 host.getInitialResource().then(initial => {
 const match = initial && /^python:\/\/notebook\/([a-zA-Z0-9_-]{1,64})$/.exec(initial.resourceUrl);
 if (match) input.value = match[1];

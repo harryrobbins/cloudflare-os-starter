@@ -9,7 +9,7 @@ import { intentHash } from '../../../gatekeeper-runtime/src/protocol.ts';
 import css from './style.css';
 
 const style = document.createElement('style'); style.textContent = css; document.head.append(style);
-document.body.innerHTML = `<main class="notebook"><header><div class="brand">N<span>·</span></div><div class="heading"><div class="eyebrow">PYTHON NOTEBOOK</div><input class="title" aria-label="Notebook title" maxlength="120"><div class="save-status" role="status">Opening notebook…</div></div><div class="file-actions"><button id="import">Import .ipynb</button><button id="export">Copy notebook…</button></div></header><section class="kernelbar"><div><span class="dot"></span><strong id="kernel">Python</strong><span id="kernel-info">Checking connection</span></div><button id="stop">Stop / reset kernel</button></section><div id="notice" role="status" hidden></div><section id="cells" aria-label="Notebook cells"></section><footer><button id="add-code">＋ Code cell</button><button id="add-markdown">＋ Markdown</button><span>Shift + Enter to save and run</span></footer><input id="file" type="file" accept=".ipynb,application/json" hidden><aside id="copy-help">Copies include cells and saved outputs. Import into a new Notebook and connect your own Python kernel to run it.</aside></main>`;
+document.body.innerHTML = `<main class="notebook"><header><div class="brand">N<span>·</span></div><div class="heading"><div class="eyebrow">PYTHON NOTEBOOK</div><input class="title" aria-label="Notebook title" maxlength="120"><div class="save-status" role="status">Opening notebook…</div></div><div class="file-actions"><button id="import">Import .ipynb</button><button id="export">Copy notebook…</button></div></header><section class="kernelbar"><div><span class="dot"></span><strong id="kernel">Python</strong><span id="kernel-info">Checking connection</span></div><button id="stop">Stop / reset kernel</button></section><aside id="setup-help" hidden><strong>Connect Python to run this notebook</strong><p>Open the notebook’s Connections tab → Connect resource → Notebook Python kernel. Connect a Notebook Python account, choose a kernel name, and use the binding name <code>PYTHON</code>. Then return to the notebook. Runs require your approval in Activity.</p></aside><div id="notice" role="status" hidden></div><section id="cells" aria-label="Notebook cells"></section><footer><button id="add-code">＋ Code cell</button><button id="add-markdown">＋ Markdown</button><span>Shift + Enter to save and run</span></footer><input id="file" type="file" accept=".ipynb,application/json" hidden><aside id="copy-help">Copies include cells and saved outputs. Import into a new Notebook and connect your own Python kernel to run it.</aside></main>`;
 const $ = selector => document.querySelector(selector);
 const rows = new Map();
 let doc, owner = false, runtime = { connected: false }, polling = false, latest = null, connectionFailures = 0;
@@ -71,7 +71,7 @@ function render() {
     }
     row.el.querySelector('.cell-index').textContent = String(index + 1).padStart(2, '0');
     const runButton = row.el.querySelector('.run'); runButton.hidden = cell.type !== 'code'; runButton.disabled = !owner || !runtime.connected;
-    runButton.title = owner ? 'Save and run this cell' : 'Only the owner can run this notebook. Download a copy to run your own.';
+    runButton.title = owner ? (runtime.connected ? 'Save and run this cell' : 'Connect a Python kernel in the Connections tab first') : 'Only the owner can run this notebook. Download a copy to run your own.';
     const state = row.el.querySelector('.run-state');
     state.textContent = cell.run ? `${cell.run.status}${cell.run.sourceRevision !== cell.version ? ' · output from an older revision' : ''}${cell.run.truncated ? ' · output capped' : ''}` : cell.executionCount ? `Out [${cell.executionCount}]` : '';
     row.el.querySelector('.conflict').hidden = !row.conflict;
@@ -127,6 +127,7 @@ async function poll() {
     doc = await gadget.getNotebook(); render();
     $('#kernel-info').textContent = !runtime.connected ? 'Connect PYTHON to run cells' : runtime.active?.status === 'submission-unknown' ? 'Submission uncertain · check Activity or stop/reset' : runtime.active && ['pending', 'running'].includes(runtime.active.status) ? runtime.active.status === 'pending' ? 'Waiting for approval in Activity' : 'Running…' : `Ready · session ${runtime.generation + 1}`;
     $('#stop').disabled = !owner || !runtime.connected;
+    $('#setup-help').hidden = !owner || runtime.connected;
     if (!owner) notice('Shared notebook · you can read saved outputs. Download a copy to run it with your own Python connection.');
     else if (latest?.storageFull) notice('Notebook storage is full. The latest output could not be saved. Export a copy and remove unused cells or outputs.');
     else if (latest && ['succeeded', 'failed', 'interrupted', 'rejected'].includes(latest.status)) notice(latest.status === 'succeeded' ? '' : `Last run: ${latest.status}. See the cell output and Workshop Activity.`);
