@@ -2,7 +2,7 @@
 
 Part of the [master plan](collaborative-blueprints.md). Build this one first: it needs nothing the platform does not already give, and it proves the whole draft, share, promote pipeline.
 
-**Status: built and deployed (2026-09-16).** The source is [`packages/blueprint-kanban`](../../packages/blueprint-kanban/README.md). It ships as the bundled format `format.board` (revision 2) on cfos.surprisingly.ltd. How it was built, and every departure from the original plan, is recorded in the [delivery plan](kanban-delivery.md). This page now describes the board as built.
+**Status: built and deployed (2026-09-16).** The source is [`packages/blueprint-kanban`](../../packages/blueprint-kanban/README.md). It ships as the bundled format `format.board` on cfos.surprisingly.ltd: revision 2 is deployed; revision 5, built during the [whiteboard](whiteboard-blueprint.md) work, awaits the next deploy. It disposes subscriber stubs (the production "RPC stub was not disposed properly" warning), makes request ids unguessable with replay records matched per sender, and rebases conflicts on the newest card state. How it was built, and every departure from the original plan, is recorded in the [delivery plan](kanban-delivery.md). This page now describes the board as built.
 
 **The authoritative RPC and storage reference** is the gadget's own [`src/README.md`](../../packages/blueprint-kanban/src/README.md). Where this page and that file disagree, the file wins.
 
@@ -125,6 +125,7 @@ What only the real platform showed:
   - A subscriber is dropped after 500 unacknowledged deliveries or 30 s behind.
   - Identical presence updates within 100 ms are not fanned out.
   - Dead subscribers are detected when a delivery fails, because `onRpcBroken` is not implemented by the runtime.
+  - Every kept callback stub is disposed when its entry is replaced, left or dropped (from revision 3).
 - **Echo suppression** by `senderId`.
 - **Undo inverses** are kept for card create, edit, move and delete, and for column rename and move. Inverses larger than 4 KiB are not kept.
 

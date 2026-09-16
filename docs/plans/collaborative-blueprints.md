@@ -9,7 +9,7 @@ Background research is in [`../research/`](../research/README.md). Read [gadget-
 | Plan | Product analogue | Hard part | Status |
 | --- | --- | --- | --- |
 | [Kanban board](kanban-blueprint.md) | Trello, Jira board | Nothing new; the Sheets pattern applied to cards and columns | **Deployed 2026-09-16** as `format.board` from [`packages/blueprint-kanban`](../../packages/blueprint-kanban/README.md), about 2,500 lines of shared, core and server code and 5,400 of client |
-| [Whiteboard](whiteboard-blueprint.md) | Miro | High-frequency ephemeral state (drags, cursors) kept off storage; many small versioned objects | Not started |
+| [Whiteboard](whiteboard-blueprint.md) | Miro | High-frequency ephemeral state (drags, cursors) kept off storage; many small versioned objects | **Built 2026-09-16, awaiting deploy** as `format.whiteboard` from [`packages/blueprint-whiteboard`](../../packages/blueprint-whiteboard/README.md), about 4,000 lines of shared, core and server code and 8,500 of client |
 | [Wave](wave-blueprint.md) | Google Wave | Character-level co-editing inside many threaded messages, which needs a CRDT inlined into the gadget | Not started |
 
 Build them in that order. The kanban board proved the deployment, sharing and promotion pipeline end to end, and its package is the base for the other two (see [Reusing the kanban build](#reusing-the-kanban-build)).
@@ -37,6 +37,12 @@ Each plan has to handle these, and the master plan tracks the cross-cutting fixe
 | The iframe sandbox has no `allow-forms` | Native form submission is silently blocked before `submit` fires | No `<form>` elements; use button and Enter handlers. |
 | No CRDT library, no `typed-storage`, no npm at runtime; `client.js` is served as one file and cannot import siblings | Text co-editing needs a library inlined: a module file for the server, concatenated into `client.js` for the browser | Only Wave needs this; see its plan for the Yjs build step. |
 | Sharing is workspace-wide, not per gadget | A workspace with a board and a whiteboard shares both or neither | Keep one tool per workspace for now. Upstream `plans/multi-gadget.md` defers per-gadget sharing. |
+| A `dup()`ed callback stub that is garbage-collected undisposed logs "An RPC stub was not disposed properly" (production) and crashes local workerd (found by the whiteboard spike) | The deployed kanban board logged the warning: its hub dropped replaced and dead subscribers without disposing them | Dispose every kept stub exactly once when its entry is replaced, left or dropped; never call `onRpcBroken` (passing it a function leaks a function stub). Disposal never reaches the client's `[Symbol.dispose]`. An instance aborted by a code edit still cannot dispose what it holds. |
+| A gadget handles about 45-50 inbound RPC calls a second, one at a time (measured locally) | Clients firing presence at a fixed 30 Hz queued calls for 2-16 s | Keep at most one `updatePresence` in flight per client and send only the latest state; coalesce fan-out on the server (33 ms) |
+| A Durable Object stub has a built-in `connect()` (TCP sockets) | An RPC method named `connect` is unreachable: `env.X.connect({...})` fails with a conversion error | Don't name gadget RPC methods `connect` (the whiteboard uses `connectObjects`) |
+| V8 serialises numbers in about 12 bytes, versus 3-4 in JSON | A JSON-based size cap let the whiteboard's `history` reach 284 KiB, past the 128 KiB value limit | Measure stored size with a bound on the V8 form (`storedBytes` in `packages/blueprint-whiteboard/src/shared/protocol.js`) |
+| Broadcast `clientId`s are public | Request ids built from `clientId:seq` let a peer pre-record another user's ids and make their writes vanish as duplicates (kanban and whiteboard) | Build request ids from a per-page random secret, and match replay records per `senderId` |
+| In the sandboxed iframe, Ctrl+Z outside a text field runs the browser's native undo; `navigator.clipboard` is blocked by permissions policy | Native undo moves focus back into the last edited textarea; async clipboard calls reject | Intercept undo/redo keys in a capture-phase listener outside editors; use `copy`/`paste` DOM events if clipboard is ever needed |
 | Open RPC channel keeps the DO billable (upstream issue #338) | A tab left open all day costs DO wall-clock time | Acceptable at team scale. Revisit if the deployment grows. |
 | Alarms availability in gadget code is undocumented | No server-side timers for e.g. Wave digests | Treat as unavailable. Use `gatekeeper-scheduler` if a schedule is ever needed. |
 | Output is one shared state, no history | No undo across users, no audit | Each plan keeps a bounded server-side `history` list of applied operations for undo and a basic activity feed. |
@@ -97,13 +103,15 @@ Rather than a snippet, [`packages/blueprint-kanban`](../../packages/blueprint-ka
 
 | Part | What it gives the next gadget |
 | --- | --- |
-| `src/core/hub.js` | Subscribers, presence and sessions, with backpressure and dead-subscriber detection. Transport-agnostic |
+| `src/core/hub.js` | Subscribers, presence and sessions, with backpressure and dead-subscriber detection. Transport-agnostic. **Take the whiteboard's version** (`packages/blueprint-whiteboard/src/core/hub.js`): it disposes stubs, coalesces presence, caps presence bytes and rate, and evicts idle subscribers |
 | `src/core/repository.js` | The storage seam |
 | `src/shared/order.js` | Fractional ordering keys |
-| `src/client/sync/store.js` | Optimistic queue, serial send, idempotent replay, heartbeat restart detection and frame reload; the conflict rules are board-specific |
+| `src/client/sync/store.js` | Optimistic queue, serial send, idempotent replay, heartbeat restart detection and frame reload; the conflict rules are board-specific. The whiteboard's version adds gated presence, unguessable request ids, a slow-server tolerant `onUnrecoverable`, and peers reconciled on resubscribe |
+| `packages/blueprint-whiteboard/src/shared/protocol.js` `storedBytes`, `cleanPresence` | A V8-safe size measure, and a presence sanitiser that merges partial updates onto full state |
+| `packages/blueprint-whiteboard/test/client/net.js` + `fuzz.test.js` | A real-core network simulator with latency, reordering and epoch-fenced restarts, and a seeded convergence fuzz |
 | `harness/` | Multi-pane simulator mirroring the platform's prefix, sandbox, CSP and stale stubs |
 | `scripts/` | esbuild bundling, deterministic `.gadget` packing, the revision lock |
-| `e2e/` | Local platform start and stop scripts for WSL, plus Playwright helpers for sign-up, upload, share and export |
+| `e2e/` | Local platform start and stop scripts for WSL (the whiteboard's copy detects an Access-mode frontend build and rebuilds it), plus Playwright helpers for sign-up, upload, share and export, and platform-log scanning for runtime warnings |
 
 If upstream's `libraries/sync` arrives through step 7, compare the two and adopt upstream's only where it removes code without changing the wire protocol.
 
@@ -112,7 +120,7 @@ If upstream's `libraries/sync` arrives through step 7, compare the two and adopt
 1. ~~Kanban board: draft, two-browser test, harden, publish, promote.~~ Done 2026-09-16. It was built in the repo, not drafted, and took one day with parallel agents. Production two-browser checks and the agent-chat test are still Harry's to run.
 2. ~~Starter change for the formats directory, and ship the board as a bundled format.~~ Done 2026-09-16 (`format.board` revision 2).
 3. Phase 0 viewer identity, if wanted. One day. Re-test the board with real names.
-4. Whiteboard. Two to three days, most of it in the client.
+4. ~~Whiteboard.~~ Built 2026-09-16 in one day with parallel agents (spikes, contract, four build streams, three reviews, three fix streams, local platform e2e). Awaiting `pnpm deploy`; production two-browser checks and the agent-chat test are Harry's to run. The same deploy ships Board revision 5 (stub disposal, request-id and conflict-rebase fixes).
 5. Wave. Two to three days, the first of which is getting a Yjs build that loads under the gadget module rules.
 6. Upstream sync and rebase onto `libraries/sync` when it arrives.
 
