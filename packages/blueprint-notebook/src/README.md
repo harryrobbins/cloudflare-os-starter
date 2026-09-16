@@ -1,6 +1,6 @@
 # Notebook
 
-Python cells, Markdown and saved results. Connect the Notebook Python resource as `PYTHON` to enable execution. The workspace owner can request runs and stop/reset; approve those requests in Workshop Activity. Shared viewers can read saved outputs, but cannot obtain the one-use owner permits needed to run code. Use the **use** sharing role for readers; **build** collaborators can change application source and should be trusted accordingly.
+Python cells, Markdown and saved results. Connect the Notebook Python resource as `PYTHON` to enable execution. The workspace owner’s Run and Stop/reset clicks authorize those exact operations immediately. Workshop Activity records them without a second approval. Shared viewers can read saved outputs, but cannot obtain the one-use owner permits needed to run code. Use the **use** sharing role for readers; **build** collaborators can change application source and should be trusted accordingly.
 
 A kernel keeps variables between cells until it stops, reaches its idle timeout or fails. It has no internet access. Runs are limited to 60 seconds including startup and outputs are capped. Stop/reset discards variables and temporary files; saved cells/results remain. This initial version does not persist the Python filesystem or install packages on demand.
 

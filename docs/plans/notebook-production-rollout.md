@@ -66,3 +66,25 @@ Post-deploy API inventory confirms the original Context/Workshop KV and R2 ident
 Container application: `a03b0724-75f7-4818-9fb6-b62e30f1f2e4`, `cfos-notebook-python-pythonsandbox`. Readiness verified with `wrangler containers info`: five healthy slots, zero failed/scheduling/starting, zero active or assigned. Maximum instances is five; image digest is `sha256:4115101e594260467ee1a5b3ecc29ad8908a789698ff31016961206f059159c8`. Signed-in production cell execution remains unverified.
 
 References: [Sandbox deployment](https://developers.cloudflare.com/sandbox/guides/deploy/), [Worker rollback limits](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/).
+
+## Owner-click follow-up rollout
+
+Authorized by the user's request to implement, commit and deploy direct owner Run/Stop authorization. The one-use permit now authorizes one action ID on the same approval queue. Actions still pass through the normal audit/apply path, with the owner recorded as resolver and `autoApproved: false`; no automatic approval rule is enabled. Agent/preview callers cannot consume owner permits, and collaborators cannot mint them. Old queue implementations ignore the optional action ID and retain manual approval during deployment.
+
+No Worker, route, Access policy, storage binding, container image, migration or capacity changes. Deploy the seven existing Workers in their established order. New Notebook instances receive revision 12 with updated guidance. Existing Notebook code also executes directly through the updated backend/runtime, but may retain old Activity-approval wording until its gadget code is upgraded.
+
+Validation: six runtime tests, 338 backend tests, two backend integration tests (four pre-existing skips), backend type-check, and the real Workshop/Python browser test passed. The browser test makes no Activity approval call: it checks execution, owner-attributed action records, shared-viewer denial, independent clone execution and kernel resets. Full production check and deployment are pending.
+
+### Baseline for the follow-up
+
+| Worker | Version |
+| --- | --- |
+| `cfos-error-reporter` | `f66d835a-6d41-4ac9-bbf0-f60d96d00fbf` |
+| `cfos-context` | `343f4a2d-1b1c-42f4-b95a-399606256f53` |
+| `cfos-scheduler` | `cac17184-daf7-4f20-a770-4ba9f2ac7013` |
+| `cfos-custom-gatekeeper` | `035d74b6-c6da-4492-a001-ffda962b39e0` |
+| `cfos-notebook-python` | `0c765d6c-f8b4-4270-8b28-182f302ebd36` |
+| `cfos-workshop` | `6c8013e8-4a60-4fb4-bb29-2ed6500b92e6` |
+| `cfos-router` | `e98c3ecf-78f8-47e1-9ff2-7d22efba334a` |
+
+Recovery: the previous Workshop and runtime remain API-compatible; restoring them reintroduces manual approval. Already executed Python is not undone. Existing runtime, notebook data, and Activity records must be preserved.

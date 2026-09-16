@@ -74,7 +74,7 @@ export class RuntimeGatekeeper extends DurableObject<Cloudflare.Env, Props> impl
     const state = await this.status();
     if (intent.sequence !== state.sequence || intent.generation !== state.generation) throw new Error("Runtime changed. Refresh and retry.");
     if (state.active && ["pending", "submission-unknown", "running"].includes(state.active.status) && intent.operation !== "stop") throw new Error("Wait for the current run, or reject it in Activity.");
-    await queue.consumeOwnerActionPermit(permit, hash);
+    await queue.consumeOwnerActionPermit(permit, hash, intent.sequence);
     // Recheck after the authority RPC: another owner's tab may have reserved this sequence.
     if ((this.ctx.storage.kv.get<number>("sequence") ?? 0) !== intent.sequence) throw new Error("Another operation was submitted. Refresh and retry.");
     const run: RuntimeRun = { id: intent.requestId, sequence: intent.sequence, generation: intent.generation,
@@ -104,7 +104,7 @@ export class RuntimeGatekeeper extends DurableObject<Cloudflare.Env, Props> impl
       const current = this.ctx.storage.kv.get<Action>(`request:${intent.requestId}`);
       if (current?.run.status === "pending") {
         current.run.status = "submission-unknown";
-        current.run.text = "Submission outcome unknown. Check Activity: reject the original request, or approve a Stop / reset before running again.";
+        current.run.text = "Submission outcome unknown. Check Activity: reject the original request, or click Stop / reset before running again.";
         this.ctx.storage.kv.put(`request:${intent.requestId}`, current);
       }
       return current?.run ?? run;

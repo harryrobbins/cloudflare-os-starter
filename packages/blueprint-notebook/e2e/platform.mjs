@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { launch, newUserPage, signUp, uploadGadget, createGadgetFromBlueprint, gadgetFrame, createUseShareLink, downloadExport } from '../../blueprint-whiteboard/e2e/platform-helpers.mjs';
-import { connectNotebook, connectPython, approveLatest } from './rpc.mjs';
+import { connectNotebook, connectPython } from './rpc.mjs';
 const base = process.env.NOTEBOOK_PLATFORM_URL ?? 'http://localhost:8797';
 const browser = await launch();
 const errors = [];
@@ -41,11 +41,16 @@ try {
   await page.waitForFunction(()=>document.querySelector('iframe[title="Gadget UI"]')!==null);
   await frame.getByRole('button',{name:'Run cell'}).click({timeout:30000});
   console.log('Run requested');
-  await approveLatest(page);
-  console.log('Run approved');
+
   await frame.locator('.run-state').getByText('succeeded',{exact:true}).waitFor({timeout:90000});
   await frame.locator('.output pre').getByText(/42/).waitFor({timeout:5000});
-  console.log('PASS: owner execution completed');
+  const actions = await page.evaluate(async()=>window.notebookTestRpc.workspace.listActions());
+  const executed = actions.filter(a=>a.type==='action');
+  assert.equal(executed.length,1);
+  assert.equal(executed[0].state,'approved');
+  assert.equal(executed[0].autoApproved,false);
+  assert.ok(executed[0].resolvedBy);
+  console.log('PASS: owner execution completed and audited without Activity approval');
   await page.screenshot({path:'/tmp/notebook-browser.png',fullPage:true});
   const share = await createUseShareLink(page);
   const viewer = (await newUserPage(browser)).page; debugPage=viewer;
@@ -85,17 +90,15 @@ try {
   const freshCell=clone.locator('.cell').last();
   await freshCell.locator('.cm-content').fill('print("shared_value" in globals())');
   await freshCell.getByRole('button',{name:'Run cell'}).click({timeout:30000});
-  await approveLatest(viewer);
   await freshCell.locator('.run-state').getByText('succeeded',{exact:true}).waitFor({timeout:90000});
   await freshCell.locator('.output pre').getByText(/False/).waitFor();
   for (const activePage of [page,viewer]) {
     const activeFrame=gadgetFrame(activePage);
     await activeFrame.getByRole('button',{name:'Stop / reset kernel'}).click();
-    await approveLatest(activePage);
     await activeFrame.locator('#kernel-info').getByText(/session 2/).waitFor({timeout:30000});
   }
   assert.deepEqual(errors,[]);
-  console.log('PASS: actual Workshop notebook creation, edit, safe import, saved outputs, export, owner approval + Python execution, forged viewer permit denial, independent copy with its own executable kernel.');
+  console.log('PASS: actual Workshop notebook creation, edit, safe import, saved outputs, export, owner-click Python execution without a second approval, forged viewer permit denial, independent copy with its own executable kernel.');
 } catch (error) {
   if(debugPage) { await debugPage.screenshot({path:'/tmp/notebook-failure.png'}).catch(()=>{}); console.error((await debugPage.locator('body').innerText().catch(()=>'' )).slice(0,2000)); }
   throw error;

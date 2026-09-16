@@ -68,3 +68,7 @@ Do not record the feature as fully verified until the complete chain—owner UI 
 A code-server/OpenVSCode launcher should use a dedicated authenticated origin, per-runtime authorization, HTTP/WebSocket proxying and an explicit durable filesystem strategy. Access login alone is not authorization to another user's runtime. The current notebook-only runtime has no terminal, launch-ticket endpoint or project storage contract; those are additional work, not hidden capabilities of the shipped blueprint.
 
 Research: [blueprint integration](../research/notebook-ide-blueprint-integration.md), [notebook runtime choices](../research/notebook-blueprint-runtime-options.md), and [browser IDE choices](../research/browser-ide-runtime-options.md).
+
+### Owner-click execution update
+
+Run and Stop/reset now use the authenticated owner’s one-use, intent-scoped permit as the action decision. The queue binds that authorization to one action ID in the same session and records the owner as the resolver. No blanket auto-approval rule is created. Collaborators and agents cannot mint these permits. The historical first rollout used a second Activity approval; that extra step is removed. Older Workshop queues still require manual approval during the non-atomic rollout.

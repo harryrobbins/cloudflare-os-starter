@@ -8,10 +8,10 @@ it('authorizes reads but rejects collaborator execution',async()=>{
   const h=env.TEST.getByName(crypto.randomUUID());
   await expect((async () => await h.check(intent(),'collaborator',false))()).rejects.toThrow(/Owner permit/);
 });
-it('does not execute before approval; retries never submit another action',async()=>{
+it('executes an owner-authorized action immediately; retries never submit another action',async()=>{
   const h=env.TEST.getByName(crypto.randomUUID()), request=intent();
   const a=await h.check(request,'owner',false);
-  expect(a.submitted.status).toBe('pending');expect(a.after.status).toBe('pending');expect(a.observations).toBe(3);expect(a.submissions).toBe(1);
+  expect(a.submitted.status).toBe('pending');expect(a.after.status).toBe('succeeded');expect(a.observations).toBe(3);expect(a.submissions).toBe(1);
   const b=await h.check(request,'owner',true);expect(b.after.text).toBe('42');expect(b.submissions).toBe(0);
   await expect((async () => await h.check({...request,source:'bad'},'owner',true))()).rejects.toThrow(/different/);
 });
@@ -34,4 +34,12 @@ it('records uncertain submission without losing its identity or retrying the act
   expect(a.submitted.status).toBe('submission-unknown'); expect(a.submissions).toBe(1);
   const b=await h.check(request,'owner',false,false);
   expect(b.submitted.status).toBe('submission-unknown'); expect(b.submissions).toBe(0);
+});
+
+it('retains manual approval with an older Workshop queue during rollout',async()=>{
+ const h=env.TEST.getByName(crypto.randomUUID()), request=intent();
+ const a=await h.check(request,'owner',false,false,true);
+ expect(a.after.status).toBe('pending');
+ const b=await h.check(request,'owner',true,false,true);
+ expect(b.after.status).toBe('succeeded');
 });

@@ -9,7 +9,7 @@ import { intentHash } from '../../../gatekeeper-runtime/src/protocol.ts';
 import css from './style.css';
 
 const style = document.createElement('style'); style.textContent = css; document.head.append(style);
-document.body.innerHTML = `<main class="notebook"><header><div class="brand">N<span>·</span></div><div class="heading"><div class="eyebrow">PYTHON NOTEBOOK</div><input class="title" aria-label="Notebook title" maxlength="120"><div class="save-status" role="status">Opening notebook…</div></div><div class="file-actions"><button id="import">Import .ipynb</button><button id="export">Copy notebook…</button></div></header><section class="kernelbar"><div><span class="dot"></span><strong id="kernel">Python</strong><span id="kernel-info">Checking connection</span></div><button id="stop">Stop / reset kernel</button></section><aside id="setup-help" hidden><strong>Connect Python to run this notebook</strong><p>Open the notebook’s Connections tab → Connect resource → Notebook Python kernel. Connect a Notebook Python account, choose a kernel name, and use the binding name <code>PYTHON</code>. Then return to the notebook. Runs require your approval in Activity.</p></aside><div id="notice" role="status" hidden></div><section id="cells" aria-label="Notebook cells"></section><footer><button id="add-code">＋ Code cell</button><button id="add-markdown">＋ Markdown</button><span>Shift + Enter to save and run</span></footer><input id="file" type="file" accept=".ipynb,application/json" hidden><aside id="copy-help">Copies include cells and saved outputs. Import into a new Notebook and connect your own Python kernel to run it.</aside></main>`;
+document.body.innerHTML = `<main class="notebook"><header><div class="brand">N<span>·</span></div><div class="heading"><div class="eyebrow">PYTHON NOTEBOOK</div><input class="title" aria-label="Notebook title" maxlength="120"><div class="save-status" role="status">Opening notebook…</div></div><div class="file-actions"><button id="import">Import .ipynb</button><button id="export">Copy notebook…</button></div></header><section class="kernelbar"><div><span class="dot"></span><strong id="kernel">Python</strong><span id="kernel-info">Checking connection</span></div><button id="stop">Stop / reset kernel</button></section><aside id="setup-help" hidden><strong>Connect Python to run this notebook</strong><p>Open the notebook’s Connections tab → Connect resource → Notebook Python kernel. Connect a Notebook Python account, choose a kernel name, and use the binding name <code>PYTHON</code>. Then return to the notebook. Run starts the selected cell immediately. Activity records each operation.</p></aside><div id="notice" role="status" hidden></div><section id="cells" aria-label="Notebook cells"></section><footer><button id="add-code">＋ Code cell</button><button id="add-markdown">＋ Markdown</button><span>Shift + Enter to save and run</span></footer><input id="file" type="file" accept=".ipynb,application/json" hidden><aside id="copy-help">Copies include cells and saved outputs. Import into a new Notebook and connect your own Python kernel to run it.</aside></main>`;
 const $ = selector => document.querySelector(selector);
 const rows = new Map();
 let doc, owner = false, runtime = { connected: false }, polling = false, latest = null, connectionFailures = 0;
@@ -107,7 +107,7 @@ async function submit(intent) {
   const permit = await gadget.$createOwnerActionPermit('PYTHON', await intentHash(intent));
   if (!permit) throw new Error('Only the workspace owner can run or stop this kernel.');
   const result = await gadget.submitRun(intent, permit); latest = result;
-  notice(result.status === 'submission-unknown' ? result.text : 'Run requested. Approve it in Workshop Activity.');
+  notice(result.status === 'submission-unknown' ? result.text : 'Operation requested. See Activity for its record.');
   await poll();
 }
 async function runCell(id) {
@@ -125,7 +125,7 @@ async function poll() {
   try {
     latest = await gadget.refreshRun(); runtime = await gadget.getRuntimeStatus();
     doc = await gadget.getNotebook(); render();
-    $('#kernel-info').textContent = !runtime.connected ? 'Connect PYTHON to run cells' : runtime.active?.status === 'submission-unknown' ? 'Submission uncertain · check Activity or stop/reset' : runtime.active && ['pending', 'running'].includes(runtime.active.status) ? runtime.active.status === 'pending' ? 'Waiting for approval in Activity' : 'Running…' : `Ready · session ${runtime.generation + 1}`;
+    $('#kernel-info').textContent = !runtime.connected ? 'Connect PYTHON to run cells' : runtime.active?.status === 'submission-unknown' ? 'Submission uncertain · check Activity or stop/reset' : runtime.active && ['pending', 'running'].includes(runtime.active.status) ? runtime.active.status === 'pending' ? 'Starting…' : 'Running…' : `Ready · session ${runtime.generation + 1}`;
     $('#stop').disabled = !owner || !runtime.connected;
     $('#setup-help').hidden = !owner || runtime.connected;
     if (!owner) notice('Shared notebook · you can read saved outputs. Download a copy to run it with your own Python connection.');
