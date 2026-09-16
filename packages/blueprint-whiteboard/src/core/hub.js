@@ -45,7 +45,9 @@ import { LIMITS, cleanLine, cleanPresence, isSession, newSession } from "../shar
 export const MAX_INFLIGHT = 500;
 export const INFLIGHT_TIMEOUT_MS = 30_000;
 export const PRESENCE_MAX_INFLIGHT = 4;
-export const DEFAULT_COALESCE_MS = 50;
+// Measured on the local platform (spike, 3 clients): coalescing at 50 ms added ~40 ms p50 over direct
+// fan-out; 33 ms keeps cursors near 30 Hz while capping outbound calls per subscriber.
+export const DEFAULT_COALESCE_MS = 33;
 const CLIENT_ID_MAX = 64;
 
 /** @param {unknown} v */

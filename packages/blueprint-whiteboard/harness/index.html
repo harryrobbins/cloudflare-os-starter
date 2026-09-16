@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Whiteboard harness</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body { font: 13px system-ui, sans-serif; display: flex; flex-direction: column; background: #20242c; color: #e8ebf1; }
+    .controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 8px 12px; border-bottom: 1px solid #353b47; }
+    .controls h1 { font-size: 14px; margin: 0 8px 0 0; }
+    .controls label { display: inline-flex; gap: 6px; align-items: center; }
+    button { font: inherit; background: #2f3542; color: inherit; border: 1px solid #4a5160; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+    button:hover { background: #3a4150; }
+    #log { color: #939bab; font-family: ui-monospace, monospace; font-size: 12px; }
+    #panes { flex: 1; min-height: 0; display: flex; gap: 6px; padding: 6px; }
+    .pane { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; border: 1px solid #353b47; border-radius: 8px; overflow: hidden; background: #111; }
+    .pane-bar { display: flex; gap: 8px; align-items: center; padding: 4px 8px; background: #2a2f3a; }
+    .pane-bar strong { flex: 1; }
+    .pane-bar button { padding: 1px 8px; font-size: 12px; }
+    .pane iframe { flex: 1; border: 0; width: 100%; background: #fff; }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <h1>Whiteboard harness</h1>
+    <label>Latency <input id="latency" type="range" min="0" max="1000" step="10" value="0"> <span id="latency-value">0 ms</span></label>
+    <button id="restart" title="New core + empty hub over the same repository; callbacks are not disposed">Restart server</button>
+    <button id="restart-dispose" title="Same, and calls [Symbol.dispose] on every callback">Restart + dispose</button>
+    <button id="restart-stale" title="Same as Restart server, and every pane's existing gadget stub rejects forever (as on the platform); panes must reload themselves">Restart (stale stub)</button>
+    <button id="add-pane">Add pane</button>
+    <button id="add-export" title="A pane with gadgetExportFormatId = 'html'">Add export pane</button>
+    <span id="log"></span>
+  </div>
+  <div id="panes"></div>
+  <script type="module" src="harness.js"></script>
+</body>
+</html>
