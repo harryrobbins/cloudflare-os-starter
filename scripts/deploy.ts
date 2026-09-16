@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -290,6 +290,14 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
       (typeof artifactsNamespace !== "string" ||
        !/^[a-z\d][a-z\d._-]*$/i.test(artifactsNamespace))) {
     throw new Error("Context Artifacts namespace must be omitted or start with a letter or number and use only letters, numbers, dots, underscores, and hyphens.");
+  }
+
+  const formatsDir = config.formatBlueprintsDir;
+  if (formatsDir !== undefined && formatsDir !== null &&
+      (typeof formatsDir !== "string" || !formatsDir.trim() || formatsDir !== formatsDir.trim())) {
+    throw new Error(
+      "formatBlueprintsDir must be null or a non-padded path to a directory of .gadget/.json " +
+      "format pairs, relative to the repository root.");
   }
 
   const sampling = config.observability.headSamplingRate;
@@ -697,8 +705,37 @@ export function buildCommands(config: DeploymentConfig): BuildCommand[] {
     // here rather than inherited: a bundle built under a different value is wrong, not just stale.
     { args: submoduleBuild("@gadgets/workshop-frontend"), env: { VITE_CF_ACCESS_MODE: "true" } },
     { args: submoduleBuild("@gadgets/router") },
-    { args: submoduleBuild("@gadgets/workshop-backend") },
+    // The backend inlines its bundled format blueprints at build time. Absolute, because upstream
+    // resolves a relative FORMAT_BLUEPRINTS_DIR against its own package, not this repository.
+    {
+      args: submoduleBuild("@gadgets/workshop-backend"),
+      ...(config.formatBlueprintsDir && {
+        env: { FORMAT_BLUEPRINTS_DIR: formatBlueprintsPath(config.formatBlueprintsDir) },
+      }),
+    },
   ];
+}
+
+/** `formatBlueprintsDir` resolved against the repository root. */
+export function formatBlueprintsPath(dir: string): string {
+  return resolve(root, dir);
+}
+
+/**
+ * Upstream's generator only warns on an empty directory and then ships no formats at all, Docs,
+ * Sheets and Slides included, because the directory replaces its defaults. Refuse that here.
+ */
+function requireFormatBlueprints(config: DeploymentConfig): void {
+  if (!config.formatBlueprintsDir) return;
+  const dir = formatBlueprintsPath(config.formatBlueprintsDir);
+  const archives = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".gadget")) : [];
+  if (!archives.length) {
+    throw new Error(`formatBlueprintsDir ${config.formatBlueprintsDir} holds no .gadget archives.`);
+  }
+  const missing = archives.filter((f) => !existsSync(join(dir, f.replace(/\.gadget$/, ".json"))));
+  if (missing.length) {
+    throw new Error(`formatBlueprintsDir: no .json sidecar beside ${missing.join(", ")}.`);
+  }
 }
 
 // `allowTrailingComma` because wrangler accepts them and upstream uses them: the Scheduler's base
@@ -811,6 +848,7 @@ function reportAiGateway(config: DeploymentConfig): void {
 async function main(): Promise<void> {
   requireSubmodule();
   const config = await readDeployment(join(root, "deployment.jsonc"));
+  requireFormatBlueprints(config);
   const generated = generateConfigs(config, {
     router: await readJsonc(join(root, packageDirs.router, "wrangler.jsonc")),
     workshop: await readJsonc(join(root, packageDirs.workshop, "wrangler.jsonc")),

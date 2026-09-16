@@ -154,6 +154,12 @@ export interface DeploymentConfig {
     blueprintContentBucket: string | null;
   };
   observability: DeploymentObservabilityConfig;
+  /**
+   * Directory of bundled format blueprints (`<name>.gadget` + `<name>.json`), relative to the
+   * repository root. Replaces upstream's default set, so it must carry any defaults to keep.
+   * `null` or absent ships upstream's formats.
+   */
+  formatBlueprintsDir?: string | null;
 }
 
 /**

@@ -1,0 +1,17 @@
+{
+  "blueprintId": "format.board",
+  "title": "Board",
+  "description": "Use to plan and track work on a live, shared kanban board with columns, cards, labels, checklists and comments.",
+  "output": {
+    "id": "board",
+    "noun": "Board",
+    "plural": "Boards",
+    "icon": "kanban"
+  },
+  "author": {
+    "type": "user",
+    "name": "Surprisingly Ltd",
+    "id": "harryrobbins@gmail.com"
+  },
+  "revision": 1
+}

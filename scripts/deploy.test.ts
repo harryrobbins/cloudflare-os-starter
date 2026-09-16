@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
+import { isAbsolute, join } from "node:path";
 import test from "node:test";
 import { parse, type ParseError } from "jsonc-parser";
-import { aiGatewayPlan, buildCommands, generateConfigs, validateConfig } from "./deploy.ts";
+import {
+  aiGatewayPlan, buildCommands, formatBlueprintsPath, generateConfigs, validateConfig,
+} from "./deploy.ts";
 import type {
   BaseConfigs,
   DeploymentConfig,
@@ -708,6 +711,44 @@ test("passes VITE_CF_ACCESS_MODE explicitly rather than inheriting it", () => {
   assert.deepEqual(withAccessMode.map(({ env }) => env), [{ VITE_CF_ACCESS_MODE: "true" }]);
   // It has to reach the frontend, which inlines it into the bundle, and nothing else.
   assert.match(withAccessMode[0].args.join(" "), /@gadgets\/workshop-frontend/);
+});
+
+test("passes an absolute FORMAT_BLUEPRINTS_DIR to the backend build only when configured", () => {
+  const backend = (config: DeploymentConfig) => buildCommands(config)
+    .find(({ args }) => args.includes("@gadgets/workshop-backend"))!;
+
+  assert.equal(backend(validConfig).env, undefined);
+  assert.equal(backend(variant((c) => { c.formatBlueprintsDir = null; })).env, undefined);
+
+  const env = backend(variant((c) => { c.formatBlueprintsDir = "formats"; })).env;
+  assert.equal(env?.FORMAT_BLUEPRINTS_DIR, formatBlueprintsPath("formats"));
+  assert.ok(isAbsolute(env!.FORMAT_BLUEPRINTS_DIR), env!.FORMAT_BLUEPRINTS_DIR);
+  // Upstream resolves a relative value against its own package; ours means the repository root.
+  assert.ok(env!.FORMAT_BLUEPRINTS_DIR.endsWith("/formats"), env!.FORMAT_BLUEPRINTS_DIR);
+});
+
+test("rejects a blank or padded formatBlueprintsDir", () => {
+  for (const value of ["", "  ", " formats", 42, true]) {
+    assert.throws(() => validateConfig(variant((c) => { c.formatBlueprintsDir = value; })),
+      /formatBlueprintsDir/, String(value));
+  }
+  validateConfig(variant((c) => { c.formatBlueprintsDir = "formats"; }));
+  validateConfig(variant((c) => { c.formatBlueprintsDir = null; }));
+});
+
+test("the repository's formats directory pairs every archive with a sidecar", async () => {
+  const dir = formatBlueprintsPath("formats");
+  const files = await readdir(dir);
+  const archives = files.filter((f) => f.endsWith(".gadget"));
+  // Setting the directory replaces upstream's defaults, so they must be carried here.
+  for (const name of ["workspace-docs", "workspace-sheets", "workspace-slides", "board"]) {
+    assert.ok(archives.includes(`${name}.gadget`), `formats/${name}.gadget missing`);
+  }
+  for (const archive of archives) {
+    const sidecar = JSON.parse(await readFile(join(dir, archive.replace(/\.gadget$/, ".json")), "utf8"));
+    assert.match(sidecar.blueprintId, /^[a-zA-Z0-9._-]+$/);
+    assert.ok(Number.isInteger(sidecar.revision) && sidecar.revision >= 1, archive);
+  }
 });
 
 test("builds the frontend before the router", () => {

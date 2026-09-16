@@ -2,6 +2,8 @@
 
 Part of the [master plan](collaborative-blueprints.md). Build this one first: it needs nothing the platform does not already give, and it proves the whole draft, share, promote pipeline.
 
+Execution order, agent orchestration and deployment are in the [delivery plan](kanban-delivery.md), which builds the board in this repo rather than in the Workshop editor.
+
 Reference: the Sheets server in [`../research/bundled-blueprints/workspace-sheets.server.js`](../research/bundled-blueprints/workspace-sheets.server.js) and the pattern summary in [bundled-blueprint-sync-patterns.md](../research/bundled-blueprint-sync-patterns.md).
 
 ## Scope

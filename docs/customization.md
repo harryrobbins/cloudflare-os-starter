@@ -35,6 +35,7 @@ The custom logo appears in the app chrome, sign-in screens, and browser tab on e
 | `customGatekeeper` | Example integration identity and guidance | Organization-specific display text |
 | `errorReporting` | Private explicit-issue destination | Console Reporter enabled state, environment, and release metadata |
 | `resources` | Blueprint/avatar KV and blueprint-content R2 | `null` to provision or explicit IDs/names to reuse |
+| `formatBlueprintsDir` | Formats shipped with the deployment | `null` for upstream's Docs, Sheets and Slides, or a directory of `.gadget`/`.json` pairs; see [Bundled formats](#bundled-formats) |
 | `observability` | Worker telemetry | Structured logs, invocation logs, traces, and sampling; see the [observability guide](observability.md) |
 
 Secrets are never valid values in this file. Install them interactively with Wrangler against the Worker that consumes them.
@@ -209,6 +210,22 @@ In exactly those cases the generated Wrangler config [declares the secret as req
 ### Observability
 
 The starter enables structured custom logs and a private console-backed Error Reporter, while invocation logs, traces, and browser reporting remain separate controls. See [Observability and error reporting](observability.md) for signal selection, sampling, triage, privacy, source maps, frontend reporting, and external destinations.
+
+### Bundled formats
+
+Formats are the blueprints offered under **New** in the composer. You can promote any published blueprint to a format in `/admin` without a deploy. To ship formats with the deployment itself, so a fresh instance has them from its first request, set `formatBlueprintsDir`:
+
+```jsonc
+"formatBlueprintsDir": "formats"
+```
+
+- **What it points at.** The directory holds `<name>.gadget` archives, each with a `<name>.json` sidecar that sets `blueprintId`, `title`, `description`, `output` and `revision`.
+- **How the deploy uses it.** The deploy passes the directory's absolute path to the Workshop build as `FORMAT_BLUEPRINTS_DIR`.
+- **It replaces upstream's formats.** The directory replaces upstream's default set rather than adding to it. That is why this repository's [`formats/`](../formats) carries copies of Docs, Sheets and Slides beside its own Board. The deploy refuses a directory with no archives, or an archive with no sidecar.
+- **Updating a format.** A deployment reinstalls a format only when its `revision` or presentation changes. Bump `revision` with every code change.
+- **Never change a `blueprintId`.** It is the install key.
+
+The Board format is built from [`packages/blueprint-kanban`](../packages/blueprint-kanban/README.md). `pnpm --filter blueprint-kanban pack:gadget` rebuilds `formats/board.gadget` and bumps its revision. The package's tests fail if the committed archive is stale.
 
 ## Custom Gatekeepers
 

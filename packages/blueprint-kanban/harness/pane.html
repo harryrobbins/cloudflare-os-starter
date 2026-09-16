@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- The platform's gadget iframe CSP. Same-origin here (the parent needs to reach in), but
+       otherwise as strict: no network, no external scripts; the client runs as an inline module. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src data: 'unsafe-inline'; style-src data: 'unsafe-inline'; img-src data:; connect-src 'none'">
+  <title>Pane</title>
+</head>
+<body>
+  <script type="module">
+    // Mimics the platform iframe: no markup of its own, globals `gadget` and `RpcTarget`, and
+    // `gadgetExportFormatId` in export mode. Then the real built client runs, inlined.
+    const pane = new URLSearchParams(location.search).get("pane");
+    window.addEventListener("error", (e) => { window.clientError = String(e.error?.stack || e.message); });
+    window.addEventListener("unhandledrejection", (e) => { window.clientError = String(e.reason?.stack || e.reason); });
+    window.RpcTarget = class RpcTarget {};
+    const { gadget, exportFormat, clientSource } = parent.harness.connect(pane, window);
+    window.gadget = gadget;
+    if (exportFormat) window.gadgetExportFormatId = exportFormat;
+    const script = document.createElement("script");
+    script.type = "module";
+    script.textContent = (await clientSource) + "\n;window.clientLoaded = true;\n";
+    document.body.appendChild(script);
+  </script>
+</body>
+</html>
