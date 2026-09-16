@@ -38,8 +38,8 @@ The configured hostname is currently attached to `cfos-router`; all six existing
 - Fresh-account browser setup passes through the actual Connections UI, account provisioning, configurator handshake, and enabled Run/Stop controls.
 - Frontend type-check and 173 frontend tests pass after the setup fixes.
 - Earlier full Notebook browser test covered execution/approval, viewer denial and independent clone execution; Docker tests covered isolation, cancellation, errors and output caps.
-- Full `pnpm check` with runtime enabled: in progress.
-- Deployment: pending.
+- Full `pnpm check` with runtime enabled: passed (exit 0), including all seven Worker dry runs and the Python Docker build.
+- Deployment: `pnpm deploy` completed successfully (exit 0) from root `a231fe1` and submodule `835b1738`.
 
 Production unauthenticated HTTPS redirects to Access. Account-level Access inventory returned no applications and zone-level inventory returned HTTP 403 with the current Wrangler credential; the existing Access policy is preserved, not reconfigured. Positive login, authenticated non-admin denial, existing private data, and production cell execution require a signed-in browser and are not yet verified.
 
@@ -48,3 +48,21 @@ Production unauthenticated HTTPS redirects to Access. Account-level Access inven
 Deployment is sequential: Reporter → Context → Scheduler → custom Gatekeeper → Python runtime → Workshop → Router. New RPC methods are additive and Python is deployed before its first caller. On failure, inventory completed stages before resuming; do not assume an atomic rollout.
 
 Restore the prior compatible Workshop/Router versions together if necessary; preserve storage and the new runtime Worker. Disabling the runtime binding prevents new connections but does not delete existing resources or stop every existing kernel immediately. Do not delete the new Durable Object classes, containers or user data as rollback. Worker rollback does not undo notebook documents, connection records, KV/R2 writes or installed blueprint revisions; bundled blueprint updates affect new instances and require deliberate handling on recovery. Prefer forward repair for runtime failures.
+
+## Deployed versions
+
+| Worker | Deployment | Version |
+| --- | --- | --- |
+| `cfos-error-reporter` | `cf186560-fa7f-46c7-8f1a-1f964305bd93` | `f66d835a-6d41-4ac9-bbf0-f60d96d00fbf` |
+| `cfos-context` | `3012c8b2-680e-4c5f-aeb4-106d47ba30f6` | `343f4a2d-1b1c-42f4-b95a-399606256f53` |
+| `cfos-scheduler` | `072fa2ea-fbd4-4d78-ba9f-cecfa8918141` | `cac17184-daf7-4f20-a770-4ba9f2ac7013` |
+| `cfos-custom-gatekeeper` | `44a930ef-5d24-4e7d-80d5-2c9f0c71c1ac` | `035d74b6-c6da-4492-a001-ffda962b39e0` |
+| `cfos-notebook-python` | `ef8e051e-1351-43fd-98a0-c860c49de3eb` | `0c765d6c-f8b4-4270-8b28-182f302ebd36` |
+| `cfos-workshop` | `17abc82f-ffb0-4728-8992-1d9e21962203` | `6c8013e8-4a60-4fb4-bb29-2ed6500b92e6` |
+| `cfos-router` | `b1232f43-43e4-4f8f-ae89-3670545f37e9` | `e98c3ecf-78f8-47e1-9ff2-7d22efba334a` |
+
+Post-deploy API inventory confirms the original Context/Workshop KV and R2 identities are unchanged. Workshop now binds `GATEKEEPER_RUNTIME` to `cfos-notebook-python` / `GatekeeperVendor`. All seven Workers have workers.dev and preview URLs disabled. The Router remains on the configured custom domain. Unauthenticated curl requests to `/` and `/api` return HTTP 302 to Access; Python's default HTTP client receives HTTP 403 instead. Neither test is an authenticated application check.
+
+Container application: `a03b0724-75f7-4818-9fb6-b62e30f1f2e4`, `cfos-notebook-python-pythonsandbox`. Readiness verified with `wrangler containers info`: five healthy slots, zero failed/scheduling/starting, zero active or assigned. Maximum instances is five; image digest is `sha256:4115101e594260467ee1a5b3ecc29ad8908a789698ff31016961206f059159c8`. Signed-in production cell execution remains unverified.
+
+References: [Sandbox deployment](https://developers.cloudflare.com/sandbox/guides/deploy/), [Worker rollback limits](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/).
