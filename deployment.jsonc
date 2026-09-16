@@ -86,7 +86,7 @@
 
   // Notebook Python execution. Enable after reviewing the new Worker/container deployment.
   // Cells and saved outputs work without it. No public route or new secrets are needed.
-  "runtime": { "enabled": false, "workerName": "cfos-notebook-python", "maxInstances": 5 },
+  "runtime": { "enabled": true, "workerName": "cfos-notebook-python", "maxInstances": 5 },
 
   "context": {
     // Isolates Context data shared by this Workshop deployment.
