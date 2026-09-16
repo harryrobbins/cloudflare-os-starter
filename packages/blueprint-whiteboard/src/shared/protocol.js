@@ -423,7 +423,7 @@ const SESSION_RE = /^[0-9a-f]{32}$/;
 const ORDER_RE = /^[0-9A-Za-z]+$/;
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 // C0/C1 controls except tab and newline, plus bidi overrides.
-const CONTROL_RE = /[ ---‪-‮⁦-⁩]/g;
+const CONTROL_RE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g;
 
 // ---------------------------------------------------------------------------------------------
 // Ids and tokens
@@ -706,7 +706,7 @@ export function effectiveFrameId(obj, objects) {
 export function storedBytes(value) {
   const json = JSON.stringify(value) ?? "";
   const utf8 = new TextEncoder().encode(json).length;
-  return /[^ -ÿ]/.test(json) ? Math.max(utf8, json.length * 2) : utf8;
+  return /[^\u0000-\u00ff]/.test(json) ? Math.max(utf8, json.length * 2) : utf8;
 }
 
 /**

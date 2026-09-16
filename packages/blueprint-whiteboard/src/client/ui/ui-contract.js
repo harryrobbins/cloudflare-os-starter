@@ -15,7 +15,8 @@
  * select: pick, move, resize, rotate, marquee. hand: pan only.
  * The creation tools create on click (default size, centred on the pointer) or drag (sized box);
  * sticky and text start editing right away; connector drags from one object to another; pen draws.
- * After creating, the tool returns to "select" unless it was locked (double-click in the toolbar).
+ * After creating, the tool returns to "select" unless it was locked (double-click in the toolbar);
+ * the pen stays active after each stroke.
  * @typedef {"select"|"hand"|"sticky"|"rect"|"ellipse"|"text"|"frame"|"connector"|"pen"} Tool
  */
 
@@ -30,6 +31,11 @@
  *   tool: the active tool changed. camera: pan or zoom (fired at most once per animation frame).
  *   selection: the selected ids changed. editing: inline text editing started or stopped.
  *   follow: following stopped or started (the user panning stops it).
+ *   The "tool" event also carries {tool, locked}.
+ *
+ * The canvas element also dispatches a bubbling CustomEvent "wb-contextmenu" with detail
+ * {clientX, clientY, ids} on right-click, the context menu key and touch long-press.
+ * Marquee selection picks objects it touches, but a frame only when fully enclosed.
  */
 
 /**
@@ -61,6 +67,8 @@
  * @typedef {object} CanvasOptions
  * @property {(message: string) => void} [announce]  polite live-region announcement (the shell provides it)
  * @property {boolean} [exportMode]  static render for HTML/PDF export: no gestures, no presence, fit to content
+ * @property {(type: ObjectType) => Partial<import("../../shared/protocol.js").Style>} [toolStyle]
+ *   style for newly created objects of `type` (e.g. the current pen colour); type defaults otherwise
  */
 
 export {};
