@@ -15,8 +15,8 @@ const display = value => value === null ? 'null' : typeof value === 'object' ? J
 const prettyCount = count => { try { return Intl.NumberFormat().format(BigInt(count)) } catch { return String(count) } }
 const currentCollection = () => collections.find(item => item.name === state.collection)
 async function persist() { state = await gadget.setState(state) }
-async function selectCollection(name) { state = { collection: name, cursorHistory: [] }; inspected = null; viewMode = 'rows'; disposeChart(); await persist(); await loadCollection() }
-async function loadCollection() { busy = true; errorMessage = ''; render(); schema = await gadget.describeCollection(state.collection); const fields = schema.fields.slice(0, 8).map(field => field.name); state.query = { collection: state.collection, limit: 50, fields }; await runQuery(false) }
+async function selectCollection(name) { state = { collection: name, cursorHistory: [] }; schema = null; page = null; inspected = null; viewMode = 'rows'; disposeChart(); await persist(); await loadCollection() }
+async function loadCollection() { busy = true; errorMessage = ''; schema = null; page = null; render(); schema = await gadget.describeCollection(state.collection); const fields = schema.fields.slice(0, 8).map(field => field.name); state.query = { collection: state.collection, limit: 50, fields }; await runQuery(false) }
 async function runQuery(keepResults = true) { busy = true; errorMessage = ''; if (!keepResults) page = null; render(); page = await gadget.query(state.query); busy = false; await persist(); render() }
 async function next() { if (!page?.nextCursor) return; state.cursorHistory.push(state.query.cursor || ''); state.query = { ...state.query, cursor: page.nextCursor }; await runQuery() }
 async function previous() { if (!state.cursorHistory.length) return; const cursor = state.cursorHistory.pop(); state.query = { ...state.query, ...(cursor ? { cursor } : {}) }; if (!cursor) delete state.query.cursor; await runQuery() }
@@ -36,7 +36,7 @@ function render() {
   if (inspected) renderInspector(root)
 }
 function renderChartPanel(panel) {
-  const fields = schema.fields.filter(field => ['string', 'number', 'boolean', 'timestamp'].includes(field.type) && state.query.fields?.includes(field.name))
+  const fields = schema.fields.filter(field => ['string', 'number', 'boolean', 'timestamp'].includes(field.type) && state.query?.fields?.includes(field.name))
   if (!page?.records?.length || fields.length < 2) { const empty = el('div', 'empty'); empty.append(el('h2', '', 'Nothing to visualize'), el('p', '', 'Load a page with at least two visible scalar fields. Charts use only the current bounded page.')); panel.append(empty); return }
   if (!fields.some(field => field.name === chartOptions.x)) chartOptions.x = fields.find(field => field.type !== 'number')?.name || fields[0].name
   if (!fields.some(field => field.name === chartOptions.y)) chartOptions.y = fields.find(field => field.type === 'number' && field.name !== chartOptions.x)?.name || fields.find(field => field.name !== chartOptions.x)?.name
@@ -49,6 +49,7 @@ function renderChartPanel(panel) {
 }
 function disposeChart() { if (chartCleanup) { chartCleanup(); chartCleanup = null } }
 function renderRows(panel) {
+  if (!state.query) { const empty = el('div', 'empty'); empty.append(el('h2', '', 'Loading records…'), el('p', '', 'Preparing the query for this collection.')); panel.append(empty); return }
   const controls = el('form', 'controls'); controls.addEventListener('submit', event => { event.preventDefault(); const data = new FormData(event.currentTarget); safe(() => applyFilter(String(data.get('field')), String(data.get('operator')), String(data.get('value'))))() })
   const indexes = schema.indexes.flatMap(index => index.fields.map(field => ({ field, operators: index.operators }))); if (indexes.length) { const field = selectControl('Indexed field', 'field', indexes.map(item => item.field)); const operator = selectControl('Condition', 'operator', indexes[0].operators); const fieldSelect = field.querySelector('select'); const operatorSelect = operator.querySelector('select'); fieldSelect.addEventListener('change', event => { const found = indexes.find(item => item.field === event.target.value); fillSelect(operatorSelect, found?.operators || []); configureFilterInput(input, schema.fields.find(item => item.name === event.target.value)) }); const value = el('div', 'control control-value'); value.append(el('label', '', 'Match value')); const input = el('input'); input.name = 'value'; input.required = true; input.autocomplete = 'off'; input.setAttribute('aria-label', 'Filter value'); configureFilterInput(input, schema.fields.find(item => item.name === fieldSelect.value)); value.append(input); const apply = submit(busy ? 'Applying…' : 'Apply filter'); apply.disabled = busy; controls.append(el('div', 'filter-lead', 'FILTER'), field, operator, value, apply, button('Reset', clearFilter)); } else controls.append(el('span', 'filter-empty', 'No indexed filters for this collection.'))
   panel.append(controls); const active = state.query.predicates?.[0]; if (active) { const summary = el('div', 'active-filter'); summary.append(el('span', '', 'ACTIVE QUERY'), el('strong', '', `${active.field} ${operatorLabel(active.operator)} ${display(active.value)}`), button('Remove', clearFilter, 'filter-remove')); panel.append(summary) }
