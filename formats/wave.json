@@ -1,0 +1,28 @@
+{
+  "blueprintId": "format.wave",
+  "title": "Wave",
+  "description": "Use to turn a live discussion into a recorded decision: threaded, co-edited Markdown blips, an agent that summarises and proposes with sources, and a Markdown export.",
+  "output": {
+    "id": "wave",
+    "noun": "Wave",
+    "plural": "Waves",
+    "icon": "notebook"
+  },
+  "author": {
+    "type": "user",
+    "name": "Surprisingly Ltd",
+    "id": "harryrobbins@gmail.com"
+  },
+  "revision": 1,
+  "bindings": {
+    "Model": {
+      "title": "Model for Ask agent",
+      "description": "Summarise, compare and catch up run on this model.",
+      "type": "aiModel",
+      "suggestedModel": {
+        "provider": "openrouter",
+        "modelName": "qwen/qwen3.8-flash"
+      }
+    }
+  }
+}
