@@ -5,6 +5,25 @@ const FUNCTIONS = new Set(['count', 'sum', 'min', 'max', 'avg'])
 const ownObject = value => value && typeof value === 'object' && !Array.isArray(value) ? value : null
 export function name(value, label = 'name') { if (typeof value !== 'string' || !NAME.test(value)) throw new Error(`Invalid ${label}.`); return value }
 export function scalar(value) { if (value === null || ['string', 'number', 'boolean'].includes(typeof value) && (typeof value !== 'number' || Number.isFinite(value))) return value; throw new Error('Predicate value must be a string, finite number, boolean, or null.') }
+export function filterPredicate(field, operator, raw) {
+  const definition = ownObject(field)
+  if (!definition || !OPS.has(operator) || typeof raw !== 'string') throw new Error('Invalid filter.')
+  const trimmed = raw.trim()
+  if (!trimmed) throw new Error('Enter a filter value.')
+  let value = trimmed
+  if (definition.type === 'number') {
+    value = Number(trimmed)
+    if (!Number.isFinite(value)) throw new Error('Enter a valid number.')
+  } else if (definition.type === 'boolean') {
+    if (!['true', 'false'].includes(trimmed)) throw new Error('Choose true or false.')
+    value = trimmed === 'true'
+  } else if (definition.type === 'timestamp') {
+    const timestamp = new Date(trimmed)
+    if (Number.isNaN(timestamp.valueOf())) throw new Error('Enter a valid date and time.')
+    value = timestamp.toISOString()
+  }
+  return { field: name(definition.name, 'filter field'), operator, value }
+}
 export function queryRequest(input) {
   const value = ownObject(input); if (!value) throw new Error('Query must be an object.')
   const fields = value.fields === undefined ? undefined : array(value.fields, LIMITS.selectedFields, field => name(field, 'field'))

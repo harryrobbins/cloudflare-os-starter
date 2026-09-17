@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aggregateRequest, explorerState, queryRequest } from '../src/shared/validation.js'
+import { aggregateRequest, explorerState, filterPredicate, queryRequest } from '../src/shared/validation.js'
 
 describe('client request validation', () => {
   it('normalizes bounded row queries', () => {
@@ -10,6 +10,13 @@ describe('client request validation', () => {
     expect(() => queryRequest({ collection: 'orders', predicates: [{ field: 'status', operator: 'contains', value: 'paid' }] })).toThrow('Unsupported predicate')
     expect(() => queryRequest({ collection: 'orders', limit: 101 })).toThrow('row limit')
     expect(() => queryRequest({ collection: '../orders' })).toThrow('collection')
+  })
+
+  it('builds typed filters without coercing string identifiers', () => {
+    expect(filterPredicate({ name: 'customer_id', type: 'string' }, 'eq', ' 42 ')).toEqual({ field: 'customer_id', operator: 'eq', value: '42' })
+    expect(filterPredicate({ name: 'total_minor', type: 'number' }, 'gte', '19.95')).toEqual({ field: 'total_minor', operator: 'gte', value: 19.95 })
+    expect(filterPredicate({ name: 'in_stock', type: 'boolean' }, 'eq', 'false')).toEqual({ field: 'in_stock', operator: 'eq', value: false })
+    expect(() => filterPredicate({ name: 'id', type: 'string' }, 'eq', '   ')).toThrow('filter value')
   })
 
   it('normalizes advertised aggregate-shaped input', () => {
