@@ -13,16 +13,5 @@
     "name": "Surprisingly Ltd",
     "id": "harryrobbins@gmail.com"
   },
-  "revision": 1,
-  "bindings": {
-    "Model": {
-      "title": "Model for Ask agent",
-      "description": "Summarise, compare and catch up run on this model.",
-      "type": "aiModel",
-      "suggestedModel": {
-        "provider": "openrouter",
-        "modelName": "qwen/qwen3.8-flash"
-      }
-    }
-  }
+  "revision": 1
 }

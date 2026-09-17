@@ -37,14 +37,14 @@ To run the gadget without a deployment, see [`harness/README.md`](harness/README
 - **With the deployment:** `deployment.jsonc` sets `"formatBlueprintsDir": "formats"`, so `pnpm deploy` installs the Wave as `format.wave`. Every `formats/*.gadget` with a `.json` sidecar beside it is picked up; nothing else needs registering. See [Bundled formats](../../docs/customization.md#bundled-formats).
 - **Without a deploy:** upload `formats/wave.gadget` at Home → Blueprints → Upload .gadget, open `/blueprint/<id>`, publish it, and promote it in `/admin` → Formats.
 
-The sidecar `formats/wave.json` owns the presentation (title, description, `output`, author) and the `bindings` the gadget's `env` expects; the packer validates the bindings against the platform's `BlueprintBinding` shape (`title`, `description`, `type`, plus the type's own fields) and writes them into the archive. Every `formats/*.gadget` with a sidecar beside it is installed by the deploy; nothing else needs registering.
+The sidecar `formats/wave.json` owns the presentation (title, description, `output`, author, `revision`) and nothing else: the deploy's format build rejects any other key. The `bindings` the gadget's `env` expects live in `bindings.json` in this package; the packer validates them against the platform's `BlueprintBinding` shape (`title`, `description`, `type`, plus the type's own fields) and writes them into the archive's metadata, which is where the installer reads them. Every `formats/*.gadget` with a sidecar beside it is installed by the deploy; nothing else needs registering.
 
 ### The Model binding
 
-The Ask agent runs on `env.Model` (an `aiModel` binding; the gadget checks `typeof env.Model?.run === "function"` and reports `no_model` without it). The sidecar declares it, with a suggested model:
+The Ask agent runs on `env.Model` (an `aiModel` binding; the gadget checks `typeof env.Model?.run === "function"` and reports `no_model` without it). `bindings.json` declares it, with a suggested model:
 
 ```json
-"bindings": {
+{
   "Model": {
     "title": "Model for Ask agent",
     "description": "Summarise, compare and catch up run on this model.",

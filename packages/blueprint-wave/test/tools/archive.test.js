@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { encodeContent, parseArchive, serializeArchive } from "../../scripts/archive.mjs";
-import { contentHash, packArchive, validateBindings } from "../../scripts/pack-gadget.mjs";
+import { SIDECAR_KEYS, contentHash, packArchive, validateBindings, validateSidecarKeys } from "../../scripts/pack-gadget.mjs";
 
 // A stand-in for dist/ so the test does not depend on a build.
 const files = { "server.js": "export class Gadget {}", "client.js": "document.body.append('hi')", "README.md": "# Hi\n" };
@@ -28,11 +28,13 @@ describe("gadget archives", () => {
     expect(Object.keys(metadata.bindings)).toEqual(["Model"]);
   });
 
-  it("packs the committed sidecar, which declares Model with Qwen suggested so New prefills it", async () => {
+  it("packs the committed sidecar with bindings.json, which declares Model with Qwen suggested so New prefills it", async () => {
     const committed = JSON.parse(await readFile(new URL("../../../../formats/wave.json", import.meta.url), "utf8"));
+    const bindings = JSON.parse(await readFile(new URL("../../bindings.json", import.meta.url), "utf8"));
     expect(committed.blueprintId).toBe("format.wave");
     expect(committed.output).toEqual({ id: "wave", noun: "Wave", plural: "Waves", icon: "notebook" });
-    expect(committed.bindings).toEqual({
+    expect(() => validateSidecarKeys(committed)).not.toThrow();
+    expect(bindings).toEqual({
       Model: {
         title: "Model for Ask agent",
         description: "Summarise, compare and catch up run on this model.",
@@ -40,9 +42,20 @@ describe("gadget archives", () => {
         suggestedModel: { provider: "openrouter", modelName: "qwen/qwen3.8-flash" },
       },
     });
-    const { metadata } = parseArchive(packArchive(files, committed));
-    expect(metadata.bindings).toEqual(committed.bindings);
+    const { metadata } = parseArchive(packArchive(files, { ...committed, bindings }));
+    expect(metadata.bindings).toEqual(bindings);
     expect(metadata.output).toEqual(committed.output);
+  });
+
+  it("allows exactly the sidecar keys the platform's format build accepts", async () => {
+    // The deploy failed once on `bindings` in the sidecar: keep SIDECAR_KEYS in step with the
+    // destructuring in upstream's parseSidecar.
+    const script = await readFile(new URL("../../../../cloudflare-os/packages/workshop-backend/scripts/build-format-blueprints.mjs", import.meta.url), "utf8");
+    const m = script.match(/let \{ ([^}]+), \.\.\.rest \} = parsed;/);
+    expect(m).not.toBeNull();
+    const upstream = /** @type {RegExpMatchArray} */ (m)[1].split(",").map((k) => k.trim());
+    expect([...SIDECAR_KEYS].sort()).toEqual(upstream.sort());
+    expect(() => validateSidecarKeys({ ...sidecar, bindings: {} })).toThrow(/unknown keys bindings/);
   });
 
   it("writes `bindings: {}` for a sidecar that declares none, explicitly or not", () => {

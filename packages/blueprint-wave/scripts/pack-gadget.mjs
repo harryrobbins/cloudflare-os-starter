@@ -8,9 +8,12 @@
 // change without a bump would never reach existing deployments. gadget.lock.json records the
 // content hash the current revision was packed from; it is created on the first pack.
 //
-// The sidecar also owns `bindings` (what the gadget's `env` expects; the installer keeps the
-// archive's copy verbatim). It is validated here against the platform's BlueprintBinding shape
-// (cloudflare-os/packages/workshop-shared/src/api.ts) so a typo fails the pack, not the New menu.
+// The bindings the gadget's `env` expects live in this package's `bindings.json`, NOT in the
+// sidecar: the platform's format build (cloudflare-os/packages/workshop-backend/scripts/
+// build-format-blueprints.mjs) rejects any sidecar key but blueprintId, title, description, output,
+// author, revision and $comment, and the installer takes bindings from the archive's metadata.
+// Both are validated here (bindings against the platform's BlueprintBinding shape in
+// cloudflare-os/packages/workshop-shared/src/api.ts) so a mistake fails the pack, not the deploy.
 
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
@@ -28,7 +31,19 @@ export const paths = {
   sidecar: join(repo, "formats/wave.json"),
   archive: join(repo, "formats/wave.gadget"),
   lock: join(pkg, "gadget.lock.json"),
+  bindings: join(pkg, "bindings.json"),
 };
+
+/** The only keys the platform's format build accepts in a sidecar. */
+export const SIDECAR_KEYS = ["blueprintId", "title", "description", "output", "author", "revision", "$comment"];
+
+/** @param {Record<string, unknown>} sidecar */
+export function validateSidecarKeys(sidecar) {
+  const unknown = Object.keys(sidecar).filter((k) => !SIDECAR_KEYS.includes(k));
+  if (unknown.length) {
+    throw new Error(`formats/wave.json: unknown keys ${unknown.join(", ")} (the deploy's format build rejects them; bindings go in packages/blueprint-wave/bindings.json)`);
+  }
+}
 
 /** @param {string} distDir */
 export async function readDist(distDir) {
@@ -63,7 +78,7 @@ const KEYS_BY_TYPE = {
  */
 export function validateBindings(bindings) {
   if (bindings === undefined) return {};
-  if (!isRecord(bindings)) throw new Error("sidecar `bindings` must be an object keyed by binding name");
+  if (!isRecord(bindings)) throw new Error("`bindings` must be an object keyed by binding name");
   for (const [name, b] of Object.entries(bindings)) {
     const at = `bindings.${name}`;
     if (!BINDING_NAME.test(name)) throw new Error(`${at}: name must match ${BINDING_NAME}`);
@@ -129,11 +144,12 @@ async function main() {
   const hash = contentHash(files);
   const sidecarText = await readFile(paths.sidecar, "utf8");
   const sidecar = JSON.parse(sidecarText);
-  validateBindings(sidecar.bindings);
+  validateSidecarKeys(sidecar);
+  const bindings = validateBindings(JSON.parse(await readFile(paths.bindings, "utf8")));
   const lock = JSON.parse(await readFile(paths.lock, "utf8").catch(() => '{"revision":0,"contentHash":""}'));
 
   if (check) {
-    const expected = packArchive(files, sidecar);
+    const expected = packArchive(files, { ...sidecar, bindings });
     const actual = new Uint8Array(await readFile(paths.archive).catch(() => Buffer.alloc(0)));
     const stale = lock.contentHash !== hash || lock.revision !== sidecar.revision ||
       Buffer.compare(Buffer.from(expected), Buffer.from(actual)) !== 0;
@@ -151,7 +167,7 @@ async function main() {
     await writeFile(paths.sidecar, JSON.stringify(sidecar, null, 2) + "\n");
     await writeFile(paths.lock, JSON.stringify({ revision: sidecar.revision, contentHash: hash }, null, 2) + "\n");
   }
-  const bytes = packArchive(files, sidecar);
+  const bytes = packArchive(files, { ...sidecar, bindings });
   await writeFile(paths.archive, bytes);
   console.log(`packed formats/wave.gadget (${bytes.byteLength} bytes, revision ${sidecar.revision})`);
 }
