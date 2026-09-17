@@ -26,6 +26,7 @@ const packageDirs = {
   workshop: "cloudflare-os/packages/workshop-backend",
   context: "cloudflare-os/packages/gatekeeper-context",
   scheduler: "cloudflare-os/packages/gatekeeper-scheduler",
+  procgen: "packages/gatekeeper-procgen",
   customGatekeeper: "packages/custom-gatekeeper",
   errorReporter: "packages/error-reporter",
   runtime: "packages/gatekeeper-runtime",
@@ -42,6 +43,7 @@ const requiredPaths = [
   "workers.workshop.name",
   "workers.context.name",
   "workers.scheduler.name",
+  "workers.procgen.name",
   "workers.customGatekeeper.name",
   "access.issuer",
   "access.audience",
@@ -231,7 +233,7 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
     .map(([, worker]) => worker.name);
   if (new Set(workerNames).size !== workerNames.length) {
     throw new Error(
-      "Router, Workshop, Context, Scheduler, and custom Gatekeeper names must be unique.");
+      "Router, Workshop, Context, Scheduler, Synthetic Data, and custom Gatekeeper names must be unique.");
   }
   if (!workerNames.every((name) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(name))) {
     throw new Error("Worker names must use lowercase letters, numbers, and hyphens.");
@@ -524,6 +526,7 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
   const workshop = structuredClone(bases.workshop);
   const context = structuredClone(bases.context);
   const scheduler = structuredClone(bases.scheduler);
+  const procgen = structuredClone(bases.procgen);
   const customGatekeeper = structuredClone(bases.customGatekeeper);
   const errorReporter = config.errorReporting.enabled
     ? structuredClone(bases.errorReporter)
@@ -605,6 +608,11 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
       entrypoint: "GatekeeperVendor",
     },
     {
+      binding: "GATEKEEPER_PROCGEN",
+      service: config.workers.procgen.name,
+      entrypoint: "GatekeeperVendor",
+    },
+    {
       binding: "GATEKEEPER_CUSTOM",
       service: config.workers.customGatekeeper.name,
       entrypoint: "GatekeeperVendor",
@@ -648,6 +656,10 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
   // here without adding a configuration surface for it.
   setCommon(scheduler, config, config.workers.scheduler.name);
 
+  // Synthetic Data is RPC-only. Its configurator iframe is returned over RPC, so exposing the
+  // Worker through the Router would add an unnecessary public ingress path.
+  setCommon(procgen, config, config.workers.procgen.name);
+
   setCommon(customGatekeeper, config, config.workers.customGatekeeper.name);
   customGatekeeper.vars = {
     CUSTOM_NAME: config.customGatekeeper.name,
@@ -659,7 +671,7 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
   }
 
   return {
-    router, workshop, context, scheduler, customGatekeeper,
+    router, workshop, context, scheduler, procgen, customGatekeeper,
     ...(errorReporter && { errorReporter }),
     ...(runtime && { runtime }),
   };
@@ -720,6 +732,7 @@ export function buildCommands(config: DeploymentConfig): BuildCommand[] {
     { args: submoduleBuild("@gadgets/gatekeeper-scheduler", "build:app") },
     { args: submoduleScript("@gadgets/gatekeeper-scheduler", "typecheck:app") },
     { args: submoduleExec("@gadgets/gatekeeper-scheduler", "tsc") },
+    { args: ownBuild("gatekeeper-procgen") },
     { args: ownBuild("custom-gatekeeper") },
     ...(config.runtime?.enabled ? [{ args: ownBuild("gatekeeper-runtime") }] : []),
     ...(config.errorReporting.enabled ? [{ args: ownBuild("error-reporter") }] : []),
@@ -876,6 +889,7 @@ async function main(): Promise<void> {
     workshop: await readJsonc(join(root, packageDirs.workshop, "wrangler.jsonc")),
     context: await readJsonc(join(root, packageDirs.context, "wrangler.jsonc")),
     scheduler: await readJsonc(join(root, packageDirs.scheduler, "wrangler.jsonc")),
+    procgen: await readJsonc(join(root, packageDirs.procgen, "wrangler.jsonc")),
     customGatekeeper: await readJsonc(join(root, packageDirs.customGatekeeper, "wrangler.jsonc")),
     errorReporter: await readJsonc(join(root, packageDirs.errorReporter, "wrangler.jsonc")),
     ...(config.runtime?.enabled ? { runtime: await readJsonc(join(root, packageDirs.runtime, "wrangler.jsonc")) } : {}),
@@ -897,6 +911,7 @@ async function main(): Promise<void> {
     }
     deployWorker(packageDirs.context, deployArgs);
     deployWorker(packageDirs.scheduler, deployArgs);
+    deployWorker(packageDirs.procgen, deployArgs);
     deployWorker(packageDirs.customGatekeeper, deployArgs);
     if (config.runtime?.enabled) deployWorker(packageDirs.runtime, deployArgs);
     deployWorker(packageDirs.workshop, deployArgs);

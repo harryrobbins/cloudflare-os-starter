@@ -32,6 +32,9 @@
     // the Context Gatekeeper
     "scheduler": { "name": "cfos-scheduler" },
 
+    // Credential-free, deterministic synthetic datasets. RPC-only; it has no public route.
+    "procgen": { "name": "cfos-procgen" },
+
     "customGatekeeper": { "name": "cfos-custom-gatekeeper" },
     "errorReporter": { "name": "cfos-error-reporter" }
   },

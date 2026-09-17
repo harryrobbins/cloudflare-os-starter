@@ -11,6 +11,9 @@ Background research behind the plans in [`../plans/`](../plans/collaborative-blu
 | [notebook-ide-blueprint-integration.md](notebook-ide-blueprint-integration.md) | Notebook/IDE integration against this checkout: runtime and iframe boundaries, RPC, authorization, storage, packaging and deployment extension points. |
 | [notebook-blueprint-runtime-options.md](notebook-blueprint-runtime-options.md) | Native notebooks, JupyterLite/Pyodide and remote Jupyter kernels; compatibility, persistence, execution semantics and primary sources. |
 | [browser-ide-runtime-options.md](browser-ide-runtime-options.md) | code-server/OpenVSCode hosting, Cloudflare Sandbox and external runtimes; authentication, WebSockets, durable files, extensions and validation. |
+| [blueprint-thumbnails.md](blueprint-thumbnails.md) | Blueprint thumbnail and preview placeholder architecture: user upload flow, R2/KV storage, bundled format limitations, why templates show identical placeholders, and customization options. |
+| [gadget-connectors-and-services.md](gadget-connectors-and-services.md) | Inter-gadget connectivity, data connectors, and service APIs: why direct gadget-to-gadget bindings are not supported today, the multi-gadget roadmap, and building service APIs with Gatekeepers. |
+| [procedural-data-performance-and-cost.md](procedural-data-performance-and-cost.md) | Performance and cost boundaries for finite synthetic datasets on Workers: safe query shapes, worst-case scans, current limits and pricing, and benchmark gates for larger releases. |
 
 The notebook/IDE recommendation, implementation status and remaining validation gates are in [Notebook and IDE blueprints](../plans/notebook-ide-blueprints.md). These three research documents retain the baseline feasibility research and now include the isolated notebook implementation update. Docker lifecycle and two-user browser checks have passed locally, and no deployed integration or upstream `main` comparison is claimed.
 

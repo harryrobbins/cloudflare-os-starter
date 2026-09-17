@@ -144,6 +144,18 @@ importers:
         specifier: 13.6.31
         version: 13.6.31
 
+  packages/blueprint-procgen-explorer:
+    devDependencies:
+      esbuild:
+        specifier: 0.28.1
+        version: 0.28.1
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@26.1.0)(@vitest/browser-preview@4.1.10)(vite@7.3.6(@types/node@26.1.0)(lightningcss@1.33.0))
+      yjs:
+        specifier: 13.6.31
+        version: 13.6.31
+
   packages/blueprint-whiteboard:
     devDependencies:
       '@cloudflare/vitest-pool-workers':
@@ -208,6 +220,40 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@26.1.0)(@vitest/browser-preview@4.1.10)(vite@7.3.6(@types/node@26.1.0)(lightningcss@1.33.0))
+      wrangler:
+        specifier: 'catalog:'
+        version: 4.124.0(@cloudflare/workers-types@5.20260818.1)
+
+  packages/gatekeeper-procgen:
+    dependencies:
+      '@gadgets/workshop-shared':
+        specifier: workspace:*
+        version: link:../../cloudflare-os/packages/workshop-shared
+      capnweb:
+        specifier: 'catalog:'
+        version: 0.11.1
+      capnweb-validate:
+        specifier: 'catalog:'
+        version: 0.2.4(capnweb@0.11.1)(esbuild@0.28.1)(rolldown@1.2.2)(rollup@4.62.4)(vite@7.3.6(@types/node@26.1.0)(lightningcss@1.33.0))
+    devDependencies:
+      '@cloudflare/vitest-pool-workers':
+        specifier: 'catalog:'
+        version: 0.20.3(@cloudflare/workers-types@5.20260818.1)(@vitest/runner@4.1.10)(@vitest/snapshot@4.1.10)(vitest@4.1.10)
+      '@cloudflare/workers-types':
+        specifier: ^5.20260808.1
+        version: 5.20260818.1
+      esbuild:
+        specifier: 0.28.1
+        version: 0.28.1
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: 7.3.6
+        version: 7.3.6(@types/node@26.1.0)(lightningcss@1.33.0)
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.0)(@vitest/browser-preview@4.1.10)(vite@7.3.6(@types/node@26.1.0)(lightningcss@1.33.0))

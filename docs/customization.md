@@ -50,6 +50,7 @@ The deployment is six Workers. Keep their names unique: service bindings use the
 | `workshop` | The Cloudflare OS backend, holding all user data in Durable Objects. |
 | `context` | The Context Gatekeeper. |
 | `scheduler` | The Scheduler Gatekeeper, which gives agents scheduled and recurring work. |
+| `procgen` | The Synthetic Data Gatekeeper, which generates finite deterministic datasets. |
 | `customGatekeeper` | This repository's example integration. |
 | `errorReporter` | The private explicit-issue destination. |
 
@@ -225,12 +226,13 @@ Formats are the blueprints offered under **New** in the composer. You can promot
 - **Updating a format.** A deployment reinstalls a format only when its `revision` or presentation changes. Bump `revision` with every code change.
 - **Never change a `blueprintId`.** It is the install key.
 
-This repository builds two of its formats from source, and each package's tests fail if its committed archive is stale:
+This repository builds these formats from source, and each package's tests fail if its committed archive is stale:
 
 | Format | Source | Rebuild with |
 | --- | --- | --- |
 | Board (`format.board`) | [`packages/blueprint-kanban`](../packages/blueprint-kanban/README.md) | `pnpm --filter blueprint-kanban pack:gadget` |
 | Whiteboard (`format.whiteboard`) | [`packages/blueprint-whiteboard`](../packages/blueprint-whiteboard/README.md) | `pnpm --filter blueprint-whiteboard pack:gadget` |
+| Data Explorer (`format.procgen-explorer`) | [`packages/blueprint-procgen-explorer`](../packages/blueprint-procgen-explorer/README.md) | `pnpm --filter blueprint-procgen-explorer pack:gadget` |
 
 Each command rebuilds `formats/<name>.gadget` and bumps its revision.
 
@@ -248,6 +250,12 @@ The minimal example flow is:
 6. The Workshop service binding makes the vendor available to Cloudflare OS.
 
 Read the [package guide](../packages/custom-gatekeeper/README.md) and upstream [`write-gatekeeper` skill](https://github.com/cloudflare/cloudflare-os/blob/main/.agents/skills/write-gatekeeper/SKILL.md) before adding OAuth, URL-scoped resources, writes, simulations, hooks, configurator UI, or stricter observer verification.
+
+The wrapper also ships a credential-free Synthetic Data Gatekeeper from
+[`packages/gatekeeper-procgen`](../packages/gatekeeper-procgen/README.md). It is bound only to the
+Workshop as `GATEKEEPER_PROCGEN`; its configurator and dataset sessions travel over RPC, so it has
+no Router binding or public route. Dataset resources use `procgen://commerce/v1/<seed>/<profile>`
+and expose the suggested Gadget binding name `PROCGEN`.
 
 ## Code extensions
 

@@ -21,6 +21,7 @@ const validConfig: DeploymentConfig = {
     workshop: { name: "acme-cloudflare-os-backend" },
     context: { name: "acme-cloudflare-os-context" },
     scheduler: { name: "acme-cloudflare-os-scheduler" },
+    procgen: { name: "acme-cloudflare-os-procgen" },
     customGatekeeper: { name: "acme-cloudflare-os-custom" },
     errorReporter: { name: "acme-cloudflare-os-errors" },
   },
@@ -76,6 +77,7 @@ async function baseConfigs(): Promise<BaseConfigs> {
     workshop: await baseConfig("../cloudflare-os/packages/workshop-backend/wrangler.jsonc"),
     context: await baseConfig("../cloudflare-os/packages/gatekeeper-context/wrangler.jsonc"),
     scheduler: await baseConfig("../cloudflare-os/packages/gatekeeper-scheduler/wrangler.jsonc"),
+    procgen: await baseConfig("../packages/gatekeeper-procgen/wrangler.jsonc"),
     customGatekeeper: await baseConfig("../packages/custom-gatekeeper/wrangler.jsonc"),
     errorReporter: await baseConfig("../packages/error-reporter/wrangler.jsonc"),
     runtime: await baseConfig("../packages/gatekeeper-runtime/wrangler.jsonc"),
@@ -327,6 +329,11 @@ test("generates Access-mode Workshop, Context, and custom Gatekeeper configs", a
       entrypoint: "GatekeeperVendor",
     },
     {
+      binding: "GATEKEEPER_PROCGEN",
+      service: "acme-cloudflare-os-procgen",
+      entrypoint: "GatekeeperVendor",
+    },
+    {
       binding: "GATEKEEPER_CUSTOM",
       service: "acme-cloudflare-os-custom",
       entrypoint: "GatekeeperVendor",
@@ -360,7 +367,7 @@ test("generates Access-mode Workshop, Context, and custom Gatekeeper configs", a
     (service) => service.binding === "FRONTEND_ERROR_REPORTER"), false);
 });
 
-test("gives the router the public route, the frontend, and every service binding", async () => {
+test("gives the router the public route, frontend, and HTTP-serving bindings", async () => {
   const bases = await baseConfigs();
   const generated = generateConfigs(validConfig, bases);
 
@@ -375,6 +382,8 @@ test("gives the router the public route, the frontend, and every service binding
     { binding: "GATEKEEPER_SCHEDULER", service: "acme-cloudflare-os-scheduler" },
     { binding: "GATEKEEPER_CUSTOM", service: "acme-cloudflare-os-custom" },
   ]);
+  assert.equal(generated.router.services.some(
+    (service) => service.binding === "GATEKEEPER_PROCGEN"), false);
   // Inherited untouched: the base config already carries the ASSETS binding, the SPA fallback, and
   // the /gatekeeper/* prefix an OAuth Gatekeeper redirect needs.
   assert.deepEqual(generated.router.assets, bases.router.assets);
@@ -421,6 +430,29 @@ test("deploys the ambient Scheduler Gatekeeper the hosted flow preinstalls", asy
     .map(({ args }) => args)
     .filter((args) => args.includes("@gadgets/gatekeeper-scheduler"));
   assert.deepEqual(builds.map((args) => args.at(-1)), ["build:app", "typecheck:app", "tsc"]);
+});
+
+test("deploys Synthetic Data privately and binds it only to the Workshop", async () => {
+  const bases = await baseConfigs();
+  const generated = generateConfigs(validConfig, bases);
+
+  assert.equal(generated.procgen.name, "acme-cloudflare-os-procgen");
+  assert.equal(generated.procgen.workers_dev, false);
+  assert.equal(generated.procgen.preview_urls, false);
+  assert.equal(generated.procgen.routes, undefined);
+  assert.equal(generated.procgen.vars, undefined);
+  assert.equal(generated.procgen.kv_namespaces, undefined);
+  assert.equal(generated.procgen.r2_buckets, undefined);
+  assert.equal(generated.procgen.secrets, undefined);
+  assert.deepEqual(generated.workshop.services!.find(
+    (service) => service.binding === "GATEKEEPER_PROCGEN"), {
+    binding: "GATEKEEPER_PROCGEN",
+    service: "acme-cloudflare-os-procgen",
+    entrypoint: "GatekeeperVendor",
+  });
+  assert.equal(generated.router.services!.some(
+    (service) => service.service === "acme-cloudflare-os-procgen"), false);
+  assert.ok(buildCommands(validConfig).some(({ args }) => args.includes("gatekeeper-procgen")));
 });
 
 test("keeps every Worker behind the router off the public internet", async () => {
