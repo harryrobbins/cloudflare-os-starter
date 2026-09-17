@@ -10,6 +10,9 @@
   },
   "devDependencies": {
     "esbuild": "0.28.1",
+    "vega": "6.2.0",
+    "vega-interpreter": "2.2.1",
+    "vega-lite": "6.4.1",
     "vitest": "catalog:",
     "yjs": "13.6.31"
   }

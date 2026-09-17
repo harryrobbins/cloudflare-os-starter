@@ -31,7 +31,28 @@ describe("synthetic commerce generator", () => {
 
   it("reports finite exact cardinalities and rejects boundary IDs", () => {
     expect(schemaFor(dataset, "events").exactRecords).toBe("50000");
+    expect(schemaFor(dataset, "daily_metrics").exactRecords).toBe("730");
     expect(() => generateRecord(dataset, "events", 50_001)).toThrow("out of range");
+  });
+
+  it("engineers deterministic graph-ready variation over time", () => {
+    const rows = Array.from({ length: 730 }, (_, index) => generateRecord(dataset, "daily_metrics", index + 1));
+    const medium = parseResourceUrl("procgen://commerce/v1/demo-4242/medium");
+    const average = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
+    const firstQuarter = average(rows.slice(0, 90).map(row => Number(row.visitors)));
+    const lastQuarter = average(rows.slice(-90).map(row => Number(row.visitors)));
+    const campaignRevenue = average(rows.filter(row => row.campaign !== "none").map(row => Number(row.revenue_minor)));
+    const baselineRevenue = average(rows.filter(row => row.campaign === "none").map(row => Number(row.revenue_minor)));
+    expect(lastQuarter).toBeGreaterThan(firstQuarter);
+    expect(campaignRevenue).toBeGreaterThan(baselineRevenue);
+    expect(new Set(rows.map(row => row.visitors)).size).toBeGreaterThan(300);
+    expect(rows[0].date).toBe("2023-01-01T00:00:00.000Z");
+    expect(rows.at(-1)?.date).toBe("2024-12-30T00:00:00.000Z");
+    expect(rows.every(row => row.currency_code === "USD" && Number(row.orders) <= Number(row.signups) && Number(row.orders) <= Number(row.sessions) && Number(row.units_sold) >= Number(row.orders) && Number(row.revenue_minor) === Number(row.orders) * Number(row.avg_order_value_minor) && Number(row.conversion_rate) === Number((Number(row.orders) / Number(row.sessions)).toFixed(4)))).toBe(true);
+    expect(Number(generateRecord(medium, "daily_metrics", 200).visitors)).toBeGreaterThan(Number(rows[199].visitors) * 90);
+    expect(generateRecord(parseResourceUrl("procgen://commerce/v1/another/small"), "daily_metrics", 200)).not.toEqual(rows[199]);
+    expect(() => generateRecord(dataset, "daily_metrics", 731)).toThrow("out of range");
+    expect(rows).toEqual(Array.from({ length: 730 }, (_, index) => generateRecord(dataset, "daily_metrics", index + 1)));
   });
 
   it("plans bounded indexed pages without scanning the collection", () => {

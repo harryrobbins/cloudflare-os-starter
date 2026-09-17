@@ -1,10 +1,13 @@
 import css from './style.css'
+import chartCss from './chart.css'
 import { filterPredicate } from '../shared/validation.js'
+import { buildPageChartSpec, renderVegaLite } from './chart.js'
 
-const style = document.createElement('style'); style.textContent = css; document.head.append(style)
+const style = document.createElement('style'); style.textContent = css + chartCss; document.head.append(style)
 document.body.innerHTML = '<main id="root"><section class="empty"><h2>Opening Synthetic Data Explorer…</h2></section></main>'
 const root = document.querySelector('#root')
-let dataset, collections = [], schema, page, state = { cursorHistory: [] }, busy = false, errorMessage = '', inspected = null
+let dataset, collections = [], schema, page, state = { cursorHistory: [] }, busy = false, errorMessage = '', inspected = null, viewMode = 'rows', chartCleanup = null
+let chartOptions = { mark: 'bar', x: '', y: '' }
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node }
 const button = (label, action, className = 'quiet') => { const node = el('button', className, label); node.type = 'button'; node.onclick = () => safe(action)(); return node }
 const safe = handler => (...args) => Promise.resolve().then(() => handler(...args)).catch(error => { errorMessage = error?.message || String(error); render() })
@@ -12,7 +15,7 @@ const display = value => value === null ? 'null' : typeof value === 'object' ? J
 const prettyCount = count => { try { return Intl.NumberFormat().format(BigInt(count)) } catch { return String(count) } }
 const currentCollection = () => collections.find(item => item.name === state.collection)
 async function persist() { state = await gadget.setState(state) }
-async function selectCollection(name) { state = { collection: name, cursorHistory: [] }; inspected = null; await persist(); await loadCollection() }
+async function selectCollection(name) { state = { collection: name, cursorHistory: [] }; inspected = null; viewMode = 'rows'; disposeChart(); await persist(); await loadCollection() }
 async function loadCollection() { busy = true; errorMessage = ''; render(); schema = await gadget.describeCollection(state.collection); const fields = schema.fields.slice(0, 8).map(field => field.name); state.query = { collection: state.collection, limit: 50, fields }; await runQuery(false) }
 async function runQuery(keepResults = true) { busy = true; errorMessage = ''; if (!keepResults) page = null; render(); page = await gadget.query(state.query); busy = false; await persist(); render() }
 async function next() { if (!page?.nextCursor) return; state.cursorHistory.push(state.query.cursor || ''); state.query = { ...state.query, cursor: page.nextCursor }; await runQuery() }
@@ -21,16 +24,30 @@ async function inspect(collection, id) { inspected = { collection, id, record: a
 async function applyFilter(field, operator, raw) { const fieldSchema = schema.fields.find(item => item.name === field); const predicate = filterPredicate(fieldSchema, operator, raw); state.cursorHistory = []; state.query = { ...state.query, predicates: [predicate] }; delete state.query.cursor; await runQuery(false) }
 async function clearFilter() { state.query = { ...state.query }; delete state.query.predicates; delete state.query.cursor; state.cursorHistory = []; await runQuery(false) }
 function render() {
+  disposeChart()
   root.replaceChildren(); root.className = dataset ? 'app' : ''
   if (!dataset) { const box = el('section', errorMessage ? 'failure' : 'empty'); box.append(el('h2', '', errorMessage ? 'Connect Synthetic Data' : 'Opening explorer…'), el('p', '', errorMessage || 'Loading the connected dataset.')); if (errorMessage) box.append(button('Retry', initialize, 'primary')); root.append(box); return }
   const header = el('header', 'dataset'); const brand = el('div', 'brand'); brand.append(el('span', 'brand-index', 'SYN—01'), el('div', 'mark', 'Data Explorer')); header.append(brand)
   const meta = el('div', 'meta'); for (const [label, value] of [['Scenario', dataset.scenario], ['Version', dataset.version], ['Seed', dataset.seedLabel], ['Size', dataset.sizeProfile]]) { const item = el('span'); item.append(el('strong', '', label + ' '), document.createTextNode(value)); meta.append(item) } header.append(meta, el('div', 'status', 'Generated on demand')); root.append(header)
   const rail = el('nav', 'rail'); rail.setAttribute('aria-label', 'Collections'); rail.append(el('div', 'eyebrow', 'Collections')); for (const item of collections) { const choice = el('button', `collection${item.name === state.collection ? ' active' : ''}`); choice.append(el('strong', '', item.title || item.name), el('span', '', `${prettyCount(item.exactRecords)} records`)); choice.onclick = () => safe(() => selectCollection(item.name))(); rail.append(choice) } root.append(rail)
-  const work = el('section', 'workspace'); const topline = el('div', 'topline'); const title = el('div'); title.append(el('div', 'section-number', `COLLECTION / ${String(collections.findIndex(item => item.name === state.collection) + 1).padStart(2, '0')}`), el('h1', '', currentCollection()?.title || state.collection), el('p', '', schema ? `${prettyCount(schema.exactRecords)} generated records · ${schema.fields.length} declared fields` : 'Loading schema…')); topline.append(title); work.append(topline)
+  const work = el('section', 'workspace'); const topline = el('div', 'topline'); const title = el('div'); title.append(el('div', 'section-number', `COLLECTION / ${String(collections.findIndex(item => item.name === state.collection) + 1).padStart(2, '0')}`), el('h1', '', currentCollection()?.title || state.collection), el('p', '', schema ? `${prettyCount(schema.exactRecords)} generated records · ${schema.fields.length} declared fields` : 'Loading schema…')); const tabs = el('div', 'view-tabs'); tabs.append(button('Rows', () => { viewMode = 'rows'; render() }, viewMode === 'rows' ? 'active' : 'quiet'), button('Visualize page', () => { viewMode = 'chart'; render() }, viewMode === 'chart' ? 'active' : 'quiet')); topline.append(title, tabs); work.append(topline)
   if (errorMessage) work.append(el('div', 'notice', errorMessage))
-  const panel = el('div', 'panel'); if (!schema) panel.append(el('div', 'empty', 'Loading…')); else renderRows(panel); work.append(panel); root.append(work)
+  const panel = el('div', 'panel'); if (!schema) panel.append(el('div', 'empty', 'Loading…')); else if (viewMode === 'chart') renderChartPanel(panel); else renderRows(panel); work.append(panel); root.append(work)
   if (inspected) renderInspector(root)
 }
+function renderChartPanel(panel) {
+  const fields = schema.fields.filter(field => ['string', 'number', 'boolean', 'timestamp'].includes(field.type) && state.query.fields?.includes(field.name))
+  if (!page?.records?.length || fields.length < 2) { const empty = el('div', 'empty'); empty.append(el('h2', '', 'Nothing to visualize'), el('p', '', 'Load a page with at least two visible scalar fields. Charts use only the current bounded page.')); panel.append(empty); return }
+  if (!fields.some(field => field.name === chartOptions.x)) chartOptions.x = fields.find(field => field.type !== 'number')?.name || fields[0].name
+  if (!fields.some(field => field.name === chartOptions.y)) chartOptions.y = fields.find(field => field.type === 'number' && field.name !== chartOptions.x)?.name || fields.find(field => field.name !== chartOptions.x)?.name
+  const controls = el('div', 'controls chart-controls'); const mark = selectControl('Mark', 'mark', ['bar', 'line', 'point']); mark.querySelector('select').value = chartOptions.mark; const x = selectControl('X axis', 'x', fields.map(field => field.name)); x.querySelector('select').value = chartOptions.x; const y = selectControl('Y axis', 'y', fields.map(field => field.name)); y.querySelector('select').value = chartOptions.y
+  for (const control of [mark, x, y]) control.querySelector('select').onchange = event => { chartOptions[event.target.name] = event.target.value; render() }
+  controls.prepend(el('div', 'filter-lead', 'CURRENT PAGE')); panel.append(controls, el('div', 'chart-note', `${page.records.length} queried records · not the whole collection`))
+  const container = el('div', 'chart'); container.setAttribute('aria-label', `Chart of ${chartOptions.y} by ${chartOptions.x}`); panel.append(container)
+  const spec = buildPageChartSpec(schema, page.records, chartOptions)
+  void renderVegaLite(container, spec).then(cleanup => { if (container.isConnected) chartCleanup = cleanup; else cleanup() }).catch(error => { errorMessage = error?.message || String(error); viewMode = 'rows'; render() })
+}
+function disposeChart() { if (chartCleanup) { chartCleanup(); chartCleanup = null } }
 function renderRows(panel) {
   const controls = el('form', 'controls'); controls.addEventListener('submit', event => { event.preventDefault(); const data = new FormData(event.currentTarget); safe(() => applyFilter(String(data.get('field')), String(data.get('operator')), String(data.get('value'))))() })
   const indexes = schema.indexes.flatMap(index => index.fields.map(field => ({ field, operators: index.operators }))); if (indexes.length) { const field = selectControl('Indexed field', 'field', indexes.map(item => item.field)); const operator = selectControl('Condition', 'operator', indexes[0].operators); const fieldSelect = field.querySelector('select'); const operatorSelect = operator.querySelector('select'); fieldSelect.addEventListener('change', event => { const found = indexes.find(item => item.field === event.target.value); fillSelect(operatorSelect, found?.operators || []); configureFilterInput(input, schema.fields.find(item => item.name === event.target.value)) }); const value = el('div', 'control control-value'); value.append(el('label', '', 'Match value')); const input = el('input'); input.name = 'value'; input.required = true; input.autocomplete = 'off'; input.setAttribute('aria-label', 'Filter value'); configureFilterInput(input, schema.fields.find(item => item.name === fieldSelect.value)); value.append(input); const apply = submit(busy ? 'Applying…' : 'Apply filter'); apply.disabled = busy; controls.append(el('div', 'filter-lead', 'FILTER'), field, operator, value, apply, button('Reset', clearFilter)); } else controls.append(el('span', 'filter-empty', 'No indexed filters for this collection.'))

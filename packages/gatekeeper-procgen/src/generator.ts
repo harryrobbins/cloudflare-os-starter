@@ -10,7 +10,7 @@ const EVENTS = ["page_view", "search", "add_to_cart", "purchase", "support_view"
 const BASE_TIME = Date.UTC(2021, 0, 1);
 
 export type CollectionName = keyof (typeof PROFILE_CARDINALITIES)["small"];
-export const COLLECTION_NAMES: CollectionName[] = ["customers", "products", "orders", "order_items", "events"];
+export const COLLECTION_NAMES: CollectionName[] = ["customers", "products", "orders", "order_items", "events", "daily_metrics"];
 
 function hash(seed: string, namespace: string, id: number): number {
   let h = 2166136261;
@@ -39,7 +39,33 @@ const DEFINITIONS = {
   orders: { title: "Orders", description: "Customer orders with three line items each.", fields: [field("id", "string", "id"), field("customer_id", "string", "id", { collection: "customers", field: "id" }), field("status", "string"), field("created_at", "timestamp"), field("total_minor", "number", "currency_minor"), field("currency_code", "string")], parent: "customer_id" },
   order_items: { title: "Order items", description: "Exactly three line items for every order.", fields: [field("id", "string", "id"), field("order_id", "string", "id", { collection: "orders", field: "id" }), field("product_id", "string", "id", { collection: "products", field: "id" }), field("quantity", "number"), field("unit_price_minor", "number", "currency_minor")], parent: "order_id" },
   events: { title: "Events", description: "Synthetic customer activity events.", fields: [field("id", "string", "id"), field("customer_id", "string", "id", { collection: "customers", field: "id" }), field("event_type", "string"), field("occurred_at", "timestamp"), field("properties", "json")], parent: "customer_id" },
+  daily_metrics: { title: "Daily metrics", description: "A 730-day modeled commerce series with dataset-scaled volume, trend, weekly and annual seasonality, campaigns, and seeded noise.", fields: [field("id", "string", "id"), field("date", "timestamp"), field("day_index", "number"), field("weekday", "string"), field("visitors", "number"), field("sessions", "number"), field("signups", "number"), field("orders", "number"), field("units_sold", "number"), field("revenue_minor", "number", "currency_minor"), field("marketing_spend_minor", "number", "currency_minor"), field("conversion_rate", "number"), field("avg_order_value_minor", "number", "currency_minor"), field("currency_code", "string"), field("campaign", "string")], parent: undefined },
 } as const;
+
+function dailyMetrics(resource: DatasetResource, id: number): Record<string, unknown> {
+  const { seed, profile } = resource;
+  const day = id - 1;
+  const date = new Date(Date.UTC(2023, 0, 1) + day * 86_400_000);
+  const weekday = date.getUTCDay();
+  const weekly = [0.78, 1.03, 1.08, 1.1, 1.13, 1.18, 0.86][weekday];
+  const annual = 1 + 0.16 * Math.sin((2 * Math.PI * (day - 35)) / 365) + 0.07 * Math.sin((4 * Math.PI * (day + 12)) / 365);
+  const trend = 1 + day * 0.00062;
+  const campaignDay = day % 91;
+  const campaign = campaignDay <= 6 ? (Math.floor(day / 91) % 2 ? "brand_week" : "product_launch") : "none";
+  const campaignLift = campaign === "none" ? 1 : 1.28 - campaignDay * 0.025;
+  const noise = (namespace: string, spread: number) => 1 + ((hash(seed, namespace, id) % 2001) - 1000) / 1000 * spread;
+  const volumeScale = PROFILE_CARDINALITIES[profile].orders / PROFILE_CARDINALITIES.small.orders;
+  const visitors = Math.max(1, Math.round(420 * volumeScale * trend * weekly * annual * campaignLift * noise("daily-visitors", 0.07)));
+  const sessions = Math.round(visitors * (1.16 + (hash(seed, "daily-sessions", id) % 15) / 100));
+  const conversionBase = 0.026 + 0.004 * Math.sin((2 * Math.PI * (day + 4)) / 28) + (campaign === "none" ? 0 : 0.006);
+  const orders = Math.max(1, Math.round(sessions * conversionBase * noise("daily-orders", 0.09)));
+  const signups = Math.max(orders, Math.round(visitors * (0.052 + 0.006 * Math.sin((2 * Math.PI * day) / 14)) * noise("daily-signups", 0.08)));
+  const unitsSold = orders + Math.round(orders * (0.42 + (hash(seed, "daily-units", id) % 18) / 100));
+  const averageOrder = Math.round((6250 + 480 * Math.sin((2 * Math.PI * (day + 65)) / 365)) * noise("daily-aov", 0.045));
+  const revenue = orders * averageOrder;
+  const marketingSpend = Math.round((55_000 * volumeScale * trend * annual * (campaign === "none" ? 1 : 1.72)) * noise("daily-spend", 0.04));
+  return { id: String(id), date: date.toISOString(), day_index: day, weekday: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][weekday], visitors, sessions, signups, orders, units_sold: unitsSold, revenue_minor: revenue, marketing_spend_minor: marketingSpend, conversion_rate: Number((orders / sessions).toFixed(4)), avg_order_value_minor: averageOrder, currency_code: "USD", campaign };
+}
 
 export function isCollection(value: string): value is CollectionName { return COLLECTION_NAMES.includes(value as CollectionName); }
 export function countFor(resource: DatasetResource, collection: CollectionName): number { return PROFILE_CARDINALITIES[resource.profile][collection]; }
@@ -80,6 +106,7 @@ export function generateRecord(resource: DatasetResource, collection: Collection
       const occurred = Date.parse(customer.created_at as string) + (1 + Math.floor((id - 1) / sizes.customers)) * 3_600_000;
       return { id: String(id), customer_id: String(customerId), event_type: EVENTS[hash(resource.seed, "event", id) % EVENTS.length], occurred_at: iso(occurred), properties: { channel: hash(resource.seed, "channel", id) % 2 ? "web" : "mobile" } };
     }
+    case "daily_metrics": return dailyMetrics(resource, id);
   }
 }
 

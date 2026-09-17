@@ -51,7 +51,7 @@ function parseId(id: string): number {
 @validateRpc()
 export class SyntheticDataGatekeeper extends DurableObject<Cloudflare.Env, GatekeeperProps> implements Gatekeeper<SyntheticDataSession> {
   resource(): DatasetResource { return parseResourceUrl(this.ctx.props.resourceUrl); }
-  async describe(): Promise<ResourceDescription> { return { url: this.resource().url, title: "Synthetic commerce data", snippet: "Finite deterministic customers, products, orders, line items, and events.", workspaceReadable: true, suggestedBindingName: "PROCGEN", tsType: "SyntheticDataSession" }; }
+  async describe(): Promise<ResourceDescription> { return { url: this.resource().url, title: "Synthetic commerce data", snippet: "Finite deterministic customers, products, orders, events, and graph-ready daily metrics.", workspaceReadable: true, suggestedBindingName: "PROCGEN", tsType: "SyntheticDataSession" }; }
   async getTypeScriptTypes(): Promise<string> { return TYPES_CODE; }
   async getAutoApprovableActions(): Promise<[]> { return []; }
   async startSession(queue: RpcStub<ApprovalQueue>): Promise<SyntheticDataSession> { return new SyntheticDataSessionImpl(this, this.resource(), queue.dup()); }

@@ -12,7 +12,7 @@ export const PROCGEN_POLICY = Object.freeze({
 });
 
 export const PROFILE_CARDINALITIES = Object.freeze({
-  small: { customers: 1_000, products: 500, orders: 10_000, order_items: 30_000, events: 50_000 },
-  medium: { customers: 100_000, products: 10_000, orders: 1_000_000, order_items: 3_000_000, events: 5_000_000 },
+  small: { customers: 1_000, products: 500, orders: 10_000, order_items: 30_000, events: 50_000, daily_metrics: 730 },
+  medium: { customers: 100_000, products: 10_000, orders: 1_000_000, order_items: 3_000_000, events: 5_000_000, daily_metrics: 730 },
 });
 export type SizeProfile = keyof typeof PROFILE_CARDINALITIES;
