@@ -92,7 +92,7 @@ Plain DOM in one bundled `client.js`, built with esbuild from `src/client/`:
   - activity with undo, filters, and a phone layout of one column at a time with tabs;
   - a static export view;
   - a live region for remote changes, focus restoration, and inert backgrounds behind dialogs.
-- **Identity.** A name prompt on first load. The name is kept in `window.name`, which survives the frame reloading itself (below) and is the only storage the iframe has. When viewer identity lands, the viewer built in `src/client/main.js` is the place to swap in a real one.
+- **Identity.** The viewer's name is the signed-in account's display name, from the platform's `gadgetViewer` (see [Viewer identity and change attribution](collaborative-blueprints.md#viewer-identity-and-change-attribution)). There is no name prompt; cards, comments and history are attributed to the account. The chosen colour is kept in `window.name`, which survives the frame reloading itself (below) and is the only storage the iframe has.
 
 What only the real platform showed:
 

@@ -1,21 +1,23 @@
 // @ts-check
 // Client entry point. Runs inside the gadget's sandboxed iframe, which has no HTML of its own:
 // everything is built here. Provided by the platform: `gadget` (RPC stub to the Gadget Durable
-// Object) and `RpcTarget`, declared as module-scope bindings in a prefix the platform prepends to
+// Object), `gadgetViewer` (the signed-in user; our fork's patch) and `RpcTarget`, declared as
+// module-scope bindings in a prefix the platform prepends to
 // this file (NOT properties of globalThis), and during HTML/PDF export `gadgetExportFormatId`
 // (a global). All are read as free identifiers behind `typeof` guards.
 
 import { createStore } from "./sync/store.js";
 import { mountApp, injectStyles } from "./ui/app.js";
 import { renderExport } from "./ui/export.js";
-import { nameDialog } from "./ui/dialogs.js";
 import { PALETTE } from "./ui/dom.js";
 
-/* global gadget, RpcTarget, gadgetExportFormatId */
+/* global gadget, gadgetViewer, RpcTarget, gadgetExportFormatId */
 // @ts-ignore provided by the platform prefix
 const platformGadget = typeof gadget !== "undefined" ? gadget : undefined;
 // @ts-ignore provided by the platform prefix
 const platformRpcTarget = typeof RpcTarget !== "undefined" ? RpcTarget : undefined;
+// @ts-ignore provided by the platform prefix: {id, displayName, role} of the signed-in user
+const platformViewer = typeof gadgetViewer !== "undefined" ? gadgetViewer : undefined;
 // @ts-ignore provided by the platform in export mode
 const exportFormatId = typeof gadgetExportFormatId !== "undefined" ? gadgetExportFormatId : undefined;
 
@@ -46,6 +48,17 @@ function writeCarried(data) {
   try {
     window.name = WINDOW_NAME_PREFIX + JSON.stringify(data);
   } catch { /* ignore */ }
+}
+
+/**
+ * The signed-in account's display name. Every change is attributed to it; nobody is asked for a
+ * name. Null when the host did not say who is viewing (an older platform).
+ * @returns {string|null}
+ */
+function accountName() {
+  const v = platformViewer;
+  const name = typeof v?.displayName === "string" && v.displayName.trim() ? v.displayName : v?.id;
+  return typeof name === "string" && name.trim() ? name.trim() : null;
 }
 
 /** @param {string} text @param {boolean} [busy] */
@@ -107,17 +120,9 @@ if (exportFormatId !== undefined) {
   const carried = readCarried();
   const viewer = {
     clientId: randomClientId(),
-    name: carried.name ?? "",
+    name: accountName() ?? carried.name ?? "Guest",
     color: carried.color ?? PALETTE[Math.floor(Math.random() * PALETTE.length)],
   };
-  // Ask for a name while the whiteboard connects behind the dialog, unless a reload carried it over.
-  const namePromise = carried.name
-    ? Promise.resolve({ name: carried.name, color: viewer.color })
-    : nameDialog({
-      name: "", color: viewer.color,
-      // The canvas is mounted while the dialog is open; joining lands on it rather than <body>.
-      returnFocus: () => /** @type {HTMLElement|null} */ (document.querySelector(".wb-canvas")),
-    });
   /** @type {import("./store-contract.js").Store|undefined} */
   let store;
   const onUnrecoverable = () => {
@@ -144,8 +149,7 @@ if (exportFormatId !== undefined) {
     throw err;
   }
   const { app } = mountApp(root, store);
-  // Joined before the board had mounted: the dialog could not hand focus to the canvas yet.
-  if (!document.querySelector(".name-dialog") && (!document.activeElement || document.activeElement === document.body)) {
+  if (!document.activeElement || document.activeElement === document.body) {
     app.canvas.element.focus({ preventScroll: true });
   }
   const liveStore = store;
@@ -153,9 +157,6 @@ if (exportFormatId !== undefined) {
     if (change.kind === "connection" && state.connection === "live") {
       document.getElementById("wb-connection-overlay")?.remove();
     }
-  });
-  namePromise.then((result) => {
-    liveStore.setViewer(result?.name || "Guest", result?.color || viewer.color);
   });
   /** @type {any} */ (globalThis).whiteboardStore = store;
 }

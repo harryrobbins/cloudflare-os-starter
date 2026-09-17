@@ -366,4 +366,6 @@ Rollback is a coordinated system operation, not one command. Read [references/up
 
 ## Pinned Submodule Upgrade
 
+The fork branch carries deployment patches that must survive every rebase: the OpenRouter provider and model allow-list, and `gadgetViewer` viewer identity. Collaborative formats (Board, Whiteboard, and any new one) attribute every change to the signed-in account through `gadgetViewer` and never ask for a name; after an upgrade, confirm a format shows the account's display name with no name dialog. See `docs/plans/collaborative-blueprints.md#viewer-identity-and-change-attribution`.
+
 Never advance the submodule blindly. Read and follow [references/upgrade-and-rollback.md](references/upgrade-and-rollback.md). An evaluation worktree prevents local file races but is not staging isolation; use separate Worker identities, route, storage, bindings, and data. Stop for specialist review before any migration, deleted/renamed Durable Object class, irreversible data change, auth boundary change, or incompatible RPC change.

@@ -37,7 +37,8 @@ export function launch(opts = {}) {
 }
 
 /**
- * Opens the harness and waits until every board pane is live.
+ * Opens the harness and waits until every board pane is live. `names` become the panes' account
+ * display names (the harness injects them as `gadgetViewer`, via `?names=`); nobody types a name.
  * @param {import("playwright").Browser} browser
  * @param {string} url
  * @param {{panes?: number, viewport?: {width: number, height: number}, query?: string, names?: string[], hasTouch?: boolean}} [opts]
@@ -49,16 +50,26 @@ export async function openHarness(browser, url, { panes = 2, viewport = { width:
   const errors = [];
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
   page.on("pageerror", (e) => errors.push(String(e)));
-  await page.goto(`${url}?panes=${panes}${query}`);
+  await page.goto(harnessUrl(url, { panes, names, query }));
   const ids = await page.evaluate(() => window.harness.panes());
+  /** @type {Record<string, import("playwright").FrameLocator>} */
   const frames = {};
+  for (const id of ids) frames[id] = pane(page, id);
   for (const [i, id] of ids.entries()) {
-    const frame = pane(page, id);
-    await joinAs(frame, names?.[i] ?? `User ${id}`);
-    frames[id] = frame;
+    await waitLive(frames[id]);
+    await expectAccountName(frames[id], names?.[i] || `User ${id}`);
   }
-  for (const id of ids) await waitLive(frames[id]);
   return { context, page, frames, errors };
+}
+
+/**
+ * The harness URL for `panes` panes with the given account names.
+ * @param {string} url
+ * @param {{panes?: number, names?: string[], query?: string}} [opts]
+ */
+export function harnessUrl(url, { panes = 2, names, query = "" } = {}) {
+  const namesParam = names?.length ? `&names=${encodeURIComponent(names.join(","))}` : "";
+  return `${url}?panes=${panes}${namesParam}${query}`;
 }
 
 /**
@@ -69,17 +80,22 @@ export function pane(page, id) {
   return page.frameLocator(`iframe[data-pane="${id}"]`);
 }
 
+/** Anything that would ask the viewer for a name (the removed name dialog). */
+export const NAME_PROMPT = '.name-dialog, .name-input, [data-skip], .join-btn, input[aria-label="Your name"]';
+
 /**
- * Fills the name dialog.
+ * Asserts the pane shows `name` (the signed-in account's display name) on the me button and never
+ * asked for a name.
  * @param {import("playwright").FrameLocator} frame
  * @param {string} name
  */
-export async function joinAs(frame, name) {
-  const input = frame.locator(".name-dialog .name-input");
-  await input.waitFor({ timeout: 10_000 });
-  await input.fill(name);
-  await frame.locator(".name-dialog .join-btn").click();
-  await input.waitFor({ state: "detached" });
+export async function expectAccountName(frame, name) {
+  const me = frame.locator(".me-btn .me-name");
+  // Attached, not visible: phone layouts hide the name text and show only the avatar.
+  await me.waitFor({ state: "attached", timeout: 10_000 });
+  await until(async () => (await me.textContent()) === name, { timeout: 5000, message: `me-btn shows "${name}"` });
+  const prompts = await frame.locator(NAME_PROMPT).count();
+  if (prompts) throw new Error(`pane asked for a name (${prompts} name prompt element(s))`);
 }
 
 /** @param {import("playwright").FrameLocator} frame */

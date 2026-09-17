@@ -264,7 +264,7 @@ Prefer wrapper-owned Workers and [service bindings](https://developers.cloudflar
 ## Upgrade
 
 1. Record the current `cloudflare-os` gitlink for rollback.
-2. Update the submodule to the intended upstream commit. The submodule tracks the `starter-openrouter` branch of this deployment's Cloudflare OS fork, which carries the `openrouter` provider and the `CF_AI_GATEWAY_EXTRA_MODELS` allow-list on top of upstream; rebase that branch onto the new upstream commit, push it, and pin the rebased commit here.
+2. Update the submodule to the intended upstream commit. The submodule tracks the `starter-openrouter` branch of this deployment's Cloudflare OS fork, which carries the `openrouter` provider, the `CF_AI_GATEWAY_EXTRA_MODELS` allow-list and the `gadgetViewer` viewer identity (formats attribute changes to the signed-in account through it; see [Viewer identity and change attribution](plans/collaborative-blueprints.md#viewer-identity-and-change-attribution)) on top of upstream; rebase that branch onto the new upstream commit, push it, and pin the rebased commit here.
 3. Review Workshop and Context Wrangler base-config changes and Gatekeeper contracts.
 4. Diff `cloudflare-os/pnpm-workspace.yaml`'s `catalog:` against this repository's and re-sync it. Two submodule packages are members of this workspace and resolve `catalog:` here, so a missing entry fails the install and a *stale* one silently gives the tree two copies of `capnweb` — a failure that only appears once the two installs are separate, as they are in CI.
 5. Run `pnpm install`, `pnpm --dir cloudflare-os install`, `pnpm lint`, and `pnpm check`.

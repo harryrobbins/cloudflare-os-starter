@@ -46,21 +46,16 @@ export function modal(build, escapeValue, returnFocus = null) {
 }
 
 /**
- * Asks for a display name and colour.
- * @param {{name: string, color: string, title?: string, skippable?: boolean,
- *   returnFocus?: HTMLElement|null|(() => HTMLElement|null)}} opts
- * @returns {Promise<{name: string, color: string}|null>}  null when skipped/cancelled
+ * Lets the viewer pick their colour. The name is the signed-in account's and is not editable.
+ * @param {{name: string, color: string, returnFocus?: HTMLElement|null|(() => HTMLElement|null)}} opts
+ * @returns {Promise<string|null>}  the chosen colour; null when cancelled
  */
-export function nameDialog({ name, color, title = "Who's here?", skippable = true, returnFocus = null }) {
+export function colorDialog({ name, color, returnFocus = null }) {
   return modal((close) => {
     let chosen = color;
-    const input = /** @type {HTMLInputElement} */ (h("input", {
-      type: "text", value: name, maxlength: 40, placeholder: "Your name", "aria-label": "Your name",
-      "data-autofocus": true, autocomplete: "off", class: "name-input",
-    }));
     const preview = h("span", null);
     const refreshPreview = () => {
-      preview.replaceChildren(avatar(input.value || "Guest", chosen));
+      preview.replaceChildren(avatar(name || "Guest", chosen));
     };
     // A radio group: one Tab stop (the checked colour), arrow keys move and choose.
     const choose = (/** @type {number} */ i, /** @type {boolean} */ focus) => {
@@ -76,6 +71,7 @@ export function nameDialog({ name, color, title = "Who's here?", skippable = tru
       PALETTE.map((c, i) => h("button", {
         type: "button", class: "swatch", role: "radio", "aria-checked": String(c === chosen),
         tabindex: c === chosen || (i === 0 && !PALETTE.includes(chosen)) ? "0" : "-1",
+        "data-autofocus": c === chosen || undefined,
         "aria-label": colorName(c), style: { background: c },
         onclick: () => choose(i, false),
       })),
@@ -91,31 +87,17 @@ export function nameDialog({ name, color, title = "Who's here?", skippable = tru
       e.preventDefault();
       choose(next, true);
     });
-    input.addEventListener("input", refreshPreview);
     refreshPreview();
-    // No <form>: the platform iframe's sandbox lacks allow-forms, so native submission is blocked
-    // before a submit event fires. A button click and Enter in the input do the same thing.
-    const join = () => {
-      const value = input.value.trim();
-      close(value ? { name: value, color: chosen } : null);
-    };
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); join(); }
-    });
-    const form = h("div", { class: "modal name-dialog", "aria-label": title },
-      h("h2", null, title),
-      h("p", null, "Pick a name and colour so others can see your cursor and changes on the whiteboard. Nothing is stored."),
-      h("div", { style: { display: "flex", gap: "10px", alignItems: "center" } }, preview, input),
+    return h("div", { class: "modal color-dialog", "aria-label": "Your colour" },
+      h("h2", null, "Your colour"),
+      h("p", null, "Others see this colour on your cursor and next to your name on the whiteboard."),
+      h("div", { style: { display: "flex", gap: "10px", alignItems: "center" } }, preview, h("strong", { class: "color-dialog-name" }, name || "Guest")),
       swatches,
       h("div", { class: "modal-actions" },
-        skippable
-          ? h("button", { type: "button", class: "btn outline", "data-skip": true, onclick: () => close(null) }, "Continue as guest")
-          : h("button", { type: "button", class: "btn outline", onclick: () => close(null) }, "Cancel"),
-        h("button", { type: "button", class: "btn primary join-btn", onclick: join }, "Join whiteboard"),
+        h("button", { type: "button", class: "btn outline", onclick: () => close(null) }, "Cancel"),
+        h("button", { type: "button", class: "btn primary save-btn", onclick: () => close(chosen) }, "Save"),
       ),
     );
-    requestAnimationFrame(() => input.select());
-    return form;
   }, null, returnFocus);
 }
 

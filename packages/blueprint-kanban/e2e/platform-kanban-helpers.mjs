@@ -3,27 +3,34 @@
 // only it runs inside the platform's sandboxed `iframe[title="Gadget UI"]`.
 
 import { join } from "node:path";
-import { PKG } from "./harness-helpers.mjs";
+import { PKG, NAME_PROMPT } from "./harness-helpers.mjs";
 
 export const REPO = join(PKG, "../..");
 export const SHIPPED_ARCHIVE = join(REPO, "formats/board.gadget");
 
 /**
- * Fills the board's name dialog and joins, through the "Join board" button or Enter in the name
- * field. The platform iframe's sandbox has no `allow-forms`, so this only works because the dialog
- * does not rely on form submission. Returns whether the dialog closed.
- * @param {import("playwright").FrameLocator} frame
- * @param {string} name
- * @param {{via?: "button"|"enter"}} [opts]
+ * The display name a local Workshop account gets from password sign-up: the username exactly as
+ * typed (SignupPage calls `createAccount(username, username, ...)`; only the id is normalized).
+ * `GadgetClient.getViewer()` returns it as `displayName`, injected into the iframe as `gadgetViewer`.
+ * @param {string} username
  */
-export async function joinBoard(frame, name, { via = "button" } = {}) {
-  const input = frame.locator(".name-dialog .name-input");
-  await input.waitFor({ timeout: 60_000 });
-  await input.fill(name);
-  if (via === "enter") await input.press("Enter");
-  else await frame.locator(".name-dialog .join-btn").click();
-  const joined = await input.waitFor({ state: "detached", timeout: 5000 }).then(() => true, () => false);
-  return { joined, via };
+export function accountDisplayName(username) {
+  return username;
+}
+
+/**
+ * Waits for the board in the platform iframe and reports what it shows instead of joining: the
+ * name on the me button, and how many name-prompt elements exist (must be 0: nobody is asked for a
+ * name any more; the platform's signed-in account name is used).
+ * @param {import("playwright").FrameLocator} frame
+ * @param {{timeout?: number, settleMs?: number}} [opts]
+ */
+export async function boardIdentity(frame, { timeout = 60_000, settleMs = 500 } = {}) {
+  const me = frame.locator(".me-btn .me-name");
+  await me.waitFor({ state: "attached", timeout });
+  // Give a (wrongly) delayed name dialog a moment to show up before counting.
+  if (settleMs) await new Promise((r) => setTimeout(r, settleMs));
+  return { meName: (await me.textContent()) ?? "", namePrompts: await frame.locator(NAME_PROMPT).count() };
 }
 
 /**
@@ -52,24 +59,19 @@ export function connectionLog(frame) {
 }
 
 /**
- * After something may have rebuilt the gadget iframe: waits for either the name dialog or a live
- * board, joins if the dialog is showing, and returns whether it had to join.
+ * After something may have rebuilt the gadget iframe: waits for a live board showing `name` (the
+ * account display name) and no name prompt. Returns whether the iframe was rebuilt (the
+ * connection recorder installed by recordConnection() was gone).
  * @param {import("playwright").FrameLocator} frame
  * @param {string} name
  */
-export async function ensureJoined(frame, name) {
-  const dialog = frame.locator(".name-dialog .name-input");
+export async function ensureLive(frame, name) {
   const live = frame.locator('.conn[data-state="live"]');
-  await dialog.or(live).first().waitFor({ timeout: 60_000 });
-  // The dialog opens immediately while the board connects behind it; give a rebuilt iframe a
-  // moment to show it before trusting "live".
-  let joined = false;
-  if (await dialog.waitFor({ timeout: 2000 }).then(() => true, () => false)) {
-    const r = await joinBoard(frame, name);
-    if (!r.joined) throw new Error("name dialog did not close after Join board");
-    joined = true;
-  }
   await live.waitFor({ timeout: 60_000 });
+  const rebuilt = await frame.locator("body").evaluate(() => !(/** @type {any} */ (window).__connLog));
+  const { meName, namePrompts } = await boardIdentity(frame, { settleMs: rebuilt ? 500 : 0 });
+  if (namePrompts) throw new Error(`the board asked for a name (${namePrompts} name prompt element(s))`);
+  if (meName !== name) throw new Error(`me button shows "${meName}", expected the account name "${name}"`);
   await recordConnection(frame);
-  return joined;
+  return rebuilt;
 }

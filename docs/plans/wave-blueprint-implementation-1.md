@@ -21,7 +21,7 @@ The five changes that matter most, each argued below:
 4. **Playback from retained update logs, not snapshots.** One storage key per Yjs update, a per-blip base state at the retention boundary, and replay by server sequence. No checkpoint chunks, no reliance on Yjs snapshots surviving garbage collection.
 5. **The Wave is legible to a model in one call.** `getWaveMarkdown()` returns the whole conversation as Markdown with blip ids as anchors; `exportMarkdown()` produces a decision record that can be pasted into a chat or committed to a repository. That is the fit with a vibe-coding workflow: the decision lands where the code is.
 
-Recommended in parallel, not on the critical path: the master plan's Phase 0 viewer identity patch. Wave is the tool where anonymous authorship hurts most. Pass 1 consumes `gadgetViewer` when the global exists and falls back to the name dialog when it does not.
+The master plan's viewer identity patch has landed in the fork (see [Viewer identity and change attribution](collaborative-blueprints.md#viewer-identity-and-change-attribution)). Wave attributes every blip, edit and decision to `gadgetViewer.displayName` and has no name dialog.
 
 ## 1. Review of the two plans
 
@@ -360,7 +360,7 @@ A throwaway gadget on the local Cloudflare OS, following `e2e/start-local-platfo
 3. Whether a Markdown link can be opened from the iframe, and what `target="_blank"` does under the sandbox flags.
 4. `env.Model.run` from a facet with a configured OpenRouter model: latency, output size, behaviour on a 90 s timeout, and what happens when the binding is absent. Also what **New** does for a bundled format whose archive declares an `aiModel` binding.
 5. Rate: three browsers typing continuously in one blip with adaptive batching; record calls a second, median remote latency and any queue growth.
-6. Whether `gadgetViewer` exists (it will not on this pin; the check documents the fallback path).
+6. That `gadgetViewer` is present in the iframe and carries the signed-in account's display name.
 
 Exit: a short write-up in the package README's "Measured" section, with numbers.
 
@@ -398,7 +398,7 @@ Fix agents turn each repro into a regression test in the owning stream's test di
 
 | Test | Passes when |
 | --- | --- |
-| T0 | The shipped client boots; the name dialog joins by button and by Enter; no blocked form submissions |
+| T0 | The shipped client boots with no name dialog; the viewer's name is the account's display name; no blocked form submissions |
 | T1 | Alice and Bob type interleaved words in one blip; both end with identical text |
 | T2 | Bob's caret is visible in Alice's editor and stays on the right character while Alice types above it |
 | T3 | Alice replies after paragraph 2; Bob sees it at the same paragraph after editing paragraph 1 |

@@ -1,5 +1,5 @@
 // Ad-hoc visual pass over the harness: a populated board in light and dark, the card panel,
-// a column menu and the name dialog. Not a test; writes screenshots only.
+// a column menu and the colour dialog. Not a test; writes screenshots only.
 //   node scripts/build.mjs && node e2e/harness-smoke.mjs [screenshot-dir]
 import { mkdir } from "node:fs/promises";
 import * as h from "./harness-helpers.mjs";
@@ -37,15 +37,18 @@ try {
   for (const scheme of ["light", "dark"]) {
     const context = await browser.newContext({ viewport: { width: 1800, height: 900 }, colorScheme: scheme });
     const page = await context.newPage();
-    await page.goto(server.url + "?panes=2");
+    await page.goto(h.harnessUrl(server.url, { panes: 2, names: ["Alice Adams", "Bob Brown"] }));
     const A = h.pane(page, "A");
     const B = h.pane(page, "B");
-    await A.locator(".name-dialog").waitFor();
-    if (scheme === "light") await page.screenshot({ path: `${shots}/smoke-${scheme}-name-dialog.png` });
-    await h.joinAs(A, "Alice Adams");
-    await h.joinAs(B, "Bob Brown");
     await h.waitLive(A);
     await h.waitLive(B);
+    if (scheme === "light") {
+      await A.locator(".me-btn").click();
+      await A.locator(".color-dialog").waitFor();
+      await page.screenshot({ path: `${shots}/smoke-${scheme}-color-dialog.png` });
+      await A.locator(".color-dialog").press("Escape");
+      await A.locator(".color-dialog").waitFor({ state: "detached" });
+    }
     await seed(page);
     await h.card(B, "Update the handbook").waitFor();
     await h.card(B, "Order hardware for new starters").click();

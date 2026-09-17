@@ -62,25 +62,21 @@ export function confirmDialog({ title, message, confirmLabel = "OK", danger = fa
 }
 
 /**
- * Asks for a display name and colour.
- * @param {{name: string, color: string, title?: string, skippable?: boolean}} opts
- * @returns {Promise<{name: string, color: string}|null>}  null when skipped/cancelled
+ * Lets the viewer pick their colour. The name is the signed-in account's and is not editable.
+ * @param {{name: string, color: string}} opts
+ * @returns {Promise<string|null>}  the chosen colour; null when cancelled
  */
-export function nameDialog({ name, color, title = "Who's here?", skippable = true }) {
+export function colorDialog({ name, color }) {
   return modal((close) => {
     let chosen = color;
-    const input = /** @type {HTMLInputElement} */ (h("input", {
-      type: "text", value: name, maxlength: 40, placeholder: "Your name", "aria-label": "Your name",
-      "data-autofocus": true, autocomplete: "off", class: "name-input",
-    }));
     const preview = h("span", null);
     const refreshPreview = () => {
-      preview.replaceChildren(avatar(input.value || "Guest", chosen));
+      preview.replaceChildren(avatar(name || "Guest", chosen));
     };
     const swatches = h("div", { class: "swatches", role: "radiogroup", "aria-label": "Colour" },
       PALETTE.map((c) => h("button", {
         type: "button", class: "swatch", role: "radio", "aria-checked": String(c === chosen),
-        "aria-label": colorName(c), style: { background: c },
+        "aria-label": colorName(c), style: { background: c }, "data-autofocus": c === chosen || undefined,
         onclick: (/** @type {Event} */ e) => {
           chosen = c;
           for (const s of swatches.children) s.setAttribute("aria-checked", String(s === e.currentTarget));
@@ -88,31 +84,17 @@ export function nameDialog({ name, color, title = "Who's here?", skippable = tru
         },
       })),
     );
-    input.addEventListener("input", refreshPreview);
     refreshPreview();
-    // No <form>: the platform iframe's sandbox lacks allow-forms, so native submission is blocked
-    // before a submit event fires. A button click and Enter in the input do the same thing.
-    const join = () => {
-      const value = input.value.trim();
-      close(value ? { name: value, color: chosen } : null);
-    };
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); join(); }
-    });
-    const form = h("div", { class: "modal name-dialog", "aria-label": title },
-      h("h2", null, title),
-      h("p", null, "Pick a name and colour so others can see who is on the board. Nothing is stored."),
-      h("div", { style: { display: "flex", gap: "10px", alignItems: "center" } }, preview, input),
+    return h("div", { class: "modal color-dialog", "aria-label": "Your colour" },
+      h("h2", null, "Your colour"),
+      h("p", null, "Others see this colour next to your name on the board."),
+      h("div", { style: { display: "flex", gap: "10px", alignItems: "center" } }, preview, h("strong", { class: "color-dialog-name" }, name || "Guest")),
       swatches,
       h("div", { class: "modal-actions" },
-        skippable
-          ? h("button", { type: "button", class: "btn outline", "data-skip": true, onclick: () => close(null) }, "Continue as guest")
-          : h("button", { type: "button", class: "btn outline", onclick: () => close(null) }, "Cancel"),
-        h("button", { type: "button", class: "btn primary join-btn", onclick: join }, "Join board"),
+        h("button", { type: "button", class: "btn outline", onclick: () => close(null) }, "Cancel"),
+        h("button", { type: "button", class: "btn primary save-btn", onclick: () => close(chosen) }, "Save"),
       ),
     );
-    requestAnimationFrame(() => input.select());
-    return form;
   }, null);
 }
 

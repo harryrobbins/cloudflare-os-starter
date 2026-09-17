@@ -88,18 +88,29 @@ cd ../.. && packages/blueprint-kanban/e2e/stop-local-platform.sh
 - `CFOS_URL` (default `http://localhost:8787`), `PLATFORM_SHOTS` (screenshots, `timings.json`,
   exported CSV/HTML).
 - Platform facts the client depends on (all reproduced by the harness, see `harness/README.md`):
-  `gadget` / `RpcTarget` are module-scope bindings in a prefix prepended to `client.js`, not
-  `globalThis` properties; the iframe sandbox has no `allow-forms`, so the UI never uses form
+  `gadget` / `gadgetViewer` / `RpcTarget` are module-scope bindings in a prefix prepended to
+  `client.js`, not `globalThis` properties (`gadgetViewer` = `{id, displayName, role}` of the
+  signed-in account, from the forked submodule's `GadgetClient.getViewer()` patch; the frontend
+  must be rebuilt from that submodule, so start the platform with `CFOS_REBUILD=1` after changing
+  it); the iframe sandbox has no `allow-forms`, so the UI never uses form
   submission; after a code edit restarts the facet, the iframe's `gadget` stub rejects every call
-  forever, so the board reloads its own frame (keeping the viewer's name in `window.name`).
-- Tests: `0a` shipped client boots and joins; `0b` name dialog joins via button (alice) and Enter
-  (bob), no blocked form submissions; `T1` create -> other browser; `T5` use-role chrome; `T2`
-  concurrent drags; `T3` title conflict banner + "Use theirs"; `T8` CSV/HTML export; `T6` code edit
+  forever, so the board reloads its own frame (keeping the viewer's colour in `window.name`).
+- Names: nobody is asked for one. Every change is attributed to the account's display name, which
+  for a password sign-up is the username as typed (`createAccount(username, username, ...)`), so
+  the suite expects `alice` and `bob` (`accountDisplayName()` in `platform-kanban-helpers.mjs`).
+  The me button (`.me-btn .me-name`) shows it and only opens a colour dialog.
+- Tests: `0a` shipped client boots without a name dialog and shows the account name; `0b` neither
+  alice (owner) nor bob (use-role link) sees a name prompt, both me buttons show the account
+  display names, no blocked form submissions; `T1` create -> other browser; `T5` use-role chrome; `T2`
+  concurrent drags; `T3` title conflict banner + "Use theirs"; `T8` CSV/HTML export (the "Created by" column is the creating account's name); `T6` code edit
   in Monaco (a single `keyboard.insertText` into `server.js`, which bumps the code version and
-  aborts the facet): bob's frame must reload itself, stay named (no dialog) and keep syncing both
-  ways; reload; bulk 30 cards; `T4` presence ring/avatar after a renderer crash and after
+  aborts the facet): bob's frame must reload itself, keep his account name (never a name prompt) and keep
+  syncing both ways; reload; bulk 30 cards; `T4` presence ring/avatar after a renderer crash and after
   `context.close()`. `T7` (agent chat) needs a model and is not run locally.
 - Verified 2026-09-16 (revision 2): 11/11 pass in ~54 s. T6: bob `reconnecting` at ~2.6 s after the
   edit, "Reconnecting…" overlay at ~4.0 s (3 failed subscribes), live again after the self-reload
-  at ~4.5 s. Alice (owner) gets a rebuilt iframe when she switches back from the Code tab, so she
-  sees the name dialog again (platform behaviour, noted in `timings.json`).
+  at ~4.5 s. Alice (owner) gets a rebuilt iframe when she switches back from the Code tab
+  (platform behaviour, noted in `timings.json`).
+- Verified 2026-09-17 (revision 6, account names from `gadgetViewer`): 11/11 pass in ~64 s. T6: bob
+  live again after the self-reload at ~3.2 s; alice's rebuilt iframe came back under her account
+  name with no dialog.

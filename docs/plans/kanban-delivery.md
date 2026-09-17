@@ -261,7 +261,7 @@ Gate: A fresh deployment gets Board with no manual steps.
 ### After v1
 
 - **Upgrading existing boards.** A new `revision` changes what *new* boards get. Existing boards keep the code they were created with. Upgrade one by pasting the new `dist/` files into its code editor, or ask its chat agent to do it. The `schemaVersion`/`migrate` hook from Phase 1 is what makes that safe for data.
-- **Viewer identity** (master plan Phase 0). With it, `getViewer()` returns the real identity, the name prompt goes, and `use` role can be read-only.
+- **Viewer identity** (master plan Phase 0). Done for attribution: the platform injects `gadgetViewer` and the name prompt is gone. `use`-role read-only still needs the server-side half.
 - **Upstream `libraries/sync`.** When the submodule moves past the pin, compare our `src/server` and `src/client/sync` with it. Adopt it only if it removes code without changing the wire protocol.
 - **Lift the harness and sync layers** into a shared package for the whiteboard, per the master plan's "shared presence and sync module".
 

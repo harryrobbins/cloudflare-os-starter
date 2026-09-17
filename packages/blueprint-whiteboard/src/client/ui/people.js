@@ -4,7 +4,7 @@
 // fit (6 avatars, 3 on phones), a "+N" button lists everyone in a menu, each with Follow.
 
 import { h, avatar } from "./dom.js";
-import { nameDialog, openMenu } from "./dialogs.js";
+import { colorDialog, openMenu } from "./dialogs.js";
 
 /** @typedef {import("./app.js").App} App */
 /** @typedef {import("../store-contract.js").ClientState} ClientState */
@@ -26,12 +26,12 @@ export function createPeople(app) {
   const { store, canvas } = app;
   const list = h("div", { class: "people", role: "group", "aria-label": "Nobody else is here" });
   const meBtn = h("button", {
-    type: "button", class: "btn me-btn", title: "Change your name or colour", "aria-label": "Change your name or colour",
+    type: "button", class: "btn me-btn", title: "Change your colour", "aria-label": "Change your colour",
   });
   meBtn.addEventListener("click", async () => {
     const viewer = store.getState().viewer;
-    const result = await nameDialog({ name: viewer.name, color: viewer.color, title: "Your name", skippable: false });
-    if (result) store.setViewer(result.name, result.color);
+    const color = await colorDialog({ name: viewer.name, color: viewer.color });
+    if (color) store.setViewer(viewer.name, color);
   });
   const el = h("div", { class: "wb-float wb-topright" }, list, meBtn);
 

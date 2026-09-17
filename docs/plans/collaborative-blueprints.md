@@ -29,10 +29,10 @@ Each plan has to handle these, and the master plan tracks the cross-cutting fixe
 
 | Gap | Impact | Handling |
 | --- | --- | --- |
-| No viewer identity reaches gadget code (upstream Discussion #455) | Collaborators show as "Guest A1B2" unless they type a name; nothing can be attributed to a real user | Phase 0 option below patches the kernel in our fork. Until then every plan has a name prompt on first load. |
-| No client-side storage (opaque-origin iframe) | The name prompt repeats on every reload; no local drafts survive a reload | Accept for v1. With the identity patch the prompt disappears. |
+| Upstream passes no viewer identity to gadget code (upstream Discussion #455) | Without it, collaborators would have to type a name and nothing could be attributed to a real account | Done in our fork: the platform injects `gadgetViewer` (see [Viewer identity and change attribution](#viewer-identity-and-change-attribution)). No format asks for a name. |
+| No client-side storage (opaque-origin iframe) | No local drafts or preferences (such as a chosen colour) survive a reload | Accept for v1. A self-reload carries the colour in `window.name`. |
 | Facet restarts on code deploy, chat-branch switch and revocation drop every subscription | Clients go stale silently | Neither `[Symbol.dispose]` nor `onRpcBroken` fires in practice (the runtime does not implement `onRpcBroken`). The kanban board's heartbeat (`updatePresence` returns `{known, revision}`) detects the restart, and the client re-subscribes. |
-| After a code edit, a `use`-role iframe's `gadget` stub fails permanently (verified locally) | Re-subscribing cannot help; the connection itself is dead | The client reloads its own frame after repeated failures, carrying the viewer's name in `window.name`. Unsent local changes are lost. |
+| After a code edit, a `use`-role iframe's `gadget` stub fails permanently (verified locally) | Re-subscribing cannot help; the connection itself is dead | The client reloads its own frame after repeated failures, carrying the viewer's colour in `window.name`. Unsent local changes are lost. |
 | The platform prepends `gadget` and `RpcTarget` as module-level `let` bindings, not globals | Code reading `globalThis.gadget` crashes on start | Read them with `typeof gadget !== "undefined"`. |
 | The iframe sandbox has no `allow-forms` | Native form submission is silently blocked before `submit` fires | No `<form>` elements; use button and Enter handlers. |
 | No CRDT library, no `typed-storage`, no npm at runtime; `client.js` is served as one file and cannot import siblings | Text co-editing needs a library inlined: a module file for the server, concatenated into `client.js` for the browser | Only Wave needs this; see its plan for the Yjs build step. |
@@ -83,13 +83,21 @@ Upstream `main` has moved the bundled gadgets to `packages/bundled-blueprints/` 
 
 ## Cross-cutting work items
 
-### Phase 0, optional but recommended: viewer identity
+### Viewer identity and change attribution
 
-A kernel change in our fork (`surprisingly-os`, branch `starter-openrouter`). `GadgetClient.connectToGadget` in `overseer.ts` already runs inside a session that knows the caller's profile and role. Pass a `{id, displayName, role}` object into the facet on connect (for example as `ctx.props`, or as a second argument the platform injects into `subscribe`), and expose it to `client.js` as a `gadgetViewer` global next to `gadget`. This mirrors the shape proposed in upstream Discussion #455, so if upstream lands it our change becomes a no-op rebase.
+**The rule for every collaborative format:** changes are attributed to the signed-in account. A format never asks anyone for a name, never offers "Continue as guest", and never lets a viewer edit the name their changes carry. Presence, cursors, `createdBy`, history `by`, comment authors and any other attribution field all use the account's display name. A viewer may still pick a colour.
 
-Cost: a day. Benefit: every plan drops its name prompt, presence shows real names, kanban assignees and Wave authors become real identities, and `use`-role viewers can be made read-only inside the gadget. Without it the three tools work but attribution is on the honour system.
+**How it works.** A kernel change in our fork (`surprisingly-os`, branch `starter-openrouter`) implements Phase 0 of the original plan:
 
-If you do this, keep the diff in `workshop-backend` and `workshop-shared` small and separate, per upstream's AGENTS.md rule for kernel changes.
+- `GadgetClient.getViewer()` (`workshop-shared/src/api.ts`, `workshop-backend/src/overseer.ts`) returns `GadgetViewer = {id, displayName, role}` from the authenticated session's profile. `role` is `"build"` for the owner and build collaborators, `"use"` for use collaborators.
+- `GadgetUI.tsx` fetches it alongside the UI bundle and injects `const gadgetViewer = Object.freeze({...})` into the iframe prefix, a module-scope binding next to `gadget`. It is `null` if the lookup failed.
+- The shape follows upstream Discussion #455, so if upstream lands an equivalent the change should become a rebase.
+
+**In a format's client:** read it like `gadget`, as a free identifier behind a `typeof` guard (`typeof gadgetViewer !== "undefined" ? gadgetViewer : undefined`). Use `displayName`, falling back to `id`, then `"Guest"` only for an older platform. Set the name before creating the store, so no change is ever sent without it. Make the harness inject a per-pane `gadgetViewer` the same way (the Board and Whiteboard harnesses take `?names=Alice,Bob`). See `packages/blueprint-kanban/src/client/main.js` and `packages/blueprint-whiteboard/src/client/main.js`.
+
+**Trust limits.** The frontend supplies `gadgetViewer` to the iframe; the gadget's server still receives names as ordinary RPC arguments. That ends the name prompt and attributes honest clients' changes correctly, but a user who tampers with their own browser can still send a different name. Anything that grants permission (approvals, `use`-role read-only enforcement) needs the server-side half: the facet learning the caller's identity from the platform, not from the client.
+
+**When upgrading the submodule,** carry this patch forward with the OpenRouter one; the Board and Whiteboard fall back to "Guest" without it.
 
 ### Starter change: own formats directory (done)
 

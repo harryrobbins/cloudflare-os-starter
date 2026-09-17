@@ -12,8 +12,9 @@ This gadget is built from `packages/blueprint-kanban` in the deployment's starte
 - **Filter** by label or assignee, or search titles, from the toolbar.
 - **Activity** lists recent changes; recent moves, edits, creations and deletions can be undone from there.
 - **Presence**: avatars in the header show who is here; a coloured ring marks the card each person has open.
+- **Your name** is your account's display name: cards you create, your comments and your Activity entries carry it. Nobody is asked for a name. Click your avatar in the header to change your colour.
 - **Export**: CSV of all cards, or HTML/PDF of the board, from the gadget's export menu.
-- **Connection**: if the gadget's code is changed while the board is open, the board reloads itself to reconnect (your name and colour are kept). Changes that had not reached the server when the connection dropped are lost, so check your last edit. If it has to reload more than 3 times in a minute it stops and asks you to reload the page.
+- **Connection**: if the gadget's code is changed while the board is open, the board reloads itself to reconnect (your colour is kept). Changes that had not reached the server when the connection dropped are lost, so check your last edit. If it has to reload more than 3 times in a minute it stops and asks you to reload the page.
 
 ## Programmatic use
 

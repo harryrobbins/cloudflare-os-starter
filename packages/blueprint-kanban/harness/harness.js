@@ -71,6 +71,8 @@ class Pane {
   constructor(id, opts) {
     this.id = id;
     this.exportFormat = opts.exportFormat ?? null;
+    /** what the platform injects as `gadgetViewer`: the signed-in account, never typed in */
+    this.viewer = { id: `user-${id.toLowerCase()}`, displayName: opts.name ?? `User ${id}`, role: "build" };
     this.dead = false;
     this.up = new Lane();
     this.down = new Lane();
@@ -218,7 +220,7 @@ class Pane {
 const panesEl = /** @type {HTMLElement} */ (document.getElementById("panes"));
 
 /**
- * @param {{exportFormat?: string|null}} [opts]
+ * @param {{exportFormat?: string|null, name?: string}} [opts]  name: the pane's account display name
  */
 function addPane(opts = {}) {
   const id = String.fromCharCode(65 + state.nextPane++);
@@ -314,7 +316,7 @@ setLatency(state.latency);
       if (!r.ok) throw new Error("dist/client.js missing: run node scripts/build.mjs");
       return r.text();
     });
-    return { gadget: pane.connect(win, RpcTarget), exportFormat: pane.exportFormat, clientSource };
+    return { gadget: pane.connect(win, RpcTarget), viewer: pane.viewer, exportFormat: pane.exportFormat, clientSource };
   },
   getBoard: () => state.server.getBoard(),
   getHistory: (/** @type {number} */ n) => state.server.getHistory(n),
@@ -341,5 +343,7 @@ setLatency(state.latency);
 };
 
 const paneCount = Math.max(1, Math.min(4, Number(params.get("panes") || 2)));
-for (let i = 0; i < paneCount; i++) addPane();
+// ?names=Alice,Bob sets the panes' account names (default "User A", "User B", ...).
+const paneNames = (params.get("names") ?? "").split(",").map((n) => n.trim());
+for (let i = 0; i < paneCount; i++) addPane({ name: paneNames[i] || undefined });
 if (params.get("export")) addPane({ exportFormat: params.get("export") });

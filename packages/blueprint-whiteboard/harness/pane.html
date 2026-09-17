@@ -10,7 +10,7 @@
 <body>
   <script type="module">
     // Mimics the platform iframe: no markup of its own. The platform prepends a prefix to
-    // client.js that declares `gadget` and `RpcTarget` (and RpcStub, newMessagePortRpcSession,
+    // client.js that declares `gadget`, `gadgetViewer` and `RpcTarget` (and RpcStub, newMessagePortRpcSession,
     // blockedOpen) as MODULE-SCOPE bindings, not properties of window, so the client must read them
     // as free identifiers. The same is done here. `gadgetExportFormatId` is a real global in export
     // mode (browser-export.ts). Then the real built client runs, inlined.
@@ -18,16 +18,18 @@
     window.addEventListener("error", (e) => { window.clientError = String(e.error?.stack || e.message); });
     window.addEventListener("unhandledrejection", (e) => { window.clientError = String(e.reason?.stack || e.reason); });
     class HarnessRpcTarget {}
-    const { gadget, exportFormat, clientSource } = parent.harness.connect(pane, window, HarnessRpcTarget);
+    const { gadget, viewer, exportFormat, clientSource } = parent.harness.connect(pane, window, HarnessRpcTarget);
     window.__harnessGadget = gadget;
+    window.__harnessViewer = Object.freeze({ ...viewer });
     window.__harnessRpcTarget = HarnessRpcTarget;
     if (exportFormat) window.gadgetExportFormatId = exportFormat;
     const prefix = [
       "//# sourceURL=client.js",
       "let gadget = window.__harnessGadget;",
+      "const gadgetViewer = window.__harnessViewer;",
       "const RpcTarget = window.__harnessRpcTarget;",
       "const RpcStub = undefined, newMessagePortRpcSession = undefined, blockedOpen = () => null;",
-      "delete window.__harnessGadget; delete window.__harnessRpcTarget;",
+      "delete window.__harnessGadget; delete window.__harnessViewer; delete window.__harnessRpcTarget;",
       "",
     ].join("\n");
     const script = document.createElement("script");

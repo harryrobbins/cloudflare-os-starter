@@ -4,7 +4,7 @@
 
 import { LIMITS } from "../../shared/protocol.js";
 import { h, icon, avatar, inlineEditable } from "./dom.js";
-import { nameDialog } from "./dialogs.js";
+import { colorDialog } from "./dialogs.js";
 import { UNASSIGNED } from "./filters.js";
 
 /** @typedef {import("../store-contract.js").ClientState} ClientState */
@@ -27,11 +27,11 @@ export function createHeader(app) {
   const avatars = h("div", { class: "avatars", role: "group", "aria-label": "Nobody else is here" });
   app.avatarsEl = avatars;
 
-  const meBtn = h("button", { type: "button", class: "btn me-btn", title: "Change your name or colour", "aria-label": "Change your name or colour" });
+  const meBtn = h("button", { type: "button", class: "btn me-btn", title: "Change your colour", "aria-label": "Change your colour" });
   meBtn.addEventListener("click", async () => {
     const viewer = store.getState().viewer;
-    const result = await nameDialog({ name: viewer.name, color: viewer.color, title: "Your name", skippable: false });
-    if (result) store.setViewer(result.name, result.color);
+    const color = await colorDialog({ name: viewer.name, color: viewer.color });
+    if (color) store.setViewer(viewer.name, color);
   });
 
   const header = h("header", { class: "header" },

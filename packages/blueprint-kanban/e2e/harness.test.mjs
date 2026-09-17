@@ -559,18 +559,17 @@ describe("kanban harness", { concurrency: false }, () => {
     });
   });
 
-  test("9a. no form submission needed: name dialog (button and Enter), add column, checklist add", async () => {
+  test("9a. no form submission needed: nobody is asked for a name, add column, checklist add", async () => {
     await withHarness({ names: ["Alice", "Bob"] }, async ({ page, frames: { A, B } }) => {
-      // The panes are sandboxed without allow-forms (like the platform), and openHarness already
-      // joined both through the Join board button. Now join through Enter.
+      // The panes are sandboxed without allow-forms (like the platform). A reloaded pane comes back
+      // under its account name with no dialog.
       await page.evaluate(() => window.harness.reloadPane("B"));
-      const input = B.locator(".name-dialog .name-input");
-      await input.waitFor({ timeout: 10_000 });
-      await input.fill("Bobby Enter");
-      await input.press("Enter");
-      await input.waitFor({ state: "detached", timeout: 3000 });
+      await h.until(() => page.evaluate(() => window.harness.paneLoads("B") >= 2), { message: "B reloaded" });
       await h.waitLive(B);
-      await A.locator('.avatars .avatar[title="Bobby Enter"]').waitFor({ timeout: 5000 });
+      await h.expectAccountName(B, "Bob");
+      await A.locator('.avatars .avatar[title="Bob"]').waitFor({ timeout: 5000 });
+      assert.equal(await A.locator("form").count(), 0);
+      assert.equal(await B.locator("form").count(), 0);
 
       // Add column through its button.
       await A.locator(".add-column-btn").click();
@@ -602,7 +601,7 @@ describe("kanban harness", { concurrency: false }, () => {
     });
   });
 
-  test("9b. restart with stale stubs (platform behaviour): panes reload themselves and keep their names", async () => {
+  test("9b. restart with stale stubs (platform behaviour): panes reload themselves and keep their account names", async () => {
     await withHarness({ names: ["Alice Adams", "Bob Brown"] }, async ({ page, frames: { A, B } }) => {
       await h.addCard(A, "Backlog", "Before stale restart");
       await h.card(B, "Before stale restart").waitFor();
@@ -614,9 +613,9 @@ describe("kanban harness", { concurrency: false }, () => {
       await h.waitLive(B);
       const recoveredMs = Date.now() - started;
       assert.ok(await page.evaluate(() => window.harness.staleRejections) > 0, "stale stubs were exercised");
-      // Names carried across the reload in window.name: no dialog, same avatars.
-      assert.equal(await A.locator(".name-dialog").count(), 0);
-      assert.equal(await B.locator(".name-dialog").count(), 0);
+      // Same account names after the reload: no name prompt, same avatars.
+      await h.expectAccountName(A, "Alice Adams");
+      await h.expectAccountName(B, "Bob Brown");
       await A.locator('.avatars .avatar[title="Bob Brown"]').waitFor({ timeout: 5000 });
       await B.locator('.avatars .avatar[title="Alice Adams"]').waitFor({ timeout: 5000 });
       await h.card(B, "Before stale restart").waitFor();
@@ -627,6 +626,69 @@ describe("kanban harness", { concurrency: false }, () => {
       assert.deepEqual(await page.evaluate(() => [window.harness.paneLoads("A"), window.harness.paneLoads("B")]), [2, 2],
         "exactly one self-reload per pane");
       console.log(`# 9b recovered in ${recoveredMs} ms`);
+    });
+  });
+  test("9c. a new pane shows its account name without a dialog; changes are attributed to it; colour dialog has no name field", async () => {
+    // Wide enough that three panes keep the desktop column layout.
+    await withHarness({ names: ["Ada Lovelace", "Grace Hopper"], viewport: { width: 2700, height: 900 } }, async ({ page, frames: { A, B } }) => {
+      // A pane added later also starts under its account name (default "User C"), no dialog.
+      const paneId = await page.evaluate(() => window.harness.addPane());
+      const C = h.pane(page, paneId);
+      await h.waitLive(C);
+      await h.expectAccountName(C, `User ${paneId}`);
+      await A.locator(`.avatars .avatar[title="User ${paneId}"]`).waitFor({ timeout: 5000 });
+
+      // Card createdBy and history `by` use the creating pane's account name.
+      await h.addCard(A, "Backlog", "Attributed A");
+      await A.locator(".composer-input").press("Escape");
+      await h.addCard(B, "To do", "Attributed B");
+      await B.locator(".composer-input").press("Escape");
+      const board = await h.until(async () => {
+        const b = await serverBoard(page);
+        const titles = Object.values(b.cards).map((c) => c.title);
+        return titles.includes("Attributed A") && titles.includes("Attributed B") && b;
+      }, { message: "both cards saved" });
+      const byTitle = Object.fromEntries(Object.values(board.cards).map((c) => [c.title, c]));
+      assert.equal(byTitle["Attributed A"].createdBy, "Ada Lovelace");
+      assert.equal(byTitle["Attributed B"].createdBy, "Grace Hopper");
+      const history = await page.evaluate(() => window.harness.getHistory(10));
+      assert.ok(history.some((e) => e.by === "Ada Lovelace" && /Attributed A/.test(e.summary)), "history entry by Ada: " + JSON.stringify(history));
+      assert.ok(history.some((e) => e.by === "Grace Hopper" && /Attributed B/.test(e.summary)), "history entry by Grace: " + JSON.stringify(history));
+
+      // Comment author is the account name, on the server and in the other pane.
+      await h.card(B, "Attributed A").click();
+      await B.locator(".panel .comment-input").fill("Grace was here");
+      await B.locator(".panel .comment-form .comment-send").click();
+      const cardId = byTitle["Attributed A"].id;
+      const comments = await h.until(async () => {
+        const list = await page.evaluate((id) => window.harness.getComments(id), cardId);
+        return list.length && list;
+      }, { message: "comment saved" });
+      assert.equal(comments[0].author, "Grace Hopper");
+      await h.card(A, "Attributed A").click();
+      await A.locator(".panel .comment .comment-head strong", { hasText: "Grace Hopper" }).waitFor({ timeout: 3000 });
+      await A.locator(".panel").press("Escape");
+      await B.locator(".panel").press("Escape");
+
+      // The me button only changes the colour: no name input; the name stays the account's.
+      await A.locator(".me-btn").click();
+      const dialog = A.locator(".color-dialog");
+      await dialog.waitFor();
+      assert.equal(await dialog.locator("input, textarea, [contenteditable]").count(), 0, "no name field in the colour dialog");
+      assert.equal(await A.locator(h.NAME_PROMPT).count(), 0);
+      assert.equal(await dialog.locator(".color-dialog-name").innerText(), "Ada Lovelace");
+      const before = await A.locator(".me-btn .avatar").evaluate((el) => getComputedStyle(el).backgroundColor);
+      const other = dialog.locator('.swatch[aria-checked="false"]').first();
+      const want = await other.evaluate((el) => getComputedStyle(el).backgroundColor);
+      await other.click();
+      await dialog.locator(".save-btn").click();
+      await dialog.waitFor({ state: "detached" });
+      await h.until(async () => (await A.locator(".me-btn .avatar").evaluate((el) => getComputedStyle(el).backgroundColor)) === want,
+        { message: "me avatar recoloured" });
+      assert.notEqual(want, before);
+      await h.expectAccountName(A, "Ada Lovelace");
+      await h.until(async () => (await B.locator('.avatars .avatar[title="Ada Lovelace"]').evaluate((el) => getComputedStyle(el).backgroundColor)) === want,
+        { message: "B sees Ada's new colour" });
     });
   });
 });

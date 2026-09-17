@@ -46,10 +46,14 @@ let alice;
 let bob;
 /** @type {User|null} */
 let carol = null;
-/** @type {{joined: boolean, via: string}} */
-let aliceJoin;
-/** @type {{joined: boolean, via: string}} */
-let bobJoin;
+/** @type {{meName: string, namePrompts: number}} */
+let aliceIdentity;
+/** @type {{meName: string, namePrompts: number}} */
+let bobIdentity;
+/** Display names of the local accounts (what `gadgetViewer.displayName` carries). */
+const ALICE = w.accountDisplayName("alice");
+const BOB = w.accountDisplayName("bob");
+const CAROL = w.accountDisplayName("carol");
 let logStart = 0;
 /** Owner-page `server: ` console lines seen by every alice page of the run. */
 /** @type {string[]} */
@@ -82,15 +86,15 @@ async function openUser(username) {
 }
 
 /**
- * Opens the whiteboard at `url` for `user` and joins as `name`.
- * @param {User} user @param {string} url @param {string} name @param {"button"|"enter"} [via]
+ * Opens the whiteboard at `url` for `user`. Nobody is asked for a name: returns what it shows.
+ * @param {User} user @param {string} url
  */
-async function openBoard(user, url, name, via = "button") {
+async function openBoard(user, url) {
   await user.page.goto(url);
-  const join = await w.joinBoard(user.frame, name, { via });
   await w.waitLive(user.frame);
+  const identity = await w.boardIdentity(user.frame);
   await w.recordConnection(user.frame);
-  return join;
+  return identity;
 }
 
 const users = () => /** @type {User[]} */ ([alice, bob, carol].filter(Boolean));
@@ -150,8 +154,8 @@ async function toSelectTool(u) {
  * Before each test: both main users live, Select tool, camera at the world origin, empty board.
  */
 async function resetBoard() {
-  for (const [u, name] of /** @type {[User, string][]} */ ([[alice, "Alice"], [bob, "Bob"]])) {
-    await w.ensureJoined(u.frame, name);
+  for (const [u, name] of /** @type {[User, string][]} */ ([[alice, ALICE], [bob, BOB]])) {
+    await w.ensureLive(u.frame, name);
     await toSelectTool(u);
     await h.setCamera(u.frame, { x: 0, y: 0, zoom: 1 });
   }
@@ -183,14 +187,14 @@ async function createShared(objects) {
 
 /**
  * Alice creates a use-role share link and a new user opens it.
- * @param {string} username @param {string} name
+ * @param {string} username
  */
-async function openSharedUser(username, name) {
+async function openSharedUser(username) {
   await alice.page.bringToFront();
   const shareUrl = await p.createUseShareLink(alice.page);
   const u = await openUser(username);
-  const join = await openBoard(u, shareUrl, name, "button");
-  return { u, join };
+  const identity = await openBoard(u, shareUrl);
+  return { u, identity };
 }
 
 before(async () => {
@@ -204,16 +208,16 @@ before(async () => {
   const t0 = Date.now();
   workspaceUrl = await p.createGadgetFromBlueprint(alice.page, BASE, blueprintId);
   log(`workspace ${workspaceUrl}`);
-  aliceJoin = await w.joinBoard(alice.frame, "Alice", { via: "button" });
   await w.waitLive(alice.frame);
   timings.setup_create_to_alice_live_ms = Date.now() - t0;
+  aliceIdentity = await w.boardIdentity(alice.frame);
   await w.recordConnection(alice.frame);
 
   const shareUrl = await p.createUseShareLink(alice.page);
   bob = await openUser("bob");
-  bobJoin = await openBoard(bob, shareUrl, "Bob", "enter");
-  await alice.frame.locator(SEL.peerNamed("Bob")).waitFor({ timeout: 15_000 });
-  await bob.frame.locator(SEL.peerNamed("Alice")).waitFor({ timeout: 15_000 });
+  bobIdentity = await openBoard(bob, shareUrl);
+  await alice.frame.locator(SEL.peerNamed(BOB)).waitFor({ timeout: 15_000 });
+  await bob.frame.locator(SEL.peerNamed(ALICE)).waitFor({ timeout: 15_000 });
   log("alice and bob are live on the whiteboard");
 });
 
@@ -250,9 +254,11 @@ after(async () => {
 });
 
 describe("whiteboard on the local platform", { concurrency: false }, () => {
-  test("0a. the shipped client boots; the name dialog joins via button (alice) and Enter (bob); no errors", () => evidence("0a", async () => {
-    assert.ok(aliceJoin.joined, "Join button did nothing (form submission blocked?)");
-    assert.ok(bobJoin.joined, "Enter in the name field did nothing (form submission blocked?)");
+  test("0a. the shipped client boots; nobody is asked for a name, each sees their account name; no errors", () => evidence("0a", async () => {
+    assert.equal(aliceIdentity.namePrompts, 0, "alice (owner) saw no name dialog");
+    assert.equal(bobIdentity.namePrompts, 0, "bob (use-role share link) saw no name dialog");
+    assert.equal(aliceIdentity.meName, ALICE, "alice's me button shows her account display name");
+    assert.equal(bobIdentity.meName, BOB, "bob's me button shows his account display name");
     for (const u of [alice, bob]) {
       assert.equal(await u.frame.locator("form").count(), 0, "no <form> in the client");
       assert.equal(await u.frame.locator(SEL.toolbar).count(), 1, "toolbar rendered");
@@ -267,6 +273,7 @@ describe("whiteboard on the local platform", { concurrency: false }, () => {
     await resetBoard();
     const [id] = await createShared([{ type: "sticky", x: 300, y: 250, text: "Drag me" }]);
     const before = await w.frameObject(alice.frame, id);
+    assert.equal(before.createdBy, ALICE, "created through alice's store: attributed to her account name");
     const start = await h.objectCenter(alice.frame, id);
     /** @type {number[]} */
     const ghostXs = [];
@@ -397,7 +404,7 @@ describe("whiteboard on the local platform", { concurrency: false }, () => {
     await bob.frame.locator("body").evaluate(() => { /** @type {any} */ (window).__e2eMarker = 1; location.reload(); }).catch(() => {});
     await until(() => bob.frame.locator("body").evaluate(() => /** @type {any} */ (window).__e2eMarker === undefined).catch(() => false),
       { timeout: 15_000, message: "bob's frame reloaded" });
-    await w.ensureJoined(bob.frame, "Bob");
+    await w.ensureLive(bob.frame, BOB);
     const fresh = (await w.settledBoard(bob.frame)).objects[id];
     assert.deepEqual({ x: fresh.x, y: fresh.y }, want2, "server has both nudges");
   }));
@@ -428,7 +435,7 @@ describe("whiteboard on the local platform", { concurrency: false }, () => {
     const aId = await h.clientId(alice.frame);
     await bob.frame.locator(SEL.peer(aId)).click();
     await bob.frame.locator(SEL.followChip).waitFor({ timeout: 5000 });
-    assert.match(await bob.frame.locator(SEL.followChip).innerText(), /Following\s+Alice/);
+    assert.match(await bob.frame.locator(SEL.followChip).innerText(), new RegExp(`Following\\s+${ALICE}`));
 
     const center = (/** @type {any} */ vp) => ({ x: vp.x + vp.w / 2, y: vp.y + vp.h / 2 });
     await alice.frame.locator(SEL.tool("hand")).click();
@@ -454,21 +461,22 @@ describe("whiteboard on the local platform", { concurrency: false }, () => {
 
   test("T6. carol's tab dies mid-drag (crash, then context close): alice's ghost goes within 15 s", () => evidence("T6", async () => {
     await resetBoard();
-    const opened = await openSharedUser("carol", "Carol");
+    const opened = await openSharedUser("carol");
     carol = opened.u;
+    assert.deepEqual(opened.identity, { meName: CAROL, namePrompts: 0 }, "carol opens under her account name, no dialog");
     await h.setCamera(carol.frame, { x: 0, y: 0, zoom: 1 });
     const [id] = await createShared([{ type: "sticky", x: 300, y: 250, text: "Orphan" }]);
     await carol.frame.locator(SEL.object(id)).waitFor({ timeout: 10_000 });
-    await alice.frame.locator(SEL.peerNamed("Carol")).waitFor({ timeout: 10_000 });
+    await alice.frame.locator(SEL.peerNamed(CAROL)).waitFor({ timeout: 10_000 });
     const before = await w.frameObject(alice.frame, id);
 
     for (const how of /** @type {const} */ (["crash", "close"])) {
       if (how === "close") {
         carol = await openUser("carol");
-        await openBoard(carol, workspaceUrl, "Carol");
+        await openBoard(carol, workspaceUrl);
         await h.setCamera(carol.frame, { x: 0, y: 0, zoom: 1 });
         await carol.frame.locator(SEL.object(id)).waitFor({ timeout: 10_000 });
-        await alice.frame.locator(SEL.peerNamed("Carol")).waitFor({ timeout: 10_000 });
+        await alice.frame.locator(SEL.peerNamed(CAROL)).waitFor({ timeout: 10_000 });
         await sleep(200);
       }
       const c = /** @type {User} */ (carol);
@@ -488,7 +496,7 @@ describe("whiteboard on the local platform", { concurrency: false }, () => {
       await alice.frame.locator(SEL.anyGhost).waitFor({ state: "detached", timeout: 15_000 });
       const took = Date.now() - killedAt;
       timings[`T6_${how}_ghost_gone_ms`] = took;
-      await alice.frame.locator(SEL.peerNamed("Carol")).waitFor({ state: "detached", timeout: Math.max(1, 15_000 - took) });
+      await alice.frame.locator(SEL.peerNamed(CAROL)).waitFor({ state: "detached", timeout: Math.max(1, 15_000 - took) });
       timings[`T6_${how}_peer_gone_ms`] = Date.now() - killedAt;
       const o = (await w.settledBoard(alice.frame)).objects[id];
       assert.deepEqual([o.x, o.y], [before.x, before.y], "object stays at its committed position");
@@ -667,7 +675,7 @@ describe("whiteboard on the local platform", { concurrency: false }, () => {
       const conn = iframes ? await bob.frame.locator(SEL.conn).getAttribute("data-state", { timeout: 300 }).catch(() => "none") : "no-iframe";
       const marker = iframes ? await read(() => /** @type {any} */ (window).__e2eMarker ?? null) : null;
       const overlay = iframes ? await read(() => document.getElementById("wb-connection-overlay")?.textContent ?? null) : null;
-      const dialog = iframes ? await bob.frame.locator(".name-dialog").count().catch(() => -1) : -1;
+      const dialog = iframes ? await bob.frame.locator(SEL.namePrompt).count().catch(() => -1) : -1;
       if (dialog > 0) sawDialog = true;
       if (marker === "before-edit") connLogBeforeReload = await w.connectionLog(bob.frame).catch(() => connLogBeforeReload);
       const key = JSON.stringify([iframes, conn, marker, overlay, dialog]);
@@ -698,12 +706,13 @@ describe("whiteboard on the local platform", { concurrency: false }, () => {
     log(`T10: bob reloaded by ${reloadedAtMs} ms, live again by ${recoveredAtMs} ms after the edit`);
     await bob.page.screenshot({ path: join(SHOTS, "t10-bob-after-edit.png") });
     assert.ok(recoveredAtMs !== null, "bob's whiteboard did not recover within 45 s; see timings.T10");
-    assert.equal(sawDialog, false, "bob's name was kept (no name dialog)");
+    assert.equal(sawDialog, false, "bob was never asked for a name");
+    assert.equal(await bob.frame.locator(SEL.meName).textContent(), BOB, "bob keeps his account name");
     await w.recordConnection(bob.frame);
 
     await alice.page.getByRole("button", { name: GADGET_TAB }).click();
-    if (await w.ensureJoined(alice.frame, "Alice")) {
-      notes.push("T10: alice's (owner) iframe was rebuilt after switching back from Code (name dialog shown again)");
+    if (await w.ensureLive(alice.frame, ALICE)) {
+      notes.push("T10: alice's (owner) iframe was rebuilt after switching back from Code (account name kept, no dialog)");
     }
     await h.setCamera(alice.frame);
     await h.setCamera(bob.frame);
@@ -717,8 +726,14 @@ describe("whiteboard on the local platform", { concurrency: false }, () => {
     const fromBob = await inPane(bob.frame, (_, canvas) => { const id = canvas.addAtCenter("ellipse"); canvas.setSelection([]); return id; });
     await alice.frame.locator(SEL.object(fromBob)).waitFor({ timeout: 15_000 });
     timings.T10_bob_to_alice_ms = Date.now() - t0;
-    await alice.frame.locator(SEL.peerNamed("Bob")).waitFor({ timeout: 15_000 });
-    await bob.frame.locator(SEL.peerNamed("Alice")).waitFor({ timeout: 15_000 });
+    // Attribution is the creating account's display name, as both browsers see it.
+    for (const u of [alice, bob]) {
+      const settled = await w.settledBoard(u.frame);
+      assert.equal(settled.objects[fromAlice]?.createdBy, ALICE, `${u.username}: alice's rect is attributed to her account`);
+      assert.equal(settled.objects[fromBob]?.createdBy, BOB, `${u.username}: bob's ellipse is attributed to his account`);
+    }
+    await alice.frame.locator(SEL.peerNamed(BOB)).waitFor({ timeout: 15_000 });
+    await bob.frame.locator(SEL.peerNamed(ALICE)).waitFor({ timeout: 15_000 });
     await shot("t10-after-restart");
 
     // The edit persisted in the workspace code.
@@ -730,7 +745,7 @@ describe("whiteboard on the local platform", { concurrency: false }, () => {
     await until(async () => (await alice.page.locator(".monaco-editor .view-lines").innerText()).replace(/ /g, " ").includes("e2e restart probe"),
       { timeout: 15_000, message: "probe comment visible in server.js" }).catch(() => notes.push("T10: probe line not found in the visible part of server.js"));
     await alice.page.getByRole("button", { name: GADGET_TAB }).click();
-    await w.ensureJoined(alice.frame, "Alice");
+    await w.ensureLive(alice.frame, ALICE);
   }));
 
   test("T11. presence rate: alice moves the pointer at ~60 Hz for 5 s; bob's copy stays fresh and converges", () => evidence("T11", async () => {
@@ -799,27 +814,27 @@ describe("whiteboard on the local platform", { concurrency: false }, () => {
       await bob.frame.locator("body").evaluate(() => { /** @type {any} */ (window).__e2eMarker = 1; location.reload(); }).catch(() => {});
       await until(() => bob.frame.locator("body").evaluate(() => /** @type {any} */ (window).__e2eMarker === undefined).catch(() => false),
         { timeout: 15_000, message: `bob's frame reloaded (${i + 1})` });
-      await w.ensureJoined(bob.frame, "Bob");
+      await w.ensureLive(bob.frame, BOB);
       reloadMs.push(Date.now() - t0);
     }
     timings.T12_bob_frame_reload_ms = stats(reloadMs);
     await Promise.race([bob.context.close(), sleep(5000)]);
     bob = await openUser("bob");
-    await openBoard(bob, workspaceUrl, "Bob");
+    await openBoard(bob, workspaceUrl);
     await h.setCamera(bob.frame);
 
     // Stale subscriptions are gone: alice sees only bob, bob sees only alice.
     const t1 = Date.now();
     await until(async () => {
       const peers = await w.peerList(alice.frame);
-      return peers.length === 1 && peers[0].name === "Bob";
+      return peers.length === 1 && peers[0].name === BOB;
     }, { timeout: 30_000, interval: 250, message: "alice sees exactly one peer (bob)" }).catch(async (e) => {
       throw new Error(`${e.message}; peers: ${JSON.stringify(await w.peerList(alice.frame))}`);
     });
     timings.T12_alice_peers_settled_ms = Date.now() - t1;
     assert.equal(await alice.frame.locator(".people .peer").count(), 1, "one avatar in alice's people list");
     const bobPeers = await w.peerList(bob.frame);
-    assert.deepEqual(bobPeers.map((x) => x.name), ["Alice"]);
+    assert.deepEqual(bobPeers.map((x) => x.name), [ALICE]);
 
     // Server allocation pressure: create and delete 200 bulky objects, three rounds.
     const t2 = Date.now();

@@ -192,7 +192,7 @@ Plain DOM and SVG in one bundled `client.js`:
 - **Shell** (`src/client/ui/*.js`):
   - toolbar, style bar (colours, sizes, Move and Size groups, Connect, reorder);
   - people and follow, minimap and zoom, Objects list and Activity panel;
-  - the name dialog, and a polite live region announcing remote changes.
+  - the colour dialog (names come from the signed-in account), and a polite live region announcing remote changes.
 - **Measured** on the local platform:
   - 500 objects pan at 60 fps with zero object re-renders, and a remote single-object update re-renders one element;
   - a ghost follows a remote drag within 25–90 ms;

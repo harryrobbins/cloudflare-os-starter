@@ -18,20 +18,28 @@ export const STUB_WARNING = /RPC (stub|result) was not disposed properly/;
 export const RUNTIME_CRASH = /The Workers runtime crashed unexpectedly/;
 
 /**
- * Fills the whiteboard's name dialog and joins through the Join button or Enter. The platform
- * iframe's sandbox has no `allow-forms`, so this only works because the dialog is not a form.
- * @param {import("playwright").FrameLocator} frame
- * @param {string} name
- * @param {{via?: "button"|"enter"}} [opts]
+ * The display name a local Workshop account gets from password sign-up: the username exactly as
+ * typed (SignupPage calls `createAccount(username, username, ...)`; only the id is normalized).
+ * `GadgetClient.getViewer()` returns it as `displayName`, injected into the iframe as `gadgetViewer`.
+ * @param {string} username
  */
-export async function joinBoard(frame, name, { via = "button" } = {}) {
-  const input = frame.locator(SEL.nameInput);
-  await input.waitFor({ timeout: 60_000 });
-  await input.fill(name);
-  if (via === "enter") await input.press("Enter");
-  else await frame.locator(SEL.joinButton).click();
-  const joined = await input.waitFor({ state: "detached", timeout: 5000 }).then(() => true, () => false);
-  return { joined, via };
+export function accountDisplayName(username) {
+  return username;
+}
+
+/**
+ * Waits for the whiteboard in the platform iframe and reports what it shows instead of joining:
+ * the name on the me button and how many name-prompt elements exist (must be 0: nobody is asked
+ * for a name; the signed-in account's display name is used).
+ * @param {import("playwright").FrameLocator} frame
+ * @param {{timeout?: number, settleMs?: number}} [opts]
+ */
+export async function boardIdentity(frame, { timeout = 60_000, settleMs = 500 } = {}) {
+  const me = frame.locator(SEL.meName);
+  await me.waitFor({ state: "attached", timeout });
+  // Give a (wrongly) delayed name dialog a moment to show up before counting.
+  if (settleMs) await new Promise((r) => setTimeout(r, settleMs));
+  return { meName: (await me.textContent()) ?? "", namePrompts: await frame.locator(SEL.namePrompt).count() };
 }
 
 /** @param {import("playwright").FrameLocator} frame */
@@ -64,24 +72,20 @@ export function connectionLog(frame) {
 }
 
 /**
- * After something may have rebuilt the gadget iframe: joins if the name dialog shows, waits live.
- * Returns whether it had to join.
+ * After something may have rebuilt the gadget iframe: waits for a live whiteboard showing `name`
+ * (the account display name) and no name prompt. Returns whether the iframe was rebuilt (the
+ * connection recorder installed by recordConnection() was gone).
  * @param {import("playwright").FrameLocator} frame
  * @param {string} name
  */
-export async function ensureJoined(frame, name) {
-  const dialog = frame.locator(SEL.nameInput);
-  const live = frame.locator(SEL.live);
-  await dialog.or(live).first().waitFor({ timeout: 60_000 });
-  let joined = false;
-  if (await dialog.waitFor({ timeout: 2000 }).then(() => true, () => false)) {
-    const r = await joinBoard(frame, name);
-    if (!r.joined) throw new Error("name dialog did not close after Join");
-    joined = true;
-  }
-  await live.waitFor({ timeout: 60_000 });
+export async function ensureLive(frame, name) {
+  await waitLive(frame);
+  const rebuilt = await frame.locator("body").evaluate(() => !(/** @type {any} */ (window).__connLog));
+  const { meName, namePrompts } = await boardIdentity(frame, { settleMs: rebuilt ? 500 : 0 });
+  if (namePrompts) throw new Error(`the whiteboard asked for a name (${namePrompts} name prompt element(s))`);
+  if (meName !== name) throw new Error(`me button shows "${meName}", expected the account name "${name}"`);
   await recordConnection(frame);
-  return joined;
+  return rebuilt;
 }
 
 /**

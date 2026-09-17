@@ -329,25 +329,65 @@ describe("whiteboard harness", { concurrency: false }, () => {
     });
   });
 
-  test("name dialog via button and Enter; no <form> anywhere", async () => {
+  test("account names: no name prompt anywhere, a reloaded or new pane keeps its account name, colour change via the me button", async () => {
     await withHarness({ names: ["Alice", "Bob"] }, async ({ page, frames: { A, B } }) => {
-      // openHarness joined both through the Join button; now join through Enter.
+      // openHarness already checked both panes show their account names without a dialog.
       await page.evaluate(() => window.harness.reloadPane("B"));
-      const input = B.locator(SEL.nameInput);
-      await input.waitFor({ timeout: 10_000 });
-      await input.fill("Bobby Enter");
-      await input.press("Enter");
-      await input.waitFor({ state: "detached", timeout: 3000 });
+      await h.until(() => page.evaluate(() => window.harness.paneLoads("B") >= 2), { message: "B reloaded" });
       await h.waitLive(B);
-      await A.locator(SEL.peerNamed("Bobby Enter")).waitFor({ timeout: 5000 });
+      await h.expectAccountName(B, "Bob");
+      await A.locator(SEL.peerNamed("Bob")).waitFor({ timeout: 5000 });
       await B.locator(SEL.peerNamed("Alice")).waitFor({ timeout: 5000 });
       assert.equal(await A.locator("form").count(), 0);
       assert.equal(await B.locator("form").count(), 0);
-      // Change name through the me button (a dialog without a form, too).
+
+      // A pane added later starts under its own account name ("User C"), also without a dialog.
+      const paneId = await page.evaluate(() => window.harness.addPane());
+      const C = h.pane(page, paneId);
+      await h.waitLive(C);
+      await h.expectAccountName(C, `User ${paneId}`);
+      await A.locator(SEL.peerNamed(`User ${paneId}`)).waitFor({ timeout: 5000 });
+
+      // The me button opens a colour-only dialog: no name field; the name stays the account's.
       await A.locator(".me-btn").click();
-      await A.locator(SEL.nameInput).fill("Alice Again");
-      await A.locator(SEL.joinButton).click();
-      await B.locator(SEL.peerNamed("Alice Again")).waitFor({ timeout: 5000 });
+      const dialog = A.locator(SEL.colorDialog);
+      await dialog.waitFor();
+      assert.equal(await dialog.locator("input, textarea, [contenteditable]").count(), 0, "no name field in the colour dialog");
+      assert.equal(await A.locator(SEL.namePrompt).count(), 0);
+      assert.equal(await dialog.locator(".color-dialog-name").innerText(), "Alice");
+      const before = await h.inPane(A, (store) => store.getState().viewer.color);
+      const other = dialog.locator('.swatch[aria-checked="false"]').first();
+      await other.click();
+      await dialog.locator(".save-btn").click();
+      await dialog.waitFor({ state: "detached" });
+      const after = await h.until(async () => {
+        const c = await h.inPane(A, (store) => store.getState().viewer.color);
+        return c !== before && c;
+      }, { message: "A's colour changed" });
+      await h.expectAccountName(A, "Alice");
+      await h.until(() => h.inPane(B, (store, _, color) =>
+        [...store.getState().peers.values()].some((p) => p.name === "Alice" && p.color === color), after),
+      { message: "B sees Alice with her new colour" });
+    });
+  });
+
+  test("attribution: objects and history entries carry the creating pane's account name", async () => {
+    await withHarness({ names: ["Ada Lovelace", "Grace Hopper"] }, async ({ page, frames: { A, B } }) => {
+      const fromA = await h.inPane(A, (_, canvas) => { const id = canvas.addAtCenter("rect"); canvas.setSelection([]); return id; });
+      const fromB = await h.inPane(B, (_, canvas) => { const id = canvas.addAtCenter("ellipse"); canvas.setSelection([]); return id; });
+      const board = await h.until(async () => {
+        const b = await h.serverBoard(page);
+        return b.objects[fromA] && b.objects[fromB] && b;
+      }, { message: "both objects saved" });
+      assert.equal(board.objects[fromA].createdBy, "Ada Lovelace");
+      assert.equal(board.objects[fromB].createdBy, "Grace Hopper");
+      await B.locator(SEL.object(fromA)).waitFor({ timeout: 3000 });
+      assert.equal((await paneObject(B, fromA)).createdBy, "Ada Lovelace", "B's copy is attributed to Ada");
+      const history = await page.evaluate(() => window.harness.getHistory(10));
+      const bys = history.map((e) => e.by);
+      assert.ok(bys.includes("Ada Lovelace"), "a history entry by Ada: " + JSON.stringify(bys));
+      assert.ok(bys.includes("Grace Hopper"), "a history entry by Grace: " + JSON.stringify(bys));
+      assert.ok(bys.every((by) => by === "Ada Lovelace" || by === "Grace Hopper"), "no Guest/Anonymous entries: " + JSON.stringify(bys));
     });
   });
 
@@ -375,7 +415,7 @@ describe("whiteboard harness", { concurrency: false }, () => {
     });
   }
 
-  test("restart with stale stubs (platform behaviour): panes reload themselves and keep their names", async () => {
+  test("restart with stale stubs (platform behaviour): panes reload themselves and keep their account names", async () => {
     await withHarness({ names: ["Alice Adams", "Bob Brown"] }, async ({ page, frames }) => {
       const { A, B } = frames;
       const [first] = await h.createObjects(page, [{ type: "sticky", x: 300, y: 250, text: "Before stale" }]);
@@ -387,8 +427,8 @@ describe("whiteboard harness", { concurrency: false }, () => {
       await h.waitLive(A);
       await h.waitLive(B);
       assert.ok(await page.evaluate(() => window.harness.staleRejections) > 0, "stale stubs were exercised");
-      assert.equal(await A.locator(".name-dialog").count(), 0);
-      assert.equal(await B.locator(".name-dialog").count(), 0);
+      await h.expectAccountName(A, "Alice Adams");
+      await h.expectAccountName(B, "Bob Brown");
       await A.locator(SEL.peerNamed("Bob Brown")).waitFor({ timeout: 5000 });
       await B.locator(SEL.peerNamed("Alice Adams")).waitFor({ timeout: 5000 });
       await B.locator(SEL.object(first)).waitFor();
@@ -776,18 +816,15 @@ describe("whiteboard harness", { concurrency: false }, () => {
     });
   });
 
-  test("focus: on the canvas after joining and after deleting from the style bar; roving toolbar keys", async () => {
+  test("focus: on the canvas on load and after deleting from the style bar; roving toolbar keys", async () => {
     await withHarness({ names: ["Alice", "Bob"] }, async ({ page, frames: { A, B } }) => {
-      // B joined last (with the Join button); A's frame lost focus to it. Rejoin A with Enter.
-      assert.match(await h.focusedClass(B), /wb-canvas/, "B: focus on the canvas after joining");
+      // No dialog to join through: a pane's focus lands on the canvas as soon as it mounts.
+      await h.until(async () => /wb-canvas/.test(await h.focusedClass(B)), { timeout: 3000, message: "B: focus on the canvas on load" });
       await page.evaluate(() => window.harness.reloadPane("A"));
-      const input = A.locator(SEL.nameInput);
-      await input.waitFor({ timeout: 10_000 });
-      await input.fill("Alice");
-      await input.press("Enter");
-      await input.waitFor({ state: "detached", timeout: 3000 });
+      await h.until(() => page.evaluate(() => window.harness.paneLoads("A") >= 2), { message: "A reloaded" });
       await h.waitLive(A);
-      await h.until(async () => /wb-canvas/.test(await h.focusedClass(A)), { timeout: 3000, message: "A: focus on the canvas after joining" });
+      await h.expectAccountName(A, "Alice");
+      await h.until(async () => /wb-canvas/.test(await h.focusedClass(A)), { timeout: 3000, message: "A: focus on the canvas after a reload" });
 
       const [id] = await h.createObjects(page, [{ type: "sticky", x: 300, y: 250, text: "Delete me" }]);
       await A.locator(SEL.object(id)).waitFor();

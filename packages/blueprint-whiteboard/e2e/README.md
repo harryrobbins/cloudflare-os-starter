@@ -100,8 +100,8 @@ cd ../.. && packages/blueprint-whiteboard/e2e/stop-local-platform.sh   # always,
 
 | Test | What it checks |
 | --- | --- |
-| 0a | Shipped client boots. The name dialog joins via the button (alice) and Enter (bob). No `<form>`, no blocked form submissions, no gadget-frame console errors. |
-| T1 | Alice drags a sticky slowly with the real pointer. Bob sees `.wb-ghost` move before release, nothing is committed before release, then the committed position arrives and the ghost goes. |
+| 0a | Shipped client boots. Nobody is asked for a name: alice (owner) and bob (use-role link) see no name prompt and their me buttons show the account display names (`alice`, `bob`: a password sign-up's display name is the username as typed; see `accountDisplayName()`). No `<form>`, no blocked form submissions, no gadget-frame console errors. |
+| T1 | The sticky alice's store created is attributed to her account name (`createdBy`). Alice drags a sticky slowly with the real pointer. Bob sees `.wb-ghost` move before release, nothing is committed before release, then the committed position arrives and the ghost goes. |
 | T2 | Pen tool. Bob's `.wb-peer-stroke` path grows while alice draws, then a committed `pen` object replaces it. |
 | T3 | Same sticky, two phases. (a) Real pointer drags in both browsers at once. (b) `store.updateObjects` in both frames in the same tick. Both deltas land in both settled stores and in a fresh subscription (bob's frame reloaded). |
 | T4 | Alice selects a sticky that has a connector and presses Delete. Both vanish for bob. |
@@ -110,7 +110,7 @@ cd ../.. && packages/blueprint-whiteboard/e2e/stop-local-platform.sh   # always,
 | T7 | 500 objects seeded through alice's store (5 × 100). Bob pans with the hand tool (rAF frame times). A remote single-object update adds `objectRenders` 1..5 and `fullRenders` 0 in bob's `__wbRenderStats`. |
 | T8 | Bob's use-role chrome has no Share, no Code tab and no Monaco, but has Export. Bob adds a sticky and types into it through the UI, and alice sees the text. Bob pointer-moves it, and alice sees the move. |
 | T9 | Export menu offers exactly `SVG image`, `HTML`, `PDF`. The SVG parses as XML (browser `DOMParser`) with every object's `data-id`. The HTML contains `<svg`. The PDF starts with `%PDF-`. |
-| T10 | Alice inserts one comment into `server.js` in Monaco (one code-version bump, one facet restart) while bob is open. Bob must go live again (self-reload keeping the name, or an in-place resubscribe) and stay live for 3 s. Syncing then works both ways. |
+| T10 | Alice inserts one comment into `server.js` in Monaco (one code-version bump, one facet restart) while bob is open. Bob must go live again (self-reload, or an in-place resubscribe) without ever showing a name prompt, keep his account name, and stay live for 3 s. Syncing then works both ways, and each new object's `createdBy` is its creator's account name in both browsers. |
 | T11 | Alice's pointer moves over the canvas at 60 Hz for 5 s. A capture listener in alice's frame logs each pointer's world position and time, and bob's store subscription logs each change to alice's peer cursor. Asserts lag p95 <= 300 ms, no growth from the first to the last second, and convergence within 1 s of stopping. |
 | T12 | Bob reloads his gadget frame 10 times, then closes and reopens his context. Alice must see exactly one peer. Alice then creates and deletes 200 bulky stickies 3 times, and 5 s later syncing still works. Neither the owner console nor the platform log may show a stub warning or runtime crash. |
 
@@ -122,9 +122,17 @@ tab: ghost gone after 1.5-2.5 s. Closed context: under 0.15 s. 500 objects: bob 
 frames (p95 16.8) with no object or full renders, and a remote update causes 1 object render and
 0 full renders. Exports: SVG 0.2 s, HTML 1.1 s, PDF 0.8 s. Code edit: bob reloads itself 2.9-4.5 s
 after the edit and is live about 0.25 s later. Alice (owner) gets a rebuilt iframe when she
-switches back from Code, so she sees the name dialog again (platform behaviour, recorded in
+switches back from Code (platform behaviour, recorded in
 `notes`). Presence: bob receives alice's cursor at about 15 Hz, lag p50 26-31 ms and p95 39-49 ms,
 and converges 40-50 ms after she stops. Frame reload: about 2.15 s each. In run 1 (the first run
 on a fresh platform, revision 1), the platform log showed one "An RPC stub was not disposed
 properly" during setup and one "An RPC result was not disposed properly" between the T10 restart
 and T12. Neither came back in later runs.
+
+Verified 2026-09-17 (revision 5, account names from `gadgetViewer`; platform started with
+`CFOS_REBUILD=1` so the frontend carries the submodule's `gadgetViewer` injection). The first run
+on the freshly started platform failed only T5 (a hardcoded `Following Alice` in the test, since
+fixed) and its platform log showed one "An RPC result was not disposed properly" during T9 and one
+"An RPC stub was not disposed properly" during T10. The second run passed 13/13 in 106 s with no
+log problems. Bob's frame reloaded itself and was live again 4.3 s after the code edit, and alice's
+rebuilt owner iframe came back under her account name with no dialog.

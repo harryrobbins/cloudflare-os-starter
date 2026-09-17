@@ -40,10 +40,13 @@ let workspaceUrl;
 let alice;
 /** @type {Awaited<ReturnType<typeof openUser>>} */
 let bob;
-/** @type {{joined: boolean, via: string}} */
-let aliceJoin;
-/** @type {{joined: boolean, via: string}} */
-let bobJoin;
+/** @type {{meName: string, namePrompts: number}} */
+let aliceIdentity;
+/** @type {{meName: string, namePrompts: number}} */
+let bobIdentity;
+/** Display names of the two local accounts (what `gadgetViewer.displayName` carries). */
+const ALICE = k.accountDisplayName("alice");
+const BOB = k.accountDisplayName("bob");
 
 /**
  * A signed-in user in their own browser context, with console capture.
@@ -68,17 +71,16 @@ async function openUser(username) {
 }
 
 /**
- * Opens the board at `url` for `user` and joins as `name`.
+ * Opens the board at `url` for `user`. Nobody is asked for a name: returns what the board shows.
  * @param {Awaited<ReturnType<typeof openUser>>} user
  * @param {string} url
- * @param {string} name
  */
-async function openBoard(user, url, name, via = /** @type {"button"|"enter"} */ ("button")) {
+async function openBoard(user, url) {
   await user.page.goto(url);
-  const join = await k.joinBoard(user.frame, name, { via });
   await h.waitLive(user.frame);
+  const identity = await k.boardIdentity(user.frame);
   await k.recordConnection(user.frame);
-  return join;
+  return identity;
 }
 
 /** @param {string} name */
@@ -131,15 +133,15 @@ before(async () => {
   const blueprintId = await p.uploadGadget(alice.page, BASE, k.SHIPPED_ARCHIVE);
   workspaceUrl = await p.createGadgetFromBlueprint(alice.page, BASE, blueprintId);
   log(`workspace ${workspaceUrl}`);
-  aliceJoin = await k.joinBoard(alice.frame, "Alice");
   await h.waitLive(alice.frame);
+  aliceIdentity = await k.boardIdentity(alice.frame);
   await k.recordConnection(alice.frame);
 
   const shareUrl = await p.createUseShareLink(alice.page);
   bob = await openUser("bob");
-  bobJoin = await openBoard(bob, shareUrl, "Bob", "enter");
-  await alice.frame.locator('.avatars .avatar[title="Bob"]').waitFor({ timeout: 15_000 });
-  await bob.frame.locator('.avatars .avatar[title="Alice"]').waitFor({ timeout: 15_000 });
+  bobIdentity = await openBoard(bob, shareUrl);
+  await alice.frame.locator(`.avatars .avatar[title="${BOB}"]`).waitFor({ timeout: 15_000 });
+  await bob.frame.locator(`.avatars .avatar[title="${ALICE}"]`).waitFor({ timeout: 15_000 });
   log("alice and bob are live on the board");
 });
 
@@ -158,22 +160,25 @@ describe("kanban board on the local platform", { concurrency: false }, () => {
       const id = await p.uploadGadget(user.page, BASE, k.SHIPPED_ARCHIVE);
       await p.createGadgetFromBlueprint(user.page, BASE, id);
       const outcome = await Promise.race([
-        user.frame.locator(".name-dialog, .conn").first().waitFor({ timeout: 30_000 }).then(() => "ui"),
+        user.frame.locator(".conn").first().waitFor({ timeout: 30_000 }).then(() => "ui"),
         h.until(async () => user.consoleErrors.find((e) => /Class extends value|gadget/.test(e)), { timeout: 30_000, message: "client error" }),
       ]);
       await user.page.screenshot({ path: join(SHOTS, "0a-shipped-archive.png") });
       assert.equal(outcome, "ui", `shipped client failed to start: ${outcome}`);
-      const joined = await k.joinBoard(user.frame, "Alice 0a");
-      assert.ok(joined.joined, "name dialog closed");
       await h.waitLive(user.frame);
+      const identity = await k.boardIdentity(user.frame);
+      assert.equal(identity.namePrompts, 0, "no name dialog");
+      assert.equal(identity.meName, ALICE, "the board shows the account's display name");
     } finally {
       await user.context.close();
     }
   });
 
-  test("0b. the name dialog joins via the button (alice) and Enter (bob) in the sandboxed iframe", () => {
-    assert.ok(aliceJoin.joined, "Join board button did nothing (form submission blocked?)");
-    assert.ok(bobJoin.joined, "Enter in the name field did nothing (form submission blocked?)");
+  test("0b. nobody is asked for a name: each board shows the signed-in account's display name", () => {
+    assert.equal(aliceIdentity.namePrompts, 0, "alice (owner) saw no name dialog");
+    assert.equal(bobIdentity.namePrompts, 0, "bob (use-role share link) saw no name dialog");
+    assert.equal(aliceIdentity.meName, ALICE, "alice's me button shows her account display name");
+    assert.equal(bobIdentity.meName, BOB, "bob's me button shows his account display name");
     for (const u of [alice, bob]) {
       assert.deepEqual(u.consoleErrors.filter((e) => FORM_BLOCKED.test(e)), [], `${u.username}: no blocked form submissions`);
     }
@@ -295,6 +300,10 @@ describe("kanban board on the local platform", { concurrency: false }, () => {
     }
     // Order within each column matches the board.
     for (const col of COLUMNS) assert.deepEqual(rows.slice(1).filter((r) => r[0] === col).map((r) => r[1]), state[col]);
+    // Attribution is the creating account's display name (T1: one card each).
+    const createdBy = Object.fromEntries(rows.slice(1).map((r) => [r[1], r[10]]));
+    assert.equal(createdBy["T1 card"], ALICE, "alice's card is attributed to her account name");
+    assert.equal(createdBy["T1 bob card"], BOB, "bob's card is attributed to his account name");
     timings.T8_csv = { filename: csv.filename, rows: rows.length - 1 };
 
     const html = await p.downloadExport(alice.page, "HTML");
@@ -327,7 +336,7 @@ describe("kanban board on the local platform", { concurrency: false }, () => {
     await alice.page.screenshot({ path: join(SHOTS, "t6-code-edit-alice.png") });
 
     // Sample bob's page until his (self-reloaded) board is live again: iframe present, connection
-    // state, marker (null after a reload), name dialog, overlay.
+    // state, marker (null after a reload), name prompts (must stay 0), overlay.
     /** @type {any[]} */
     const samples = [];
     let lastKey = "";
@@ -341,7 +350,7 @@ describe("kanban board on the local platform", { concurrency: false }, () => {
       const conn = iframes ? await bob.frame.locator(".conn").getAttribute("data-state", { timeout: 300 }).catch(() => "none") : "no-iframe";
       const marker = iframes ? await read(() => /** @type {any} */ (window).__e2eMarker ?? null) : null;
       const overlay = iframes ? await read(() => document.getElementById("kanban-connection-overlay")?.textContent ?? null) : null;
-      const dialog = iframes ? await bob.frame.locator(".name-dialog").count().catch(() => -1) : -1;
+      const dialog = iframes ? await bob.frame.locator(h.NAME_PROMPT).count().catch(() => -1) : -1;
       if (marker === "before-edit") {
         connLogBeforeReload = await k.connectionLog(bob.frame).catch(() => connLogBeforeReload);
       }
@@ -361,13 +370,14 @@ describe("kanban board on the local platform", { concurrency: false }, () => {
     log(`T6: bob reloaded by ${reloadedAtMs} ms, live again by ${recoveredAtMs} ms after the edit`);
     await bob.page.screenshot({ path: join(SHOTS, "t6-bob-after-edit.png") });
     assert.ok(recoveredAtMs !== null, "bob's board did not reload itself and go live again within 45 s; see timings.T6");
-    assert.equal(await bob.frame.locator(".name-dialog").count(), 0, "bob's name was kept across the self-reload");
+    assert.ok(!samples.some((x) => x.dialog > 0), "bob was never asked for a name during the self-reload");
+    assert.equal(await bob.frame.locator(".me-btn .me-name").innerText(), BOB, "bob keeps his account name across the self-reload");
     await k.recordConnection(bob.frame);
 
     // Alice returns to the board (her iframe may be rebuilt by the platform).
     await alice.page.getByRole("button", { name: "Board", exact: true }).click();
-    if (await k.ensureJoined(alice.frame, "Alice")) {
-      notes.push("T6: alice's (owner) iframe was rebuilt after switching back from Code (name dialog shown again)");
+    if (await k.ensureLive(alice.frame, ALICE)) {
+      notes.push("T6: alice's (owner) iframe was rebuilt after switching back from Code (account name kept, no dialog)");
     }
 
     const t0 = Date.now();
@@ -393,18 +403,17 @@ describe("kanban board on the local platform", { concurrency: false }, () => {
     await h.until(async () => (await alice.page.locator(".monaco-editor .view-lines").innerText()).replace(/\u00a0/g, " ").includes("e2e restart probe"),
       { timeout: 15_000, message: "probe comment visible in server.js" }).catch(() => notes.push("T6: probe line not found in the visible part of server.js"));
     await alice.page.getByRole("button", { name: "Board", exact: true }).click();
-    await k.ensureJoined(alice.frame, "Alice");
-    // Bob's own name is still what alice sees.
-    await alice.frame.locator('.avatars .avatar[title="Bob"]').waitFor({ timeout: 15_000 });
+    await k.ensureLive(alice.frame, ALICE);
+    // Bob's account name is still what alice sees.
+    await alice.frame.locator(`.avatars .avatar[title="${BOB}"]`).waitFor({ timeout: 15_000 });
   });
 
   test("reload: bob reloads and the board state is intact", async () => {
     const before = await boardState(alice.frame);
     await bob.page.reload();
-    // A full page reload makes a new iframe (window.name starts empty), so the dialog is back.
-    await k.joinBoard(bob.frame, "Bob");
-    await h.waitLive(bob.frame);
-    await k.recordConnection(bob.frame);
+    // A full page reload makes a new iframe (window.name starts empty); the name still comes from
+    // the account, with no dialog.
+    await k.ensureLive(bob.frame, BOB);
     await h.until(async () => JSON.stringify(await boardState(bob.frame)) === JSON.stringify(before),
       { timeout: 10_000, message: "bob's reloaded board equals alice's" });
   });
@@ -436,12 +445,12 @@ describe("kanban board on the local platform", { concurrency: false }, () => {
 
   test("T4. alice's open card shows a ring for bob; it and her avatar go when her browser dies", async () => {
     const ringed = h.card(bob.frame, "T1 card").and(bob.frame.locator(".peer-open"));
-    const avatar = bob.frame.locator('.avatars .avatar[title="Alice"]');
+    const avatar = bob.frame.locator(`.avatars .avatar[title="${ALICE}"]`);
 
     // (a) renderer crash: no pagehide, no leavePresence.
     await h.card(alice.frame, "T1 card").click();
     timings.T4_ring_appeared_ms = await timeUntil(() => ringed.count(), 3000, "ring on bob");
-    assert.equal(await ringed.locator('.peer-badges .avatar[title="Alice"]').count(), 1);
+    assert.equal(await ringed.locator(`.peer-badges .avatar[title="${ALICE}"]`).count(), 1);
     await shot("t4-ring");
     const cdp = await alice.context.newCDPSession(alice.page);
     let t0 = Date.now();
@@ -456,7 +465,8 @@ describe("kanban board on the local platform", { concurrency: false }, () => {
 
     // (b) context.close() without closing the panel or leaving the board.
     alice = await openUser("alice");
-    await openBoard(alice, workspaceUrl, "Alice");
+    const reopened = await openBoard(alice, workspaceUrl);
+    assert.deepEqual(reopened, { meName: ALICE, namePrompts: 0 }, "alice reopens under her account name, no dialog");
     await avatar.waitFor({ timeout: 10_000 });
     await h.card(alice.frame, "T1 card").click();
     await ringed.waitFor({ timeout: 3000 });
