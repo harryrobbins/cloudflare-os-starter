@@ -1,0 +1,17 @@
+{
+  "blueprintId": "format.procgen-explorer",
+  "title": "Synthetic Data Explorer",
+  "description": "Inspect generated-on-demand datasets, follow relationships, run supported indexed queries, and calculate exact metrics.",
+  "output": {
+    "id": "procgen-explorer",
+    "noun": "Data Explorer",
+    "plural": "Data Explorers",
+    "icon": "table"
+  },
+  "author": {
+    "type": "user",
+    "name": "Surprisingly Ltd",
+    "id": "harryrobbins@gmail.com"
+  },
+  "revision": 2
+}
