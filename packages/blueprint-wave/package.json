@@ -1,0 +1,19 @@
+{
+  "name": "blueprint-wave",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:gadget": "node scripts/build.mjs",
+    "pack:gadget": "node scripts/build.mjs && node scripts/pack-gadget.mjs",
+    "test:run": "vitest run && vitest run --config vitest.workers.config.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "catalog:",
+    "esbuild": "0.28.1",
+    "playwright": "1.61.0",
+    "vitest": "catalog:",
+    "wrangler": "catalog:",
+    "yjs": "13.6.31"
+  }
+}

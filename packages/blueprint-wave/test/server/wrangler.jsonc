@@ -1,0 +1,11 @@
+{
+  // Test-only config: mirrors the production facet (compat date/flags live in vitest.workers.config.ts).
+  "name": "blueprint-wave-test",
+  "main": "./worker.js",
+  "compatibility_date": "2026-02-01",
+  "compatibility_flags": ["allow_irrevocable_stub_storage"],
+  "durable_objects": {
+    "bindings": [{ "name": "GADGET", "class_name": "Gadget" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Gadget"] }]
+}
