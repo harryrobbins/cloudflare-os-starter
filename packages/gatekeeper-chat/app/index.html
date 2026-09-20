@@ -1,12 +1,31 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-mode="light">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
     <title>Chat</title>
+    <script>
+      // Set the theme before the first paint so a dark-mode reload never flashes white. The app
+      // takes over afterwards (stored preference, then the embed bridge's `chat:theme`).
+      (function () {
+        try {
+          var stored = localStorage.getItem("chat.theme");
+          var mode =
+            stored === "light" || stored === "dark"
+              ? stored
+              : window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
+          document.documentElement.dataset.mode = mode;
+        } catch (_) {
+          /* Private mode with blocked storage: the media query default is fine. */
+        }
+      })();
+    </script>
   </head>
   <body>
-    <div id="root">Loading chat…</div>
-    <script type="module" src="./src/main.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="./src/main.tsx"></script>
   </body>
 </html>

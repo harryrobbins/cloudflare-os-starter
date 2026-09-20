@@ -1,0 +1,438 @@
+/* The chat app's stylesheet. Kumo supplies the token layer, Tailwind v4 the utilities, and the
+   `@theme` block below is the same override set `workshop-frontend/src/styles.css` applies, so the
+   two apps read as one product: near-neutral warm greys for every surface, the brand orange reserved
+   for intent (active row, link, primary action, focus ring).
+
+   Dark mode is driven by `[data-mode="dark"]` on <html>, exactly as the shell does it, because the
+   embed bridge's `chat:theme` and the settings override both have to beat `prefers-color-scheme`.
+   index.html sets the attribute from the media query before the first paint. */
+@import "@cloudflare/kumo/styles";
+@import "tailwindcss";
+@custom-variant dark (&:where([data-mode="dark"], [data-mode="dark"] *));
+
+@theme {
+  --font-sans: "FT Kunst Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+    "Helvetica Neue", sans-serif;
+  --font-mono: "Apercu Mono Pro", "SF Mono", Menlo, Monaco, Consolas, monospace;
+
+  /* Tailwind's own text scale, overriding Kumo's 12/13/14/16px. */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.75rem;
+
+  /* Surfaces */
+  --color-kumo-base: #fcfcfb;
+  --color-kumo-elevated: #f8f8f7;
+  --color-kumo-tint: #f3f3f1;
+  --color-kumo-overlay: #fbfbfa;
+  --color-kumo-recessed: #efeeec;
+  --color-kumo-control: #ffffff;
+  --color-kumo-contrast: #14110f;
+  --color-kumo-fill: #e8e7e4;
+  --color-kumo-fill-hover: #dededb;
+  --color-kumo-interact: #cac8c3;
+
+  /* Brand, intent only */
+  --color-kumo-brand: #ff4801;
+  --color-kumo-brand-hover: #e03f00;
+
+  /* Hairlines */
+  --color-kumo-line: #1411100f;
+  --color-kumo-ring: #cac8c3;
+
+  --color-kumo-info: oklch(62.3% 0.214 259.815);
+  --color-kumo-info-tint: oklch(90% 0.06 250);
+  --color-kumo-warning: oklch(79.5% 0.184 86.047);
+  --color-kumo-warning-tint: oklch(92% 0.08 85);
+  --color-kumo-danger: oklch(63.7% 0.237 25.331);
+  --color-kumo-danger-tint: oklch(92% 0.06 25);
+  --color-kumo-success: oklch(72.3% 0.219 149.579);
+  --color-kumo-success-tint: oklch(92% 0.08 150);
+
+  --text-color-kumo-default: #1c1a18;
+  --text-color-kumo-default-hover: #100f0d;
+  --text-color-kumo-inverse: #ffffff;
+  --text-color-kumo-strong: #100f0d;
+  --text-color-kumo-subtle: oklch(52% 0.006 60);
+  --text-color-kumo-inactive: oklch(66% 0.005 60);
+  --text-color-kumo-brand: #ff4801;
+  --text-color-kumo-link: #ff4801;
+  --text-color-kumo-success: oklch(72.3% 0.219 149.579);
+  --text-color-kumo-danger: oklch(63.7% 0.237 25.331);
+  --text-color-kumo-warning: oklch(47.6% 0.114 61.907);
+
+  --color-selection-bg: #ffe9e0;
+  --color-selection-text: #ff500a;
+  /* The "New messages" rule and the permalink flash both need a tint that survives dark mode. */
+  --color-chat-unread: oklch(63.7% 0.237 25.331);
+
+  --spacing: 0.25rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --default-transition-duration: 0.15s;
+  --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-mode="dark"] {
+  /* Violet-tinted surfaces around hue 285, not neutral black -- the shell's palette. */
+  --color-kumo-base: oklch(0.115 0.012 285);
+  --color-kumo-elevated: oklch(0.155 0.011 285);
+  --color-kumo-tint: oklch(0.225 0.025 285);
+  --color-kumo-overlay: oklch(0.155 0.011 285);
+  --color-kumo-recessed: oklch(0.1 0.012 285);
+  --color-kumo-control: oklch(0.155 0.011 285);
+  --color-kumo-contrast: var(--color-kumo-brand);
+  --color-kumo-fill: oklch(0.225 0.025 285);
+  --color-kumo-fill-hover: oklch(0.295 0.045 285);
+  --color-kumo-interact: oklch(0.34 0.022 285);
+  --color-kumo-line: oklch(0.34 0.022 285);
+  --color-kumo-ring: oklch(0.52 0.065 285);
+
+  --color-kumo-brand: #b84e00;
+  --color-kumo-brand-hover: #a54200;
+
+  --color-kumo-info: oklch(62.3% 0.214 259.815);
+  --color-kumo-info-tint: oklch(0.25 0.065 259.815);
+  --color-kumo-warning: oklch(55.5% 0.163 48.998);
+  --color-kumo-warning-tint: oklch(0.27 0.06 84.429);
+  --color-kumo-danger: oklch(50.5% 0.213 27.518);
+  --color-kumo-danger-tint: oklch(0.25 0.065 25.331);
+  --color-kumo-success: oklch(52.7% 0.154 150.069);
+  --color-kumo-success-tint: oklch(0.25 0.06 150.069);
+
+  --text-color-kumo-default: oklch(0.92 0.01 285);
+  --text-color-kumo-default-hover: oklch(0.97 0.006 285);
+  --text-color-kumo-inverse: #ffffff;
+  --text-color-kumo-strong: oklch(0.92 0.01 285);
+  --text-color-kumo-subtle: oklch(0.66 0.02 285);
+  --text-color-kumo-inactive: oklch(0.58 0.025 285);
+  --text-color-kumo-brand: #ff8a5c;
+  --text-color-kumo-link: #ff8a5c;
+  --text-color-kumo-success: oklch(79.2% 0.209 151.711);
+  --text-color-kumo-danger: oklch(70.4% 0.191 22.216);
+  --text-color-kumo-warning: oklch(82.8% 0.189 84.429);
+
+  --color-selection-bg: color-mix(in srgb, var(--color-kumo-brand) 28%, transparent);
+  --color-selection-text: oklch(0.97 0.006 285);
+  --color-chat-unread: oklch(70.4% 0.191 22.216);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  font-family: var(--font-sans);
+  background-color: var(--color-kumo-base);
+  color: var(--text-color-kumo-default);
+  /* The app is a fixed three-pane shell; the page itself never scrolls. */
+  overflow: hidden;
+}
+
+::selection {
+  background-color: var(--color-selection-bg);
+  color: var(--color-selection-text);
+}
+
+code,
+pre {
+  font-family: var(--font-mono);
+}
+
+/* One focus treatment for the whole app: a brand outline, for keyboard users only. No `border-radius`
+   here -- setting it would change the *element's* shape on focus, not just the outline's; browsers
+   already follow the element's own radius. */
+:focus-visible {
+  outline: 2px solid var(--color-kumo-brand);
+  outline-offset: 1px;
+}
+
+/* Text fields are the exception. A hard 2px rectangle inside a rounded, bordered container reads as a
+   rendering fault, and clicking into a text field triggers `:focus-visible` as well as tabbing to it,
+   so it would be on screen most of the time. Their container carries the indicator instead. */
+:where(input:not([type="checkbox"]):not([type="radio"]), textarea):focus-visible {
+  outline: none;
+}
+
+/* The focus indicator for anything wrapping a text field: the brand border plus a soft ring, which is
+   as visible as the outline and belongs to the shape the user sees. */
+.field:focus-within {
+  border-color: var(--color-kumo-brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-kumo-brand) 18%, transparent);
+}
+
+/* Rail and list scrollbars: invisible at rest, faint while the pointer is in the region. Keeps a
+   dense list calm without hiding the affordance entirely. */
+.quiet-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.2s ease;
+}
+.quiet-scroll:hover,
+.quiet-scroll:focus-within {
+  scrollbar-color: color-mix(in srgb, var(--color-kumo-interact) 60%, transparent) transparent;
+}
+.quiet-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.quiet-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+.quiet-scroll:hover::-webkit-scrollbar-thumb,
+.quiet-scroll:focus-within::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-kumo-interact) 55%, transparent);
+}
+.quiet-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Rendered Markdown. Scoped to the class rather than applied to bare tags, so the composer's own
+   controls are unaffected. Tight vertical rhythm: a chat line is not an article. */
+.md {
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md p {
+  margin: 0.25rem 0;
+}
+.md strong {
+  font-weight: 600;
+  color: var(--text-color-kumo-strong);
+}
+.md em {
+  font-style: italic;
+}
+.md del {
+  text-decoration: line-through;
+  color: var(--text-color-kumo-subtle);
+}
+.md a {
+  color: var(--text-color-kumo-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md a:hover {
+  text-decoration-thickness: 2px;
+}
+.md code {
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-sm);
+  background: var(--color-kumo-tint);
+  color: var(--text-color-kumo-brand);
+}
+.md pre {
+  margin: 0.4rem 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-kumo-line);
+  border-radius: var(--radius-lg);
+  background: var(--color-kumo-elevated);
+  overflow-x: auto;
+}
+.md pre code {
+  padding: 0;
+  background: none;
+  color: var(--text-color-kumo-default);
+  font-size: 0.8125rem;
+}
+.md blockquote {
+  margin: 0.35rem 0;
+  padding-left: 0.7rem;
+  border-left: 3px solid var(--color-kumo-fill);
+  color: var(--text-color-kumo-subtle);
+}
+.md ul,
+.md ol {
+  margin: 0.3rem 0;
+  padding-left: 1.25rem;
+}
+.md ul {
+  list-style: disc;
+}
+.md ol {
+  list-style: decimal;
+}
+.md li {
+  margin: 0.1rem 0;
+}
+.md hr {
+  margin: 0.6rem 0;
+  border: 0;
+  border-top: 1px solid var(--color-kumo-line);
+}
+.md h1,
+.md h2,
+.md h3 {
+  margin: 0.5rem 0 0.25rem;
+  font-weight: 600;
+  color: var(--text-color-kumo-strong);
+  font-size: 1rem;
+}
+.md table {
+  margin: 0.4rem 0;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+.md th,
+.md td {
+  border: 1px solid var(--color-kumo-line);
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+}
+
+/* The "(edited)" marker has to sit at the end of the last line, not below the message. The body is a
+   block of rendered Markdown, so the container and its final paragraph go inline -- but only when that
+   final child really is a paragraph, because a message ending in a code block or a list must stay a
+   block. `:has()` is what makes that condition expressible in CSS instead of in the renderer. */
+.md.md-inline-tail:has(> p:last-child) {
+  display: inline;
+}
+.md.md-inline-tail:has(> p:last-child) > p:last-child {
+  display: inline;
+}
+
+/* A resolved `<@id>` token, and a search snippet's match. Both are inline chips rather than coloured
+   text so they survive inside bold or a link. */
+.md .mention,
+.mention {
+  padding: 0 0.2em;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-kumo-brand) 14%, transparent);
+  color: var(--text-color-kumo-brand);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.mention.mention-me {
+  background: color-mix(in srgb, var(--color-kumo-brand) 26%, transparent);
+}
+.snippet mark {
+  background: color-mix(in srgb, var(--color-kumo-warning) 38%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 0.1em;
+}
+
+/* Permalink arrival: the target message pulses once, then settles. Long enough to find with the eye,
+   short enough not to nag. */
+@keyframes chat-flash {
+  0%,
+  35% {
+    background-color: color-mix(in srgb, var(--color-kumo-warning) 22%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.chat-flash {
+  animation: chat-flash 2.4s var(--ease-out-strong) both;
+}
+
+@keyframes chat-skeleton {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+.chat-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-kumo-tint) 0%,
+    color-mix(in srgb, var(--color-kumo-fill) 70%, transparent) 50%,
+    var(--color-kumo-tint) 100%
+  );
+  background-size: 200% 100%;
+  animation: chat-skeleton 1.4s ease-in-out infinite;
+  border-radius: var(--radius-md);
+}
+
+@keyframes chat-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.chat-rise {
+  animation: chat-rise 0.18s var(--ease-out-strong) both;
+}
+
+@keyframes chat-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.chat-spin {
+  animation: chat-spin 0.9s linear infinite;
+}
+
+/* Typing dots. Three staggered fades, no layout movement. */
+@keyframes chat-typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+.chat-typing-dot {
+  animation: chat-typing 1.2s ease-in-out infinite;
+}
+
+.press {
+  transition: transform 140ms var(--ease-out-strong);
+}
+.press:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-flash,
+  .chat-skeleton,
+  .chat-rise,
+  .chat-spin,
+  .chat-typing-dot,
+  .press,
+  .press:active {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+  /* The flash still has to be visible without motion, so it becomes a static tint that the
+     component clears on a timer. */
+  .chat-flash {
+    background-color: color-mix(in srgb, var(--color-kumo-warning) 18%, transparent);
+  }
+  html {
+    scroll-behavior: auto !important;
+  }
+}

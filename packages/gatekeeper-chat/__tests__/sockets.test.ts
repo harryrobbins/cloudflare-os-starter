@@ -214,6 +214,49 @@ describe("commands", () => {
     socket.close();
   });
 
+  it("tells the other member of a dm that their message was read", async () => {
+    const { alice, bob } = setup("ws-read-seen");
+    await bob.get(apiPath("me"));
+    const dm = await alice.send<ChannelResponse>("POST", apiPath("createChannel"), {
+      kind: "dm",
+      memberIds: ["bob"],
+    });
+    const channelId = dm.channel.id;
+    await post(alice, channelId, "did you see this?");
+
+    const hers = await alice.socket();
+    await hers.next("hello");
+    const his = await bob.socket();
+    await his.next("hello");
+
+    his.send({ t: "read", channel: channelId, seq: 1 });
+    const seen = await hers.next("read");
+    expect(seen).toMatchObject({ channel: channelId, seq: 1, userId: "bob" });
+    // And the reader's own tabs hear about it, so their "New messages" line moves.
+    expect((await his.next("read")).userId).toBe("bob");
+    hers.close();
+    his.close();
+  });
+
+  it("keeps a read in a public channel private to the reader", async () => {
+    const { alice, bob } = setup("ws-read-not-shared");
+    await bob.send("POST", apiPath("joinChannel", { channelId: GENERAL_CHANNEL_ID }));
+    await post(alice, GENERAL_CHANNEL_ID, "for everybody");
+
+    const hers = await alice.socket();
+    await hers.next("hello");
+    const his = await bob.socket();
+    await his.next("hello");
+
+    his.send({ t: "read", channel: GENERAL_CHANNEL_ID, seq: 1 });
+    expect((await his.next("read")).userId).toBe("bob");
+    await tick(30);
+    // A public channel could hold the whole deployment, so nobody else is told.
+    expect(hers.all("read")).toHaveLength(0);
+    hers.close();
+    his.close();
+  });
+
   it("pushes a fresh badge when a conversation is muted", async () => {
     const { alice, bob } = setup("ws-mute-badge");
     await bob.send("POST", apiPath("joinChannel", { channelId: GENERAL_CHANNEL_ID }));

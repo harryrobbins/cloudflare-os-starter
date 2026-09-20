@@ -332,8 +332,15 @@ export function markRead(
       );
       advanceThreadCursors(ctx, user.id, channelId, seq);
     });
-    // Other tabs of the same person need to move their "New messages" line too.
-    ctx.bus.toUsers([user.id], { t: "read", channel: channelId, seq });
+    // Other tabs of the same person need to move their "New messages" line too, and in a two-or-a-few
+    // person conversation the others want to see that it was read. A public or private channel keeps
+    // the event private to the reader: it could have the whole deployment in it.
+    const event = { t: "read", channel: channelId, seq, userId: user.id } as const;
+    ctx.bus.toUsers([user.id], event);
+    const kind = access.value.channel.kind;
+    if (kind === "dm" || kind === "group") {
+      ctx.bus.toChannel(channelId, event, { exclude: user.id });
+    }
   } else {
     ctx.sql.exec(
       `UPDATE memberships SET manual_unread_seq = ? WHERE channel_id = ? AND user_id = ?`,

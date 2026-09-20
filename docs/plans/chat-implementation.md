@@ -72,20 +72,56 @@ Decisions the other streams need:
   fields were already on every `Membership` in `GET /api/channels`, so the rail reads them from there.
   `UpdateMembershipRequest` and `MembershipResponse` are additive types; `parseUpdateMembership` is
   the validator.
+- **"Seen by" in direct and group conversations** (added after the first pass). Every
+  `GET /api/channels/:id/messages` page carries `readCursors: ReadCursor[]` — the *other* members'
+  `lastReadSeq` — for `dm` and `group` only; `public` and `private` omit the field, because a channel
+  can hold the whole deployment and the caller's own cursor is already on their `Membership`. A manual
+  unread marker is deliberately not reflected: it is a private note to yourself. The existing
+  `{t:"read"}` server event gained an optional `userId` (the server always sets it; optional so a mock
+  need not) and is now fanned out to the other members of a `dm` or `group` as well as to the reader's
+  own tabs. A read in a public or private channel stays private to the reader.
 
 ## Stream B: SPA
 
-- [ ] Vite + React 19 + TanStack Router + Tailwind v4 + Kumo + Phosphor under `app/`, `base: "/gatekeeper/chat/"`
-- [ ] Rail (Threads, Mentions, Drafts, Starred, Channels, DMs, unread and mention badges, muted state)
-- [ ] Conversation view: day dividers, grouping, "New messages" line, hover and keyboard actions, reactions, thread summaries, images with lightbox, file cards
-- [ ] Composer: Enter/Shift+Enter, Markdown, `@`/`#` autocomplete with id tokens, emoji picker, paste/drop uploads with progress, drafts per conversation
-- [ ] Thread pane, channel details pane, search view with qualifiers and jump-to-message, Files tab
-- [ ] History paging, permalinks `c/<channel>/m/<id>`, jump to date/latest
-- [ ] WebSocket client with jittered backoff and `since` catch-up; optimistic send with pending/failed/retry
-- [ ] Notifications: in-app toast, background-tab `Notification`, document title count
-- [ ] Embedded mode (`?embed=1`) and the `postMessage` bridge
-- [ ] Accessibility: focus, keyboard equivalents, live region, reduced motion; offline/reconnecting state
-- [ ] Narrow layout
+Built 2026-09-20 against the contract in `src/shared/`, with a `VITE_CHAT_MOCK=1` transport
+(`app/src/mock/`) standing in for stream A's routes. 133 SPA tests in `app/src/**/*.test.ts`
+(`pnpm --filter gatekeeper-chat test:run` runs them after the workers-pool suite; `types:check`
+now covers `app/` through `app/tsconfig.json`).
+
+- [x] Vite + React 19 + TanStack Router + Tailwind v4 + Kumo + Phosphor under `app/`, `base: "/gatekeeper/chat/"`
+- [x] Rail (Threads, Mentions, Drafts, Starred, Channels, DMs, unread and mention badges, muted state)
+- [x] Conversation view: day dividers, grouping, "New messages" line, hover and keyboard actions, reactions, thread summaries, images with lightbox, file cards
+- [x] Composer: Enter/Shift+Enter, Markdown, `@`/`#` autocomplete with id tokens, emoji picker, paste/drop uploads with progress, drafts per conversation
+- [x] Thread pane, channel details pane, search view with qualifiers and jump-to-message, Files tab
+- [x] History paging, permalinks `c/<channel>/m/<id>`, jump to latest — *"jump to date" is not built: `ListMessagesQuery` has no date cursor, so it needs a contract addition (see below)*
+- [x] WebSocket client with jittered backoff and `since` catch-up; optimistic send with pending/failed/retry
+- [x] Notifications: in-app toast, background-tab `Notification` (permission asked only from the settings opt-in), document title count
+- [x] Embedded mode (`?embed=1`) and the `postMessage` bridge
+- [x] Accessibility: focus, keyboard equivalents, live region, reduced motion; offline/reconnecting state
+- [x] Narrow layout
+
+**Contract gaps the SPA worked around** (nothing in `src/shared/` was edited; each is a client-side
+fallback, and each is a small addition when stream A gets to it):
+
+- **Mention token syntax.** `protocol.ts` fixes the parsed `Mention` but not the syntax that carries an
+  id through a Markdown body. The client uses `<@userId>` / `<#channelId>` plus bare `@channel`,
+  `@here`, `@agent`, defined in one place (`app/src/lib/mentions.ts`). The server must parse the same
+  thing; moving that module into `src/shared/` would settle it. The composer holds the *display* form
+  (`@Alice Chen`) and `resolveMentions` converts to ids on send, with `mentionsToText` as its inverse
+  for the inline editor — an exact, unambiguous name resolves, anything else stays literal text.
+- **No `GET /api/mentions`.** The Mentions view runs the search qualifier `to:me` instead, which the
+  contract already resolves server-side.
+- **No route for per-conversation `notify` / `muted` / `starred`.** `Membership` carries all three and
+  `MarkReadRequest` cannot set them, so they are applied optimistically and persisted per browser in
+  `localStorage`. They will start syncing the moment a `PATCH channels/:id/membership` exists.
+- **`SearchHit.snippet` mark syntax is unspecified.** The renderer accepts `<mark>`, `<b>` and `[[…]]`
+  and allow-lists the result down to `<mark>`.
+- **`GET messages?rootId=` does not say whether the root is included.** The thread pane copes either
+  way: it falls back to one `around=<rootId>` page when the root is missing, which is what a narrow
+  deep link to `/c/<id>/t/<root>` needs.
+- **No date cursor for "jump to date"**, as above.
+- **`Attachment` carries no URL.** The client builds one with `filePath()`; the mock swaps in inline
+  data URLs through `app/src/lib/files.ts`, which production never installs.
 
 ## Stream C: deployment wiring
 
@@ -119,6 +155,21 @@ Notes for the other streams:
 - [ ] Playwright against `wrangler dev` with two dev identities: live updates, unread, threads, search, upload, reconnect
 - [ ] Local-platform run through the router (`start-local-platform.sh` pattern)
 - [ ] Protected-deployment smoke: Access assertion present on HTTP and WebSocket upgrade, invalid assertion rejected
+
+## Delight pass (after Stream B, before cleanup)
+
+Ranked by effect against complexity; work top-down and stop at diminishing returns.
+
+- [ ] 1. Unread return: "N new messages" pill when scrolled up, jump to first unread on entry, sticky date header
+- [ ] 2. Reactions: recent-emoji quick picks, pop animation, "who reacted" tooltip
+- [ ] 3. Send lifecycle: optimistic slide-in, pending state, inline retry; reduced-motion aware
+- [ ] 4. Empty states: first-run `#general` card, channel header card on join
+- [ ] 5. Composer smarts: URL-over-selection makes a link, pasted code becomes a fence, draft pencil in the rail
+- [ ] 6. Quick switcher (`Ctrl/Cmd+K`) with fuzzy channels and people; `?` shortcut sheet
+- [ ] 7. Landing inbox: greeting, unread digest, resume where you left off
+- [ ] 8. Slash commands: `/me`, `/shrug`, `/topic`, `/mute`, `/dm`, `/search`
+- [ ] 9. Images: aspect-ratio placeholders, blur-up, keyboard lightbox, download
+- [ ] 10. Seen-by avatars in DMs and groups (needs others' read cursors on the channel response)
 
 ## Phase 2: dock fork commit (submodule)
 

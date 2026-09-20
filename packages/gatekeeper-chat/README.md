@@ -24,7 +24,7 @@ by name, because they are phase 3. Stream B is building the SPA under `app/`.
 | `src/shared/` | **the contract**: `protocol.ts`, `routes.ts`, `validate.ts`. Imported by the Worker and the SPA. |
 | `src/dev/` | dev-identity entry point, reached only via `wrangler.dev.jsonc` |
 | `src/vendor/` | the Gatekeeper vendor: the agent's `ChatSession` (see [Agent access](#agent-access)) |
-| `app/` | the SPA (placeholder until stream B), built to `app/dist` by `pnpm build` |
+| `app/` | the SPA: React 19, TanStack Router, Tailwind v4, Kumo. Built to `app/dist` by `pnpm build` (see below) |
 | `__tests__/` | vitest-pool-workers suites, including the spikes |
 | `spikes/` | phase 0 findings ([spikes/README.md](spikes/README.md)) and the `wrangler dev` FTS5 spike |
 
@@ -56,9 +56,23 @@ pnpm --filter gatekeeper-chat build        # Vite build of app/ into app/dist (r
                                           # assets binding needs the directory, and app/dist is
                                           # gitignored build output)
 pnpm --filter gatekeeper-chat dev          # wrangler dev -c wrangler.dev.jsonc, on :8787
-pnpm --filter gatekeeper-chat test:run     # vitest
-pnpm --filter gatekeeper-chat types:check  # tsc --noEmit
+pnpm --filter gatekeeper-chat test:run     # both suites: workers-pool, then the SPA's jsdom one
+pnpm --filter gatekeeper-chat types:check  # tsc --noEmit for the Worker, then for app/
+VITE_CHAT_MOCK=1 pnpm --filter gatekeeper-chat dev:app   # the SPA alone, on an in-memory fake
 ```
+
+### Working on the SPA
+
+`app/` imports the contract through `app/src/contract.ts`, which re-exports `src/shared/` and is the
+only place a path or a wire type enters the client. Two transports sit behind one interface
+(`app/src/api/types.ts`): the real HTTP + WebSocket pair, and `app/src/mock/` — an in-memory workspace
+seeded with channels, DMs, threads, attachments and unread state, so the whole UI can be built and
+screenshot-tested without the Worker. The mock is selected by `__CHAT_MOCK__`, a build-time constant,
+so a production bundle folds the branch away and never contains it; `VITE_CHAT_MOCK=1 pnpm dev:app`
+turns it on.
+
+Against the real Worker, run `pnpm build` then `pnpm dev` and sign in at
+`/gatekeeper/chat/dev/login?as=dev-user` (see [Signing in locally](#signing-in-locally)).
 
 After `wrangler types`, re-apply the hand edit marked at the top of `worker-configuration.d.ts`: it
 rewrites two `import("./.wrangler/validate/src/index")` paths to `./src/index`. Wrangler follows

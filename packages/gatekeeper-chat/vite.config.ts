@@ -23,7 +23,9 @@ export default {
   run: {
     tasks: {
       test: {
-        command: "vitest run",
+        // Both suites: the workers-pool one in the package root, and the SPA's jsdom one under app/.
+        // Same command as the package's `test:run` script, so `vp run test` and `pnpm test:run` agree.
+        command: "vitest run && vitest run --config app/vitest.config.ts",
         input: [{ auto: true }, ...vitestScratch],
         output: [{ auto: true }, ...vitestScratch],
       },

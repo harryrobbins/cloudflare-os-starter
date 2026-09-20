@@ -396,6 +396,12 @@ export interface ListMessagesQuery {
   readonly limit?: number;
 }
 
+/** How far somebody else has read. The "seen by" line under the last message of a conversation. */
+export interface ReadCursor {
+  readonly userId: UserId;
+  readonly lastReadSeq: number;
+}
+
 export interface MessagePageResponse {
   /** Ascending by `seq`. */
   readonly messages: readonly Message[];
@@ -404,6 +410,14 @@ export interface MessagePageResponse {
   /** Authors of the page, so the client needs no second directory fetch. */
   readonly users: readonly User[];
   readonly channelLastSeq: number;
+  /**
+   * The other members' read cursors, for `dm` and `group` only.
+   *
+   * Absent for `public` and `private`: a channel can have every person in the deployment in it, and
+   * "seen by" is a two-or-a-handful-of-people feature. The caller's own cursor is not here either --
+   * it is on their {@link Membership}.
+   */
+  readonly readCursors?: readonly ReadCursor[];
 }
 
 /** `POST /api/channels/:channelId/messages` */
@@ -586,7 +600,18 @@ export type ServerEvent =
       readonly id: MessageId;
       readonly reactions: readonly Reaction[];
     }
-  | { readonly t: "read"; readonly channel: ChannelId; readonly seq: number }
+  /**
+   * Somebody's read cursor moved. Sent to every socket of the reader, so their other tabs move the
+   * "New messages" line, and -- for a `dm` or a `group` -- to the other members, so "seen by" updates
+   * live. `userId` is who read; the server always sets it, and it is optional only so a client that
+   * builds this event in a test or a mock does not have to.
+   */
+  | {
+      readonly t: "read";
+      readonly channel: ChannelId;
+      readonly seq: number;
+      readonly userId?: UserId;
+    }
   | { readonly t: "presence"; readonly online: readonly UserId[] }
   | { readonly t: "typing"; readonly channel: ChannelId; readonly user: UserId }
   | {

@@ -52,7 +52,7 @@ import { newMessageId } from "./ids.js";
 import { consume } from "./limits.js";
 import { hashId, logEvent } from "./logs.js";
 import { asMessageKind, type MessageRow, type UserRow } from "./rows.js";
-import { badgeSummary, unreadReplies } from "./unread.js";
+import { badgeSummary, otherReadCursors, unreadReplies } from "./unread.js";
 import { loadUsers } from "./users.js";
 
 /** Avatar stacks do not need more than this, and the query is cheaper for the cap. */
@@ -230,6 +230,12 @@ export function listMessages(
 
   const first = rows[0];
   const last = rows.at(-1);
+  // "Seen by" is a small-conversation feature, so the cursors ride along only where the member list
+  // is bounded and the product wants them.
+  const seenBy =
+    channel.kind === "dm" || channel.kind === "group"
+      ? otherReadCursors(ctx, channelId, userId)
+      : undefined;
   return allow({
     messages: hydrateMessages(ctx, rows),
     hasMoreBefore:
@@ -239,6 +245,7 @@ export function listMessages(
       last !== undefined && existsAround(ctx, channelId, threadFilter, threadParams, ">", last.seq),
     users: loadUsers(ctx, rows.map((row) => row.author_id)),
     channelLastSeq: channel.last_seq,
+    ...(seenBy === undefined ? {} : { readCursors: seenBy }),
   });
 }
 

@@ -176,6 +176,88 @@ describe("unread", () => {
   });
 });
 
+describe("read cursors on a message page", () => {
+  it("reports the other members' cursors in a dm, and not the caller's own", async () => {
+    const workspace = freshWorkspace("cursors-dm");
+    const alice = client(workspace, identity("alice"));
+    const bob = client(workspace, identity("bob"));
+    await bob.get(apiPath("me"));
+    const dm = await alice.send<ChannelResponse>("POST", apiPath("createChannel"), {
+      kind: "dm",
+      memberIds: ["bob"],
+    });
+    const channelId = dm.channel.id;
+    for (const body of ["one", "two", "three"]) await post(alice, channelId, body);
+    await bob.send("POST", apiPath("readChannel", { channelId }), { seq: 2 });
+
+    const page = await alice.get<MessagePageResponse>(apiPath("listMessages", { channelId }));
+    expect(page.readCursors).toEqual([{ userId: "bob", lastReadSeq: 2 }]);
+
+    // From Bob's side it is Alice's cursor, which sending advanced to the last message she wrote.
+    const his = await bob.get<MessagePageResponse>(apiPath("listMessages", { channelId }));
+    expect(his.readCursors).toEqual([{ userId: "alice", lastReadSeq: 3 }]);
+  });
+
+  it("reports every other member in a group", async () => {
+    const workspace = freshWorkspace("cursors-group");
+    const alice = client(workspace, identity("alice"));
+    const bob = client(workspace, identity("bob"));
+    const cara = client(workspace, identity("cara"));
+    await bob.get(apiPath("me"));
+    await cara.get(apiPath("me"));
+    const group = await alice.send<ChannelResponse>("POST", apiPath("createChannel"), {
+      kind: "group",
+      memberIds: ["bob", "cara"],
+    });
+    const channelId = group.channel.id;
+    await post(alice, channelId, "hello both");
+    await bob.send("POST", apiPath("readChannel", { channelId }), { seq: 1 });
+
+    const page = await alice.get<MessagePageResponse>(apiPath("listMessages", { channelId }));
+    expect(page.readCursors).toEqual([
+      { userId: "bob", lastReadSeq: 1 },
+      { userId: "cara", lastReadSeq: 0 },
+    ]);
+  });
+
+  it("omits the field for a public or private channel", async () => {
+    const workspace = freshWorkspace("cursors-omitted");
+    const alice = client(workspace, identity("alice"));
+    await post(alice, GENERAL_CHANNEL_ID, "public");
+    const publicPage = await alice.get<MessagePageResponse>(
+      apiPath("listMessages", { channelId: GENERAL_CHANNEL_ID }),
+    );
+    expect(publicPage.readCursors).toBeUndefined();
+
+    const created = await alice.send<ChannelResponse>("POST", apiPath("createChannel"), {
+      kind: "private",
+      name: "closed",
+    });
+    const privatePage = await alice.get<MessagePageResponse>(
+      apiPath("listMessages", { channelId: created.channel.id }),
+    );
+    expect(privatePage.readCursors).toBeUndefined();
+  });
+
+  it("ignores a manual unread marker, which is a private note to yourself", async () => {
+    const workspace = freshWorkspace("cursors-manual");
+    const alice = client(workspace, identity("alice"));
+    const bob = client(workspace, identity("bob"));
+    await bob.get(apiPath("me"));
+    const dm = await alice.send<ChannelResponse>("POST", apiPath("createChannel"), {
+      kind: "dm",
+      memberIds: ["bob"],
+    });
+    const channelId = dm.channel.id;
+    for (const body of ["one", "two"]) await post(alice, channelId, body);
+    await bob.send("POST", apiPath("readChannel", { channelId }), { seq: 2 });
+    await bob.send("POST", apiPath("readChannel", { channelId }), { manualUnreadSeq: 1 });
+
+    const page = await alice.get<MessagePageResponse>(apiPath("listMessages", { channelId }));
+    expect(page.readCursors).toEqual([{ userId: "bob", lastReadSeq: 2 }]);
+  });
+});
+
 describe("threads", () => {
   it("gives a reply its own channel seq and bumps the root", async () => {
     const { alice, bob, channelId } = await fixture("threads");

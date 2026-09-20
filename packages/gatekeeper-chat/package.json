@@ -5,19 +5,34 @@
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {
-    "types:check": "tsc --noEmit",
-    "test:run": "vitest run",
+    "types:check": "tsc --noEmit && tsc --noEmit -p app/tsconfig.json",
+    "test:run": "vitest run && vitest run --config app/vitest.config.ts",
     "build": "vite build --config app/vite.config.ts",
-    "dev": "wrangler dev -c wrangler.dev.jsonc"
+    "dev": "wrangler dev -c wrangler.dev.jsonc",
+    "dev:app": "vite --config app/vite.config.ts"
   },
   "dependencies": {
+    "@cloudflare/kumo": "^2.9.2",
+    "@gadgets/workshop-shared": "workspace:*",
+    "@phosphor-icons/react": "^2.1.10",
+    "@tanstack/react-router": "^1.170.23",
     "capnweb": "catalog:",
     "capnweb-validate": "catalog:",
-    "jose": "catalog:"
+    "dompurify": "^3.4.13",
+    "jose": "catalog:",
+    "marked": "^14.0.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/node": "26.1.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^5.2.0",
+    "jsdom": "^26.1.0",
+    "tailwindcss": "^4.3.3",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",

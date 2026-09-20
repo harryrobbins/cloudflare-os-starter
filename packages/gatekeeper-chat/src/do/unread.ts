@@ -8,7 +8,7 @@
 // `last_read_seq` backwards, because that cursor is also what another tab's read acknowledgement
 // writes and what decides whether an old mention notifies again.
 
-import type { BadgeSummary, ChannelId, UserId } from "../shared/protocol.js";
+import type { BadgeSummary, ChannelId, ReadCursor, UserId } from "../shared/protocol.js";
 import type { Ctx } from "./context.js";
 import type { CountRow, MembershipRow } from "./rows.js";
 
@@ -108,4 +108,23 @@ export function unreadReplies(ctx: Ctx, rootId: string, userId: UserId, lastRead
       )
       .toArray()[0]?.n ?? 0
   );
+}
+
+/**
+ * The other members' read cursors, for the "seen by" line.
+ *
+ * Only ever called for a `dm` or a `group`, where the member list is small and the caller is already
+ * known to be a member. `manual_unread_seq` is deliberately ignored: "I marked this unread again" is
+ * a private note to yourself, not something to tell the room.
+ */
+export function otherReadCursors(ctx: Ctx, channelId: ChannelId, selfId: UserId): readonly ReadCursor[] {
+  return ctx.sql
+    .exec<{ user_id: string; last_read_seq: number }>(
+      `SELECT user_id, last_read_seq FROM memberships
+        WHERE channel_id = ? AND user_id <> ? ORDER BY user_id`,
+      channelId,
+      selfId,
+    )
+    .toArray()
+    .map((row) => ({ userId: row.user_id, lastReadSeq: row.last_read_seq }));
 }
