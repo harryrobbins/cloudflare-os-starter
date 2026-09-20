@@ -1,0 +1,71 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+
+  // Placeholder. `scripts/deploy.ts` generates `wrangler.prod.jsonc` from `deployment.jsonc`
+  // (`workers.chat.name`, normally `cfos-chat`) and overrides the name, the R2 bucket name and
+  // every var below. Nothing here is deployed as-is.
+  "name": "cfos-chat",
+
+  // capnweb-validate rewrites `src/` into `.wrangler/validate/src/` so the Gatekeeper RPC surface
+  // (stream D) gets its argument validators; the entry point therefore lives in the build output,
+  // exactly as packages/custom-gatekeeper does it.
+  "main": ".wrangler/validate/src/index.ts",
+  "build": {
+    "command": "pnpm exec capnweb-validate build --out .wrangler/validate",
+    "watch_dir": "src"
+  },
+
+  "compatibility_date": "2026-08-04",
+  "compatibility_flags": ["allow_irrevocable_stub_storage", "nodejs_compat"],
+
+  "migrations": [
+    {
+      "tag": "v0",
+      "new_sqlite_classes": ["ChatWorkspace"]
+    }
+  ],
+
+  // Explicit binding rather than `ctx.exports`: the DO is addressed by name from the Worker's
+  // fetch handler and from tests, and an explicit namespace behaves identically in both.
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CHAT_WORKSPACE",
+        "class_name": "ChatWorkspace"
+      }
+    ]
+  },
+
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "cfos-chat-files"
+    }
+  ],
+
+  // `run_worker_first` so the Access check runs before a static asset is served: the SPA shell is
+  // not secret, but serving it unauthenticated would let an unsigned-in browser reach the app and
+  // discover routes. The Worker falls back to ASSETS for everything that is not API, WS or files.
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./app/dist",
+    "run_worker_first": true
+  },
+
+  // Placeholders; deploy.ts substitutes the real values. ADMINS is a JSON array of email
+  // addresses (matching `access.admins` in deployment.jsonc).
+  "vars": {
+    "CF_ACCESS_ISS": "https://example.cloudflareaccess.com",
+    "CF_ACCESS_AUD": "replace-with-the-access-application-aud",
+    "ADMINS": "[]",
+    "PUBLIC_BASE_URL": "https://example.invalid",
+    // A number, not a string: wrangler passes structured vars through verbatim.
+    "MAX_UPLOAD_BYTES": 10485760
+  },
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": { "invocation_logs": false }
+  }
+}

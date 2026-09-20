@@ -1,0 +1,17 @@
+{
+  "extends": "../../cloudflare-os/tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ESNext"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["./worker-configuration.d.ts", "@cloudflare/vitest-pool-workers/types"],
+    "noEmit": true
+  },
+  // app/ is excluded: its Vite config runs under Node (a different global URL and
+  // import.meta), and stream B gives the SPA its own tsconfig with the DOM lib.
+  "include": ["./src/**/*.ts", "./__tests__/**/*.ts", "./spikes/**/*.ts"],
+  // Paths are anchored with `./`: a bare "src" also matches `.wrangler/validate/src`, the
+  // capnweb-validate build copy, which would report every error twice.
+  "exclude": ["app", "node_modules", ".wrangler"]
+}

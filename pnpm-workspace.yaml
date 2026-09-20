@@ -19,6 +19,10 @@ catalog:
   capnweb: ^0.11.1
   # Exact: pinned in lockstep with capnweb (declared as a >=0.7.0 peer)
   capnweb-validate: 0.2.4
+  # Starter-only (not in the submodule's catalog): Access JWT verification in
+  # packages/gatekeeper-chat, matching the version cloudflare-os/packages/workshop-backend
+  # declares directly so the two installs agree on the JWKS implementation.
+  jose: ^6.2.8
   # Exact: TypeScript 7 (tsgo). The submodule's tsconfig sets `singleThreaded`, which TS 5.9
   # rejects outright, so every package extending it has to be on 7.x. Nothing here uses the JS
   # compiler API, so the submodule's `typescript6` alias is not needed.

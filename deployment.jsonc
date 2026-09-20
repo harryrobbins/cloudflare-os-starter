@@ -36,7 +36,11 @@
     "procgen": { "name": "cfos-procgen" },
 
     "customGatekeeper": { "name": "cfos-custom-gatekeeper" },
-    "errorReporter": { "name": "cfos-error-reporter" }
+    "errorReporter": { "name": "cfos-error-reporter" },
+
+    // Team chat: serves its own app at /gatekeeper/chat/ through the router. Only deployed while
+    // the "chat" block below is enabled.
+    "chat": { "name": "cfos-chat" }
   },
 
   // This starter deploys Cloudflare Access mode. Cloudflare OS also supports built-in password
@@ -114,6 +118,31 @@
   "customGatekeeper": {
     "name": "Surprisingly Ltd",
     "message": "This deployment belongs to Surprisingly Ltd. Keep answers concise and never expose credentials."
+  },
+
+  // Team chat for everyone who can sign in: one Worker, one SQLite Durable Object holding the
+  // messages, and one R2 bucket holding uploaded files. Reachable at /gatekeeper/chat/ behind the
+  // same Access application as the rest of the hostname; membership, display names and the admin
+  // list all come from "access" above, so there is nothing to configure here about identity.
+  // Reference: docs/customization.md#team-chat
+  "chat": {
+    // false deploys nothing chat-related: no Worker, no bucket, and no binding on the router or
+    // the Workshop. The Durable Object and bucket survive being disabled; they are not deleted.
+    "enabled": true,
+
+    // null: Wrangler provisions and remembers an R2 bucket for uploads on first deploy.
+    // string: adopt an existing bucket by name -- the way to keep files across a Worker rename.
+    "filesBucket": null,
+
+    // Hard cap per upload, in bytes (10 MiB). Becomes the Worker's MAX_UPLOAD_BYTES; an upload
+    // arrives as one Worker request body, so the platform's 100 MiB is the ceiling here.
+    "maxUploadBytes": 10485760
+
+    // The agent-facing half: binds chat to the Workshop as a Gatekeeper vendor, so every workspace
+    // gets an ambient ChatSession (public channels: read and search; posting is an approved action).
+    // Off until that observer policy has been reviewed in /admin, and until the deployed chat
+    // Worker exports the vendor entrypoint. To enable it, add a comma above and uncomment:
+    // "agentAccess": true
   },
 
   // Explicit backend issue reports go to a private Worker that emits structured console errors.

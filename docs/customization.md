@@ -33,6 +33,7 @@ The custom logo appears in the app chrome, sign-in screens, and browser tab on e
 | `aiGateway` | Deployment-managed model catalog | Enabled by default over the Workers AI binding; which providers to advertise, which gateway, and an optional model allow-list |
 | `context` | Context sharing boundary, snapshot KV, and optional Artifacts repositories | `null` to scope data to the public origin, or a pinned stable label; automatic or existing KV; Git-backed collections disabled or enabled |
 | `customGatekeeper` | Example integration identity and guidance | Organization-specific display text |
+| `chat` | Team chat Worker, its uploads bucket, and the upload cap | Enabled or disabled; a bucket to provision or an existing one to reuse; see [Team chat](#team-chat) |
 | `errorReporting` | Private explicit-issue destination | Console Reporter enabled state, environment, and release metadata |
 | `resources` | Blueprint/avatar KV and blueprint-content R2 | `null` to provision or explicit IDs/names to reuse |
 | `formatBlueprintsDir` | Formats shipped with the deployment | `null` for upstream's Docs, Sheets and Slides, or a directory of `.gadget`/`.json` pairs; see [Bundled formats](#bundled-formats) |
@@ -42,7 +43,7 @@ Secrets are never valid values in this file. Install them interactively with Wra
 
 ### Workers and routing
 
-The deployment is six Workers. Keep their names unique: service bindings use these names, so update and deploy them together.
+The deployment is seven Workers, plus team chat and Notebook Python execution when those are enabled. Keep their names unique: service bindings use these names, so update and deploy them together.
 
 | Worker | Role |
 | --- | --- |
@@ -52,11 +53,12 @@ The deployment is six Workers. Keep their names unique: service bindings use the
 | `scheduler` | The Scheduler Gatekeeper, which gives agents scheduled and recurring work. |
 | `procgen` | The Synthetic Data Gatekeeper, which generates finite deterministic datasets. |
 | `customGatekeeper` | This repository's example integration. |
+| `chat` | [Team chat](#team-chat), which also serves its own app at `/gatekeeper/chat/`. Deployed only while `chat.enabled`. |
 | `errorReporter` | The private explicit-issue destination. |
 
 Context and Scheduler are *ambient*: upstream's release marks both `PREINSTALL`, so the hosted flow installs them on every instance and this starter deploys them for the same reason. Neither takes configuration beyond its name — the Scheduler takes none at all.
 
-Only the router takes a route; the other five are reachable only over service bindings, and the deploy turns off `workers.dev` and [Preview URLs](https://developers.cloudflare.com/workers/configuration/previews/) on all six. That keeps the router the single Access-protected way in.
+Only the router takes a route; every other Worker is reachable only over service bindings, and the deploy turns off `workers.dev` and [Preview URLs](https://developers.cloudflare.com/workers/configuration/previews/) on all of them. That keeps the router the single Access-protected way in.
 
 For production, set a [Custom Domain](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/) on it:
 
@@ -236,6 +238,38 @@ This repository builds these formats from source, and each package's tests fail 
 
 Each command rebuilds `formats/<name>.gadget` and bumps its revision.
 
+### Team chat
+
+Team chat is a chat for everyone who can sign in to the deployment: channels, direct messages, threads, unread and mention tracking, search across everything, and file uploads. It is one deployment-owned Worker, `packages/gatekeeper-chat`, and it is on by default:
+
+```jsonc
+"workers": { "chat": { "name": "cfos-chat" } },
+"chat": { "enabled": true, "filesBucket": null, "maxUploadBytes": 10485760 }
+```
+
+Chat is reached at **`https://<your public origin>/gatekeeper/chat/`**. The router proxies `/gatekeeper/chat` and everything under it — the app, its JSON API, its WebSocket, and authenticated file downloads — over a `GATEKEEPER_CHAT` service binding, and that binding name is what creates the path (see [Custom Gatekeepers](#custom-gatekeepers)).
+
+A deploy with chat enabled creates three things:
+
+| Resource | What it holds |
+| --- | --- |
+| One Worker, named by `workers.chat.name` | The app, the API, the WebSocket, and the file routes. No route and no Preview URL of its own, like every other Worker behind the router. |
+| One SQLite Durable Object, `ChatWorkspace` | Every message, channel, membership, read cursor, reaction and the full-text search index. Its migrations are declared in the package's `wrangler.jsonc` and replayed in order. |
+| One R2 bucket, bound as `FILES` | Uploaded files and generated thumbnails. Bytes stay out of the Durable Object. |
+
+| Key | Controls |
+| --- | --- |
+| `chat.enabled` | Whether any of the above is built, deployed or bound. `false` is a complete opt-out. |
+| `chat.filesBucket` | `null` lets Wrangler provision the uploads bucket and remember it, like the other [storage](#storage) values. A name adopts an existing bucket, which is how uploads survive a Worker rename. |
+| `chat.maxUploadBytes` | Hard cap on one upload, deployed as the Worker's `MAX_UPLOAD_BYTES`. An upload arrives as a single Worker request body, so 100 MiB is the ceiling `pnpm check` allows. |
+| `chat.agentAccess` | Optional, default `false`. `true` also binds chat to the Workshop with the `GatekeeperVendor` entrypoint, so every workspace gets an ambient chat session for the agent: public channels to read and search, posting as an approval-gated action. Leave it off until that observer policy has been reviewed in `/admin`; the chat app itself does not need it. |
+
+Identity is not configured here. Signing in through Access *is* membership: nobody is invited, approved or asked for a name, and display names come from the Access identity. The chat Worker verifies the `cf-access-jwt-assertion` itself — with the `CF_ACCESS_ISS` and `CF_ACCESS_AUD` from [`access`](#cloudflare-access), on every request and every WebSocket upgrade — rather than trusting the router, and `access.admins` are its administrators, the identities that can rename and archive any channel. The package's `wrangler.dev.jsonc` carries a development-only identity switch (`DEV_IDENTITIES`); `pnpm check` refuses a deploy whose base *or* generated config carries any `DEV_*` var or required secret, so that bypass cannot reach the Access-protected hostname.
+
+Retention and backup are policy, not defaults: the Durable Object keeps all history and the bucket keeps all uploads, and neither expires anything on its own. Decide how long messages, attachments and deleted content are kept, and rehearse a restore, before a team relies on chat. Schema changes go through the package's numbered migrations — never roll back by deleting the `ChatWorkspace` class or the bucket, which destroys the data instead.
+
+To disable chat, set `"enabled": false`. The build, the deploy and both service bindings disappear, and `pnpm check` stops validating the rest of the block. The Worker, its Durable Object and its bucket are not deleted by disabling it, so re-enabling with the same names and bucket brings the history back.
+
 ## Custom Gatekeepers
 
 Keep deployment-owned Gatekeepers under `packages/`, outside the `cloudflare-os` submodule. `scripts/deploy.ts` binds this repository's example as `GATEKEEPER_CUSTOM` and Context as `GATEKEEPER_CONTEXT`, twice each: on the Workshop with the `GatekeeperVendor` entrypoint for RPC, and on the router with no entrypoint, where the binding name is what routes `/gatekeeper/custom` and `/gatekeeper/context` to it. A Gatekeeper that serves HTTP — an OAuth redirect, for instance — needs both.
@@ -269,7 +303,8 @@ Prefer wrapper-owned Workers and [service bindings](https://developers.cloudflar
 4. Diff `cloudflare-os/pnpm-workspace.yaml`'s `catalog:` against this repository's and re-sync it. Two submodule packages are members of this workspace and resolve `catalog:` here, so a missing entry fails the install and a *stale* one silently gives the tree two copies of `capnweb` — a failure that only appears once the two installs are separate, as they are in CI.
 5. Run `pnpm install`, `pnpm --dir cloudflare-os install`, `pnpm lint`, and `pnpm check`.
 6. If `formatBlueprintsDir` is set, compare `cloudflare-os/packages/workshop-backend/format-blueprints/*.json` with the copies in `formats/`. Re-copy any `.gadget`/`.json` pair whose `revision` moved, or the deployment keeps shipping the old Docs, Sheets and Slides.
-7. Deploy and verify Access, administrator access, storage, configured AI, Context, custom observations, the Error Reporter query surface, and that every bundled format still instantiates from **New**.
-8. If needed, restore the previous gitlink and redeploy, or use [Workers rollback](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/) when bindings remain compatible.
+7. If [team chat](#team-chat) is enabled, rebuild `packages/gatekeeper-chat` against the new submodule — its Gatekeeper vendor uses `@gadgets/workshop-shared` — and check that its `ChatWorkspace` migrations are unchanged and still replay in order. Never roll back chat by deleting that Durable Object class or its uploads bucket.
+8. Deploy and verify Access, administrator access, storage, configured AI, Context, custom observations, the Error Reporter query surface, and that every bundled format still instantiates from **New**.
+9. If needed, restore the previous gitlink and redeploy, or use [Workers rollback](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/) when bindings remain compatible.
 
 Do not update the submodule blindly. The deployment script derives from upstream configs so incompatible base changes remain visible during review and checks.

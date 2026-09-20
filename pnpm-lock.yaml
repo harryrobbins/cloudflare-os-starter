@@ -15,6 +15,9 @@ catalogs:
     capnweb-validate:
       specifier: 0.2.4
       version: 0.2.4
+    jose:
+      specifier: ^6.2.8
+      version: 6.2.12
     typescript:
       specifier: 7.0.2
       version: 7.0.2
@@ -250,6 +253,37 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@26.1.0)(@vitest/browser-preview@4.1.10)(vite@7.3.6(@types/node@26.1.0)(lightningcss@1.33.0))
+      wrangler:
+        specifier: 'catalog:'
+        version: 4.124.0(@cloudflare/workers-types@5.20260818.1)
+
+  packages/gatekeeper-chat:
+    dependencies:
+      capnweb:
+        specifier: 'catalog:'
+        version: 0.11.1
+      capnweb-validate:
+        specifier: 'catalog:'
+        version: 0.2.4(capnweb@0.11.1)(esbuild@0.28.1)(rolldown@1.2.2)(rollup@4.62.4)(vite@7.3.6(@types/node@26.1.0)(lightningcss@1.33.0))
+      jose:
+        specifier: 'catalog:'
+        version: 6.2.12
+    devDependencies:
+      '@cloudflare/vitest-pool-workers':
+        specifier: 'catalog:'
+        version: 0.20.3(@cloudflare/workers-types@5.20260818.1)(@vitest/runner@4.1.10)(@vitest/snapshot@4.1.10)(vitest@4.1.10)
+      '@types/node':
+        specifier: 26.1.0
+        version: 26.1.0
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: 7.3.6
+        version: 7.3.6(@types/node@26.1.0)(lightningcss@1.33.0)
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.0)(@vitest/browser-preview@4.1.10)(vite@7.3.6(@types/node@26.1.0)(lightningcss@1.33.0))
@@ -2032,6 +2066,9 @@ packages:
   isomorphic.js@0.2.5:
     resolution: {integrity: sha512-PIeMbHqMt4DnUP3MA/Flc0HElYjMXArsw1qwJZcm9sqR8mq3l8NYizFMty0pWwE/tzIGH3EKK5+jes5mAr85yw==}
 
+  jose@6.2.12:
+    resolution: {integrity: sha512-9NiFmJEex0sy2Dk58j2UGBSHgUs2ypF9eZSu4L6vjOX3Dp96Sw1F3uL+H+D1sx02jZZdzUT0HgvCy59CuvXcWw==}
+
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
@@ -3800,6 +3837,8 @@ snapshots:
   internmap@2.0.3: {}
 
   isomorphic.js@0.2.5: {}
+
+  jose@6.2.12: {}
 
   js-tokens@4.0.0: {}
 

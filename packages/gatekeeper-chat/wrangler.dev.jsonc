@@ -1,0 +1,66 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+
+  // `pnpm --filter gatekeeper-chat dev`. The only difference from wrangler.jsonc that matters is
+  // `main`: this config boots `src/dev/entry.ts`, which accepts a signed dev-identity cookie in
+  // place of a Cloudflare Access assertion. Production's `src/index.ts` does not import that
+  // module, so the bypass cannot ship (see src/dev/README note in src/dev/entry.ts).
+  "name": "cfos-chat-dev",
+  "main": ".wrangler/validate/src/dev/entry.ts",
+  "build": {
+    "command": "pnpm exec capnweb-validate build --out .wrangler/validate",
+    "watch_dir": "src"
+  },
+
+  "compatibility_date": "2026-08-04",
+  "compatibility_flags": ["allow_irrevocable_stub_storage", "nodejs_compat"],
+
+  "migrations": [
+    {
+      "tag": "v0",
+      "new_sqlite_classes": ["ChatWorkspace"]
+    }
+  ],
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CHAT_WORKSPACE",
+        "class_name": "ChatWorkspace"
+      }
+    ]
+  },
+
+  // Local-only bucket: `wrangler dev` without --remote keeps R2 in .wrangler/state.
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "cfos-chat-files-dev"
+    }
+  ],
+
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./app/dist",
+    "run_worker_first": true
+  },
+
+  "vars": {
+    // Empty on purpose: with no issuer/audience configured the Access path can never verify a
+    // token, so dev identity is the only way in and a stale production assertion cannot be
+    // replayed against a dev server.
+    "CF_ACCESS_ISS": "",
+    "CF_ACCESS_AUD": "",
+    "ADMINS": "[\"dev-admin@example.test\"]",
+    "PUBLIC_BASE_URL": "http://localhost:8787",
+    "MAX_UPLOAD_BYTES": 10485760,
+
+    // The identities `/gatekeeper/chat/dev/login?as=<id>` will mint. JSON array of
+    // {id, email, name?}. Two entries so the Playwright two-user suites (stream E) have both.
+    "DEV_IDENTITIES": "[{\"id\":\"dev-admin\",\"email\":\"dev-admin@example.test\",\"name\":\"Dev Admin\"},{\"id\":\"dev-user\",\"email\":\"dev-user@example.test\",\"name\":\"Dev User\"}]",
+    // Signs the dev identity cookie. A var, not a secret: it only has authority on a dev server.
+    "DEV_IDENTITY_SECRET": "local-development-only"
+  },
+
+  "observability": { "enabled": true }
+}

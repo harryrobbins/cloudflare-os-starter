@@ -119,6 +119,7 @@ Backend error reporting is enabled without a vendor account. Explicit upstream i
 | Logs, traces, error destinations, browser reporting | [Observability guide](docs/observability.md) | Sometimes |
 | Organization APIs and capabilities | [`packages/custom-gatekeeper`](packages/custom-gatekeeper/README.md) | Yes |
 | Formats offered under **New** (this deployment ships a live kanban Board, a live Whiteboard and a Notebook beside Docs, Sheets and Slides) | [`formats/`](formats) and [Bundled formats](docs/customization.md#bundled-formats); ad hoc promotion in `/admin` | Yes for bundled, no for promoted |
+| Team chat at `/gatekeeper/chat/` (channels, DMs, threads, search, uploads) | `deployment.jsonc.chat` and [Team chat](docs/customization.md#team-chat) | Yes |
 | Notebook Python execution (optional, disabled by default) | `deployment.jsonc.runtime`, [runtime guide](packages/gatekeeper-runtime/README.md) and [implementation/validation plan](docs/plans/notebook-ide-blueprints.md) | Yes |
 | Product behavior unavailable through Worker boundaries | Pinned upstream fork/commit | Yes |
 

@@ -105,6 +105,34 @@ export interface ContextConfig {
   artifacts?: { enabled?: boolean; namespace?: string };
 }
 
+/**
+ * Team chat: one Worker serving its own SPA, JSON API and WebSocket at `/gatekeeper/chat/`, with a
+ * SQLite Durable Object and an R2 bucket of its own.
+ *
+ * Absent or disabled generates nothing: no Worker, no bucket, and no `GATEKEEPER_CHAT` binding on
+ * the router or the Workshop. Identity is not configured here -- chat verifies the same Access JWT
+ * the Workshop does, from the same `access` block.
+ */
+export interface ChatConfig {
+  /** Whether the chat Worker is built, deployed and bound at all. */
+  enabled: boolean;
+  /**
+   * R2 bucket holding uploaded files and thumbnails. `null` requests Wrangler automatic
+   * provisioning; a name adopts an existing bucket, which is how uploads survive a rename.
+   */
+  filesBucket: string | null;
+  /** Hard cap on one upload, in bytes. Becomes the chat Worker's `MAX_UPLOAD_BYTES` var. */
+  maxUploadBytes: number;
+  /**
+   * Whether the Workshop binds chat as an agent-facing Gatekeeper vendor, so every workspace gets
+   * an ambient `ChatSession`. Off by default, and deliberately separate from `enabled`: the chat app
+   * works without it, the vendor entrypoint is a later stream, and a service binding naming an
+   * entrypoint the deployed chat Worker does not export is a Workshop deploy that can fail for a
+   * reason nothing in chat itself explains.
+   */
+  agentAccess?: boolean;
+}
+
 /** Worker telemetry. Maps onto wrangler's `observability` block. */
 export interface DeploymentObservabilityConfig {
   enabled: boolean;
@@ -141,6 +169,8 @@ export interface DeploymentConfig {
     customGatekeeper: { name: string };
     /** Only required when `errorReporting.enabled`. */
     errorReporter?: { name: string };
+    /** Team chat. Only required when `chat.enabled`. */
+    chat?: { name: string };
   };
   /** Optional private Python execution service; disabled unless explicitly enabled. */
   runtime?: { enabled: boolean; workerName: string; maxInstances: number };
@@ -151,6 +181,8 @@ export interface DeploymentConfig {
   customGatekeeper: { name: string; message: string };
   /** Private explicit-issue destination. */
   errorReporting: { enabled: boolean; environment?: string; release?: string | null };
+  /** Team chat. Absent means disabled, as does `enabled: false`. */
+  chat?: ChatConfig;
   /** Workshop KV/R2. `null` requests Wrangler automatic provisioning. */
   resources: {
     blueprintsKvNamespaceId: string | null;
@@ -224,6 +256,8 @@ export interface GeneratedConfigs {
   customGatekeeper: ProdWranglerConfig;
   /** Absent when `errorReporting.enabled` is false. */
   errorReporter?: ProdWranglerConfig;
+  /** Absent when `chat.enabled` is false or the block is missing. */
+  chat?: ProdWranglerConfig;
 }
 
 /** The upstream base configs the generated ones are derived from. */
@@ -237,6 +271,8 @@ export interface BaseConfigs {
   procgen: ProdWranglerConfig;
   customGatekeeper: ProdWranglerConfig;
   errorReporter: ProdWranglerConfig;
+  /** Team chat base; required only when chat is enabled. */
+  chat?: ProdWranglerConfig;
 }
 
 /** One build step `deploy.ts` runs before deploying. See `buildCommands`. */

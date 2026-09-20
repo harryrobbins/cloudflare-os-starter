@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../../node_modules/wrangler/config-schema.json",
+
+  // Spike-only Worker. Exists to answer one question the vitest suite cannot: does FTS5 behave the
+  // same in a real `wrangler dev` (workerd + the local SQLite file) as it does under
+  // vitest-pool-workers? Never deployed; not referenced by deployment.jsonc or scripts/deploy.ts.
+  //
+  //   pnpm exec wrangler dev -c spikes/fts-dev/wrangler.jsonc --port 8799
+  //   curl -s localhost:8799/fts | jq
+  "name": "cfos-chat-spike-fts",
+  "main": "./worker.ts",
+  "compatibility_date": "2026-08-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "migrations": [{ "tag": "v0", "new_sqlite_classes": ["SpikeFtsDo"] }],
+  "durable_objects": {
+    "bindings": [{ "name": "SPIKE_FTS", "class_name": "SpikeFtsDo" }]
+  }
+}

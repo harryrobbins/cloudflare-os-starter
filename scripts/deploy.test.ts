@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import test from "node:test";
 import { parse, type ParseError } from "jsonc-parser";
 import {
-  aiGatewayPlan, buildCommands, formatBlueprintsPath, generateConfigs, validateConfig,
+  aiGatewayPlan, buildCommands, deployOrder, formatBlueprintsPath, generateConfigs, validateConfig,
 } from "./deploy.ts";
 import type {
   BaseConfigs,
@@ -24,6 +25,7 @@ const validConfig: DeploymentConfig = {
     procgen: { name: "acme-cloudflare-os-procgen" },
     customGatekeeper: { name: "acme-cloudflare-os-custom" },
     errorReporter: { name: "acme-cloudflare-os-errors" },
+    chat: { name: "acme-cloudflare-os-chat" },
   },
   access: {
     issuer: "https://acme.cloudflareaccess.com",
@@ -43,6 +45,7 @@ const validConfig: DeploymentConfig = {
   },
   customGatekeeper: { name: "Acme", message: "Use the company handbook." },
   errorReporting: { enabled: true, environment: "production", release: "abc123" },
+  chat: { enabled: true, filesBucket: "acme-cloudflare-os-chat-files", maxUploadBytes: 10485760 },
   resources: {
     blueprintsKvNamespaceId: "blueprints-kv-id",
     avatarsKvNamespaceId: "avatars-kv-id",
@@ -81,7 +84,31 @@ async function baseConfigs(): Promise<BaseConfigs> {
     customGatekeeper: await baseConfig("../packages/custom-gatekeeper/wrangler.jsonc"),
     errorReporter: await baseConfig("../packages/error-reporter/wrangler.jsonc"),
     runtime: await baseConfig("../packages/gatekeeper-runtime/wrangler.jsonc"),
+    chat: await chatBaseConfig(),
   };
+}
+
+/**
+ * The chat package's base config, read from disk like every other one once it exists.
+ *
+ * It is owned by a separate stream, so until it lands this stands in for it -- with the keys
+ * `deploy.ts` and these tests actually read, in the shape its `wrangler.jsonc` declares. A stale
+ * stand-in cannot hide a drift for long: the moment the file exists it is what is read, and the
+ * assertions below are written against the real one.
+ */
+async function chatBaseConfig(): Promise<ProdWranglerConfig> {
+  const path = "../packages/gatekeeper-chat/wrangler.jsonc";
+  if (!existsSync(new URL(path, import.meta.url))) {
+    return {
+      name: "gatekeeper-chat",
+      main: ".wrangler/validate/src/index.ts",
+      migrations: [{ tag: "v0", new_sqlite_classes: ["ChatWorkspace"] }],
+      assets: { binding: "ASSETS", directory: "./app/dist" },
+      vars: { MAX_UPLOAD_BYTES: 1 },
+      r2_buckets: [{ binding: "FILES" }],
+    };
+  }
+  return baseConfig(path);
 }
 
 // Parsed the way `deploy.ts` parses it, errors included. Swallowing them would let a base config
@@ -381,6 +408,7 @@ test("gives the router the public route, frontend, and HTTP-serving bindings", a
     { binding: "GATEKEEPER_CONTEXT", service: "acme-cloudflare-os-context" },
     { binding: "GATEKEEPER_SCHEDULER", service: "acme-cloudflare-os-scheduler" },
     { binding: "GATEKEEPER_CUSTOM", service: "acme-cloudflare-os-custom" },
+    { binding: "GATEKEEPER_CHAT", service: "acme-cloudflare-os-chat" },
   ]);
   assert.equal(generated.router.services.some(
     (service) => service.binding === "GATEKEEPER_PROCGEN"), false);
@@ -821,4 +849,195 @@ test("runtime is opt-in, private, bounded, and bound only to Workshop", async ()
   assert.ok(buildCommands(config).some(c => c.args.includes('gatekeeper-runtime')));
   for (const maxInstances of [0, 21, 1.5]) assert.throws(() => validateConfig(variant(c => { c.runtime = { ...config.runtime, maxInstances }; })), /runtime/);
   assert.throws(() => validateConfig(variant(c => { c.runtime = { ...config.runtime, workerName: c.workers.workshop.name }; })), /unique|distinct|name/i);
+});
+
+/**
+ * Chat is two bindings on two Workers for two different reasons: the router's plain-fetch one is
+ * what makes /gatekeeper/chat a URL at all, and the Workshop's vendor one is the agent's ambient
+ * session. Only the first is part of `chat.enabled`.
+ */
+test("serves chat through the router and provisions its own storage", async () => {
+  const bases = await baseConfigs();
+  const generated = generateConfigs(validConfig, bases);
+  const chat = generated.chat!;
+
+  assert.equal(chat.name, "acme-cloudflare-os-chat");
+  assert.equal(chat.workers_dev, false);
+  assert.equal(chat.preview_urls, false);
+  assert.equal(chat.routes, undefined);
+  // The same Access trust boundary and admin list the Workshop gets: chat verifies the assertion
+  // itself rather than trusting the router.
+  assert.deepEqual(chat.vars, {
+    ADMINS: ["admin@example.com"],
+    CF_ACCESS_ISS: "https://acme.cloudflareaccess.com",
+    CF_ACCESS_AUD: "access-audience",
+    PUBLIC_BASE_URL: "https://os.example.com",
+    MAX_UPLOAD_BYTES: 10485760,
+  });
+  // ADMINS in the structured form, not a joined string: the same value the Workshop receives.
+  assert.deepEqual(chat.vars!.ADMINS, generated.workshop.vars!.ADMINS);
+  assert.deepEqual(chat.r2_buckets, [
+    { binding: "FILES", bucket_name: "acme-cloudflare-os-chat-files" },
+  ]);
+  // Inherited untouched, unlike the Workshop's: chat serves its own SPA behind its own auth check.
+  assert.deepEqual(chat.assets, bases.chat!.assets);
+  assert.equal(chat.assets!.binding, "ASSETS");
+  // The DO the messages live in has to arrive verbatim.
+  assert.deepEqual(chat.migrations, bases.chat!.migrations);
+  assert.deepEqual(chat.migrations![0].new_sqlite_classes, ["ChatWorkspace"]);
+
+  // No entrypoint on the router binding: the router forwards whole HTTP requests, WebSocket
+  // upgrades included, and GATEKEEPER_CHAT is what selects /gatekeeper/chat.
+  assert.deepEqual(
+    generated.router.services!.find((service) => service.binding === "GATEKEEPER_CHAT"),
+    { binding: "GATEKEEPER_CHAT", service: "acme-cloudflare-os-chat" });
+  // Agent access is a separate switch, so the vendor binding is absent by default.
+  assert.equal(generated.workshop.services!.some(
+    (service) => service.binding === "GATEKEEPER_CHAT"), false);
+
+  assert.ok(buildCommands(validConfig).some(({ args }) => args.includes("gatekeeper-chat")));
+});
+
+test("binds chat to the Workshop as a vendor only under chat.agentAccess", async () => {
+  const bases = await baseConfigs();
+  const config = variant((c) => { c.chat.agentAccess = true; });
+
+  const services = generateConfigs(config, bases).workshop.services!;
+  assert.deepEqual(services.find((service) => service.binding === "GATEKEEPER_CHAT"), {
+    binding: "GATEKEEPER_CHAT",
+    service: "acme-cloudflare-os-chat",
+    entrypoint: "GatekeeperVendor",
+  });
+  // The router keeps its plain-fetch binding either way; the two are not alternatives.
+  assert.deepEqual(
+    generateConfigs(config, bases).router.services!.find((s) => s.binding === "GATEKEEPER_CHAT"),
+    { binding: "GATEKEEPER_CHAT", service: "acme-cloudflare-os-chat" });
+
+  // Agent access without a chat Worker to bind is a mistake, not a no-op.
+  assert.throws(
+    () => validateConfig(variant((c) => { c.chat = { enabled: false, agentAccess: true }; })),
+    /agentAccess is true while chat.enabled is false/i);
+});
+
+test("generates nothing chat-related when chat is disabled or absent", async () => {
+  const bases = await baseConfigs();
+
+  for (const config of [
+    variant((c) => { c.chat.enabled = false; }),
+    variant((c) => { delete c.chat; delete c.workers.chat; }),
+    // A dormant block is not validated, the way a disabled AI Gateway block is not: placeholders and
+    // junk in it must not block a deploy that never reads it.
+    variant((c) => {
+      c.chat = { enabled: false, filesBucket: "", maxUploadBytes: 0 };
+      c.workers.chat = { name: "<CHAT_WORKER_NAME>" };
+    }),
+  ]) {
+    const generated = generateConfigs(config, bases);
+    assert.equal(generated.chat, undefined);
+    assert.equal(generated.router.services!.some((s) => s.binding === "GATEKEEPER_CHAT"), false);
+    assert.equal(generated.workshop.services!.some((s) => s.binding === "GATEKEEPER_CHAT"), false);
+    assert.equal(buildCommands(config).some(({ args }) => args.includes("gatekeeper-chat")), false);
+    assert.equal(deployOrder(config).includes("chat"), false);
+  }
+
+  // A disabled chat name is free to collide, because nothing is deployed under it.
+  validateConfig(variant((c) => {
+    c.chat.enabled = false;
+    c.workers.chat.name = c.workers.workshop.name;
+  }));
+  assert.throws(
+    () => validateConfig(variant((c) => { c.workers.chat.name = c.workers.workshop.name; })),
+    /unique/i);
+  assert.throws(
+    () => validateConfig(variant((c) => { delete c.workers.chat; })),
+    /Missing required deployment value: workers.chat.name/);
+});
+
+test("adopts an existing uploads bucket or leaves it to be provisioned", async () => {
+  const bases = await baseConfigs();
+
+  assert.deepEqual(
+    generateConfigs(variant((c) => { c.chat.filesBucket = null; }), bases).chat!.r2_buckets,
+    [{ binding: "FILES" }]);
+  assert.deepEqual(
+    generateConfigs(variant((c) => { c.chat.filesBucket = "team-chat-files"; }), bases)
+      .chat!.r2_buckets,
+    [{ binding: "FILES", bucket_name: "team-chat-files" }]);
+
+  for (const filesBucket of ["", "  ", 42, true]) {
+    assert.throws(() => validateConfig(variant((c) => { c.chat.filesBucket = filesBucket; })),
+      /chat.filesBucket must be null or an existing R2 bucket name/, String(filesBucket));
+  }
+});
+
+test("caps a chat upload at what one Worker request body can carry", () => {
+  for (const maxUploadBytes of [0, -1, 1.5, "10485760", 100 * 1024 * 1024 + 1]) {
+    assert.throws(() => validateConfig(variant((c) => { c.chat.maxUploadBytes = maxUploadBytes; })),
+      /chat.maxUploadBytes/, String(maxUploadBytes));
+  }
+  validateConfig(variant((c) => { c.chat.maxUploadBytes = 100 * 1024 * 1024; }));
+
+  assert.throws(() => validateConfig(variant((c) => { c.chat = { enabled: "true" }; })),
+    /chat.enabled must be a boolean/);
+  assert.throws(() => validateConfig(variant((c) => { c.chat = []; })),
+    /chat must be an object/);
+  assert.throws(() => validateConfig(variant((c) => { c.chat.agentAccess = "yes"; })),
+    /chat.agentAccess must be a boolean/);
+});
+
+/**
+ * Chat's dev identity wrapper is switched on by `DEV_IDENTITIES` in its `wrangler.dev.jsonc`. In
+ * production that var is an identity bypass sitting behind the Access-protected hostname, so a
+ * generated config carrying one -- or any other `DEV_*` value, from any base config -- must not
+ * reach a deploy.
+ */
+test("refuses a production config carrying a dev identity bypass", async () => {
+  const bases = await baseConfigs();
+
+  // Caught in the base config, which is the only place it survives: the chat Worker's generated vars
+  // are written from deployment.jsonc, so a var read from wrangler.dev.jsonc is overwritten and the
+  // result alone would look clean.
+  const withDevVar = structuredClone(bases);
+  withDevVar.chat!.vars = { ...withDevVar.chat!.vars, DEV_IDENTITIES: "alice@example.com" };
+  assert.throws(() => generateConfigs(validConfig, withDevVar),
+    /chat: base wrangler.jsonc carries dev-only value\(s\) DEV_IDENTITIES/);
+
+  // Any DEV_* var, on any Worker: the rule is the prefix, not the one name.
+  const otherWorker = structuredClone(bases);
+  otherWorker.scheduler.vars = { DEV_BYPASS: "1" };
+  assert.throws(() => generateConfigs(validConfig, otherWorker), /dev-only value\(s\) DEV_BYPASS/);
+
+  // Including a required secret, which is how a dev signing key would arrive.
+  const devSecret = structuredClone(bases);
+  devSecret.chat!.secrets = { required: ["DEV_IDENTITY_SECRET"] };
+  assert.throws(() => generateConfigs(validConfig, devSecret), /DEV_IDENTITY_SECRET/);
+
+  // And the tell no var would show: chat's dev config differs from its production one in `main`.
+  const devEntry = structuredClone(bases);
+  devEntry.chat!.main = ".wrangler/validate/src/dev/entry.ts";
+  assert.throws(() => generateConfigs(validConfig, devEntry), /dev entry point/);
+
+  // The real base configs carry none, which is the case this guards.
+  generateConfigs(validConfig, bases);
+});
+
+test("deploys chat before the Workshop and the router", () => {
+  const order = deployOrder(validConfig);
+
+  assert.ok(order.indexOf("chat") < order.indexOf("workshop"), order.join(" "));
+  assert.ok(order.indexOf("chat") < order.indexOf("router"), order.join(" "));
+  // The router stays last: it binds every Worker before it.
+  assert.equal(order.at(-1), "router");
+  assert.equal(order.at(-2), "workshop");
+  // Every Worker is deployed exactly once, and only the ones this deployment enables.
+  assert.equal(new Set(order).size, order.length);
+  assert.deepEqual(deployOrder(variant((c) => {
+    c.chat.enabled = false;
+    c.errorReporting = { enabled: false };
+  })), ["context", "scheduler", "procgen", "customGatekeeper", "workshop", "router"]);
+  // Enabled: after every Worker it does not bind, before the two that bind it.
+  assert.deepEqual(order, [
+    "errorReporter", "context", "scheduler", "procgen", "customGatekeeper", "chat",
+    "workshop", "router",
+  ]);
 });

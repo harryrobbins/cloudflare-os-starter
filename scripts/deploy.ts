@@ -30,11 +30,17 @@ const packageDirs = {
   customGatekeeper: "packages/custom-gatekeeper",
   errorReporter: "packages/error-reporter",
   runtime: "packages/gatekeeper-runtime",
+  chat: "packages/gatekeeper-chat",
 } as const;
 const generatedPaths = Object.fromEntries(
   Object.entries(packageDirs).map(([name, dir]) => [name, join(root, dir, generatedName)]),
 ) as Record<keyof typeof packageDirs, string>;
 const defaultContextArtifactsNamespace = "gatekeeper-context-collections";
+// One chat upload arrives as a single Worker request body, and 100 MiB is what the platform accepts:
+// https://developers.cloudflare.com/workers/platform/limits/#request-limits
+const maxChatUploadBytes = 100 * 1024 * 1024;
+// The chat SPA is uploaded from here through the Worker's own `assets` binding.
+const chatAssetsDir = "app/dist";
 const accountIdPattern = /^[a-f\d]{32}$/i;
 
 const requiredPaths = [
@@ -69,6 +75,10 @@ const aiGatewayPaths = [
 const errorReportingPaths = [
   "workers.errorReporter.name",
   "errorReporting.environment",
+];
+
+const chatPaths = [
+  "workers.chat.name",
 ];
 
 const resourcePaths = [
@@ -169,6 +179,7 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
     ...requiredPaths,
     ...(config.aiGateway?.enabled ? aiGatewayPaths : []),
     ...(config.errorReporting?.enabled ? errorReportingPaths : []),
+    ...(config.chat?.enabled ? chatPaths : []),
   ];
   for (const path of activePaths) {
     const value = valueAt(config, path);
@@ -192,6 +203,15 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
       ...activeConfig,
       workers: { ...activeConfig.workers, errorReporter: undefined },
       errorReporting: { enabled: false },
+    };
+  }
+  if (!config.chat?.enabled) {
+    // Dormant, like a disabled Error Reporter: a placeholder left in a chat block nobody deploys is
+    // not a reason to refuse the deploy.
+    activeConfig = {
+      ...activeConfig,
+      workers: { ...activeConfig.workers, chat: undefined },
+      chat: undefined,
     };
   }
   const placeholder = JSON.stringify(activeConfig).match(/<[^>]+>/)?.[0];
@@ -230,10 +250,13 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
   }
   const workerNames = Object.entries(config.workers)
     .filter(([key]) => key !== "errorReporter" || config.errorReporting.enabled)
-    .map(([, worker]) => worker.name);
+    // A dormant chat name may collide with nothing, because no chat Worker is deployed for it.
+    .filter(([key]) => key !== "chat" || (config.chat?.enabled ?? false))
+    .map(([, worker]) => worker!.name);
   if (new Set(workerNames).size !== workerNames.length) {
     throw new Error(
-      "Router, Workshop, Context, Scheduler, Synthetic Data, and custom Gatekeeper names must be unique.");
+      "Router, Workshop, Context, Scheduler, Synthetic Data, chat, and custom Gatekeeper names must " +
+      "be unique.");
   }
   if (!workerNames.every((name) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(name))) {
     throw new Error("Worker names must use lowercase letters, numbers, and hyphens.");
@@ -279,6 +302,7 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
   }
 
   validateAiGateway(config);
+  validateChat(config);
 
   if (typeof config.errorReporting.enabled !== "boolean") {
     throw new Error("Error reporting enabled must be a boolean.");
@@ -476,6 +500,44 @@ function validateAiGatewayModels(config: DeploymentConfig): void {
   }
 }
 
+/**
+ * The team chat block. Dormant unless enabled, like `aiGateway`: a disabled deployment generates no
+ * chat Worker, so nothing else in the block has to be valid.
+ */
+function validateChat(config: DeploymentConfig): void {
+  const chat = config.chat;
+  if (chat === undefined) return;
+  if (chat === null || typeof chat !== "object" || Array.isArray(chat)) {
+    throw new Error('chat must be an object when present. Use { "enabled": false } to turn it off.');
+  }
+  if (typeof chat.enabled !== "boolean") {
+    throw new Error("chat.enabled must be a boolean.");
+  }
+  if (!chat.enabled) {
+    if (chat.agentAccess) {
+      throw new Error(
+        "chat.agentAccess is true while chat.enabled is false: there would be no chat Worker for " +
+        "the Workshop to bind. Enable chat, or drop agentAccess.");
+    }
+    return;
+  }
+  if (chat.filesBucket !== null &&
+      (typeof chat.filesBucket !== "string" || !chat.filesBucket.trim())) {
+    throw new Error(
+      "chat.filesBucket must be null or an existing R2 bucket name. null lets Wrangler provision " +
+      "one and remember it; a name adopts a bucket, which is how uploads survive a rename.");
+  }
+  if (!Number.isInteger(chat.maxUploadBytes) || chat.maxUploadBytes <= 0 ||
+      chat.maxUploadBytes > maxChatUploadBytes) {
+    throw new Error(
+      `chat.maxUploadBytes must be a positive integer of at most ${maxChatUploadBytes}: one upload ` +
+      "arrives as a single Worker request body, and that is the platform's own limit.");
+  }
+  if (chat.agentAccess !== undefined && typeof chat.agentAccess !== "boolean") {
+    throw new Error("chat.agentAccess must be a boolean when present.");
+  }
+}
+
 /** `aiGateway.models` with empty providers dropped, or undefined when nothing remains. */
 function extraModels(config: DeploymentConfig): AiGatewayModels | undefined {
   const entries = Object.entries(config.aiGateway.models ?? {})
@@ -522,6 +584,9 @@ function setCommon(
 
 export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): GeneratedConfigs {
   validateConfig(config);
+  // Before anything is derived from them: a var this script overwrites would otherwise vanish from
+  // the result, and with it the evidence that a *dev* base config was read.
+  requireNoDevValues(bases, "base wrangler.jsonc");
   const router = structuredClone(bases.router);
   const workshop = structuredClone(bases.workshop);
   const context = structuredClone(bases.context);
@@ -533,6 +598,8 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     : undefined;
   const runtime = config.runtime?.enabled ? structuredClone(bases.runtime) : undefined;
   if (config.runtime?.enabled && !runtime) throw new Error("Python runtime base configuration is required.");
+  const chat = config.chat?.enabled ? structuredClone(bases.chat) : undefined;
+  if (config.chat?.enabled && !chat) throw new Error("Team chat base configuration is required.");
   const origin = publicOrigin(config);
 
   setCommon(router, config, config.workers.router.name, config.workers.router.route);
@@ -543,6 +610,12 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     { binding: "GATEKEEPER_CONTEXT", service: config.workers.context.name },
     { binding: "GATEKEEPER_SCHEDULER", service: config.workers.scheduler.name },
     { binding: "GATEKEEPER_CUSTOM", service: config.workers.customGatekeeper.name },
+    // Chat is the one Gatekeeper here that is also a web app: this binding is what routes
+    // /gatekeeper/chat -- the SPA, its JSON API, its WebSocket upgrade and its file downloads -- to
+    // it. Plain fetch, like the three above.
+    ...(config.chat?.enabled
+      ? [{ binding: "GATEKEEPER_CHAT", service: config.workers.chat!.name }]
+      : []),
   ];
 
   setCommon(workshop, config, config.workers.workshop.name);
@@ -617,6 +690,16 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
       service: config.workers.customGatekeeper.name,
       entrypoint: "GatekeeperVendor",
     },
+    // The agent-facing half of chat, and the only part of it that is opt-in: `chat.enabled` deploys
+    // the app, `chat.agentAccess` hands every workspace an ambient ChatSession. Separate because the
+    // app is useful without it, and because this binding names an entrypoint on a Worker deployed
+    // moments earlier in the same run -- pointing it at a chat build that does not export
+    // `GatekeeperVendor` yet would fail the *Workshop* deploy, for a reason nothing in chat explains.
+    ...(config.chat?.enabled && config.chat.agentAccess ? [{
+      binding: "GATEKEEPER_CHAT",
+      service: config.workers.chat!.name,
+      entrypoint: "GatekeeperVendor",
+    }] : []),
   ];
   if (runtime && config.runtime) {
     setCommon(runtime, config, config.runtime.workerName);
@@ -670,11 +753,70 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     setCommon(errorReporter, config, config.workers.errorReporter!.name);
   }
 
-  return {
+  if (chat && config.chat) {
+    setCommon(chat, config, config.workers.chat!.name);
+    chat.vars = {
+      // The same trust boundary the Workshop gets, because chat verifies the Access JWT itself on
+      // every request and WebSocket upgrade rather than trusting the router. ADMINS in the same
+      // structured form: admin powers come from the deployment, never from a client flag.
+      ADMINS: config.access.admins,
+      CF_ACCESS_ISS: config.access.issuer.replace(/\/$/, ""),
+      CF_ACCESS_AUD: config.access.audience,
+      // Chat is reached through the router, so its absolute links and permalinks are the router's
+      // origin plus /gatekeeper/chat, not a hostname of its own.
+      PUBLIC_BASE_URL: origin,
+      // A number, not a string: wrangler passes structured vars through verbatim, as it does ADMINS.
+      MAX_UPLOAD_BYTES: config.chat.maxUploadBytes,
+    };
+    chat.r2_buckets = [
+      { binding: "FILES", ...(config.chat.filesBucket
+        ? { bucket_name: config.chat.filesBucket } : {}) },
+    ];
+    // `assets` is inherited untouched, unlike the Workshop's: chat serves its own SPA from
+    // `app/dist` behind its own Access check (`run_worker_first`), and the router only proxies to it.
+  }
+
+  const generated: GeneratedConfigs = {
     router, workshop, context, scheduler, procgen, customGatekeeper,
     ...(errorReporter && { errorReporter }),
     ...(runtime && { runtime }),
+    ...(chat && { chat }),
   };
+  requireNoDevValues(generated, "generated production config");
+  return generated;
+}
+
+/**
+ * No sign-in bypass in a deployed config.
+ *
+ * Chat has a dev-only identity wrapper, switched on by `DEV_IDENTITIES` in its `wrangler.dev.jsonc`;
+ * in production that var is an identity bypass sitting behind the Access-protected hostname. Applied
+ * to the base configs and to the generated ones, because the two catch different mistakes: a `DEV_*`
+ * var this script happens to overwrite would disappear from the result, taking with it the only sign
+ * that a dev base config was read, while one on a Worker whose vars are inherited only ever shows up
+ * in the result. Nothing here is chat-specific: the rule is the prefix, on every Worker.
+ */
+function requireNoDevValues(configs: BaseConfigs | GeneratedConfigs, where: string): void {
+  for (const [name, worker] of
+       Object.entries(configs) as [string, ProdWranglerConfig | undefined][]) {
+    const offenders = [
+      ...Object.keys(worker?.vars ?? {}),
+      ...(worker?.secrets?.required ?? []),
+    ].filter((key) => key.startsWith("DEV_"));
+    if (offenders.length) {
+      throw new Error(
+        `${name}: ${where} carries dev-only value(s) ${offenders.join(", ")}. DEV_IDENTITIES and ` +
+        "anything else DEV_* belongs to wrangler.dev.jsonc only -- in production it is an identity " +
+        "bypass behind the Access-protected hostname.");
+    }
+    // The other half of the same mistake, and the one no var would reveal: chat's dev config differs
+    // from its production one mainly in `main`, which boots the dev-identity entry point.
+    if (worker?.main?.includes("/dev/")) {
+      throw new Error(
+        `${name}: ${where} has a dev entry point (main: ${worker.main}). Production must boot the ` +
+        "module with no identity bypass in it.");
+    }
+  }
 }
 
 // `--no-cache` goes before the task name. Everything after it is `[ADDITIONAL_ARGS]`, forwarded to
@@ -735,6 +877,11 @@ export function buildCommands(config: DeploymentConfig): BuildCommand[] {
     { args: ownBuild("gatekeeper-procgen") },
     { args: ownBuild("custom-gatekeeper") },
     ...(config.runtime?.enabled ? [{ args: ownBuild("gatekeeper-runtime") }] : []),
+    // Chat's `build` is the Vite build of its SPA into `app/dist`, which its `assets` binding
+    // uploads. The Worker half needs no step here: the package's wrangler.jsonc declares the
+    // capnweb-validate build as a `build.command`, so wrangler runs it at deploy time, exactly as the
+    // custom Gatekeeper's does.
+    ...(config.chat?.enabled ? [{ args: ownBuild("gatekeeper-chat") }] : []),
     ...(config.errorReporting.enabled ? [{ args: ownBuild("error-reporter") }] : []),
     // Access mode is a build-time constant in the frontend bundle (`src/useAuth.ts`), so it is set
     // here rather than inherited: a bundle built under a different value is wrong, not just stale.
@@ -748,6 +895,29 @@ export function buildCommands(config: DeploymentConfig): BuildCommand[] {
         env: { FORMAT_BLUEPRINTS_DIR: formatBlueprintsPath(config.formatBlueprintsDir) },
       }),
     },
+  ];
+}
+
+/**
+ * The Workers to deploy, in order. Data rather than a sequence of calls so the order is testable:
+ * every binding points *backwards* in this list, so a deploy that fails part-way leaves the previous
+ * Workers bound to what they were bound to before.
+ *
+ * Chat comes before the Workshop and the router because both bind it: the router to route
+ * /gatekeeper/chat, the Workshop (when `chat.agentAccess`) to reach its Gatekeeper vendor.
+ */
+export function deployOrder(config: DeploymentConfig): (keyof typeof packageDirs)[] {
+  return [
+    ...(config.errorReporting.enabled ? ["errorReporter" as const] : []),
+    "context",
+    "scheduler",
+    "procgen",
+    "customGatekeeper",
+    ...(config.runtime?.enabled ? ["runtime" as const] : []),
+    ...(config.chat?.enabled ? ["chat" as const] : []),
+    "workshop",
+    // Last: it binds every one of the above.
+    "router",
   ];
 }
 
@@ -770,6 +940,38 @@ function requireFormatBlueprints(config: DeploymentConfig): void {
   const missing = archives.filter((f) => !existsSync(join(dir, f.replace(/\.gadget$/, ".json"))));
   if (missing.length) {
     throw new Error(`formatBlueprintsDir: no .json sidecar beside ${missing.join(", ")}.`);
+  }
+}
+
+/**
+ * The chat package has to be on disk before anything can be generated for it: its base
+ * `wrangler.jsonc` is where the DO migrations, the `assets` block and the capnweb-validate build step
+ * come from. Said in one line here rather than as an ENOENT from the config reader.
+ */
+function requireChatPackage(config: DeploymentConfig): void {
+  if (!config.chat?.enabled) return;
+  if (!existsSync(join(root, packageDirs.chat, "wrangler.jsonc"))) {
+    throw new Error(
+      `chat.enabled is true but ${packageDirs.chat}/wrangler.jsonc is missing. Add the package, or ` +
+      "set chat.enabled to false.");
+  }
+}
+
+/**
+ * The chat SPA, after the build that produces it and only on a real deploy.
+ *
+ * wrangler uploads `app/dist` through the Worker's `assets` binding and does not mind that it is
+ * empty, so a build that never ran deploys an origin answering /gatekeeper/chat/ with nothing. A
+ * `--check` dry run uploads no assets, so it does not need the directory to exist.
+ */
+function requireChatAssets(config: DeploymentConfig): void {
+  if (!config.chat?.enabled) return;
+  const entry = join(root, packageDirs.chat, chatAssetsDir, "index.html");
+  if (!existsSync(entry)) {
+    throw new Error(
+      `${packageDirs.chat}/${chatAssetsDir}/index.html is missing, so the chat Worker would deploy ` +
+      "with no app. Its `build` task must build the SPA into " +
+      `${chatAssetsDir} (pnpm --filter gatekeeper-chat build).`);
   }
 }
 
@@ -884,6 +1086,7 @@ async function main(): Promise<void> {
   requireSubmodule();
   const config = await readDeployment(join(root, "deployment.jsonc"));
   requireFormatBlueprints(config);
+  requireChatPackage(config);
   const generated = generateConfigs(config, {
     router: await readJsonc(join(root, packageDirs.router, "wrangler.jsonc")),
     workshop: await readJsonc(join(root, packageDirs.workshop, "wrangler.jsonc")),
@@ -893,6 +1096,7 @@ async function main(): Promise<void> {
     customGatekeeper: await readJsonc(join(root, packageDirs.customGatekeeper, "wrangler.jsonc")),
     errorReporter: await readJsonc(join(root, packageDirs.errorReporter, "wrangler.jsonc")),
     ...(config.runtime?.enabled ? { runtime: await readJsonc(join(root, packageDirs.runtime, "wrangler.jsonc")) } : {}),
+    ...(config.chat?.enabled ? { chat: await readJsonc(join(root, packageDirs.chat, "wrangler.jsonc")) } : {}),
   });
   reportAiGateway(config);
 
@@ -906,17 +1110,10 @@ async function main(): Promise<void> {
     if (check) run(["test"]);
     build(config);
     const deployArgs = check ? ["--dry-run"] : [];
-    if (config.errorReporting.enabled) {
-      deployWorker(packageDirs.errorReporter, deployArgs);
+    if (!check) requireChatAssets(config);
+    for (const name of deployOrder(config)) {
+      deployWorker(packageDirs[name], deployArgs);
     }
-    deployWorker(packageDirs.context, deployArgs);
-    deployWorker(packageDirs.scheduler, deployArgs);
-    deployWorker(packageDirs.procgen, deployArgs);
-    deployWorker(packageDirs.customGatekeeper, deployArgs);
-    if (config.runtime?.enabled) deployWorker(packageDirs.runtime, deployArgs);
-    deployWorker(packageDirs.workshop, deployArgs);
-    // Last: it binds every one of the above.
-    deployWorker(packageDirs.router, deployArgs);
   } finally {
     await Promise.all(Object.values(generatedPaths).map((path) => rm(path, { force: true })));
   }
