@@ -46,7 +46,11 @@ describe("spike: assets under a base prefix, through a service binding", () => {
     const response = await env.ROUTER.fetch(`${ORIGIN}${hashedModule}`);
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toMatch(/javascript/);
-    expect(await response.text()).toContain("Signed in as");
+    // Module bytes, not the shell: the SPA fallback must not have answered instead. Asserting on a
+    // string from the app itself would tie this spike to whatever stream B has built today.
+    const body = await response.text();
+    expect(body.length).toBeGreaterThan(0);
+    expect(body).not.toContain("<!doctype html");
   });
 
   it("404s an asset that does not exist rather than serving the shell", async () => {

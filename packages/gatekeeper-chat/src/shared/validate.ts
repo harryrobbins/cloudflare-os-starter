@@ -16,6 +16,7 @@ import {
   MAX_PURPOSE_LENGTH,
   MAX_SUBSCRIPTIONS,
   MAX_TOPIC_LENGTH,
+  MENTION_TOKEN_SOURCE,
   type ChannelKind,
   type ClientEvent,
   type CreateChannelRequest,
@@ -27,6 +28,7 @@ import {
   type PushSubscribeRequest,
   type SendMessageRequest,
   type UpdateChannelRequest,
+  type UpdateMembershipRequest,
   type UpdateMeRequest,
 } from "./protocol.js";
 
@@ -208,6 +210,27 @@ export function parseUpdateChannel(input: unknown): Result<UpdateChannelRequest>
   return ok(result);
 }
 
+/**
+ * Per-conversation preferences. Every field is optional, but a body that changes nothing is rejected
+ * rather than answered with an unchanged row: it is always a client bug.
+ */
+export function parseUpdateMembership(input: unknown): Result<UpdateMembershipRequest> {
+  if (!isRecord(input)) return fail("body must be an object");
+  const notify = optionalEnum(input, "notify", NOTIFY_LEVELS);
+  if (!notify.ok) return notify;
+  const muted = optionalBoolean(input, "muted");
+  if (!muted.ok) return muted;
+  const starred = optionalBoolean(input, "starred");
+  if (!starred.ok) return starred;
+  const result: UpdateMembershipRequest = {
+    ...(notify.value === undefined ? {} : { notify: notify.value }),
+    ...(muted.value === undefined ? {} : { muted: muted.value }),
+    ...(starred.value === undefined ? {} : { starred: starred.value }),
+  };
+  if (Object.keys(result).length === 0) return fail("body must change at least one field");
+  return ok(result);
+}
+
 export function parseMarkRead(input: unknown): Result<MarkReadRequest> {
   if (!isRecord(input)) return fail("body must be an object");
   const hasSeq = input["seq"] !== undefined;
@@ -290,6 +313,29 @@ export function parsePushSubscribe(input: unknown): Result<PushSubscribeRequest>
   const auth = requiredString(input, "auth", 256);
   if (!auth.ok) return auth;
   return ok({ endpoint: endpoint.value, p256dh: p256dh.value, auth: auth.value });
+}
+
+// --- mention tokens ---------------------------------------------------------
+
+/** The token autocomplete inserts for a person. Both halves of the app build it from here. */
+export function mentionToken(userId: string): string {
+  return `<@${userId}>`;
+}
+
+/**
+ * Every distinct user id mentioned in a body, in first-appearance order.
+ *
+ * Extraction only: the caller still has to check each id against a real user before writing a
+ * `mentions` row, because a body is client-supplied text and a token can name anybody.
+ */
+export function extractMentionIds(body: string): readonly string[] {
+  const pattern = new RegExp(MENTION_TOKEN_SOURCE, "gu");
+  const seen = new Set<string>();
+  for (const match of body.matchAll(pattern)) {
+    const id = match[1];
+    if (id !== undefined) seen.add(id);
+  }
+  return [...seen];
 }
 
 /** A reaction emoji arrives as a path segment, so it is validated on its own. */
@@ -393,6 +439,13 @@ export function parseClientEvent(raw: string | ArrayBuffer): Result<ClientEvent>
 }
 
 // --- helpers ----------------------------------------------------------------
+
+function optionalBoolean(source: Json, key: string): Result<boolean | undefined> {
+  if (!(key in source) || source[key] === undefined) return ok(undefined);
+  const raw = source[key];
+  if (typeof raw !== "boolean") return fail(`${key} must be true or false`);
+  return ok(raw);
+}
 
 function optionalEnum<T extends string>(source: Json, key: string, allowed: readonly T[]): Result<T | undefined> {
   if (!(key in source) || source[key] === undefined) return ok(undefined);

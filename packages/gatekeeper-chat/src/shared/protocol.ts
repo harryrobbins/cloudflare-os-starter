@@ -23,6 +23,8 @@ export type Timestamp = number;
 // ---------------------------------------------------------------------------
 
 export type ChannelKind = "public" | "private" | "dm" | "group";
+/** `agent` is the one built-in account; everyone else signs in through Access. */
+export type UserKind = "person" | "agent";
 export type MessageKind = "user" | "system" | "agent";
 export type NotifyLevel = "all" | "mentions" | "none";
 export type MentionKind = "user" | "channel" | "here" | "agent";
@@ -42,6 +44,8 @@ export interface User {
   readonly tz: string | null;
   /** Approximate: true while at least one WebSocket tagged with this id is connected. */
   readonly online: boolean;
+  /** Absent means `person`; only the built-in {@link AGENT_USER_ID} row is an `agent`. */
+  readonly kind?: UserKind;
 }
 
 export interface Channel {
@@ -156,6 +160,34 @@ export interface UserPrefs {
 }
 
 // ---------------------------------------------------------------------------
+// Built-in rows and the mention token
+// ---------------------------------------------------------------------------
+
+/**
+ * The reserved agent account. It is an implicit member of every public channel (the Durable Object
+ * materialises a membership row so every membership query stays one query), and it is the identity
+ * the Gatekeeper vendor uses when the agent reads or posts.
+ */
+export const AGENT_USER_ID: UserId = "agent";
+export const AGENT_USER_NAME = "Agent";
+
+/** Seeded on first boot. Public, and the one channel nobody may leave. */
+export const GENERAL_CHANNEL_ID: ChannelId = "general";
+export const GENERAL_CHANNEL_NAME = "general";
+
+/**
+ * A mention in a message body is an immutable id token, never a display name: names are neither
+ * unique nor stable (chat.md, "Unread and mention model"). Autocomplete inserts `<@userId>`; the
+ * server extracts the ids, checks them against real users, and stores them in `mentions`. The
+ * renderer resolves each token back to the current display name at paint time.
+ *
+ * The source string rather than a `RegExp`, because a shared global regex carries `lastIndex`
+ * between callers. {@link mentionToken} and `extractMentionIds` in `./validate.ts` build one per
+ * call.
+ */
+export const MENTION_TOKEN_SOURCE = String.raw`<@([A-Za-z0-9_-]{1,64})>`;
+
+// ---------------------------------------------------------------------------
 // Limits (shared so the client can reject before a round trip)
 // ---------------------------------------------------------------------------
 
@@ -185,6 +217,21 @@ export const RATE_LIMITS = {
   uploadsPerHour: 20,
   searchesPerMinute: 60,
 } as const;
+
+/**
+ * How often a connected client should send `{t:"ping"}`.
+ *
+ * Presence is derived from the newest frame each socket sent, not from close events, so a socket
+ * that stops pinging drops out of `presence` after {@link PRESENCE_TTL_MS} even though hibernation
+ * keeps it open.
+ */
+export const WS_HEARTBEAT_MS = 30_000;
+/** A socket counts as online while its last frame is newer than this. */
+export const PRESENCE_TTL_MS = 90_000;
+/** Minimum gap between two `typing` frames for one conversation; extra frames are dropped. */
+export const TYPING_THROTTLE_MS = 2_000;
+/** How long an uploaded but unattached object survives before the sweep alarm deletes it. */
+export const PENDING_UPLOAD_TTL_MS = 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -297,6 +344,26 @@ export interface ChannelResponse {
   readonly membership: Membership | null;
   /** A system message ("Harry archived #old") when the action produced one. */
   readonly systemMessage?: Message;
+}
+
+/**
+ * `PATCH /api/channels/:channelId/membership`
+ *
+ * Per-conversation preferences, all optional and independently settable. Separate from
+ * {@link UpdateChannelRequest}, which changes the channel for everybody: these three fields are the
+ * caller's own row in `memberships` and nobody else can see them.
+ */
+export interface UpdateMembershipRequest {
+  readonly notify?: NotifyLevel;
+  /** A muted conversation never badges, whatever `notify` says. */
+  readonly muted?: boolean;
+  readonly starred?: boolean;
+}
+
+/** `PATCH /api/channels/:channelId/membership`. Carries badges: muting changes the counts. */
+export interface MembershipResponse {
+  readonly membership: Membership;
+  readonly badges: BadgeSummary;
 }
 
 /**

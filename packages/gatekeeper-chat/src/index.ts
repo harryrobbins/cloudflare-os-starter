@@ -11,6 +11,11 @@ import { serveChat } from "./serve.js";
 
 export { ChatWorkspace } from "./workspace.js";
 
+// The agent-facing half, reached over RPC from the Workshop rather than over HTTP (see
+// `src/vendor/`). `ChatAccount`, `ChatVerifier` and `ChatGatekeeper` are resolved through
+// `ctx.exports`, which is why they only have to be exported from this module.
+export { ChatAccount, ChatGatekeeper, ChatVerifier, GatekeeperVendor } from "./vendor/index.js";
+
 export default {
   async fetch(request, env): Promise<Response> {
     const claims = await verifyCfAccessJwt(request, env);

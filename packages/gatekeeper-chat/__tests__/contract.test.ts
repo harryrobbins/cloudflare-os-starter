@@ -32,6 +32,7 @@ import {
   parseSendMessage,
   parseUpdateChannel,
   parseUpdateMe,
+  parseUpdateMembership,
 } from "../src/shared/validate.js";
 
 describe("routes", () => {
@@ -259,5 +260,21 @@ describe("env parsing", () => {
     expect(maxUploadBytes({})).toBe(MAX_UPLOAD_BYTES);
     expect(maxUploadBytes({ MAX_UPLOAD_BYTES: 0 })).toBe(MAX_UPLOAD_BYTES);
     expect(maxUploadBytes({ MAX_UPLOAD_BYTES: -5 })).toBe(MAX_UPLOAD_BYTES);
+  });
+});
+
+describe("parseUpdateMembership", () => {
+  it("accepts any subset of the three preferences", () => {
+    expect(parseUpdateMembership({ muted: true })).toEqual({ ok: true, value: { muted: true } });
+    expect(parseUpdateMembership({ notify: "mentions", starred: false })).toEqual({
+      ok: true,
+      value: { notify: "mentions", starred: false },
+    });
+  });
+
+  it("rejects an empty body and the wrong types", () => {
+    for (const body of [{}, { muted: "yes" }, { starred: 1 }, { notify: "hourly" }, "not an object"]) {
+      expect(parseUpdateMembership(body).ok, JSON.stringify(body)).toBe(false);
+    }
   });
 });

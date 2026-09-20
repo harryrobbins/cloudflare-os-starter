@@ -18,8 +18,16 @@ export interface ChatEnv {
   readonly CF_ACCESS_ISS: string;
   /** The Access application's AUD tag. */
   readonly CF_ACCESS_AUD: string;
-  /** JSON array of admin email addresses, mirroring `access.admins` in deployment.jsonc. */
-  readonly ADMINS: string;
+  /**
+   * Admin email addresses, mirroring `access.admins` in deployment.jsonc.
+   *
+   * Two shapes, both real: `scripts/deploy.ts` writes the generated config's `vars.ADMINS` as a JSON
+   * *array* and wrangler passes structured vars through verbatim, so production hands this Worker a
+   * `string[]`. `wrangler.jsonc` and `wrangler.dev.jsonc` carry the same value as a JSON *string*,
+   * which is what a hand-written config and the test bindings can express. Accept both rather than
+   * making one of them silently yield no admins.
+   */
+  readonly ADMINS: string | readonly string[];
   /** Public origin, e.g. `https://cfos.surprisingly.ltd`. Used for the `Origin` check. */
   readonly PUBLIC_BASE_URL: string;
   /**
@@ -44,15 +52,37 @@ export function maxUploadBytes(env: Pick<ChatEnv, "MAX_UPLOAD_BYTES">): number {
   return Number.isSafeInteger(configured) && configured > 0 ? configured : MAX_UPLOAD_BYTES;
 }
 
-/** Parses `ADMINS`. A malformed value yields no admins rather than throwing on every request. */
+/**
+ * The admin email list, normalized to lowercase.
+ *
+ * Accepts the array production supplies and the JSON string a hand-written config carries. A
+ * malformed value yields no admins rather than throwing on every request: losing admin powers is
+ * recoverable, a 500 on `/api/me` is not.
+ */
 export function adminEmails(env: Pick<ChatEnv, "ADMINS">): readonly string[] {
+  return normalizeEmails(readAdmins(env.ADMINS));
+}
+
+/** True when this email is an admin. Case-insensitive; an empty email is never an admin. */
+export function isAdminEmail(env: Pick<ChatEnv, "ADMINS">, email: string | null): boolean {
+  if (email === null || email.length === 0) return false;
+  return adminEmails(env).includes(email.trim().toLowerCase());
+}
+
+function readAdmins(value: string | readonly string[]): unknown {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return [];
   try {
-    const parsed: unknown = JSON.parse(env.ADMINS || "[]");
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
-      .map((entry) => entry.trim().toLowerCase());
+    return JSON.parse(value || "[]");
   } catch {
     return [];
   }
+}
+
+function normalizeEmails(parsed: unknown): readonly string[] {
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => entry.length > 0);
 }

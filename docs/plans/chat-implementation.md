@@ -27,21 +27,51 @@ Complete 2026-09-20. 79 tests green (`pnpm --filter gatekeeper-chat test:run`), 
 
 ## Stream A: Worker and Durable Object
 
-Stream 0 already provides: `src/access.ts` (verification), `src/serve.ts` (`originAllowed`, DO
-forwarding, the `x-chat-user` contract), `src/migrations.ts` (the runner; append version 2 onwards) and
-`src/workspace.ts` (`GET /api/me`, the `users` upsert). Build on those rather than replacing them.
+Complete 2026-09-20. `src/do/` (13 modules), migration 2, 198 tests green
+(`pnpm --filter gatekeeper-chat test:run`), `tsc --noEmit` clean, no lint findings outside `app/`.
 
-- [ ] Access JWT verification (`jose`) on every request and WebSocket upgrade; `Origin` check on upgrades and writes — *HTTP done in stream 0; the upgrade path lands with the WebSocket handler*
-- [ ] `ChatWorkspace` DO: numbered idempotent migrations, schema from the plan, `#general` seeded — *runner and `users` done in stream 0*
-- [ ] Users, channels, memberships, join/leave/archive, admin list from `ADMINS`
-- [ ] Messages: send (idempotent `clientId`), edit, delete (tombstone rule), threads with `reply_count`, reactions, mentions by user id
-- [ ] Unread: `last_read_seq`, manual unread marker, thread follows, badge summary
-- [ ] Search: FTS5 with qualifier parser, membership filter, `snippet()`, cursor paging
-- [ ] Uploads: multipart with hard byte cap, pending R2 object with expiry, atomic attach on send, magic-number image sniff, authenticated `files/:id` and thumb, cleanup alarm
-- [ ] WebSocket protocol: `sub`, `typing`, `read`, `ping`; server events; per-user tags; membership rechecked per command; presence with heartbeat expiry
-- [ ] Rate limits per user (messages, uploads, search)
-- [ ] Structured, redacted logs
-- [ ] Unit tests (vitest-pool-workers): migrations, unread arithmetic, search qualifiers, membership on every path, idempotency, rate limits
+- [x] Access JWT verification (`jose`) on every request and WebSocket upgrade; `Origin` check on upgrades and writes — the upgrade reaches the DO through the same `serveChat` path, so both checks already cover it
+- [x] `ChatWorkspace` DO: numbered idempotent migrations, schema from the plan, `#general` seeded
+- [x] Users, channels, memberships, join/leave/archive, admin list from `ADMINS`
+- [x] Messages: send (idempotent `clientId`), edit, delete (tombstone rule), threads with `reply_count`, reactions, mentions by user id
+- [x] Unread: `last_read_seq`, manual unread marker, thread follows, badge summary
+- [x] Search: FTS5 with qualifier parser, membership filter, `snippet()`, cursor paging
+- [x] Uploads: multipart with hard byte cap, pending R2 object with expiry, atomic attach on send, magic-number image sniff, authenticated `files/:id` and thumb, cleanup alarm
+- [x] WebSocket protocol: `sub`, `typing`, `read`, `ping`; server events; per-user tags; membership rechecked per command; presence with heartbeat expiry
+- [x] Rate limits per user (messages, uploads, search)
+- [x] Structured, redacted logs
+- [x] Unit tests (vitest-pool-workers): migrations, unread arithmetic, search qualifiers, membership on every path, idempotency, rate limits
+
+Decisions the other streams need:
+
+- **`protocol.ts` gained constants only, all additive**: `UserKind` and an optional `User.kind`;
+  `AGENT_USER_ID` / `AGENT_USER_NAME`; `GENERAL_CHANNEL_ID` / `GENERAL_CHANNEL_NAME`;
+  `MENTION_TOKEN_SOURCE`; and `WS_HEARTBEAT_MS`, `PRESENCE_TTL_MS`, `TYPING_THROTTLE_MS`,
+  `PENDING_UPLOAD_TTL_MS`. `validate.ts` gained `mentionToken()` and `extractMentionIds()`. Nothing
+  existing changed shape.
+- **A mention is the token `<@userId>`**, inserted by autocomplete and resolved against a real user at
+  post time. A token naming nobody stays plain text and writes no row.
+- **Subscriptions are a filter, not a permission.** Membership decides who may receive a channel
+  event; a socket that has subscribed receives only the channels it named, and a socket that has
+  subscribed to nothing receives everything it is entitled to. A public channel fans out to every
+  connected user, because anybody may browse one.
+- **Presence expires lazily.** Every inbound frame is a heartbeat; a user is online while one of their
+  sockets sent a frame inside `PRESENCE_TTL_MS` (90s) and clients ping every `WS_HEARTBEAT_MS` (30s).
+  There is no presence alarm — the only alarm is the pending-upload sweep — so the set is recomputed
+  when it is asked for and re-broadcast on connect and disconnect.
+- **Writing to a public channel joins you**, because the read cursor lives in the membership row. The
+  same is true of adding a reaction.
+- **Search dates are resolved in UTC** and the search cursor is a bounded offset; both are noted as
+  TODOs in `src/do/search.ts`. `GET files/:id/thumb` serves the full object until server-side
+  thumbnails exist (`src/do/files.ts`).
+- **A malformed search is `invalid_request` (400)**, since `ERROR_CODES` has no `validation` member.
+- **`PATCH /api/channels/:id/membership`** (added after the first pass, for the SPA rail) takes a
+  partial `{notify?, muted?, starred?}` and returns `{membership, badges}`, pushing a fresh `badge` to
+  the caller's sockets because muting changes the counts. It needs a membership row, so browsing a
+  public channel you have not joined is a 403 while a channel you cannot see is a 404. The three
+  fields were already on every `Membership` in `GET /api/channels`, so the rail reads them from there.
+  `UpdateMembershipRequest` and `MembershipResponse` are additive types; `parseUpdateMembership` is
+  the validator.
 
 ## Stream B: SPA
 
@@ -66,8 +96,23 @@ forwarding, the `x-chat-user` contract), `src/migrations.ts` (the runner; append
 
 ## Stream D: agent access
 
-- [ ] `GatekeeperVendor`, `ChatAccount` (auto-provisioned, singleton), `ChatSession` (public channels: list, read, search; post as approval-gated action), `getTypeScriptTypes`, README
-- [ ] Tests for observer policy and action approval
+Complete 2026-09-20. `packages/gatekeeper-chat/src/vendor/`, 23 tests in `__tests__/vendor.test.ts`.
+
+- [x] `GatekeeperVendor`, `ChatAccount` (auto-provisioned, singleton), `ChatSession` (public channels: list, read, search; post as approval-gated action), `getTypeScriptTypes`, README
+- [x] Tests for observer policy and action approval
+
+Notes for the other streams:
+
+- The vendor reaches chat through the **Durable Object's own HTTP API**, as the built-in `agent`
+  identity (`src/vendor/bridge.ts`), never through SQLite. It uses `listChannels`, `listMessages`
+  (with `before`, `limit`, `rootId`), `search` (`?q=&limit=&cursor=`), `sendMessage` and
+  `deleteMessage`. Two expectations of stream A beyond the header contract: `?rootId=` returns the
+  thread **including its root message**, and `GET /api/search` takes `q`, `limit` and `cursor`.
+- `ChatGatekeeper` is a Durable Object class, so `wrangler.jsonc` and `wrangler.dev.jsonc` gained a
+  `v1` migration for it and `worker-configuration.d.ts` lists it under `durableNamespaces`.
+- Posts are **not simulated**: every submission sets `awaitDecision`, and `revertAction()` deletes
+  the message. The observer policy accepts everyone, which is only sound while nothing private is
+  reachable -- README.md, "Agent access", is the thing to read before `/admin` enables it.
 
 ## Stream E: end-to-end
 

@@ -22,6 +22,15 @@
     {
       "tag": "v0",
       "new_sqlite_classes": ["ChatWorkspace"]
+    },
+    // The Gatekeeper facet class the Workshop instantiates under its Overseer (src/vendor/). It is
+    // reached through `ctx.exports`, so it needs no binding -- but every Durable Object class still
+    // needs a migration, and it stores the posts the agent has submitted for approval in its own
+    // SQLite-backed KV. A separate tag rather than an edit to v0: a tag that has already been
+    // applied must never change.
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ChatGatekeeper"]
     }
   ],
 

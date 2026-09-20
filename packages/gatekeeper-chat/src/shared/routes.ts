@@ -51,6 +51,7 @@ export const API_ROUTES = {
   leaveChannel: { method: "POST", path: "/channels/:channelId/leave" },
   archiveChannel: { method: "POST", path: "/channels/:channelId/archive" },
   readChannel: { method: "POST", path: "/channels/:channelId/read" },
+  updateMembership: { method: "PATCH", path: "/channels/:channelId/membership" },
 
   listMessages: { method: "GET", path: "/channels/:channelId/messages" },
   sendMessage: { method: "POST", path: "/channels/:channelId/messages" },

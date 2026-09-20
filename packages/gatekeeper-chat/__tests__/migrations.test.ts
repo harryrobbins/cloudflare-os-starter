@@ -44,7 +44,7 @@ describe("migrations", () => {
     });
   });
 
-  it("creates the users table version 1 describes", async () => {
+  it("creates the users table version 1 describes, plus version 2's kind column", async () => {
     const stub = workspace(`schema-${crypto.randomUUID()}`);
     const columns = await runInDurableObject(stub, (_instance, state) =>
       state.storage.sql
@@ -59,6 +59,7 @@ describe("migrations", () => {
       "email",
       "first_seen_at",
       "id",
+      "kind",
       "last_seen_at",
       "name",
       "notify",

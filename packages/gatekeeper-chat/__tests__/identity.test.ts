@@ -162,11 +162,21 @@ describe("serveChat, with an already-verified identity", () => {
   });
 
   it("reports an unimplemented route by name rather than 404", async () => {
-    const response = await serveChat(new Request(`${ORIGIN}${apiPath("listChannels")}`), env, identity);
+    // Web Push is phase 3. A route the contract names but the object does not serve answers 501 with
+    // the route's name, so a client can tell "not yet" from "wrong URL".
+    const response = await serveChat(
+      new Request(`${ORIGIN}${apiPath("subscribePush")}`, {
+        method: "POST",
+        headers: { Origin: ORIGIN, "content-type": "application/json" },
+        body: "{}",
+      }),
+      env,
+      identity,
+    );
     expect(response.status).toBe(501);
     const body = (await response.json()) as ErrorEnvelope;
     expect(body.error).toMatchObject({ code: "not_implemented" });
-    expect(body.error.message).toContain("listChannels");
+    expect(body.error.message).toContain("subscribePush");
   });
 
   it("404s a path that is not in the route table", async () => {
