@@ -21,6 +21,13 @@ import { DEV_COOKIE_NAME, readCookie, signIdentityId, verifyIdentityCookie } fro
 
 export { ChatWorkspace } from "../workspace.js";
 
+// Every Durable Object class named in a `migrations` tag has to be exported by whatever `main` points
+// at, or the runtime refuses to start ("Class extends value undefined"). `wrangler.dev.jsonc` carries
+// the same v0 and v1 tags as `wrangler.jsonc`, so this entry must export the vendor's classes too --
+// they are dead weight on a dev server, but an unexported one is a boot failure, not a missing
+// feature. `__tests__/identity.test.ts` pins the two entries' exports to each other.
+export { ChatAccount, ChatGatekeeper, ChatVerifier, GatekeeperVendor } from "../vendor/index.js";
+
 export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);

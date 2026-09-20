@@ -9,12 +9,14 @@
 import { isAdminEmail } from "../env.js";
 import {
   AGENT_USER_ID,
+  GENERAL_CHANNEL_ID,
   MAX_PAGE_LIMIT,
   type ChatIdentity,
   type UpdateMeRequest,
   type User,
   type UserId,
 } from "../shared/protocol.js";
+import { joinChannelRow, loadChannel } from "./access.js";
 import { placeholders, type Ctx } from "./context.js";
 import { toUser, type UserRow } from "./rows.js";
 
@@ -53,9 +55,26 @@ export function touchUser(ctx: Ctx, identity: ChatIdentity): UserRow {
       now,
     );
   }
+  joinGeneral(ctx, identity.id);
   const row = loadUserRow(ctx, identity.id);
   if (row === null) throw new Error("The user row vanished immediately after being written.");
   return row;
+}
+
+/**
+ * Everybody is in `#general`.
+ *
+ * "`#general` exists on first boot and cannot be left" (chat.md, "Channels and conversations") only
+ * makes sense if you are in it to begin with: the read cursor lives in the membership row, so without
+ * one a brand-new person opens chat to an empty rail and a "You are not in #general / Join" card for
+ * the channel they are not allowed to leave. The row is inserted at the channel's current high-water
+ * mark, so history is not unread, and the insert is idempotent -- it cannot resurrect a membership
+ * somebody dropped, because this is the one channel nobody can drop.
+ */
+function joinGeneral(ctx: Ctx, userId: UserId): void {
+  const general = loadChannel(ctx, GENERAL_CHANNEL_ID);
+  if (general === null) return;
+  joinChannelRow(ctx, general, userId);
 }
 
 export function loadUserRow(ctx: Ctx, userId: UserId): UserRow | null {

@@ -8,6 +8,7 @@ import type {
   ChannelId,
   Membership,
   MessageId,
+  ReadCursor,
   SearchResult,
   ThreadSummary,
   User,
@@ -105,6 +106,14 @@ export interface ChatState {
   readonly users: Readonly<Record<UserId, User>>;
   readonly online: readonly UserId[];
   readonly badges: BadgeSummary;
+  /**
+   * How far the *other* members of a `dm` or `group` have read, keyed by channel.
+   *
+   * Only those two kinds: `GET channels/:id/messages` omits `readCursors` for `public` and `private`
+   * (a channel can hold the whole deployment), so a missing entry means "not a thing here", not
+   * "nobody has read".
+   */
+  readonly readCursors: Readonly<Record<ChannelId, readonly ReadCursor[]>>;
 
   readonly conversations: Readonly<Record<string, ConversationState>>;
   readonly threads: readonly ThreadSummary[];
@@ -153,6 +162,7 @@ export const INITIAL_STATE: ChatState = {
   users: {},
   online: [],
   badges: { unread: {}, mentions: {}, threads: 0 },
+  readCursors: {},
   conversations: {},
   threads: [],
   threadsLoading: false,

@@ -8,10 +8,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   Channel,
   ChannelListResponse,
+  ClientEvent,
   MeResponse,
   Membership,
   Message,
   MessagePageResponse,
+  ReadCursor,
   SendMessageResponse,
   ServerEvent,
   User,
@@ -124,6 +126,9 @@ interface Harness {
   calls: { listMessages: Array<[string, unknown]> };
   sendResult: (request: { clientId: string; body: string }) => Promise<SendMessageResponse>;
   history: Message[];
+  /** Set to make `listMessages` answer like a dm or group page. */
+  readCursors?: ReadCursor[];
+  membership: Membership;
 }
 
 function harness(): Harness {
@@ -135,6 +140,7 @@ function harness(): Harness {
     api: undefined as unknown as ChatApi,
     calls,
     history: [message({ id: "m1", seq: 1 }), message({ id: "m2", seq: 2 })],
+    membership,
     sendResult: async (request) => ({
       message: message({ id: "srv", seq: 3, authorId: "me", body: request.body, clientId: request.clientId }),
       deduped: false,
@@ -171,6 +177,12 @@ function harness(): Harness {
       },
       badges: { unread: {}, mentions: {}, threads: 0 },
     }),
+    updateMembership: async (_channelId, patch) => {
+      // Stateful, like the row it stands for: three separate PATCHes accumulate rather than each one
+      // resetting the other two.
+      state.membership = { ...state.membership, ...patch };
+      return { membership: state.membership, badges: { unread: {}, mentions: {}, threads: 0 } };
+    },
     listMessages: async (channelId, query = {}): Promise<MessagePageResponse> => {
       calls.listMessages.push([channelId, query]);
       const after = query.after;
@@ -182,6 +194,7 @@ function harness(): Harness {
         hasMoreAfter: false,
         users: [me, alice],
         channelLastSeq: state.history[state.history.length - 1]?.seq ?? 0,
+        ...(state.readCursors === undefined ? {} : { readCursors: state.readCursors }),
       };
     },
     sendMessage: async (_channelId, request) => state.sendResult(request),
@@ -548,5 +561,110 @@ describe("drafts", () => {
     store.setDraft(conversationKey("c1"), "text");
     store.setDraft(conversationKey("c1"), "   ");
     expect(store.state.drafts["c1"]).toBeUndefined();
+  });
+});
+
+describe("conversation preferences", () => {
+  it("persists notify, mute and star through PATCH channels/:id/membership", async () => {
+    const h = harness();
+    const patch = vi.spyOn(h.api, "updateMembership");
+    await h.store.start({ embedded: false });
+
+    await h.store.setNotify("c1", "mentions");
+    await h.store.toggleMute("c1");
+    await h.store.toggleStar("c1");
+
+    expect(patch.mock.calls.map(([, body]) => body)).toEqual([
+      { notify: "mentions" },
+      { muted: true },
+      { starred: true },
+    ]);
+    // The server's copy wins, so a value it refused to change never lingers in the UI.
+    expect(h.store.state.memberships.c1).toMatchObject({
+      notify: "mentions",
+      muted: true,
+      starred: true,
+    });
+  });
+
+  it("rolls the optimistic change back when the server refuses", async () => {
+    const h = harness();
+    await h.store.start({ embedded: false });
+    vi.spyOn(h.api, "updateMembership").mockRejectedValue(
+      new ApiError("forbidden", "Join the channel first.", 403),
+    );
+
+    await h.store.toggleStar("c1");
+    expect(h.store.state.memberships.c1?.starred).toBe(false);
+    expect(h.store.state.toasts[0]?.title).toBe("Could not star this conversation");
+  });
+});
+
+describe("read cursors", () => {
+  it("takes the other members' cursors from a dm or group page", async () => {
+    const h = harness();
+    h.readCursors = [{ userId: "alice", lastReadSeq: 2 }];
+    await h.store.start({ embedded: false });
+    await h.store.openConversation("c1");
+    expect(h.store.state.readCursors.c1).toEqual([{ userId: "alice", lastReadSeq: 2 }]);
+  });
+
+  it("moves somebody else's cursor on a read event, and never backwards", async () => {
+    const h = harness();
+    await h.store.start({ embedded: false });
+    h.socket.emit({ t: "read", channel: "c1", seq: 5, userId: "alice" });
+    h.socket.emit({ t: "read", channel: "c1", seq: 3, userId: "alice" });
+    expect(h.store.state.readCursors.c1).toEqual([{ userId: "alice", lastReadSeq: 5 }]);
+    // Somebody else's read must not move my own membership.
+    expect(h.store.state.memberships.c1?.lastReadSeq).toBe(membership.lastReadSeq);
+  });
+
+  it("still mirrors my own read from another tab", async () => {
+    const h = harness();
+    await h.store.start({ embedded: false });
+    h.socket.emit({ t: "read", channel: "c1", seq: 7, userId: "me" });
+    expect(h.store.state.memberships.c1?.lastReadSeq).toBe(7);
+    expect(h.store.state.readCursors.c1).toBeUndefined();
+  });
+});
+
+describe("channels the rail has never heard of", () => {
+  it("refetches the rail when a badge names an unknown channel", async () => {
+    const h = harness();
+    await h.store.start({ embedded: false });
+    const list = vi.spyOn(h.api, "listChannels");
+
+    // A new DM: the server pushes badges to its members, but there is no "channel created" event and
+    // this socket's `sub` could not have named a channel that did not exist yet.
+    h.socket.emit({ t: "badge", unread: { "c-new": 1 }, mentions: {}, threads: 0 });
+    await settle();
+    expect(list).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not refetch for a channel it already has", async () => {
+    const h = harness();
+    await h.store.start({ embedded: false });
+    const list = vi.spyOn(h.api, "listChannels");
+    h.socket.emit({ t: "badge", unread: { c1: 3 }, mentions: {}, threads: 0 });
+    await settle();
+    expect(list).not.toHaveBeenCalled();
+  });
+});
+
+describe("subscriptions", () => {
+  it("re-sends `sub` when a channel is created, so its events are not filtered out", async () => {
+    const h = harness();
+    await h.store.start({ embedded: false });
+    const created: Channel = { ...channel, id: "c-dm", kind: "dm", name: null };
+    vi.spyOn(h.api, "createChannel").mockResolvedValue({
+      channel: created,
+      membership: { ...membership, channelId: "c-dm" },
+    });
+
+    h.socket.sent.length = 0;
+    await h.store.createChannel({ kind: "dm", memberIds: ["alice"] });
+    const subs = (h.socket.sent as ClientEvent[]).filter((event) => event.t === "sub");
+    expect(subs).toHaveLength(1);
+    expect(subs[0]).toMatchObject({ channels: expect.arrayContaining(["c1", "c-dm"]) });
   });
 });

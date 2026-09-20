@@ -3,9 +3,10 @@
 // line up to the pixel.
 
 import { List } from "@phosphor-icons/react";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import { IconButton } from "../components/primitives.js";
+import { useStore } from "../hooks/store.js";
 
 export function ViewShell({
   title,
@@ -20,6 +21,15 @@ export function ViewShell({
   onBack?: () => void;
   children: ReactNode;
 }): ReactNode {
+  const store = useStore();
+
+  // Nothing is on screen here, so nothing should be marked read here. `activeChannelId` is what
+  // `#maybeMarkRead` consults, and only `ChannelScreen` ever set it -- so without this, a message that
+  // arrived while you were reading Threads or People was silently marked read and never badged.
+  useEffect(() => {
+    store.setActive(null);
+  }, [store]);
+
   return (
     // `flex-1` matters: the shell's <main> is a flex row, and without it every list view would be
     // as wide as its widest row rather than the pane.

@@ -28,6 +28,7 @@ import {
   type ListThreadsQuery,
   type MarkReadRequest,
   type MarkReadResponse,
+  type MembershipResponse,
   type MeResponse,
   type Membership,
   type Message,
@@ -46,6 +47,7 @@ import {
   type ThreadResponse,
   type ThreadSummary,
   type UpdateChannelRequest,
+  type UpdateMembershipRequest,
   type UpdateMeRequest,
   type User,
   type UserId,
@@ -106,7 +108,7 @@ class MockWorkspace {
   messagesIn(channelId: ChannelId): Message[] {
     return this.seed.messages
       .filter((message) => message.channelId === channelId)
-      .sort((a, b) => a.seq - b.seq);
+      .toSorted((a, b) => a.seq - b.seq);
   }
 
   badges(): BadgeSummary {
@@ -138,7 +140,7 @@ class MockWorkspace {
     return [...roots.values()].map((root) => {
       const replies = this.seed.messages
         .filter((message) => message.rootId === root.id)
-        .sort((a, b) => a.seq - b.seq);
+        .toSorted((a, b) => a.seq - b.seq);
       const last = replies[replies.length - 1];
       const unreadReplies = replies.filter(
         (reply) => reply.authorId !== ME && reply.seq > this.membership(root.channelId).lastReadSeq,
@@ -152,7 +154,7 @@ class MockWorkspace {
         lastReadReplySeq: this.membership(root.channelId).lastReadSeq,
         unreadReplies,
         following: this.seed.following.has(root.id),
-        participantIds: [...new Set(replies.map((reply) => reply.authorId).reverse())].slice(0, 5),
+        participantIds: [...new Set(replies.map((reply) => reply.authorId).toReversed())].slice(0, 5),
       };
     });
   }
@@ -354,6 +356,22 @@ function createMockApi(workspace: MockWorkspace): ChatApi {
       return { membership, badges: workspace.badges() };
     },
 
+    async updateMembership(
+      channelId: ChannelId,
+      request: UpdateMembershipRequest,
+    ): Promise<MembershipResponse> {
+      await delay(40);
+      const current = workspace.membership(channelId);
+      const membership: Membership = {
+        ...current,
+        ...(request.notify === undefined ? {} : { notify: request.notify }),
+        ...(request.muted === undefined ? {} : { muted: request.muted }),
+        ...(request.starred === undefined ? {} : { starred: request.starred }),
+      };
+      workspace.setMembership(membership);
+      return { membership, badges: workspace.badges() };
+    },
+
     async listMessages(channelId: ChannelId, query: ListMessagesQuery = {}): Promise<MessagePageResponse> {
       await delay();
       workspace.membership(channelId);
@@ -485,7 +503,7 @@ function createMockApi(workspace: MockWorkspace): ChatApi {
       const threads = workspace
         .threads()
         .filter((thread) => (query.unread === true ? thread.unreadReplies > 0 : true))
-        .sort((a, b) => (b.lastReplyAt ?? 0) - (a.lastReplyAt ?? 0));
+        .toSorted((a, b) => (b.lastReplyAt ?? 0) - (a.lastReplyAt ?? 0));
       return { threads, users: workspace.seed.users, cursor: null };
     },
 
@@ -512,7 +530,7 @@ function createMockApi(workspace: MockWorkspace): ChatApi {
       const hits: SearchHit[] = workspace.seed.messages
         .filter((message) => memberChannelIds.has(message.channelId))
         .filter((message) => matches(message, parsed, workspace))
-        .sort((a, b) => b.createdAt - a.createdAt)
+        .toSorted((a, b) => b.createdAt - a.createdAt)
         .slice(0, 40)
         .map((message) => ({
           message,

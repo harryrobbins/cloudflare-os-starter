@@ -76,7 +76,7 @@ export function mergeMessages(
     }
     out.push(message);
   }
-  return out.sort(compare);
+  return out.toSorted(compare);
 }
 
 /** The row shown the instant Enter is pressed. */

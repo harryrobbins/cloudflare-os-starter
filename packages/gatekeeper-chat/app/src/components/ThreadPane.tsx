@@ -3,7 +3,7 @@
 // back to the channel and returning.
 
 import { X } from "@phosphor-icons/react";
-import { useCallback, useEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, type ReactNode } from "react";
 
 import type { Message } from "../contract.js";
 import { channelLabel } from "../lib/labels.js";
@@ -40,16 +40,6 @@ export function ThreadPane({
     void store.openConversation(channelId, { rootId });
   }, [store, channelId, rootId]);
 
-  /**
-   * Recovers the root when the thread page did not include it.
-   *
-   * `GET messages?rootId=` is only specified to restrict the page to one thread, so a server may serve
-   * the replies alone. Deep-linking straight to `/c/<id>/t/<root>` -- which is what the narrow layout
-   * does, since the channel view never mounts there -- would then leave the pane with no root to show.
-   * One `around=` page fixes it and fills the channel view behind the pane at the same time.
-   */
-  const recovered = useRef<string | null>(null);
-
   const onCopyLink = useCallback(
     (message: Message) => {
       void navigator.clipboard
@@ -60,16 +50,15 @@ export function ThreadPane({
     [store],
   );
 
+  /**
+   * `GET messages?rootId=` returns the thread *including its root* (`src/do/messages.ts`: the filter is
+   * `root_id = ? OR id = ?`), so the pane never has to fetch the root separately -- not even on a deep
+   * link straight to `/c/<id>/t/<root>`, which is what the narrow layout does. The channel view behind
+   * the pane may not have loaded, so it is a fallback for the already-open case, not a recovery path.
+   */
   const root =
     conversation.messages.find((message) => message.id === rootId) ??
     channelMessages.find((message) => message.id === rootId);
-
-  useEffect(() => {
-    if (root !== undefined || conversation.loading || !conversation.loaded) return;
-    if (recovered.current === rootId) return;
-    recovered.current = rootId;
-    void store.openConversation(channelId, { around: rootId });
-  }, [root, conversation.loading, conversation.loaded, store, channelId, rootId]);
   const replies = conversation.messages.filter((message) => message.rootId === rootId);
   const label = channel === undefined ? "" : channelLabel(channel, users, meId);
   const following = thread?.following ?? true;

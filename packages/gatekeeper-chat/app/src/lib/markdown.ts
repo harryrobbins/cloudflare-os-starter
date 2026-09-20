@@ -15,7 +15,7 @@
 import DOMPurify from "dompurify";
 import { Marked } from "marked";
 
-import { CHANNEL_TOKEN_PATTERN, USER_TOKEN_PATTERN } from "./mentions.js";
+import { channelTokenPattern, userTokenPattern } from "./mentions.js";
 
 const marked = new Marked({ gfm: true, breaks: true, async: false });
 
@@ -69,7 +69,7 @@ export function renderMarkdown(body: string, names: MentionNames): string {
   installHooks();
   const chips: string[] = [];
   const withSentinels = body
-    .replace(USER_TOKEN_PATTERN, (_all, id: string) => {
+    .replace(userTokenPattern(), (_all, id: string) => {
       const name = names.nameOf(id);
       const classes = `mention${names.meId === id ? " mention-me" : ""}`;
       chips.push(
@@ -77,7 +77,7 @@ export function renderMarkdown(body: string, names: MentionNames): string {
       );
       return `${SENTINEL_OPEN}${chips.length - 1}${SENTINEL_CLOSE}`;
     })
-    .replace(CHANNEL_TOKEN_PATTERN, (_all, id: string) => {
+    .replace(channelTokenPattern(), (_all, id: string) => {
       chips.push(
         `<span class="mention" data-mention="channel" data-mention-id="${escapeHtml(id)}">#${escapeHtml(names.channelNameOf(id) ?? "unknown")}</span>`,
       );
@@ -102,16 +102,14 @@ export function renderMarkdown(body: string, names: MentionNames): string {
 /**
  * An FTS5 `snippet()` result.
  *
- * CONTRACT GAP: `SearchHit.snippet` is documented as carrying "the marks the client's renderer
- * expects" without saying what they are. This accepts `<mark>`/`<b>` and also the `[[`/`]]` pair a
- * server might choose to avoid emitting markup at all, and allow-lists the result down to `<mark>`.
+ * The server emits exactly one form: SQLite's `snippet(messages_fts, 0, '<mark>', '</mark>', '…', n)`
+ * (`src/do/search.ts`). So the body is escaped, `&lt;mark&gt;` is turned back into a tag, and the
+ * result is allow-listed down to `<mark>` -- the escape-then-reinstate order is what makes a body that
+ * itself contains `<mark>` render as text.
  */
 export function renderSnippet(snippet: string): string {
   installHooks();
-  const marked_ = escapeHtml(snippet)
-    .replace(/&lt;(\/?)(?:mark|b)&gt;/g, "<$1mark>")
-    .replace(/\[\[/g, "<mark>")
-    .replace(/\]\]/g, "</mark>");
+  const marked_ = escapeHtml(snippet).replace(/&lt;(\/?)mark&gt;/g, "<$1mark>");
   return DOMPurify.sanitize(marked_, { ALLOWED_TAGS: ["mark"], ALLOWED_ATTR: [] });
 }
 

@@ -4,7 +4,7 @@
 // column at a time: the rail becomes a drawer and the content fills the screen, which is also exactly
 // what embedded mode wants, so `?embed=1` simply forces the narrow branch and drops the rail's width.
 
-import { List, X } from "@phosphor-icons/react";
+import { X } from "@phosphor-icons/react";
 import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 
@@ -189,21 +189,5 @@ function LoadingShell({ narrow }: { narrow: boolean }): ReactNode {
         </div>
       </div>
     </div>
-  );
-}
-
-/** The header button that opens the rail on narrow layouts. */
-export function RailToggle(): ReactNode {
-  const layout = useLayout();
-  if (!layout.narrow) return null;
-  return (
-    <button
-      type="button"
-      onClick={layout.openRail}
-      aria-label="Open the conversation list"
-      className="press inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-kumo-subtle hover:bg-kumo-tint hover:text-kumo-default"
-    >
-      <List size={16} />
-    </button>
   );
 }

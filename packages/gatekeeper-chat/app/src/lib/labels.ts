@@ -5,7 +5,7 @@
 // shows a conversation's name goes through here so a DM is labelled identically in the rail, the
 // header, a toast and the document title.
 
-import type { Channel, ChannelId, User, UserId } from "../contract.js";
+import { GENERAL_CHANNEL_ID, type Channel, type ChannelId, type User, type UserId } from "../contract.js";
 
 export function otherMemberIds(channel: Channel, meId: UserId | undefined): readonly UserId[] {
   const members = channel.memberIds ?? [];
@@ -43,9 +43,14 @@ export function isDirect(channel: Channel): boolean {
   return channel.kind === "dm" || channel.kind === "group";
 }
 
-/** The one channel nobody can leave. */
+/**
+ * The one channel nobody can leave.
+ *
+ * Matched on the id, not the name: `GENERAL_CHANNEL_ID` is what `src/do/channels.ts` refuses to leave
+ * or archive, and a channel can be renamed.
+ */
 export function isGeneral(channel: Channel): boolean {
-  return channel.name === "general";
+  return channel.id === GENERAL_CHANNEL_ID;
 }
 
 export function channelById(

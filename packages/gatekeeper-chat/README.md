@@ -5,11 +5,11 @@ authenticated file downloads at `/gatekeeper/chat/*`, behind Cloudflare Access l
 hostname. Design and rationale: [docs/plans/chat.md](../../docs/plans/chat.md); delivery state:
 [docs/plans/chat-implementation.md](../../docs/plans/chat-implementation.md).
 
-**Status: the Worker is complete (streams 0, A and D).** Channels, memberships, messages, threads,
-reactions, mentions, unread and mention badges, FTS5 search with qualifiers, uploads with an
+**Status: the Worker and the SPA both work, against each other.** Channels, memberships, messages,
+threads, reactions, mentions, unread and mention badges, FTS5 search with qualifiers, uploads with an
 authenticated download, the WebSocket protocol, per-user rate limits and the agent-facing Gatekeeper
-all work. Only `PUT /api/me/avatar` and the two Web Push routes still answer `501 not_implemented`,
-by name, because they are phase 3. Stream B is building the SPA under `app/`.
+all work, and `e2e/` proves the SPA drives them in a real browser. Only `PUT /api/me/avatar` and the
+two Web Push routes still answer `501 not_implemented`, by name, because they are phase 3.
 
 ## Layout
 
@@ -27,6 +27,7 @@ by name, because they are phase 3. Stream B is building the SPA under `app/`.
 | `app/` | the SPA: React 19, TanStack Router, Tailwind v4, Kumo. Built to `app/dist` by `pnpm build` (see below) |
 | `__tests__/` | vitest-pool-workers suites, including the spikes |
 | `spikes/` | phase 0 findings ([spikes/README.md](spikes/README.md)) and the `wrangler dev` FTS5 spike |
+| `e2e/` | Playwright against `wrangler dev`, plus the dev-server and local-platform scripts (see [End-to-end tests](#end-to-end-tests)) |
 
 ### Inside the Durable Object
 
@@ -59,6 +60,7 @@ pnpm --filter gatekeeper-chat dev          # wrangler dev -c wrangler.dev.jsonc,
 pnpm --filter gatekeeper-chat test:run     # both suites: workers-pool, then the SPA's jsdom one
 pnpm --filter gatekeeper-chat types:check  # tsc --noEmit for the Worker, then for app/
 VITE_CHAT_MOCK=1 pnpm --filter gatekeeper-chat dev:app   # the SPA alone, on an in-memory fake
+packages/gatekeeper-chat/e2e/run.sh        # Playwright, two identities, against wrangler dev
 ```
 
 ### Working on the SPA
@@ -80,6 +82,36 @@ rewrites two `import("./.wrangler/validate/src/index")` paths to `./src/index`. 
 generated copy of `src/` into the type-check — reporting every error twice, or reporting errors from a
 stale copy. `exclude` cannot prevent it; it filters `include`, not imports.
 
+## Running locally
+
+Two commands, in this order, from the repo root:
+
+```sh
+eval "$(fnm env)" && fnm use v24.21.0
+pnpm --filter gatekeeper-chat build        # app/dist; gitignored, so a fresh checkout has none
+pnpm --filter gatekeeper-chat dev          # wrangler dev -c wrangler.dev.jsonc, on :8787
+```
+
+Then open one identity per browser profile (or one per incognito window -- the dev cookie is
+`HttpOnly` and scoped to `/gatekeeper/chat/`, so two identities need two cookie jars):
+
+```
+http://localhost:8787/gatekeeper/chat/dev/login?as=dev-admin    # Dev Admin,  an ADMINS member
+http://localhost:8787/gatekeeper/chat/dev/login?as=dev-user     # Dev User
+```
+
+Each URL sets the cookie and redirects to the app. Both land in `#general`, which everybody is in and
+nobody can leave, so the second window sees the first one type straight away.
+
+**Build before you start the server, and restart it after a rebuild.** The `assets` binding reads its
+manifest once, when the Worker starts: rebuilding `app/dist` underneath a running `wrangler dev`
+leaves every hashed filename unknown to it. The Worker answers those with a 404 rather than the app
+shell (`src/serve.ts`), which is a legible failure instead of a "MIME type text/html" console error --
+but the fix is still to restart.
+
+`e2e/start-dev.sh` and `e2e/stop-dev.sh` do all of that, refuse to start a second server, and put the
+server in its own process group so one `kill` takes wrangler, workerd and the build child with it.
+
 ## Signing in locally
 
 `wrangler.dev.jsonc` points `main` at `src/dev/entry.ts`, which accepts a signed cookie naming one of
@@ -95,6 +127,86 @@ http://localhost:8787/gatekeeper/chat/dev/identities            # what is config
 is the whole mechanism, and `__tests__/identity.test.ts` proves the production entry ignores a valid
 dev cookie even when `DEV_IDENTITIES` and `DEV_IDENTITY_SECRET` are set. Stream C adds a
 `deploy.ts --check` rule that rejects a production config whose `main` points at the dev entry.
+
+## End-to-end tests
+
+`e2e/` drives the real bundle in a real browser against a real `wrangler dev`: two dev identities in
+two browser contexts, one Durable Object between them. It is **not** part of `pnpm test:run`, because
+it needs a port and a browser and a unit-test run should assume neither.
+
+```sh
+eval "$(fnm env)" && fnm use v24.21.0
+ps -ef | grep -E 'wrangler|workerd' | grep -v grep     # must be empty: one server at a time
+CHAT_SHOTS=/tmp/chat-e2e packages/gatekeeper-chat/e2e/run.sh
+```
+
+`run.sh` builds `app/dist`, clears `.wrangler/state` (`CHAT_KEEP_STATE=1` keeps it), starts the
+server, runs `node --test --test-concurrency=1 e2e/chat.test.mjs` and stops the server whatever
+happened. A full run is about 40 s against a warm build; 13/13 green on 2026-09-20. To iterate on one test, start the server yourself and run the file directly:
+
+```sh
+packages/gatekeeper-chat/e2e/start-dev.sh
+cd packages/gatekeeper-chat && node --test --test-concurrency=1 e2e/chat.test.mjs
+cd ../.. && packages/gatekeeper-chat/e2e/stop-dev.sh    # always, also after a failure
+```
+
+- `playwright@1.61.0` is a devDependency, matching the Chromium already in `~/.cache/ms-playwright`.
+  Never run `playwright install` on this distro; run the suite with the Linux node **from this package
+  directory** so `import 'playwright'` resolves.
+- Serial, and ordered. Every test shares one workspace, T12 restarts the server, and T13 burns a
+  per-user rate-limit budget, so those two are last. A `beforeEach` presses Escape on both pages, so
+  one failure's open modal does not swallow the next test's clicks.
+- Screenshots go to `CHAT_SHOTS` (default `/tmp/chat-e2e`), plus `console-problems.txt` if either page
+  logged a console error, a page error or a 5xx.
+- `CHAT_URL` points the suite at a different origin -- which is how it runs through the local
+  platform's router (see below).
+
+| Test | What it proves |
+| --- | --- |
+| T1 | Two identities in `#general` see each other's messages arrive over the socket, both ways. |
+| T2 | Reply in thread from the hover bar; the root grows a "1 reply" summary; the Threads view lists it. |
+| T3 | The other identity's rail goes unread, and clears when they open the channel. |
+| T4 | A `<@dev-user>` token badges a mention with a count, and reading clears it. |
+| T5 | "Mark unread from here" puts the conversation back to unread with a New messages rule. |
+| T6 | A private channel 404s for a non-member on read *and* write, and is absent from Browse. |
+| T7 | A DM opened from the New message dialog; the other side reading it shows "Seen by Dev User". |
+| T8 | An image renders inline from `/files/:id`; a `.txt` downloads with `content-disposition: attachment`. |
+| T9 | `in:#general from:@dev-admin <term>` finds it, `from:@dev-user <term>` does not, and Jump opens the permalink. |
+| T10 | A permalink deep link in a fresh tab centres the message. |
+| T11 | 390x780: the rail is a dialog behind "Open the conversation list". |
+| T12 | The server is killed mid-session: the banner shows, the socket reconnects, and a message posted while the tab was down arrives through the `since` catch-up. |
+| T13 | A 429 from the message budget surfaces as a "Message not sent" toast with Retry. |
+
+### Through the real router
+
+`e2e/start-local-platform.sh` boots the local Cloudflare OS Workshop with this package added to the
+same multi-config `wrangler dev` and bound to the dev router as `GATEKEEPER_CHAT`, so
+`/gatekeeper/chat/*` and the WebSocket upgrade go through the router's `GATEKEEPER_*` scan rather than
+straight to this Worker. Nothing in `cloudflare-os/` is edited: the submodule's launcher is copied to
+a temp dir and patched there, the same trick `packages/blueprint-whiteboard/e2e/start-local-platform.sh`
+uses, with two extra patches that read `EXTRA_ROUTER_SERVICE` and `EXTRA_WRANGLER_CONFIGS`.
+
+```sh
+eval "$(fnm env)" && fnm use v24.21.0
+packages/gatekeeper-chat/e2e/start-local-platform.sh     # ~2 min cold; prints PGID and URL
+curl -s http://localhost:8787/gatekeeper/chat/dev/identities      # through the router
+open http://localhost:8787/gatekeeper/chat/dev/login?as=dev-admin
+packages/gatekeeper-chat/e2e/stop-local-platform.sh      # always, also after a failure
+```
+
+Verified 2026-09-20: `/gatekeeper/chat/`, the hashed assets, `/api/*`, a send and
+`GET /gatekeeper/chat/ws -> 101 Switching Protocols` all reach the chat Worker through the router,
+with no console errors in the SPA. Two things the submodule's launcher does not do for a config it did
+not generate, both handled by the script:
+
+- **`build.cwd`.** The multi-config `wrangler dev` runs from `cloudflare-os/`, and a custom build
+  inherits that directory, so `pnpm exec capnweb-validate` would run where it is not installed. The
+  script writes a copy of this package's `wrangler.dev.jsonc` into its state dir with `build.cwd`,
+  `main` and `assets.directory` made absolute.
+- **`\|` is alternation in GNU sed's BRE**, so the obvious anchor for `config.services || []` matches
+  the empty string on every line and silently rewrites the whole launcher; and both the router and the
+  workshop-backend generator have that line, so the substitution is addressed to the first match only.
+  The script checks both, and fails loudly rather than starting something half-patched.
 
 ## Why the Durable Object trusts a header
 

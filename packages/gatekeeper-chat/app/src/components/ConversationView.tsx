@@ -53,6 +53,7 @@ export function ConversationView({
   );
   const typing = useChat((state) => state.typing[channelId]);
   const online = useChat((state) => state.online);
+  const readCursors = useChat((state) => state.readCursors[channelId]);
 
   const label = channel === undefined ? "" : channelLabel(channel, users, meId);
 
@@ -105,6 +106,29 @@ export function ConversationView({
     },
     [store],
   );
+
+  /**
+   * "Seen by" for a direct or group conversation.
+   *
+   * `readCursors` is only sent for those two kinds, so an undefined entry means the affordance does not
+   * apply here rather than "nobody has read". The yardstick is the newest message that actually exists
+   * on the server: a pending local row has no `seq` yet, so nobody can have seen it.
+   */
+  const seenLine = useMemo(() => {
+    if (readCursors === undefined || readCursors.length === 0) return null;
+    const newest = conversation.messages.reduce<number>(
+      (max, message) => (message.local === undefined && message.seq > max ? message.seq : max),
+      0,
+    );
+    if (newest === 0) return null;
+    const names = readCursors
+      .filter((cursor) => cursor.userId !== meId && cursor.lastReadSeq >= newest)
+      .map((cursor) => users[cursor.userId]?.name ?? "Someone");
+    if (names.length === 0) return null;
+    if (names.length === 1) return `Seen by ${names[0]}`;
+    if (names.length === 2) return `Seen by ${names[0]} and ${names[1]}`;
+    return `Seen by ${names.length} people`;
+  }, [readCursors, conversation.messages, meId, users]);
 
   if (channel === undefined) {
     return (
@@ -198,6 +222,9 @@ export function ConversationView({
                   ? `${typingNames[0]} is typing…`
                   : `${typingNames.slice(0, 2).join(" and ")} are typing…`}
               </span>
+            )}
+            {typingNames.length === 0 && seenLine !== null && (
+              <span data-testid="seen-by">{seenLine}</span>
             )}
           </div>
 

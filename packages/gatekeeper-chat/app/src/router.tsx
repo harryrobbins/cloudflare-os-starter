@@ -18,7 +18,7 @@ import {
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
-import { APP_BASE, matchPath } from "./contract.js";
+import { APP_BASE, GENERAL_CHANNEL_ID, matchPath } from "./contract.js";
 import { AppShell, useLayout } from "./components/AppShell.js";
 import { setAppNavigator } from "./lib/navigate.js";
 import { toRouterPath } from "./lib/nav.js";
@@ -62,8 +62,8 @@ const indexRoute = createRoute({
     );
     const target =
       (remembered !== null && candidates.find((channel) => channel.id === remembered)) ||
-      candidates.find((channel) => channel.name === "general") ||
-      candidates.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""))[0];
+      candidates.find((channel) => channel.id === GENERAL_CHANNEL_ID) ||
+      candidates.toSorted((a, b) => (a.name ?? "").localeCompare(b.name ?? ""))[0];
     if (target === undefined) throw redirect({ to: "/browse" });
     throw redirect({ to: "/c/$channelId", params: { channelId: target.id } });
   },

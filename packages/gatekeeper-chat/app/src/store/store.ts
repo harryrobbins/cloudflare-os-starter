@@ -18,8 +18,10 @@ import {
   type Message,
   type MessageId,
   type NotifyLevel,
+  type ReadCursor,
   type ServerEvent,
   type ThreadSummary,
+  type UpdateMembershipRequest,
   type User,
   type UserId,
 } from "../contract.js";
@@ -62,6 +64,8 @@ import {
 
 const THEME_KEY = "chat.theme";
 const NOTIFY_OPT_IN_KEY = "chat.notifications";
+/** Floor between two `listChannels` triggered by an unrecognised channel id. */
+const UNKNOWN_CHANNEL_REFRESH_MS = 5_000;
 const TYPING_TTL_MS = 6000;
 /** How long a toast lives. Errors are sticky; everything else clears itself. */
 const TOAST_TIMEOUT_MS = 6000;
@@ -154,7 +158,7 @@ export class ChatStore {
         limits: me.limits,
         badges: channels.badges,
         channels: byId(channels.channels),
-        memberships: this.#restoreLocalPrefs(byChannel(channels.memberships)),
+        memberships: byChannel(channels.memberships),
         users: { ...byId(channels.users), [me.user.id]: me.user },
       });
       this.#updateTitle();
@@ -220,7 +224,13 @@ export class ChatStore {
         });
         return;
       case "read": {
-        // Another tab acknowledged a read. Mirror it so this tab's rail agrees.
+        // Two cases in one frame, told apart by `userId`: my own read from another tab (mirror it so
+        // this tab's rail agrees) or somebody else's, in a dm or group, which only moves "seen by".
+        // The server always sets `userId`; it is optional in the type so a mock need not.
+        if (event.userId !== undefined && event.userId !== this.#state.me?.id) {
+          this.#applyReadCursor(event.channel, event.userId, event.seq);
+          return;
+        }
         const membership = this.#state.memberships[event.channel];
         if (membership === undefined) return;
         const channel = this.#state.channels[event.channel];
@@ -237,24 +247,56 @@ export class ChatStore {
         return;
       case "typing": {
         if (event.user === this.#state.me?.id) return;
-        const forChannel = { ...(this.#state.typing[event.channel] ?? {}) };
+        const forChannel = { ...this.#state.typing[event.channel] };
         forChannel[event.user] = Date.now() + TYPING_TTL_MS;
         this.#patch({ typing: { ...this.#state.typing, [event.channel]: forChannel } });
         this.#later(() => this.#expireTyping(), TYPING_TTL_MS + 250);
         return;
       }
-      case "badge":
+      case "badge": {
         this.#patch({
           badges: { unread: event.unread, mentions: event.mentions, threads: event.threads },
         });
         this.#updateTitle();
+        // A badge naming a conversation the rail has never heard of is how a new DM, a new group or a
+        // private channel somebody added you to arrives: the server pushes fresh badges to every
+        // member when a channel is created and when a message lands, but there is no "channel
+        // created" event, and a socket that has subscribed to a channel list cannot receive `msg` for
+        // a channel that was not on it.
+        this.#refreshIfUnknown([...Object.keys(event.unread), ...Object.keys(event.mentions)]);
         return;
+      }
       case "error":
         // A frame the server refused. Surfaced quietly: it is a client bug, not the user's problem.
         this.#toast({ tone: "error", title: "The chat server rejected a request", body: event.message });
         return;
     }
   }
+
+  /** One other member's cursor, never backwards: two tabs of theirs can report out of order. */
+  #applyReadCursor(channelId: ChannelId, userId: UserId, seq: number): void {
+    const current = this.#state.readCursors[channelId] ?? [];
+    const existing = current.find((cursor) => cursor.userId === userId);
+    if (existing !== undefined && existing.lastReadSeq >= seq) return;
+    const next: ReadCursor[] =
+      existing === undefined
+        ? [...current, { userId, lastReadSeq: seq }]
+        : current.map((cursor) => (cursor.userId === userId ? { userId, lastReadSeq: seq } : cursor));
+    this.#patch({ readCursors: { ...this.#state.readCursors, [channelId]: next } });
+  }
+
+  /** One `listChannels` when a channel id turns up that the rail does not have. Guarded against loops. */
+  #refreshIfUnknown(channelIds: readonly ChannelId[]): void {
+    const unknown = channelIds.filter((id) => this.#state.channels[id] === undefined);
+    if (unknown.length === 0) return;
+    const now = Date.now();
+    // A channel that is genuinely invisible would otherwise be refetched on every badge frame.
+    if (now - this.#lastUnknownRefresh < UNKNOWN_CHANNEL_REFRESH_MS) return;
+    this.#lastUnknownRefresh = now;
+    void this.refreshChannels();
+  }
+
+  #lastUnknownRefresh = 0;
 
   #expireTyping(): void {
     const now = Date.now();
@@ -395,6 +437,7 @@ export class ChatStore {
         limit: DEFAULT_PAGE_LIMIT,
       });
       this.#mergeUsers(page.users);
+      this.#mergeReadCursors(channelId, page.readCursors);
       const channel = this.#state.channels[channelId];
       if (channel !== undefined && page.channelLastSeq > channel.lastSeq) {
         this.#patch({
@@ -831,28 +874,55 @@ export class ChatStore {
   // --- conversation preferences --------------------------------------------
 
   async setNotify(channelId: ChannelId, notify: NotifyLevel): Promise<void> {
-    this.#patchMembership(channelId, { notify });
-    // CONTRACT GAP: there is no route for per-conversation notify / mute / star. They are applied
-    // locally and persisted per browser so the UI is complete; see the report.
-    this.#persistLocalPrefs();
-    await Promise.resolve();
+    await this.#applyMembershipPatch(channelId, { notify }, "Could not change notifications");
   }
 
   async toggleMute(channelId: ChannelId): Promise<void> {
     const membership = this.#state.memberships[channelId];
     if (membership === undefined) return;
-    this.#patchMembership(channelId, { muted: !membership.muted });
-    this.#persistLocalPrefs();
-    this.#updateTitle();
-    await Promise.resolve();
+    await this.#applyMembershipPatch(
+      channelId,
+      { muted: !membership.muted },
+      membership.muted ? "Could not unmute this conversation" : "Could not mute this conversation",
+    );
   }
 
   async toggleStar(channelId: ChannelId): Promise<void> {
     const membership = this.#state.memberships[channelId];
     if (membership === undefined) return;
-    this.#patchMembership(channelId, { starred: !membership.starred });
-    this.#persistLocalPrefs();
-    await Promise.resolve();
+    await this.#applyMembershipPatch(
+      channelId,
+      { starred: !membership.starred },
+      membership.starred ? "Could not remove the star" : "Could not star this conversation",
+    );
+  }
+
+  /**
+   * One `PATCH channels/:id/membership`, applied optimistically and rolled back on refusal.
+   *
+   * The response carries fresh badges, because muting changes the counts -- and the server also pushes
+   * a `badge` frame to this tab's socket, so the two agree either way.
+   */
+  async #applyMembershipPatch(
+    channelId: ChannelId,
+    patch: UpdateMembershipRequest,
+    failureTitle: string,
+  ): Promise<void> {
+    const before = this.#state.memberships[channelId];
+    if (before === undefined) return;
+    this.#patchMembership(channelId, patch);
+    this.#updateTitle();
+    try {
+      const response = await this.#api.updateMembership(channelId, patch);
+      this.#patch({
+        memberships: { ...this.#state.memberships, [channelId]: response.membership },
+        badges: response.badges,
+      });
+    } catch (cause) {
+      this.#patch({ memberships: { ...this.#state.memberships, [channelId]: before } });
+      this.#toast({ tone: "error", title: failureTitle, body: describe(cause) });
+    }
+    this.#updateTitle();
   }
 
   #patchMembership(channelId: ChannelId, patch: Partial<Membership>): void {
@@ -863,44 +933,6 @@ export class ChatStore {
     });
   }
 
-  #persistLocalPrefs(): void {
-    const local: Record<string, { notify: NotifyLevel; muted: boolean; starred: boolean }> = {};
-    for (const [channelId, membership] of Object.entries(this.#state.memberships)) {
-      if (membership.notify === "all" && !membership.muted && !membership.starred) continue;
-      local[channelId] = {
-        notify: membership.notify,
-        muted: membership.muted,
-        starred: membership.starred,
-      };
-    }
-    writeSetting("chat.conversationPrefs", JSON.stringify(local));
-  }
-
-  #restoreLocalPrefs(memberships: Record<ChannelId, Membership>): Record<ChannelId, Membership> {
-    const raw = readSetting("chat.conversationPrefs");
-    if (raw === null) return memberships;
-    try {
-      const parsed = JSON.parse(raw) as Record<
-        string,
-        { notify?: NotifyLevel; muted?: boolean; starred?: boolean }
-      >;
-      const out = { ...memberships };
-      for (const [channelId, prefs] of Object.entries(parsed)) {
-        const membership = out[channelId];
-        if (membership === undefined) continue;
-        out[channelId] = {
-          ...membership,
-          notify: prefs.notify ?? membership.notify,
-          muted: prefs.muted ?? membership.muted,
-          starred: prefs.starred ?? membership.starred,
-        };
-      }
-      return out;
-    } catch {
-      return memberships;
-    }
-  }
-
   // --- channels -------------------------------------------------------------
 
   async refreshChannels(): Promise<void> {
@@ -908,7 +940,7 @@ export class ChatStore {
       const response = await this.#api.listChannels();
       this.#patch({
         channels: byId(response.channels),
-        memberships: this.#restoreLocalPrefs(byChannel(response.memberships)),
+        memberships: byChannel(response.memberships),
         users: { ...this.#state.users, ...byId(response.users) },
         badges: response.badges,
       });
@@ -998,6 +1030,7 @@ export class ChatStore {
   }
 
   #applyChannelResponse(channel: Channel, membership: Membership | null): void {
+    const known = this.#state.channels[channel.id] !== undefined;
     const memberships = { ...this.#state.memberships };
     if (membership === null) delete memberships[channel.id];
     else memberships[channel.id] = membership;
@@ -1005,6 +1038,11 @@ export class ChatStore {
       channels: { ...this.#state.channels, [channel.id]: channel },
       memberships,
     });
+    // A `sub` is a filter over the channels the socket named, so a conversation created (or joined)
+    // after the socket connected is invisible to it until the list is sent again -- no `msg`, no
+    // `read`, no `typing`. Creating a DM and then never seeing the other person reply is the case
+    // that found this.
+    if (!known || membership !== null) this.#subscribeAll();
   }
 
   // --- threads --------------------------------------------------------------
@@ -1337,6 +1375,18 @@ export class ChatStore {
   }
 
   // --- internals ------------------------------------------------------------
+
+  /**
+   * The page's `readCursors`, for a dm or group.
+   *
+   * `undefined` means the channel kind does not carry them (public, private) and is not the same as an
+   * empty array, which means nobody else has read anything -- so the key is only written when the
+   * server sent the field.
+   */
+  #mergeReadCursors(channelId: ChannelId, cursors: readonly ReadCursor[] | undefined): void {
+    if (cursors === undefined) return;
+    this.#patch({ readCursors: { ...this.#state.readCursors, [channelId]: cursors } });
+  }
 
   #mergeUsers(users: readonly User[]): void {
     if (users.length === 0) return;

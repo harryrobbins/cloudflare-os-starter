@@ -1,7 +1,7 @@
 // New channel and New message.
 
 import { Hash, LockSimple, MagnifyingGlass } from "@phosphor-icons/react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { MAX_CHANNEL_NAME_LENGTH, MAX_TOPIC_LENGTH, type ChannelKind } from "../contract.js";
 import { useChat, useStore } from "../hooks/store.js";
@@ -135,10 +135,18 @@ export function NewMessageDialog({
 }): ReactNode {
   const store = useStore();
   const users = useChat((state) => state.users);
+  const directory = useChat((state) => state.directory);
   const meId = useChat((state) => state.me?.id);
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+
+  // `state.users` only holds people this client has already seen -- the authors on a loaded page, the
+  // members of a conversation. On a quiet deployment that is nobody, so the dialog would open empty
+  // and there would be no way to start a first conversation. The People view does the same fetch.
+  useEffect(() => {
+    if (!directory.loaded) void store.loadDirectory();
+  }, [store, directory.loaded]);
 
   const matches = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -150,7 +158,7 @@ export function NewMessageDialog({
           user.name.toLowerCase().includes(needle) ||
           user.email?.toLowerCase().includes(needle) === true,
       )
-      .sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name))
+      .toSorted((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name))
       .slice(0, 8);
   }, [users, query, picked, meId]);
 

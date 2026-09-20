@@ -388,7 +388,7 @@ function suggest(
   if (trigger.kind === "user") {
     const matches = Object.values(users)
       .filter((user) => user.name.toLowerCase().includes(needle) || user.email?.toLowerCase().startsWith(needle) === true)
-      .sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name))
+      .toSorted((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name))
       .slice(0, 7);
     return matches.map((user) => ({
       kind: "user" as const,
@@ -401,7 +401,7 @@ function suggest(
   if (trigger.kind === "channel") {
     return Object.values(channels)
       .filter((channel) => channel.name !== null && channel.name.includes(needle))
-      .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""))
+      .toSorted((a, b) => (a.name ?? "").localeCompare(b.name ?? ""))
       .slice(0, 7)
       .map((channel) => ({
         kind: "channel" as const,

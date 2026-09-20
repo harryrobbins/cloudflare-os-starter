@@ -35,7 +35,7 @@ export function BrowseView({
           channel.name?.includes(needle) === true ||
           channel.topic?.toLowerCase().includes(needle) === true,
       )
-      .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+      .toSorted((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
   }, [channels, query, showArchived]);
 
   return (

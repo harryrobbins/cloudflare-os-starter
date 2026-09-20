@@ -116,6 +116,13 @@ async function serveApp(request: Request, env: ChatEnv, url: URL): Promise<Respo
   // 2xx is a real asset; 304 answers a conditional request and must be passed through untouched.
   if (direct.ok || direct.status === 304) return direct;
 
+  // A miss under `assets/` is a missing build artefact, never a client route: Vite writes hashed
+  // filenames there and the router has no path that starts with it. Falling through to the shell
+  // would answer a `<script type="module">` with HTML, and the browser reports that as a MIME-type
+  // refusal rather than a 404 -- which is exactly what a rebuild under a running `wrangler dev` looks
+  // like, since the assets binding keeps the manifest it started with.
+  if (url.pathname.startsWith(`${APP_BASE}assets/`)) return notFound();
+
   // Anything else is a client-routed path. The shell is requested as the app base rather than
   // `index.html`, because the asset server's `html_handling` turns an explicit `index.html` into a
   // redirect whose Location has lost the `/gatekeeper/chat` prefix -- which is also why a redirect

@@ -31,7 +31,7 @@ export function ThreadsView({
 
   const ordered = useMemo(
     () =>
-      [...threads].sort(
+      threads.toSorted(
         (a, b) =>
           Number(b.unreadReplies > 0) - Number(a.unreadReplies > 0) ||
           (b.lastReplyAt ?? 0) - (a.lastReplyAt ?? 0),

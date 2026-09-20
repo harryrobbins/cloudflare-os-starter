@@ -87,6 +87,7 @@ export function CountBadge({
       : "bg-kumo-brand/15 text-kumo-strong";
   return (
     <span
+      data-count={count}
       className={`grid h-[18px] min-w-[18px] shrink-0 place-items-center rounded-full px-1.5 text-[11px] leading-none font-semibold tabular-nums ${toneClassName} ${className}`}
     >
       {count > max ? `${max}+` : count}

@@ -57,13 +57,13 @@ export function Rail({
     const starred = mine.filter((channel) => memberships[channel.id]?.starred === true);
     const starredIds = new Set(starred.map((channel) => channel.id));
     return {
-      starred: starred.sort(compareChannels),
+      starred: starred.toSorted(compareChannels),
       channels: mine
         .filter((channel) => !isDirect(channel) && !starredIds.has(channel.id) && !channel.archived)
-        .sort(compareChannels),
+        .toSorted(compareChannels),
       directs: mine
         .filter((channel) => isDirect(channel) && !starredIds.has(channel.id))
-        .sort((a, b) => b.lastSeq - a.lastSeq),
+        .toSorted((a, b) => b.lastSeq - a.lastSeq),
     };
   }, [channels, memberships]);
 
@@ -261,6 +261,11 @@ function ChannelRow({
       params={{ channelId: channel.id }}
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
+      // Read by the e2e suite: "unread" is carried by font weight alone, which is not something a
+      // test can assert on without pinning a Tailwind class name.
+      data-channel-id={channel.id}
+      data-unread={unread ? "true" : "false"}
+      data-mentions={mentions}
       className={[
         "group flex h-7 items-center gap-2 rounded-md px-2.5 text-[13px] transition-colors",
         active

@@ -17,6 +17,7 @@ import type {
   ListThreadsQuery,
   MarkReadRequest,
   MarkReadResponse,
+  MembershipResponse,
   MeResponse,
   MessageId,
   MessagePageResponse,
@@ -29,6 +30,7 @@ import type {
   ThreadListResponse,
   ThreadResponse,
   UpdateChannelRequest,
+  UpdateMembershipRequest,
   UpdateMeRequest,
   UserId,
   UserListResponse,
@@ -72,6 +74,11 @@ export interface ChatApi {
   leaveChannel(channelId: ChannelId): Promise<ChannelResponse>;
   archiveChannel(channelId: ChannelId): Promise<ChannelResponse>;
   markRead(channelId: ChannelId, request: MarkReadRequest): Promise<MarkReadResponse>;
+  /** The caller's own `notify` / `muted` / `starred` on one conversation. */
+  updateMembership(
+    channelId: ChannelId,
+    request: UpdateMembershipRequest,
+  ): Promise<MembershipResponse>;
 
   listMessages(channelId: ChannelId, query?: ListMessagesQuery): Promise<MessagePageResponse>;
   sendMessage(channelId: ChannelId, request: SendMessageRequest): Promise<SendMessageResponse>;

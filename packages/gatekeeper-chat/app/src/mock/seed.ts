@@ -4,15 +4,16 @@
 // system message, a tombstone, an edited message, and enough bulk history to make the windowed list
 // do actual work.
 
-import type {
-  Attachment,
-  Channel,
-  ChannelId,
-  Membership,
-  Message,
-  Reaction,
-  User,
-  UserId,
+import {
+  GENERAL_CHANNEL_ID,
+  type Attachment,
+  type Channel,
+  type ChannelId,
+  type Membership,
+  type Message,
+  type Reaction,
+  type User,
+  type UserId,
 } from "../contract.js";
 import { userToken } from "../lib/mentions.js";
 
@@ -93,7 +94,7 @@ export function buildSeed(): Seed {
   const following = new Set<string>();
 
   const channels: Channel[] = [
-    channel("c-general", "public", "general", "Release week — ship by Friday", "Everything that does not belong anywhere else.", 8, now - 60 * DAY),
+    channel(GENERAL_CHANNEL_ID, "public", "general", "Release week — ship by Friday", "Everything that does not belong anywhere else.", 8, now - 60 * DAY),
     channel("c-design", "public", "design", "Rail spacing and the new empty states", "Design review and critique.", 6, now - 50 * DAY),
     channel("c-platform", "private", "platform", "Durable Objects, R2, the router", null, 4, now - 40 * DAY),
     channel("c-releases", "public", "releases", "Automated release notes", null, 7, now - 45 * DAY),
@@ -142,7 +143,7 @@ export function buildSeed(): Seed {
     const attachmentIds = entry.attachmentIds ?? [];
     generalMessages.push({
       id,
-      channelId: "c-general",
+      channelId: GENERAL_CHANNEL_ID,
       seq,
       rootId: null,
       authorId: entry.by === "system" ? "u-cara" : entry.by,
@@ -155,7 +156,7 @@ export function buildSeed(): Seed {
       lastReplyAt: null,
       reactions: [],
       attachments: attachmentIds.map((attachmentId) =>
-        makeAttachment(attachmentId, "c-general", id, entry.by, attachments, entry.at),
+        makeAttachment(attachmentId, GENERAL_CHANNEL_ID, id, entry.by, attachments, entry.at),
       ),
       mentions: entry.body.includes(userToken(ME)) ? [{ kind: "user", userId: ME }] : [],
     });
@@ -186,7 +187,7 @@ export function buildSeed(): Seed {
     seq += 1;
     generalMessages.push({
       id: `m-general-t-${seq}`,
-      channelId: "c-general",
+      channelId: GENERAL_CHANNEL_ID,
       seq,
       rootId: "m-root-ship",
       authorId: reply.by,
@@ -203,7 +204,7 @@ export function buildSeed(): Seed {
     });
   }
   following.add("m-root-ship");
-  messages.push(...generalMessages.sort((a, b) => a.seq - b.seq));
+  messages.push(...generalMessages.toSorted((a, b) => a.seq - b.seq));
 
   // --- #design: three unread, one of them a mention -------------------------
   messages.push(
@@ -297,7 +298,7 @@ export function buildSeed(): Seed {
   const withSeq = channels.map((entry) => ({ ...entry, lastSeq: lastSeqByChannel.get(entry.id) ?? 0 }));
 
   const memberships: Membership[] = [
-    membership("c-general", (lastSeqByChannel.get("c-general") ?? 0) - 2, { starred: true }),
+    membership(GENERAL_CHANNEL_ID, (lastSeqByChannel.get(GENERAL_CHANNEL_ID) ?? 0) - 2, { starred: true }),
     membership("c-design", (lastSeqByChannel.get("c-design") ?? 0) - 3),
     membership("c-platform", lastSeqByChannel.get("c-platform") ?? 0, { starred: true }),
     membership("c-releases", (lastSeqByChannel.get("c-releases") ?? 0) - 1, { muted: true, notify: "none" }),

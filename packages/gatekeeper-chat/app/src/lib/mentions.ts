@@ -1,30 +1,52 @@
 // Mention tokens.
 //
-// CONTRACT GAP: `protocol.ts` fixes the *parsed* shape (`Mention`) and the plan fixes the rule --
-// "mentions use immutable user IDs from autocomplete tokens, resolved and checked server-side at post
-// time; display names are neither unique nor stable" -- but it never writes down the token syntax
-// that carries the id through the message body. This module defines it for the client and is the only
-// place that knows it, so replacing it with a shared helper later is a one-file change:
+// The token syntax is the *shared* one: `MENTION_TOKEN_SOURCE` in `src/shared/protocol.ts` and
+// `mentionToken` / `extractMentionIds` in `src/shared/validate.ts` are the single definition, used by
+// the Durable Object to write `mentions` rows and by this module to build and render them. There is
+// no second regex for a person:
 //
 //   <@USER_ID>      a person; the composer inserts it, the renderer shows the display name
-//   <#CHANNEL_ID>   a channel
+//   <#CHANNEL_ID>   a channel. Client-only sugar: the server stores no channel mention, so this one
+//                   is defined here, over the same id charset, and only ever affects rendering.
 //   @channel @here  bare, because they name no id
 //   @agent          bare, the one reserved name (chat.md: ship `@user` and `@agent` first)
 //
-// The angle brackets are the important part: an id may contain characters a bare `@name` form would
-// swallow, and a token can never be produced by ordinary typing, so a body that quotes `<@x>` in
-// backticks is still parsed as a mention only if the server agrees -- which is why the server, not
-// this file, decides who actually gets notified.
+// The angle brackets are the important part: a token can never be produced by ordinary typing, so the
+// composer can insert one without escaping, and the server -- not this file -- decides who actually
+// gets notified.
 
-import type { Mention, UserId } from "../contract.js";
+import {
+  extractMentionIds,
+  MENTION_TOKEN_SOURCE,
+  mentionToken,
+  type Mention,
+  type UserId,
+} from "../contract.js";
 
-export const USER_TOKEN_PATTERN = /<@([^<>\s|]+)>/g;
-export const CHANNEL_TOKEN_PATTERN = /<#([^<>\s|]+)>/g;
+/** The channel form of {@link MENTION_TOKEN_SOURCE}: the same id charset behind a `#`. */
+const CHANNEL_TOKEN_SOURCE = MENTION_TOKEN_SOURCE.replace("<@", "<#");
+
+/**
+ * A fresh global regex per call.
+ *
+ * Never a shared `const`: a global `RegExp` carries `lastIndex`, which is exactly why the contract
+ * publishes the source string rather than a compiled pattern.
+ */
+export function userTokenPattern(): RegExp {
+  return new RegExp(MENTION_TOKEN_SOURCE, "gu");
+}
+
+export function channelTokenPattern(): RegExp {
+  return new RegExp(CHANNEL_TOKEN_SOURCE, "gu");
+}
+
 /** `@channel`, `@here` and `@agent` at a word boundary. */
-export const BARE_MENTION_PATTERN = /(^|[^\w@])@(channel|here|agent)\b/g;
+export function bareMentionPattern(): RegExp {
+  return /(^|[^\w@])@(channel|here|agent)\b/g;
+}
 
 export function userToken(id: UserId): string {
-  return `<@${id}>`;
+  return mentionToken(id);
 }
 
 export function channelToken(id: string): string {
@@ -34,21 +56,16 @@ export function channelToken(id: string): string {
 /**
  * Every mention in a body, deduplicated, in the order the server would see them.
  *
- * Client-side only: it drives the composer's preview and the "did this mention me" check that decides
- * whether to raise a notification before the server's own `mentions` array arrives. The server's copy
- * is authoritative for badges.
+ * The user half is `extractMentionIds` from the contract, so the client and the Durable Object cannot
+ * disagree about which tokens count. Client-side only: it drives the composer's preview and the "did
+ * this mention me" check that decides whether to raise a notification before the server's own
+ * `mentions` array arrives. The server's copy is authoritative for badges.
  */
 export function parseMentions(body: string): Mention[] {
   const out: Mention[] = [];
-  const seenUsers = new Set<string>();
+  for (const userId of extractMentionIds(body)) out.push({ kind: "user", userId });
   const seenKinds = new Set<string>();
-  for (const match of body.matchAll(USER_TOKEN_PATTERN)) {
-    const id = match[1]!;
-    if (seenUsers.has(id)) continue;
-    seenUsers.add(id);
-    out.push({ kind: "user", userId: id });
-  }
-  for (const match of body.matchAll(BARE_MENTION_PATTERN)) {
+  for (const match of body.matchAll(bareMentionPattern())) {
     const kind = match[2] as "channel" | "here" | "agent";
     if (seenKinds.has(kind)) continue;
     seenKinds.add(kind);
@@ -60,7 +77,7 @@ export function parseMentions(body: string): Mention[] {
 /** Channel ids referenced by `<#id>` tokens, for the "also mentioned in" affordances. */
 export function parseChannelMentions(body: string): string[] {
   const out: string[] = [];
-  for (const match of body.matchAll(CHANNEL_TOKEN_PATTERN)) {
+  for (const match of body.matchAll(channelTokenPattern())) {
     if (!out.includes(match[1]!)) out.push(match[1]!);
   }
   return out;
@@ -147,6 +164,6 @@ export function mentionsToText(
   channelNameOf: (id: string) => string | undefined,
 ): string {
   return body
-    .replace(USER_TOKEN_PATTERN, (_all, id: string) => `@${nameOf(id) ?? "unknown"}`)
-    .replace(CHANNEL_TOKEN_PATTERN, (_all, id: string) => `#${channelNameOf(id) ?? "unknown"}`);
+    .replace(userTokenPattern(), (_all, id: string) => `@${nameOf(id) ?? "unknown"}`)
+    .replace(channelTokenPattern(), (_all, id: string) => `#${channelNameOf(id) ?? "unknown"}`);
 }

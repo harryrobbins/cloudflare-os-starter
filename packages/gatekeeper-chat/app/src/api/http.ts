@@ -14,6 +14,7 @@ import {
   type ListThreadsQuery,
   type MarkReadRequest,
   type MarkReadResponse,
+  type MembershipResponse,
   type MeResponse,
   type MessageId,
   type MessagePageResponse,
@@ -25,6 +26,7 @@ import {
   type ThreadListResponse,
   type ThreadResponse,
   type UpdateChannelRequest,
+  type UpdateMembershipRequest,
   type UpdateMeRequest,
   type UploadResponse,
   type User,
@@ -136,6 +138,8 @@ export function createHttpApi(): ChatApi {
       request<ChannelResponse>("POST", apiPath("archiveChannel", { channelId })),
     markRead: (channelId: ChannelId, body: MarkReadRequest) =>
       request<MarkReadResponse>("POST", apiPath("readChannel", { channelId }), body),
+    updateMembership: (channelId: ChannelId, body: UpdateMembershipRequest) =>
+      request<MembershipResponse>("PATCH", apiPath("updateMembership", { channelId }), body),
 
     listMessages: (channelId: ChannelId, params: ListMessagesQuery = {}) =>
       request<MessagePageResponse>(

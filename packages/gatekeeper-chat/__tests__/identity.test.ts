@@ -4,9 +4,9 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 import { identityFromClaims } from "../src/access.js";
-import devWorker from "../src/dev/entry.js";
+import devWorker, * as devEntry from "../src/dev/entry.js";
 import { DEV_COOKIE_NAME, signIdentityId } from "../src/dev/cookie.js";
-import productionWorker from "../src/index.js";
+import productionWorker, * as productionEntry from "../src/index.js";
 import { serveChat, originAllowed } from "../src/serve.js";
 import { IDENTITY_HEADER, type ErrorEnvelope, type MeResponse } from "../src/shared/protocol.js";
 import { apiPath, APP_BASE, CHAT_PREFIX, WS_PATH } from "../src/shared/routes.js";
@@ -208,6 +208,19 @@ describe("serveChat, with an already-verified identity", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 
+  it("404s a missing build asset instead of serving the shell", async () => {
+    // A hashed filename that is not in the manifest is a stale bundle, not a client route. Answering
+    // the shell would hand a `<script type="module">` an HTML body, which the browser reports as a
+    // MIME-type refusal -- a much worse error than a 404.
+    const response = await serveChat(
+      new Request(`${ORIGIN}${APP_BASE}assets/index-deadbeef.js`),
+      env,
+      identity,
+    );
+    expect(response.status).toBe(404);
+    expect(response.headers.get("content-type")).toContain("application/json");
+  });
+
   it("redirects the prefix without a trailing slash", async () => {
     const response = await serveChat(new Request(`${ORIGIN}${CHAT_PREFIX}`), env, identity);
     expect(response.status).toBe(302);
@@ -265,5 +278,30 @@ describe("dev entry point", () => {
     expect(response.status).toBe(401);
     const body = (await response.json()) as ErrorEnvelope;
     expect(body.error.message).toContain("/dev/login");
+  });
+});
+
+/** The exported classes of an entry module, by name. A `default` handler is an object, not a class. */
+function classesOf(module: Record<string, unknown>): string[] {
+  return Object.keys(module)
+    .filter((name) => typeof module[name] === "function")
+    .toSorted();
+}
+
+describe("Durable Object exports", () => {
+  /**
+   * A class named in a `migrations` tag must be exported by whatever `main` points at, or workerd
+   * refuses to start the Worker at all: "Class extends value undefined is not a constructor or null",
+   * from miniflare's DO wrapper. `wrangler.dev.jsonc` carries the same v0/v1 tags as `wrangler.jsonc`,
+   * so the dev entry needs every class the production entry has -- which is not obvious, because the
+   * vendor is useless on a dev server and the failure is a boot error rather than a missing feature.
+   */
+  it("the dev entry exports every class the production entry does", () => {
+    expect(classesOf(devEntry)).toEqual(classesOf(productionEntry));
+  });
+
+  it("names the classes the migrations declare", () => {
+    expect(Object.keys(devEntry)).toContain("ChatWorkspace");
+    expect(Object.keys(devEntry)).toContain("ChatGatekeeper");
   });
 });

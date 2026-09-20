@@ -89,18 +89,18 @@ describe("mentionsUser", () => {
   });
 });
 
-describe("mentionsToText", () => {
-  const names = (id: string): string | undefined => ({ "u-alice": "Alice Chen" })[id];
-  const channels = (id: string): string | undefined => ({ "c-design": "design" })[id];
+const nameOf = (id: string): string | undefined => ({ "u-alice": "Alice Chen" })[id];
+const channelNameOf = (id: string): string | undefined => ({ "c-design": "design" })[id];
 
+describe("mentionsToText", () => {
   it("resolves tokens to display names", () => {
-    expect(mentionsToText("hi <@u-alice> see <#c-design>", names, channels)).toBe(
+    expect(mentionsToText("hi <@u-alice> see <#c-design>", nameOf, channelNameOf)).toBe(
       "hi @Alice Chen see #design",
     );
   });
 
   it("says unknown rather than leaking a raw id", () => {
-    expect(mentionsToText("<@u-ghost>", names, channels)).toBe("@unknown");
+    expect(mentionsToText("<@u-ghost>", nameOf, channelNameOf)).toBe("@unknown");
   });
 });
 

@@ -6,4 +6,4 @@
 // `permalink` are the only way paths are produced.
 export * from "../../src/shared/protocol.js";
 export * from "../../src/shared/routes.js";
-export { utf8Bytes } from "../../src/shared/validate.js";
+export { extractMentionIds, mentionToken, utf8Bytes } from "../../src/shared/validate.js";

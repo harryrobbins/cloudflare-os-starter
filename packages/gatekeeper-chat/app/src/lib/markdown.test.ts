@@ -92,8 +92,9 @@ describe("renderSnippet", () => {
     expect(html).toBe("the <mark>build</mark> is green");
   });
 
-  it("accepts the bracket form too", () => {
-    expect(renderSnippet("the [[build]] is green")).toContain("<mark>build</mark>");
+  it("reinstates only the mark tag; any other markup stays text", () => {
+    // `<mark>` is the one form `snippet()` is asked for in src/do/search.ts.
+    expect(renderSnippet("the <b>build</b> is green")).not.toContain("<b>");
   });
 
   it("escapes everything else", () => {

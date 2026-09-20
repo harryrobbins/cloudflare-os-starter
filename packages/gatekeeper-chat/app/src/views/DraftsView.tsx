@@ -29,7 +29,7 @@ export function DraftsView({
     () =>
       Object.entries(drafts)
         .map(([key, draft]) => ({ key, draft, ...parseConversationKey(key) }))
-        .sort((a, b) => b.draft.updatedAt - a.draft.updatedAt),
+        .toSorted((a, b) => b.draft.updatedAt - a.draft.updatedAt),
     [drafts],
   );
 

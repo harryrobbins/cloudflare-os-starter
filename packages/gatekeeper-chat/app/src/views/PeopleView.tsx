@@ -35,7 +35,7 @@ export function PeopleView({
           user.name.toLowerCase().includes(needle) ||
           user.email?.toLowerCase().includes(needle) === true,
       )
-      .sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name));
+      .toSorted((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name));
   }, [users, query]);
 
   return (

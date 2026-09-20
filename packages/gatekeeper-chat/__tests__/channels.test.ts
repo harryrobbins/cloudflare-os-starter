@@ -33,9 +33,44 @@ describe("the seeded workspace", () => {
     const rail = await alice.get<ChannelListResponse>(channels);
     const general = rail.channels.find((channel) => channel.id === GENERAL_CHANNEL_ID);
     expect(general).toMatchObject({ kind: "public", name: "general", archived: false });
-    // Browsing is not membership: Alice has not posted, so she has no row yet.
-    expect(rail.memberships).toHaveLength(0);
-    expect(general!.memberCount).toBe(1);
+    // Alice and the agent. `#general` cannot be left, so being in it is not a choice she makes;
+    // browsing is still not membership for every *other* public channel (see below).
+    expect(rail.memberships.map((membership) => membership.channelId)).toEqual([GENERAL_CHANNEL_ID]);
+    expect(general!.memberCount).toBe(2);
+  });
+
+  it("puts a person in #general the first time they appear, at the current high-water mark", async () => {
+    const { alice, bob } = setup("general-autojoin");
+    // Alice says something before Bob has ever opened chat.
+    await alice.send<SendMessageResponse>(
+      "POST",
+      apiPath("sendMessage", { channelId: GENERAL_CHANNEL_ID }),
+      { body: "before Bob arrived", clientId: "c1" },
+    );
+
+    const rail = await bob.get<ChannelListResponse>(channels);
+    const membership = rail.memberships.find((row) => row.channelId === GENERAL_CHANNEL_ID);
+    expect(membership).toBeDefined();
+    // History is not unread: the row starts at the channel's last seq, so Bob has no badge for a
+    // conversation that happened before he existed.
+    expect(membership!.lastReadSeq).toBe(
+      rail.channels.find((channel) => channel.id === GENERAL_CHANNEL_ID)!.lastSeq,
+    );
+    expect(rail.badges.unread[GENERAL_CHANNEL_ID] ?? 0).toBe(0);
+  });
+
+  it("does not re-add the membership on a later visit", async () => {
+    const { alice } = setup("general-idempotent");
+    await alice.send<MembershipResponse>(
+      "PATCH",
+      apiPath("updateMembership", { channelId: GENERAL_CHANNEL_ID }),
+      { starred: true },
+    );
+    await alice.get(apiPath("me"));
+    const rail = await alice.get<ChannelListResponse>(channels);
+    const membership = rail.memberships.find((row) => row.channelId === GENERAL_CHANNEL_ID);
+    // A second `touchUser` must not reset the row it already wrote.
+    expect(membership).toMatchObject({ starred: true });
   });
 
   it("reserves the agent as a real user with kind agent", async () => {

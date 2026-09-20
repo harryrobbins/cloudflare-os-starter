@@ -42,7 +42,7 @@ export function ChannelDetails({
         out.push({ attachment, at: message.createdAt, authorId: message.authorId });
       }
     }
-    return out.sort((a, b) => b.at - a.at);
+    return out.toSorted((a, b) => b.at - a.at);
   }, [messages]);
 
   if (channel === undefined) return null;

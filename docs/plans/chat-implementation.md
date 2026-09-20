@@ -100,28 +100,28 @@ now covers `app/` through `app/tsconfig.json`).
 - [x] Accessibility: focus, keyboard equivalents, live region, reduced motion; offline/reconnecting state
 - [x] Narrow layout
 
-**Contract gaps the SPA worked around** (nothing in `src/shared/` was edited; each is a client-side
-fallback, and each is a small addition when stream A gets to it):
+**Contract gaps the SPA worked around.** All but two were closed in stream E, once the SPA ran
+against the real Worker; the entries are kept so the reasoning survives:
 
-- **Mention token syntax.** `protocol.ts` fixes the parsed `Mention` but not the syntax that carries an
-  id through a Markdown body. The client uses `<@userId>` / `<#channelId>` plus bare `@channel`,
-  `@here`, `@agent`, defined in one place (`app/src/lib/mentions.ts`). The server must parse the same
-  thing; moving that module into `src/shared/` would settle it. The composer holds the *display* form
-  (`@Alice Chen`) and `resolveMentions` converts to ids on send, with `mentionsToText` as its inverse
-  for the inline editor — an exact, unambiguous name resolves, anything else stays literal text.
-- **No `GET /api/mentions`.** The Mentions view runs the search qualifier `to:me` instead, which the
-  contract already resolves server-side.
-- **No route for per-conversation `notify` / `muted` / `starred`.** `Membership` carries all three and
-  `MarkReadRequest` cannot set them, so they are applied optimistically and persisted per browser in
-  `localStorage`. They will start syncing the moment a `PATCH channels/:id/membership` exists.
-- **`SearchHit.snippet` mark syntax is unspecified.** The renderer accepts `<mark>`, `<b>` and `[[…]]`
-  and allow-lists the result down to `<mark>`.
-- **`GET messages?rootId=` does not say whether the root is included.** The thread pane copes either
-  way: it falls back to one `around=<rootId>` page when the root is missing, which is what a narrow
-  deep link to `/c/<id>/t/<root>` needs.
-- **No date cursor for "jump to date"**, as above.
-- **`Attachment` carries no URL.** The client builds one with `filePath()`; the mock swaps in inline
-  data URLs through `app/src/lib/files.ts`, which production never installs.
+- ~~**Mention token syntax.**~~ Closed. `app/src/lib/mentions.ts` now builds and parses the user half
+  with `mentionToken` / `extractMentionIds` and `MENTION_TOKEN_SOURCE` from `src/shared/`, so there is
+  one definition and the client cannot drift from the rows the object writes. `<#channelId>` stays
+  client-only sugar over the same id charset, because the server stores no channel mention. The
+  composer still holds the *display* form (`@Alice Chen`) and `resolveMentions` converts on send.
+- **No `GET /api/mentions`.** Still true, still fine: the Mentions view runs the `to:me` search
+  qualifier, which the contract already resolves server-side.
+- ~~**No route for per-conversation `notify` / `muted` / `starred`.**~~ Closed. The store calls
+  `PATCH channels/:id/membership` and adopts the response (badges included), rolling the optimistic
+  change back and toasting on a refusal. The `localStorage` mirror is gone.
+- ~~**`SearchHit.snippet` mark syntax is unspecified.**~~ Closed. The server emits exactly
+  `snippet(messages_fts, 0, '<mark>', '</mark>', '…', n)`, so the renderer reinstates `<mark>` and
+  nothing else; the `<b>` and `[[…]]` variants are gone.
+- ~~**`GET messages?rootId=` does not say whether the root is included.**~~ Closed. It does
+  (`root_id = ? OR id = ?` in `src/do/messages.ts`), which is also what the agent vendor needs, so the
+  thread pane's `around=<rootId>` recovery pass is gone.
+- **No date cursor for "jump to date"**, as above. Unchanged: it still needs a contract addition.
+- **`Attachment` carries no URL.** Unchanged, and correct as it stands: the client builds one with
+  `filePath()` and the `/files/:id` route serves it, authenticated; only the mock installs a resolver.
 
 ## Stream C: deployment wiring
 
@@ -152,9 +152,50 @@ Notes for the other streams:
 
 ## Stream E: end-to-end
 
-- [ ] Playwright against `wrangler dev` with two dev identities: live updates, unread, threads, search, upload, reconnect
-- [ ] Local-platform run through the router (`start-local-platform.sh` pattern)
-- [ ] Protected-deployment smoke: Access assertion present on HTTP and WebSocket upgrade, invalid assertion rejected
+Complete 2026-09-20 apart from the protected-deployment smoke, which needs a deployed hostname.
+
+- [x] The SPA reconciled with the real API: every contract gap in stream B's list closed except the
+      two noted there (no date cursor, no `GET /api/mentions`)
+- [x] Playwright against `wrangler dev` with two dev identities, in `packages/gatekeeper-chat/e2e/`:
+      13 scenarios (live delivery, threads, unread, mentions, mark-unread, private-channel
+      invisibility, DM and "seen by", uploads of an image and a non-image, search qualifiers and
+      Jump, permalink, narrow viewport, kill-and-restart reconnect with catch-up, 429 toast).
+      Its own runner (`e2e/run.sh`), deliberately **not** in `test:run`; how to run it is in the
+      package README.
+- [x] Local-platform run through the router (`e2e/start-local-platform.sh`, the whiteboard's
+      patched-launcher pattern plus `EXTRA_ROUTER_SERVICE` / `EXTRA_WRANGLER_CONFIGS`)
+- [ ] Protected-deployment smoke: Access assertion present on HTTP and WebSocket upgrade, invalid
+      assertion rejected — still open; it needs the deployed hostname, so it belongs with the release
+      smoke test rather than here
+
+**Bugs the integration found**, all of which only appear when the two halves run against each other:
+
+- **The dev server could not boot at all.** `wrangler.dev.jsonc` carries the same `v1` migration for
+  `ChatGatekeeper` as production, but `src/dev/entry.ts` exported only `ChatWorkspace`, and workerd
+  refuses to start a Worker whose migration names a class it cannot find ("Class extends value
+  undefined"). The dev entry now exports the vendor's classes too, and `__tests__/identity.test.ts`
+  pins the two entries' exports to each other.
+- **Nobody was in `#general`.** The channel was seeded with only the agent in it, so a person's first
+  visit showed an empty rail and a "You are not in #general / Join" card for the one channel the
+  server refuses to let anybody leave. `touchUser` now inserts the membership at the channel's
+  high-water mark, so history is not unread (`__tests__/channels.test.ts`).
+- **A stale asset answered with the app shell.** The `assets` binding reads its manifest at start-up,
+  so rebuilding `app/dist` under a running `wrangler dev` made every hashed filename fall through the
+  SPA fallback: the browser then reports "MIME type text/html" instead of a 404. A miss under
+  `assets/` is now a 404 (`src/serve.ts`), and the README says to restart after a build.
+- **Messages were silently marked read while you were elsewhere.** `activeChannelId` was set by
+  `ChannelScreen` and never cleared, so anything arriving while you were on Threads, People, Search
+  or Drafts was marked read and never badged. `ViewShell` now clears it.
+- **A conversation created after the socket connected was invisible to it.** `sub` is a filter over
+  the channels the socket named, so a new DM's `msg`, `read` and `typing` never arrived: the creator
+  never saw the reply and the recipient never saw the conversation. The store now re-sends `sub`
+  whenever a channel response lands, and refetches the rail when a `badge` names a channel it does
+  not know (which is how the *recipient* of a new DM learns about it, since there is no
+  "channel created" event).
+- **The New message dialog was empty on a quiet deployment.** It filtered `state.users`, which only
+  holds people this client has already seen; it now loads the directory the way the People view does.
+- `RailToggle` in `AppShell.tsx` was dead code: the narrow layout's rail is opened by the
+  "Conversations" button that `ConversationView` and `ViewShell` already render. Removed.
 
 ## Delight pass (after Stream B, before cleanup)
 
@@ -169,7 +210,9 @@ Ranked by effect against complexity; work top-down and stop at diminishing retur
 - [ ] 7. Landing inbox: greeting, unread digest, resume where you left off
 - [ ] 8. Slash commands: `/me`, `/shrug`, `/topic`, `/mute`, `/dm`, `/search`
 - [ ] 9. Images: aspect-ratio placeholders, blur-up, keyboard lightbox, download
-- [ ] 10. Seen-by avatars in DMs and groups (needs others' read cursors on the channel response)
+- [ ] 10. Seen-by *avatars* in DMs and groups. The data and a plain "Seen by Alice" line landed in
+      stream E (`readCursors` on the page, the `read` event's `userId`, `ConversationView`'s
+      `data-testid="seen-by"` line); what is left is the avatar stack.
 
 ## Phase 2: dock fork commit (submodule)
 
