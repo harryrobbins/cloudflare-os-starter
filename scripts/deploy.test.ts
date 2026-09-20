@@ -768,10 +768,24 @@ test("rebuilds the Context configurator app rather than replaying it", () => {
 });
 
 test("passes VITE_CF_ACCESS_MODE explicitly rather than inheriting it", () => {
-  const withAccessMode = buildCommands(validConfig).filter(({ env }) => env);
-  assert.deepEqual(withAccessMode.map(({ env }) => env), [{ VITE_CF_ACCESS_MODE: "true" }]);
+  const withEnv = buildCommands(validConfig).filter(({ env }) => env);
+  assert.deepEqual(withEnv.map(({ env }) => env),
+    [{ VITE_CF_ACCESS_MODE: "true", VITE_CHAT_DOCK: "true" }]);
   // It has to reach the frontend, which inlines it into the bundle, and nothing else.
-  assert.match(withAccessMode[0].args.join(" "), /@gadgets\/workshop-frontend/);
+  assert.match(withEnv[0].args.join(" "), /@gadgets\/workshop-frontend/);
+});
+
+test("builds the chat dock into the frontend only when chat is deployed", () => {
+  // The dock is a fork commit in the submodule (`ChatDock.tsx`), gated on this build-time flag. With
+  // no chat Worker there is nothing for its iframe to load, so the flag is absent and the dock, its
+  // sidebar and editor triggers and its /chat route are all dropped from the bundle.
+  const frontend = (config: DeploymentConfig) => buildCommands(config)
+    .find(({ args }) => args.includes("@gadgets/workshop-frontend"))!;
+
+  assert.equal(frontend(validConfig).env?.VITE_CHAT_DOCK, "true");
+  const withoutChat = frontend(variant((c) => { c.chat = { enabled: false }; }));
+  assert.deepEqual(withoutChat.env, { VITE_CF_ACCESS_MODE: "true" });
+  assert.equal(frontend(variant((c) => { delete c.chat; })).env?.VITE_CHAT_DOCK, undefined);
 });
 
 test("passes an absolute FORMAT_BLUEPRINTS_DIR to the backend build only when configured", () => {

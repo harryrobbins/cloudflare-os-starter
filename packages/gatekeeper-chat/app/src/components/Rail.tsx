@@ -23,6 +23,7 @@ import { useMemo, useState, type ReactNode } from "react";
 
 import type { Channel, ChannelId } from "../contract.js";
 import { channelLabel, isDirect, otherMemberIds } from "../lib/labels.js";
+import { parseConversationKey } from "../store/drafts.js";
 import { compareChannels, isUnread } from "../store/unread.js";
 import { useChat } from "../hooks/store.js";
 import { Avatar, CountBadge, PresenceDot, SectionLabel } from "./primitives.js";
@@ -46,7 +47,16 @@ export function Rail({
   const online = useChat((state) => state.online);
   const meId = useChat((state) => state.me?.id);
   const threadCount = useChat((state) => state.badges.threads);
-  const draftCount = useChat((state) => Object.keys(state.drafts).length);
+  const drafts = useChat((state) => state.drafts);
+  const draftCount = Object.keys(drafts).length;
+  /**
+   * Which conversations hold unsent text. A thread draft counts for its channel: the rail has no row
+   * for a thread, and "you were writing something in here" is the fact worth surfacing either way.
+   */
+  const draftChannels = useMemo(
+    () => new Set(Object.keys(drafts).map((key) => parseConversationKey(key).channelId)),
+    [drafts],
+  );
   const mentionCount = useMemo(
     () => Object.values(badges.mentions).reduce((total, count) => total + count, 0),
     [badges.mentions],
@@ -79,7 +89,9 @@ export function Rail({
           className="press flex h-8 flex-1 cursor-pointer items-center gap-2 rounded-lg border border-kumo-line bg-kumo-base px-2.5 text-left text-[12px] text-kumo-inactive transition-colors hover:border-kumo-ring hover:text-kumo-subtle"
         >
           <MagnifyingGlass size={14} />
-          <span className="flex-1 truncate">Search</span>
+          {/* It opens the quick switcher, which both jumps and hands off to the search view, so the
+              label says so rather than promising only one of the two. */}
+          <span className="flex-1 truncate">Search or jump to…</span>
           <kbd className="rounded border border-kumo-line px-1 font-sans text-[10px] text-kumo-inactive">
             ⌘K
           </kbd>
@@ -103,6 +115,7 @@ export function Rail({
                 unread={isUnread(memberships[channel.id], channel.lastSeq)}
                 mentions={badges.mentions[channel.id] ?? 0}
                 muted={memberships[channel.id]?.muted === true}
+                hasDraft={draftChannels.has(channel.id)}
                 label={channelLabel(channel, users, meId)}
                 online={presenceOf(channel, online, meId)}
                 onNavigate={onNavigate}
@@ -119,6 +132,7 @@ export function Rail({
               unread={isUnread(memberships[channel.id], channel.lastSeq)}
               mentions={badges.mentions[channel.id] ?? 0}
               muted={memberships[channel.id]?.muted === true}
+              hasDraft={draftChannels.has(channel.id)}
               label={channelLabel(channel, users, meId)}
               onNavigate={onNavigate}
             />
@@ -135,6 +149,7 @@ export function Rail({
               unread={isUnread(memberships[channel.id], channel.lastSeq)}
               mentions={badges.mentions[channel.id] ?? 0}
               muted={memberships[channel.id]?.muted === true}
+              hasDraft={draftChannels.has(channel.id)}
               label={channelLabel(channel, users, meId)}
               online={presenceOf(channel, online, meId)}
               onNavigate={onNavigate}
@@ -238,6 +253,7 @@ function ChannelRow({
   mentions,
   muted,
   online,
+  hasDraft,
   onNavigate,
 }: {
   channel: Channel;
@@ -246,6 +262,7 @@ function ChannelRow({
   mentions: number;
   muted: boolean;
   online?: boolean;
+  hasDraft: boolean;
   onNavigate?: () => void;
 }): ReactNode {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -293,7 +310,14 @@ function ChannelRow({
         )}
       </span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {online !== undefined && !unread && mentions === 0 && (
+      {hasDraft && (
+        <NotePencil
+          size={12}
+          className="shrink-0 text-kumo-inactive"
+          aria-label="Unsent draft"
+        />
+      )}
+      {online !== undefined && !unread && mentions === 0 && !hasDraft && (
         <PresenceDot online={online} className="h-2 w-2" />
       )}
       {!muted && <CountBadge count={mentions} />}

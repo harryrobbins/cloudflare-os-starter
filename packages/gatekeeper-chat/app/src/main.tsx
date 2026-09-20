@@ -9,7 +9,7 @@ import "./styles.css";
 
 import { createTransport } from "./api/transport.js";
 import { StoreProvider } from "./hooks/store.js";
-import { applyAccent, createBridge, isEmbedded } from "./lib/bridge.js";
+import { applyAccent, createBridge, parseEmbedOptions } from "./lib/bridge.js";
 import { attachStore, navigateToAppPath, router } from "./router.js";
 import { ChatStore } from "./store/store.js";
 
@@ -17,7 +17,7 @@ async function main(): Promise<void> {
   const root = document.querySelector("#root");
   if (root === null) throw new Error("The app root is missing from index.html.");
 
-  const embedded = isEmbedded();
+  const { bridged, compact } = parseEmbedOptions();
   const transport = await createTransport();
   const store = new ChatStore({ transport, navigate: navigateToAppPath });
   attachStore(store);
@@ -34,7 +34,7 @@ async function main(): Promise<void> {
       },
       onVisible: (visible) => store.setVisible(visible),
     },
-    embedded,
+    bridged,
   );
 
   if (bridge.active) {
@@ -53,9 +53,16 @@ async function main(): Promise<void> {
     .matchMedia("(prefers-color-scheme: dark)")
     .addEventListener("change", () => store.systemThemeChanged());
 
-  if (embedded) document.documentElement.dataset.embed = "1";
+  if (bridged) document.documentElement.dataset.embed = "1";
+  if (compact) document.documentElement.dataset.compact = "1";
 
-  await store.start({ embedded });
+  // Mock builds only, and `__CHAT_MOCK__` is a build-time constant, so a production bundle folds this
+  // away with the fake it reaches for. It is what lets a screenshot script make a message arrive.
+  if (__CHAT_MOCK__ && store.mock !== undefined) {
+    (window as unknown as { chatMock?: unknown }).chatMock = store.mock;
+  }
+
+  await store.start({ embedded: bridged, compact });
 
   createRoot(root).render(
     <StrictMode>

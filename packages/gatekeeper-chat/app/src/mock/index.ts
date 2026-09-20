@@ -120,8 +120,12 @@ class MockWorkspace {
         membership.manualUnreadSeq === null
           ? membership.lastReadSeq
           : Math.min(membership.lastReadSeq, membership.manualUnreadSeq - 1);
+      // No `rootId` filter and no tombstones: `badgeSummary` in `src/do/unread.ts` counts every
+      // live message above the cursor, thread replies included. The mock used to exclude replies,
+      // which made the rail (membership arithmetic) and the badge summary disagree in #general.
       const missed = this.messagesIn(channel.id).filter(
-        (message) => message.seq > floor && message.authorId !== ME && message.rootId === null,
+        (message) =>
+          message.seq > floor && message.authorId !== ME && message.deletedAt === null,
       );
       if (missed.length > 0) unread[channel.id] = missed.length;
       const mentioned = missed.filter((message) => mentionsUser(message.mentions, ME, message.authorId));
@@ -417,12 +421,17 @@ function createMockApi(workspace: MockWorkspace): ChatApi {
         hasMoreAfter = false;
       }
 
+      // `dm` and `group` only, exactly as `src/do/messages.ts` does it.
+      const kind = workspace.channel(channelId).kind;
+      const cursors = kind === "dm" || kind === "group" ? workspace.seed.readCursors.get(channelId) : undefined;
+
       return {
         messages: slice,
         hasMoreBefore,
         hasMoreAfter,
         users: usersOf(slice),
         channelLastSeq: workspace.channel(channelId).lastSeq,
+        ...(cursors === undefined ? {} : { readCursors: cursors }),
       };
     },
 

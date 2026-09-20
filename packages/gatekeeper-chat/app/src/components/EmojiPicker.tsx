@@ -3,9 +3,17 @@
 // is not a trade this app needs to make.
 
 import { MagnifyingGlass } from "@phosphor-icons/react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
-import { ALL_EMOJI, EMOJI_GROUPS } from "../lib/emoji.js";
+import { ALL_EMOJI, EMOJI_GROUPS, type EmojiEntry } from "../lib/emoji.js";
+import { quickReactions, subscribeQuickReactions } from "../lib/reactions.js";
 
 export function EmojiPicker({
   onPick,
@@ -28,16 +36,25 @@ export function EmojiPicker({
     return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [onClose]);
 
+  const quickPicks = useSyncExternalStore(subscribeQuickReactions, quickReactions, quickReactions);
+
   const groups = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (needle.length === 0) return EMOJI_GROUPS;
+    if (needle.length === 0) {
+      // The same row the hover bar offers, at the top: a picker whose first row is what you always
+      // reach for turns two decisions into none.
+      const frequent: EmojiEntry[] = quickPicks.map(
+        (emoji) => ALL_EMOJI.find((entry) => entry.emoji === emoji) ?? { emoji, name: emoji },
+      );
+      return [{ label: "Frequently used", entries: frequent }, ...EMOJI_GROUPS];
+    }
     const matches = ALL_EMOJI.filter(
       (entry) =>
         entry.name.includes(needle) ||
         (entry.keywords ?? []).some((keyword) => keyword.includes(needle)),
     );
     return [{ label: `${matches.length} matches`, entries: matches }];
-  }, [query]);
+  }, [query, quickPicks]);
 
   return (
     <>
@@ -68,7 +85,7 @@ export function EmojiPicker({
               <div className="grid grid-cols-8 gap-0.5">
                 {group.entries.map((entry) => (
                   <button
-                    key={entry.name}
+                    key={`${group.label}:${entry.name}`}
                     type="button"
                     onClick={() => onPick(entry.emoji)}
                     aria-label={entry.name}

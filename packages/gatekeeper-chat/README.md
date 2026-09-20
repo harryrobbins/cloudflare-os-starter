@@ -76,6 +76,14 @@ turns it on.
 Against the real Worker, run `pnpm build` then `pnpm dev` and sign in at
 `/gatekeeper/chat/dev/login?as=dev-user` (see [Signing in locally](#signing-in-locally)).
 
+The SPA's keyboard surface, for anybody driving it by hand or writing a test against it:
+`Ctrl/Cmd+K` opens the quick switcher (`#` narrows it to channels, `@` to people, and the last row
+hands off to the search view); `?` opens the shortcut sheet unless a text field has focus; and a
+message starting with a known slash command (`/me`, `/shrug`, `/topic`, `/mute`, `/unmute`, `/dm`,
+`/search`) is intercepted rather than posted -- anything else beginning with a slash is an ordinary
+message. `?embed=1` turns on the `postMessage` bridge; `?compact=1` -- separately -- forces the
+single-column layout that a narrow viewport also produces.
+
 After `wrangler types`, re-apply the hand edit marked at the top of `worker-configuration.d.ts`: it
 rewrites two `import("./.wrangler/validate/src/index")` paths to `./src/index`. Wrangler follows
 `main`, which is the capnweb-validate build output, and an import from that `.d.ts` drags the

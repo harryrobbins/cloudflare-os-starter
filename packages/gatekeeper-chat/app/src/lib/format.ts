@@ -11,6 +11,7 @@ const DAY_WITH_YEAR = new Intl.DateTimeFormat("en-GB", {
   year: "numeric",
 });
 const SHORT_DATE = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
+const FULL_DATE = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
 /** `10:02`. */
 export function formatTime(at: number): string {
@@ -33,6 +34,11 @@ export function formatDayDivider(at: number, now: number = Date.now()): string {
   return new Date(at).getFullYear() === new Date(now).getFullYear()
     ? DAY.format(at)
     : DAY_WITH_YEAR.format(at);
+}
+
+/** `17 September 2026`. For a fact about a thing rather than a position in a conversation. */
+export function formatFullDate(at: number): string {
+  return FULL_DATE.format(at);
 }
 
 /** `10:02` today, `Yesterday 10:02`, `17 Sep 10:02` further back. For lists, not the conversation. */

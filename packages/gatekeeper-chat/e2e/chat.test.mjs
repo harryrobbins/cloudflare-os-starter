@@ -230,8 +230,11 @@ describe('gatekeeper-chat end to end', () => {
     await openChannel(user.page, dmId)
     await messageRow(user.page, body).waitFor({ timeout: 15_000 })
 
-    await admin.page.getByTestId('seen-by').waitFor({ timeout: 20_000 })
-    assert.match(await admin.page.getByTestId('seen-by').innerText(), /Seen by Dev User/)
+    // The marker is an avatar stack sitting after the last message that person has read, so the
+    // sentence lives on its label rather than in its text (delight pass, item 10).
+    const seen = admin.page.getByTestId('seen-by').first()
+    await seen.waitFor({ timeout: 20_000 })
+    assert.match(await seen.getAttribute('aria-label'), /Seen by Dev User/)
     await shot(admin.page, 'T7-dm-seen-by')
     await openChannel(admin.page, 'general')
     await openChannel(user.page, 'general')
@@ -286,10 +289,16 @@ describe('gatekeeper-chat end to end', () => {
     await say(admin.page, `a searchable ${needle} message`)
     await messageRow(admin.page, needle).waitFor({ timeout: 15_000 })
 
-    const search = admin.page.getByLabel('Search messages')
+    // The rail's box opens the quick switcher; its last row hands off to the search view. The needle
+    // is a nonsense word, so no channel or person matches and the hand-off row is the only one.
     await admin.page.getByRole('navigation', { name: 'Conversations' })
-      .getByRole('button', { name: 'Search' })
+      .getByRole('button', { name: /Search or jump/ })
       .click()
+    await admin.page.getByTestId('quick-switcher').waitFor({ timeout: 10_000 })
+    await admin.page.getByRole('combobox').fill(needle)
+    await admin.page.getByRole('option', { name: /Search messages for/ }).click()
+
+    const search = admin.page.getByLabel('Search messages')
     await search.waitFor({ timeout: 10_000 })
     await search.fill(`in:#general from:@dev-admin ${needle}`)
     await search.press('Enter')
@@ -307,7 +316,9 @@ describe('gatekeeper-chat end to end', () => {
 
     await search.fill(`in:#general ${needle}`)
     await search.press('Enter')
-    await admin.page.getByRole('button', { name: 'Jump' }).first().click()
+    // `exact`: the rail's own button is called "Search or jump to…", and a substring match on
+    // "Jump" picks that up first.
+    await admin.page.getByRole('button', { name: 'Jump', exact: true }).first().click()
     await admin.page.waitForURL((url) => /\/c\/general\/m\//.test(url.pathname), { timeout: 15_000 })
     await messageRow(admin.page, needle).waitFor({ timeout: 15_000 })
     await shot(admin.page, 'T9-jump')

@@ -1,8 +1,9 @@
 // The shell: rail, the routed content area, and the overlays that belong to no single view.
 //
 // Three layouts from one tree. Wide is rail + content (+ the content's own right pane). Narrow is one
-// column at a time: the rail becomes a drawer and the content fills the screen, which is also exactly
-// what embedded mode wants, so `?embed=1` simply forces the narrow branch and drops the rail's width.
+// column at a time: the rail becomes a drawer and the content fills the screen, which is exactly what
+// the shell's dock wants -- so `?compact=1` forces that branch. `?embed=1` does *not*: it only says a
+// shell is listening on `postMessage`, and the shell's full `/chat` page is bridged and wide at once.
 
 import { X } from "@phosphor-icons/react";
 import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
@@ -12,6 +13,8 @@ import { useChat } from "../hooks/store.js";
 import { navigateToAppPath } from "../lib/navigate.js";
 import { NARROW_QUERY, useMediaQuery } from "../hooks/useMedia.js";
 import { NewChannelDialog, NewMessageDialog } from "./Dialogs.js";
+import { QuickSwitcher } from "./QuickSwitcher.js";
+import { ShortcutSheet } from "./ShortcutSheet.js";
 import { ConnectionBanner, LiveRegion, Toasts } from "./Toasts.js";
 import { Rail } from "./Rail.js";
 import { Button, EmptyState, Skeleton } from "./primitives.js";
@@ -37,25 +40,40 @@ export function AppShell(): ReactNode {
   const phase = useChat((state) => state.phase);
   const fatalError = useChat((state) => state.fatalError);
   const embedded = useChat((state) => state.embedded);
+  const compact = useChat((state) => state.compact);
   const narrowViewport = useMediaQuery(NARROW_QUERY);
-  const narrow = narrowViewport || embedded;
+  const narrow = narrowViewport || compact;
   const [railOpen, setRailOpen] = useState(false);
   const [dialog, setDialog] = useState<"channel" | "message" | null>(null);
+  const [overlay, setOverlay] = useState<"switcher" | "shortcuts" | null>(null);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
 
-  // ⌘K / Ctrl+K opens search from anywhere that is not already a text field.
+  /**
+   * The two global keys.
+   *
+   * `⌘K`/`Ctrl+K` works anywhere, including inside the composer -- that is what makes it a *switcher*
+   * rather than a menu item. `?` must not, because `?` is a character: it only opens the sheet when
+   * the keystroke is not headed for a text field.
+   */
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        void navigate({ to: "/search", search: { q: "" } });
+        setOverlay((current) => (current === "switcher" ? null : "switcher"));
+        return;
+      }
+      if (event.key === "?" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        if (isTypingTarget(event.target)) return;
+        event.preventDefault();
+        setOverlay((current) => (current === "shortcuts" ? null : "shortcuts"));
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [navigate]);
+  }, []);
 
   useEffect(() => setRailOpen(false), [pathname]);
+  useEffect(() => setOverlay(null), [pathname]);
 
   const layout: Layout = {
     narrow,
@@ -94,7 +112,7 @@ export function AppShell(): ReactNode {
               <Rail
                 onNewChannel={layout.openNewChannel}
                 onNewMessage={layout.openNewMessage}
-                onSearch={() => void navigate({ to: "/search", search: { q: "" } })}
+                onSearch={() => setOverlay("switcher")}
               />
             </div>
           )}
@@ -118,7 +136,7 @@ export function AppShell(): ReactNode {
                 }}
                 onSearch={() => {
                   setRailOpen(false);
-                  void navigate({ to: "/search", search: { q: "" } });
+                  setOverlay("switcher");
                 }}
                 onNavigate={() => setRailOpen(false)}
               />
@@ -131,6 +149,16 @@ export function AppShell(): ReactNode {
             />
           </div>
         )}
+
+        {overlay === "switcher" && (
+          <QuickSwitcher
+            onClose={() => setOverlay(null)}
+            onOpenChannel={(channelId) => void navigate({ to: "/c/$channelId", params: { channelId } })}
+            onOpenPerson={(userId) => void navigate({ to: "/dm/$userId", params: { userId } })}
+            onSearch={(q) => void navigate({ to: "/search", search: { q } })}
+          />
+        )}
+        {overlay === "shortcuts" && <ShortcutSheet onClose={() => setOverlay(null)} />}
 
         <Toasts onNavigate={navigateToAppPath} />
         <LiveRegion />
@@ -156,6 +184,14 @@ export function AppShell(): ReactNode {
       </div>
     </LayoutContext.Provider>
   );
+}
+
+/** Is this keystroke headed for something the user is typing into? */
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
 /** The first paint, shaped like the app so nothing jumps when the data lands. */

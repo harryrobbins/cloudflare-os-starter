@@ -228,9 +228,10 @@ describe("shouldNotify", () => {
     ).toBe(true);
   });
 
-  it("counts @channel as a mention of everybody but the author", () => {
+  // The server never writes a `channel` mention row, so "mentions only" must stay silent for one.
+  it("does not treat @channel as a mention under \"mentions only\"", () => {
     expect(
       shouldNotify(message({ mentions: [{ kind: "channel" }] }), "me", membership({ notify: "mentions" })),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

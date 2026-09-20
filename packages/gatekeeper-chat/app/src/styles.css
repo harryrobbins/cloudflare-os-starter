@@ -384,6 +384,40 @@ pre {
   animation: chat-rise 0.18s var(--ease-out-strong) both;
 }
 
+/* The "Jump to first unread" pill arrives from above, matching the direction it will send you. It
+   keeps its own horizontal centring in the keyframes, because a transform animation replaces the
+   utility class's translate wholesale. */
+@keyframes chat-drop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+.chat-drop {
+  animation: chat-drop 0.18s var(--ease-out-strong) both;
+}
+
+/* A reaction landing. A short overshoot on the pill itself -- enough to catch the eye in a busy
+   channel, short enough that a burst of reactions does not turn the row into a slot machine. */
+@keyframes chat-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.chat-pop {
+  animation: chat-pop 0.26s var(--ease-out-strong) both;
+}
+
 @keyframes chat-spin {
   to {
     transform: rotate(360deg);
@@ -419,6 +453,8 @@ pre {
   .chat-flash,
   .chat-skeleton,
   .chat-rise,
+  .chat-drop,
+  .chat-pop,
   .chat-spin,
   .chat-typing-dot,
   .press,
@@ -426,6 +462,11 @@ pre {
     animation: none;
     transition: none;
     transform: none;
+  }
+  /* `transform: none` above would also undo the centring the drop pill carries in its keyframes,
+     so it gets its resting position back explicitly. */
+  .chat-drop {
+    transform: translateX(-50%);
   }
   /* The flash still has to be visible without motion, so it becomes a static tint that the
      component clears on a timer. */

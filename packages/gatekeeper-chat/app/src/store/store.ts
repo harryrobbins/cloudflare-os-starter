@@ -27,6 +27,7 @@ import {
 } from "../contract.js";
 import { ApiError, type ChatApi, type ChatSocket, type SocketStatus, type Transport } from "../api/types.js";
 import { channelLabel } from "../lib/labels.js";
+import { recordEmojiUse } from "../lib/reactions.js";
 import { toPlainText } from "../lib/markdown.js";
 import { mentionsToText, parseMentions, resolveMentions } from "../lib/mentions.js";
 import { conversationKey, loadDrafts, readSetting, saveDrafts, writeSetting } from "./drafts.js";
@@ -57,6 +58,7 @@ import {
   INITIAL_STATE,
   type ChatState,
   type ConversationState,
+  type LocalReadCursor,
   type QueuedUpload,
   type ThemeMode,
   type Toast,
@@ -131,12 +133,13 @@ export class ChatStore {
 
   // --- lifecycle ------------------------------------------------------------
 
-  async start(options: { embedded: boolean }): Promise<void> {
+  async start(options: { embedded: boolean; compact?: boolean }): Promise<void> {
     const storedTheme = readSetting(THEME_KEY);
     const override: ThemeMode | null =
       storedTheme === "light" || storedTheme === "dark" ? storedTheme : null;
     this.#patch({
       embedded: options.embedded,
+      compact: options.compact ?? false,
       drafts: loadDrafts(),
       themeOverride: override,
       theme: override ?? systemTheme(),
@@ -278,10 +281,13 @@ export class ChatStore {
     const current = this.#state.readCursors[channelId] ?? [];
     const existing = current.find((cursor) => cursor.userId === userId);
     if (existing !== undefined && existing.lastReadSeq >= seq) return;
-    const next: ReadCursor[] =
+    // The event is the only place a *time* for somebody else's read is ever available, so it is
+    // captured here; a cursor that arrived with the page keeps none.
+    const moved: LocalReadCursor = { userId, lastReadSeq: seq, seenAt: Date.now() };
+    const next: LocalReadCursor[] =
       existing === undefined
-        ? [...current, { userId, lastReadSeq: seq }]
-        : current.map((cursor) => (cursor.userId === userId ? { userId, lastReadSeq: seq } : cursor));
+        ? [...current, moved]
+        : current.map((cursor) => (cursor.userId === userId ? moved : cursor));
     this.#patch({ readCursors: { ...this.#state.readCursors, [channelId]: next } });
   }
 
@@ -713,6 +719,8 @@ export class ChatStore {
     const had = message.reactions.some(
       (reaction) => reaction.emoji === emoji && reaction.userIds.includes(me.id),
     );
+    // Adding is a preference; removing one is not, so only the add feeds the quick-pick row.
+    if (!had) recordEmojiUse(emoji);
     const optimistic = toggleReaction(message.reactions, emoji, me.id);
     this.#forEachConversationOf(message.channelId, (key, conversation) => {
       this.#setConversation(key, {
@@ -880,10 +888,17 @@ export class ChatStore {
   async toggleMute(channelId: ChannelId): Promise<void> {
     const membership = this.#state.memberships[channelId];
     if (membership === undefined) return;
+    await this.setMuted(channelId, !membership.muted);
+  }
+
+  /** The explicit form, for `/mute` and `/unmute`, which say what they want rather than flipping. */
+  async setMuted(channelId: ChannelId, muted: boolean): Promise<void> {
+    const membership = this.#state.memberships[channelId];
+    if (membership === undefined || membership.muted === muted) return;
     await this.#applyMembershipPatch(
       channelId,
-      { muted: !membership.muted },
-      membership.muted ? "Could not unmute this conversation" : "Could not mute this conversation",
+      { muted },
+      muted ? "Could not mute this conversation" : "Could not unmute this conversation",
     );
   }
 

@@ -200,7 +200,9 @@ Rate limits per verified user (messages 30/min, uploads 20/hour, search 60/min),
 
 Client state: a store keyed by channel with message pages, unread cursors and drafts; WebSocket reconnect with jittered backoff and HTTP `since` catch-up; optimistic send with the `clientId`. Show pending/failed/retry states and reconcile against the server sequence before declaring a send complete. Drafts can remain in local storage, but do not cache private message bodies in IndexedDB in v1; add an opt-in, bounded cache only after shared-device and sign-out behavior is designed.
 
-Embedded mode (`?embed=1`): compact layout, and a `postMessage` bridge to the parent, origin-checked both ways:
+Embedded mode (`?embed=1`): a `postMessage` bridge to the parent, origin-checked both ways. The
+compact one-column layout is a *separate* flag (`?compact=1`), because the shell's full `/chat` page is
+bridged but wants the wide three-pane layout; a narrow viewport is compact either way:
 
 ```
 app → shell: {type:"chat:badge", unread, mentions}   {type:"chat:notify", title, body, href}   {type:"chat:expand", href}

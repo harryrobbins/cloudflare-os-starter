@@ -21,6 +21,16 @@ import type { LocalMessage } from "./merge.js";
 
 export type ThemeMode = "light" | "dark";
 
+/**
+ * A `ReadCursor` plus the moment this client watched it move.
+ *
+ * The contract's cursor is a sequence number and nothing else, so a time is only ever known for a
+ * read that arrived as a socket event while this tab was open. Optional, and never invented.
+ */
+export interface LocalReadCursor extends ReadCursor {
+  readonly seenAt?: number;
+}
+
 export interface ConversationState {
   readonly messages: readonly LocalMessage[];
   readonly hasMoreBefore: boolean;
@@ -113,7 +123,7 @@ export interface ChatState {
    * (a channel can hold the whole deployment), so a missing entry means "not a thing here", not
    * "nobody has read".
    */
-  readonly readCursors: Readonly<Record<ChannelId, readonly ReadCursor[]>>;
+  readonly readCursors: Readonly<Record<ChannelId, readonly LocalReadCursor[]>>;
 
   readonly conversations: Readonly<Record<string, ConversationState>>;
   readonly threads: readonly ThreadSummary[];
@@ -142,7 +152,10 @@ export interface ChatState {
   readonly notificationsOptIn: boolean;
   readonly notificationPermission: "default" | "granted" | "denied" | "unsupported";
 
+  /** A shell is listening on `postMessage`. Not the same as {@link ChatState.compact}. */
   readonly embedded: boolean;
+  /** `?compact=1`: one column whatever the viewport says. The narrow media query is the other half. */
+  readonly compact: boolean;
   readonly visible: boolean;
   readonly focused: boolean;
   /** The conversation the UI currently shows, so notifications know what is on screen. */
@@ -180,6 +193,7 @@ export const INITIAL_STATE: ChatState = {
   notificationsOptIn: false,
   notificationPermission: "default",
   embedded: false,
+  compact: false,
   visible: true,
   focused: true,
   activeChannelId: null,

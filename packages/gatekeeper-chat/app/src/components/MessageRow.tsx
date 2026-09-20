@@ -19,18 +19,32 @@ import {
   EnvelopeSimpleOpen,
   WarningCircle,
 } from "@phosphor-icons/react";
-import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 
 import type { Message } from "../contract.js";
 import { formatTime } from "../lib/format.js";
 import { mentionsToText } from "../lib/mentions.js";
-import { QUICK_REACTIONS } from "../lib/emoji.js";
+import {
+  describeReactors,
+  quickReactions,
+  subscribeQuickReactions,
+} from "../lib/reactions.js";
 import { useChat, useStore } from "../hooks/store.js";
+import { describeSeen, type SeenReader } from "../lib/seen.js";
 import type { LocalMessage } from "../store/merge.js";
 import { Attachments } from "./Attachments.js";
 import { EmojiPicker } from "./EmojiPicker.js";
 import { Markdown } from "./Markdown.js";
-import { Avatar, IconButton, Spinner } from "./primitives.js";
+import { Avatar, IconButton } from "./primitives.js";
 
 export interface MessageRowProps {
   readonly message: LocalMessage;
@@ -44,6 +58,8 @@ export interface MessageRowProps {
   readonly onMentionClick: (kind: "user" | "channel", id: string) => void;
   readonly onRetry: (clientId: string) => void;
   readonly onDiscard: (clientId: string) => void;
+  /** The people whose read cursor sits on this message. Undefined everywhere it does not apply. */
+  readonly seenBy?: readonly SeenReader[];
 }
 
 export const MessageRow = memo(function MessageRow({
@@ -57,8 +73,16 @@ export const MessageRow = memo(function MessageRow({
   onMentionClick,
   onRetry,
   onDiscard,
+  seenBy,
 }: MessageRowProps): ReactNode {
   const store = useStore();
+  /**
+   * The quick-pick row, which is the reader's own habit rather than a fixed list.
+   *
+   * `useSyncExternalStore` over the module in `lib/reactions.ts`, so reacting in one row updates the
+   * bar in every other one without the store or a context knowing anything about emoji.
+   */
+  const quickPicks = useSyncExternalStore(subscribeQuickReactions, quickReactions, quickReactions);
   const author = useChat((state) => state.users[message.authorId]);
   const meId = useChat((state) => state.me?.id);
   const users = useChat((state) => state.users);
@@ -139,7 +163,10 @@ export const MessageRow = memo(function MessageRow({
         "group relative px-5 transition-colors",
         startsGroup ? "mt-3 pt-0.5" : "",
         focused ? "chat-flash" : "",
-        pending ? "opacity-60" : "",
+        // Only an uncommitted row animates in. Once the server answers, the row is re-keyed under its
+        // real id and remounts -- so a class that did not depend on `local` would play the entrance a
+        // second time, which reads as a glitch rather than as delivery.
+        message.local === undefined ? "" : "chat-rise",
         "hover:bg-kumo-elevated focus-within:bg-kumo-elevated focus-visible:outline-none focus-visible:bg-kumo-elevated",
       ].join(" ")}
     >
@@ -156,7 +183,12 @@ export const MessageRow = memo(function MessageRow({
           ) : (
             <time
               dateTime={new Date(message.createdAt).toISOString()}
-              className="mt-0.5 block text-right text-[10px] leading-5 text-kumo-inactive opacity-0 tabular-nums transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+              className={[
+                "mt-0.5 block text-right text-[10px] leading-5 text-kumo-inactive tabular-nums transition-opacity",
+                // A pending row shows its time faintly rather than on hover: that half-there
+                // timestamp *is* the pending state, which is why there is no spinner.
+                pending ? "opacity-40" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+              ].join(" ")}
             >
               {formatTime(message.createdAt)}
             </time>
@@ -176,7 +208,8 @@ export const MessageRow = memo(function MessageRow({
               )}
               <time
                 dateTime={new Date(message.createdAt).toISOString()}
-                className="text-[11px] text-kumo-inactive tabular-nums"
+                title={pending ? "Sending" : undefined}
+                className={`text-[11px] text-kumo-inactive tabular-nums ${pending ? "opacity-40" : ""}`}
               >
                 {formatTime(message.createdAt)}
               </time>
@@ -239,27 +272,16 @@ export const MessageRow = memo(function MessageRow({
 
           {message.reactions.length > 0 && (
             <div className="mt-1.5 flex flex-wrap items-center gap-1">
-              {message.reactions.map((reaction) => {
-                const reacted = meId !== undefined && reaction.userIds.includes(meId);
-                return (
-                  <button
-                    key={reaction.emoji}
-                    type="button"
-                    onClick={() => void store.toggleReaction(message, reaction.emoji)}
-                    aria-pressed={reacted}
-                    aria-label={`${reaction.emoji}, ${reaction.userIds.length}`}
-                    className={[
-                      "press inline-flex h-6 cursor-pointer items-center gap-1 rounded-full border px-2 text-[12px] transition-colors",
-                      reacted
-                        ? "border-kumo-brand bg-kumo-brand/12 text-kumo-brand"
-                        : "border-kumo-line bg-kumo-elevated text-kumo-subtle hover:border-kumo-ring",
-                    ].join(" ")}
-                  >
-                    <span aria-hidden="true">{reaction.emoji}</span>
-                    <span className="tabular-nums">{reaction.userIds.length}</span>
-                  </button>
-                );
-              })}
+              {message.reactions.map((reaction) => (
+                <ReactionPill
+                  key={reaction.emoji}
+                  emoji={reaction.emoji}
+                  userIds={reaction.userIds}
+                  meId={meId}
+                  nameOf={(id) => users[id]?.name}
+                  onToggle={() => void store.toggleReaction(message, reaction.emoji)}
+                />
+              ))}
               <IconButton label="Add a reaction" onClick={() => setPickerOpen(true)} className="h-6 w-6">
                 <SmileySticker size={14} />
               </IconButton>
@@ -282,30 +304,36 @@ export const MessageRow = memo(function MessageRow({
             </button>
           )}
 
+          {/* One quiet line rather than an alert box: the message is still on screen and still
+              readable, and the two things worth doing about it are right there. The reason lives in
+              the tooltip, because "fetch failed" in the transcript is noise. */}
           {failed && (
-            <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md border border-kumo-danger/40 bg-kumo-danger-tint px-2 py-1.5 text-[12px] text-kumo-danger">
-              <WarningCircle size={14} weight="fill" />
-              <span className="flex-1">{message.local?.error ?? "Not sent."}</span>
+            <div
+              className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-kumo-danger"
+              title={message.local?.error}
+            >
+              <WarningCircle size={12} weight="fill" aria-hidden="true" />
+              <span className="font-medium">Not sent</span>
+              <span aria-hidden="true" className="text-kumo-inactive">·</span>
               <button
                 type="button"
                 onClick={() => message.clientId !== undefined && onRetry(message.clientId)}
-                className="cursor-pointer font-semibold underline underline-offset-2"
+                className="cursor-pointer font-semibold underline underline-offset-2 hover:no-underline"
               >
                 Retry
               </button>
+              <span aria-hidden="true" className="text-kumo-inactive">·</span>
               <button
                 type="button"
                 onClick={() => message.clientId !== undefined && onDiscard(message.clientId)}
-                className="cursor-pointer underline underline-offset-2"
+                className="cursor-pointer underline underline-offset-2 hover:no-underline"
               >
                 Discard
               </button>
             </div>
           )}
-          {pending && (
-            <span className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-kumo-subtle">
-              <Spinner size={10} /> Sending…
-            </span>
+          {seenBy !== undefined && seenBy.length > 0 && (
+            <SeenStack readers={seenBy} nameOf={(id) => users[id]?.name} />
           )}
         </div>
       </div>
@@ -314,7 +342,7 @@ export const MessageRow = memo(function MessageRow({
       {!tombstone && !editing && !pending && (
         <div className="pointer-events-none absolute -top-3 right-4 z-10 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
           <div className="pointer-events-auto flex items-center gap-0.5 rounded-lg border border-kumo-line bg-kumo-control p-0.5 shadow-sm">
-            {QUICK_REACTIONS.map((emoji) => (
+            {quickPicks.map((emoji) => (
               <button
                 key={emoji}
                 type="button"
@@ -410,6 +438,102 @@ export const MessageRow = memo(function MessageRow({
     </div>
   );
 });
+
+/**
+ * The read markers for one message.
+ *
+ * Monograms rather than a sentence, because the useful fact is *where* people have got to, and a line
+ * of prose at the bottom of the pane cannot say that. They overlap by a few pixels so four readers
+ * take the space of two, and the sentence survives as the label for anybody who cannot see the stack.
+ */
+function SeenStack({
+  readers,
+  nameOf,
+}: {
+  readers: readonly SeenReader[];
+  nameOf: (id: string) => string | undefined;
+}): ReactNode {
+  const label = describeSeen(readers, nameOf);
+  const shown = readers.slice(0, 4);
+  return (
+    <div
+      data-testid="seen-by"
+      aria-label={label}
+      title={label}
+      className="mt-1 flex items-center justify-end gap-1"
+    >
+      <span className="flex -space-x-1.5">
+        {shown.map((reader) => (
+          <span key={reader.userId} className="rounded-[28%] ring-2 ring-kumo-base">
+            <Avatar name={nameOf(reader.userId) ?? "?"} id={reader.userId} size={16} />
+          </span>
+        ))}
+      </span>
+      {readers.length > shown.length && (
+        <span className="text-[10px] text-kumo-inactive tabular-nums">
+          +{readers.length - shown.length}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One reaction pill.
+ *
+ * Its own component for one reason: the pop belongs to a *count change*, which needs a previous value
+ * to compare against, and that is state the row itself must not carry once per emoji. The animation
+ * fires for a remote reaction as well as your own -- a channel where reactions land silently feels
+ * dead -- and the stylesheet turns it off under `prefers-reduced-motion`.
+ */
+function ReactionPill({
+  emoji,
+  userIds,
+  meId,
+  nameOf,
+  onToggle,
+}: {
+  emoji: string;
+  userIds: readonly string[];
+  meId: string | undefined;
+  nameOf: (id: string) => string | undefined;
+  onToggle: () => void;
+}): ReactNode {
+  const reacted = meId !== undefined && userIds.includes(meId);
+  const [popping, setPopping] = useState(false);
+  const previousCount = useRef(userIds.length);
+
+  useEffect(() => {
+    if (userIds.length === previousCount.current) return;
+    previousCount.current = userIds.length;
+    setPopping(true);
+    const timer = setTimeout(() => setPopping(false), 260);
+    return () => clearTimeout(timer);
+  }, [userIds.length]);
+
+  const who = describeReactors(emoji, userIds, meId, nameOf);
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={reacted}
+      // The sentence is the label as well as the tooltip: "👍, 3" tells a screen-reader user the
+      // count and nothing about who, which is the half that matters.
+      aria-label={who}
+      title={who}
+      className={[
+        "press inline-flex h-6 cursor-pointer items-center gap-1 rounded-full border px-2 text-[12px] transition-colors",
+        popping ? "chat-pop" : "",
+        reacted
+          ? "border-kumo-brand bg-kumo-brand/12 text-kumo-brand"
+          : "border-kumo-line bg-kumo-elevated text-kumo-subtle hover:border-kumo-ring",
+      ].join(" ")}
+    >
+      <span aria-hidden="true">{emoji}</span>
+      <span className="tabular-nums">{userIds.length}</span>
+    </button>
+  );
+}
 
 function MenuItem({
   icon,

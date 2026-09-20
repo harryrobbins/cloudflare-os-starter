@@ -16,17 +16,23 @@ import {
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import type { Message, NotifyLevel } from "../contract.js";
+import { GENERAL_CHANNEL_ID, type Message, type NotifyLevel } from "../contract.js";
 import { channelLabel, isDirect } from "../lib/labels.js";
 import { permalinkUrl } from "../lib/nav.js";
 import { pluralise } from "../lib/format.js";
 import { useChat, useStore } from "../hooks/store.js";
+import { useLayout } from "./AppShell.js";
 import { conversationKey } from "../store/drafts.js";
 import { EMPTY_CONVERSATION } from "../store/state.js";
+import { seenMarkers } from "../lib/seen.js";
 import { firstUnreadSeq } from "../store/unread.js";
+import { ChannelStartCard, FirstRunCard } from "./ChannelStartCard.js";
 import { Composer } from "./Composer.js";
 import { MessageList } from "./MessageList.js";
 import { Button, EmptyState, IconButton, PresenceDot } from "./primitives.js";
+
+/** A shared empty map, so the memoised rows are not re-rendered by a new reference every paint. */
+const NO_MARKERS: ReadonlyMap<string, never[]> = new Map();
 
 export function ConversationView({
   channelId,
@@ -54,6 +60,8 @@ export function ConversationView({
   const typing = useChat((state) => state.typing[channelId]);
   const online = useChat((state) => state.online);
   const readCursors = useChat((state) => state.readCursors[channelId]);
+  const hasDisplayName = useChat((state) => state.prefs.displayName !== null);
+  const layout = useLayout();
 
   const label = channel === undefined ? "" : channelLabel(channel, users, meId);
 
@@ -108,27 +116,44 @@ export function ConversationView({
   );
 
   /**
-   * "Seen by" for a direct or group conversation.
+   * "Seen by", as markers rather than a sentence.
    *
-   * `readCursors` is only sent for those two kinds, so an undefined entry means the affordance does not
-   * apply here rather than "nobody has read". The yardstick is the newest message that actually exists
-   * on the server: a pending local row has no `seq` yet, so nobody can have seen it.
+   * `readCursors` is only sent for `dm` and `group`, so an undefined entry means the affordance does
+   * not apply here rather than "nobody has read". An empty map is passed in that case, which is also
+   * a stable reference -- `MessageRow` is memoised, and a fresh empty map every render would defeat
+   * it for every row in the conversation.
    */
-  const seenLine = useMemo(() => {
-    if (readCursors === undefined || readCursors.length === 0) return null;
-    const newest = conversation.messages.reduce<number>(
-      (max, message) => (message.local === undefined && message.seq > max ? message.seq : max),
-      0,
-    );
-    if (newest === 0) return null;
-    const names = readCursors
-      .filter((cursor) => cursor.userId !== meId && cursor.lastReadSeq >= newest)
-      .map((cursor) => users[cursor.userId]?.name ?? "Someone");
-    if (names.length === 0) return null;
-    if (names.length === 1) return `Seen by ${names[0]}`;
-    if (names.length === 2) return `Seen by ${names[0]} and ${names[1]}`;
-    return `Seen by ${names.length} people`;
-  }, [readCursors, conversation.messages, meId, users]);
+  const seenBy = useMemo(
+    () =>
+      readCursors === undefined || readCursors.length === 0
+        ? NO_MARKERS
+        : seenMarkers({
+            cursors: readCursors,
+            messages: conversation.messages,
+            ...(meId === undefined ? {} : { meId }),
+          }),
+    [readCursors, conversation.messages, meId],
+  );
+
+  /**
+   * A deployment that has just booted has a #general holding, at most, a system line and whatever the
+   * agent has said. That is not "the start of a channel", it is "nobody has arrived yet", and the two
+   * want different words -- so the first-run card stands in for both the empty state and the header
+   * card until somebody posts.
+   */
+  const firstRun =
+    channelId === GENERAL_CHANNEL_ID &&
+    conversation.loaded &&
+    !conversation.messages.some((message) => message.kind === "user");
+
+  const firstRunCard = (
+    <FirstRunCard
+      label={label}
+      hasDisplayName={hasDisplayName}
+      onNewChannel={layout.openNewChannel}
+      onNewMessage={layout.openNewMessage}
+    />
+  );
 
   if (channel === undefined) {
     return (
@@ -181,16 +206,32 @@ export function ConversationView({
             hasMoreBefore={conversation.hasMoreBefore}
             focusMessageId={focusMessageId ?? conversation.focusMessageId}
             canThread
-            showStart
+            startCard={
+              firstRun ? (
+                firstRunCard
+              ) : (
+                <ChannelStartCard
+                  channel={channel}
+                  label={label}
+                  users={users}
+                  isMember={membership !== undefined}
+                  onJoin={() => void store.joinChannel(channelId)}
+                />
+              )
+            }
             emptyState={
-              <EmptyState
-                icon={isDirect(channel) ? <Users size={20} /> : <Hash size={20} />}
-                title={`This is the start of ${label}`}
-                body={
-                  channel.purpose ??
-                  "Say something to get the conversation going. Messages here are visible to every member."
-                }
-              />
+              firstRun ? (
+                firstRunCard
+              ) : (
+                <EmptyState
+                  icon={isDirect(channel) ? <Users size={20} /> : <Hash size={20} />}
+                  title={`This is the start of ${label}`}
+                  body={
+                    channel.purpose ??
+                    "Say something to get the conversation going. Messages here are visible to every member."
+                  }
+                />
+              )
             }
             onLoadOlder={() => void store.loadOlder(channelId)}
             onAtBottomChange={(atBottom) => store.setAtBottom(channelId, null, atBottom)}
@@ -201,6 +242,7 @@ export function ConversationView({
             onRetry={(clientId) => void store.retrySend(channelId, conversationKey(channelId), clientId)}
             onDiscard={(clientId) => store.discardSend(conversationKey(channelId), clientId)}
             onFocusHandled={() => store.clearFocusMessage(channelId)}
+            seenBy={seenBy}
           />
 
           <div
@@ -222,9 +264,6 @@ export function ConversationView({
                   ? `${typingNames[0]} is typing…`
                   : `${typingNames.slice(0, 2).join(" and ")} are typing…`}
               </span>
-            )}
-            {typingNames.length === 0 && seenLine !== null && (
-              <span data-testid="seen-by">{seenLine}</span>
             )}
           </div>
 

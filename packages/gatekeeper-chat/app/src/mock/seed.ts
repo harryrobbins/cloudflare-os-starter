@@ -12,6 +12,7 @@ import {
   type Membership,
   type Message,
   type Reaction,
+  type ReadCursor,
   type User,
   type UserId,
 } from "../contract.js";
@@ -36,6 +37,13 @@ export interface Seed {
   readonly messages: Message[];
   readonly attachments: Map<string, { readonly dataUrl: string; readonly thumbUrl: string }>;
   readonly following: Set<string>;
+  /**
+   * How far the *other* members of a `dm` or `group` have read.
+   *
+   * Only those two kinds, matching `GET channels/:id/messages`: the server omits `readCursors` for
+   * `public` and `private`, because a channel can hold the whole deployment.
+   */
+  readonly readCursors: Map<ChannelId, ReadCursor[]>;
 }
 
 function user(id: UserId, name: string, email: string, online: boolean, now: number): User {
@@ -131,7 +139,9 @@ export function buildSeed(): Seed {
     { at: now - 180 * MINUTE, by: "u-agent", body: "I've summarised the week's incidents in [the postmortem doc](https://example.test/postmortem). Two of the three were the same DO eviction.", kind: "agent" },
     { at: now - 95 * MINUTE, by: "u-cara", body: "That matches what I saw. Nice one." },
     { at: now - 42 * MINUTE, by: "u-bob", body: `${userToken(ME)} can you look at the rail spacing before the freeze? It's 2px out at narrow widths.`, id: "m-mention-rail" },
-    { at: now - 38 * MINUTE, by: "u-eve", body: "Same on the thread pane. Screenshot:", attachmentIds: ["a-rail"] },
+    // Three images on one message: a portrait, a landscape and a second landscape, so the inline row
+    // has to cope with mixed shapes and the lightbox has something to page through.
+    { at: now - 38 * MINUTE, by: "u-eve", body: "Same on the thread pane. Screenshots:", attachmentIds: ["a-rail", "a-rail-narrow", "a-thread-pane"] },
     { at: now - 12 * MINUTE, by: "u-alice", body: "Release notes are drafted — shout if anything is missing.", edited: true },
   ];
 
@@ -302,13 +312,30 @@ export function buildSeed(): Seed {
     membership("c-design", (lastSeqByChannel.get("c-design") ?? 0) - 3),
     membership("c-platform", lastSeqByChannel.get("c-platform") ?? 0, { starred: true }),
     membership("c-releases", (lastSeqByChannel.get("c-releases") ?? 0) - 1, { muted: true, notify: "none" }),
-    membership("c-random", (lastSeqByChannel.get("c-random") ?? 0) - 4, { notify: "mentions" }),
+    // A deliberately long unread run: more than a screenful, so the "New messages" rule opens above
+    // the viewport and the jump-to-unread and new-messages affordances have something to do.
+    membership("c-random", (lastSeqByChannel.get("c-random") ?? 0) - 40, { notify: "mentions" }),
     membership("d-alice", (lastSeqByChannel.get("d-alice") ?? 0) - 2),
     membership("d-bob", lastSeqByChannel.get("d-bob") ?? 0),
     membership("g-launch", (lastSeqByChannel.get("g-launch") ?? 0) - 1),
   ];
 
-  return { users, channels: withSeq, memberships, messages, attachments, following };
+  // Three people at three different places in the group, so the seen-by markers stack and spread.
+  const groupLast = lastSeqByChannel.get("g-launch") ?? 0;
+  const readCursors = new Map<ChannelId, ReadCursor[]>([
+    ["d-alice", [{ userId: "u-alice", lastReadSeq: lastSeqByChannel.get("d-alice") ?? 0 }]],
+    ["d-bob", [{ userId: "u-bob", lastReadSeq: (lastSeqByChannel.get("d-bob") ?? 0) - 1 }]],
+    [
+      "g-launch",
+      [
+        { userId: "u-alice", lastReadSeq: groupLast },
+        { userId: "u-cara", lastReadSeq: groupLast },
+        { userId: "u-eve", lastReadSeq: Math.max(1, groupLast - 2) },
+      ],
+    ],
+  ]);
+
+  return { users, channels: withSeq, memberships, messages, attachments, following, readCursors };
 
   // --- local helpers --------------------------------------------------------
 
@@ -413,6 +440,9 @@ const ATTACHMENT_SPECS: Record<
 > = {
   "a-graph": { name: "send-latency.png", mime: "image/png", bytes: 184_320, width: 960, height: 540, label: "p95 38ms" },
   "a-rail": { name: "rail-spacing.png", mime: "image/png", bytes: 96_100, width: 720, height: 460, label: "rail spacing" },
+  "a-rail-narrow": { name: "rail-spacing-390.png", mime: "image/png", bytes: 88_400, width: 390, height: 620, label: "390px" },
+  // Deliberately unmeasured: exercises the placeholder that has no aspect ratio to work from.
+  "a-thread-pane": { name: "thread-pane.png", mime: "image/png", bytes: 74_200, width: 640, height: 400, label: "thread pane" },
   "a-checklist": { name: "release-checklist.pdf", mime: "application/pdf", bytes: 412_000, width: null, height: null, label: "" },
 };
 

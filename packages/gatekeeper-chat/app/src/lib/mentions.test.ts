@@ -82,9 +82,11 @@ describe("mentionsUser", () => {
     expect(mentionsUser([{ kind: "user", userId: "me" }], "me", "me")).toBe(false);
   });
 
-  it("counts @channel and @here but not @agent", () => {
-    expect(mentionsUser([{ kind: "channel" }], "me", "alice")).toBe(true);
-    expect(mentionsUser([{ kind: "here" }], "me", "alice")).toBe(true);
+  // The server writes only `<@id>` rows, so a client that counted the bare forms would badge a
+  // mention no reload could reproduce. chat.md gates @channel and @here behind explicit limits.
+  it("ignores @channel, @here and @agent, which the server never writes", () => {
+    expect(mentionsUser([{ kind: "channel" }], "me", "alice")).toBe(false);
+    expect(mentionsUser([{ kind: "here" }], "me", "alice")).toBe(false);
     expect(mentionsUser([{ kind: "agent" }], "me", "alice")).toBe(false);
   });
 });

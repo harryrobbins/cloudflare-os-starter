@@ -885,7 +885,17 @@ export function buildCommands(config: DeploymentConfig): BuildCommand[] {
     ...(config.errorReporting.enabled ? [{ args: ownBuild("error-reporter") }] : []),
     // Access mode is a build-time constant in the frontend bundle (`src/useAuth.ts`), so it is set
     // here rather than inherited: a bundle built under a different value is wrong, not just stale.
-    { args: submoduleBuild("@gadgets/workshop-frontend"), env: { VITE_CF_ACCESS_MODE: "true" } },
+    // `VITE_CHAT_DOCK` is the same kind of thing for the chat dock (the fork's `ChatDock.tsx`): a flag
+    // tied to this deployment's wiring rather than a runtime probe of `/gatekeeper/chat`, so a chat
+    // Worker that is briefly down shows an unavailable state instead of making the dock vanish. Off
+    // when chat is not deployed, and the dock, its triggers and its route drop out of the bundle.
+    {
+      args: submoduleBuild("@gadgets/workshop-frontend"),
+      env: {
+        VITE_CF_ACCESS_MODE: "true",
+        ...(config.chat?.enabled ? { VITE_CHAT_DOCK: "true" } : {}),
+      },
+    },
     { args: submoduleBuild("@gadgets/router") },
     // The backend inlines its bundled format blueprints at build time. Absolute, because upstream
     // resolves a relative FORMAT_BLUEPRINTS_DIR against its own package, not this repository.

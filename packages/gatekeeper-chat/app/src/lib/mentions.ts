@@ -86,8 +86,12 @@ export function parseChannelMentions(body: string): string[] {
 /**
  * Whether a message should count as a mention of `userId`.
  *
- * `@channel` and `@here` count for everyone but the author, matching the plan's badge model; the
- * caller supplies `authorId` so a self-mention never badges.
+ * **Only `<@id>` counts.** `@channel` and `@here` are parsed above so the composer can show them, but
+ * the Durable Object never writes a `channel` or `here` row -- `extractMentionIds` in
+ * `src/shared/validate.ts` sees the id token and nothing else -- so counting them here would badge a
+ * mention the server does not have, and the badge would vanish on the next `badge` event or reload.
+ * chat.md gates those two behind explicit limits and permissions, and until that lands the honest
+ * client behaviour is to ignore them. `authorId` is supplied so a self-mention never badges.
  */
 export function mentionsUser(
   mentions: readonly Mention[],
@@ -95,12 +99,7 @@ export function mentionsUser(
   authorId?: UserId,
 ): boolean {
   if (authorId === userId) return false;
-  return mentions.some(
-    (mention) =>
-      (mention.kind === "user" && mention.userId === userId) ||
-      mention.kind === "channel" ||
-      mention.kind === "here",
-  );
+  return mentions.some((mention) => mention.kind === "user" && mention.userId === userId);
 }
 
 /**

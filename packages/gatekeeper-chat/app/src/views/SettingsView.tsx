@@ -6,11 +6,12 @@
 // The notification permission is requested here and nowhere else, from this button's click, because an
 // unprompted `Notification.requestPermission()` on load is both rude and penalised by browsers.
 
-import { Bell, Moon, Sun, Desktop } from "@phosphor-icons/react";
+import { Bell, House, Moon, Sun, Desktop } from "@phosphor-icons/react";
 import { useState, type ReactNode } from "react";
 
 import { MAX_DISPLAY_NAME_LENGTH } from "../contract.js";
 import { useChat, useStore } from "../hooks/store.js";
+import { readLanding, writeLanding, type Landing } from "../store/recents.js";
 import { Avatar, Button } from "../components/primitives.js";
 import { ViewShell } from "./ViewShell.js";
 
@@ -23,6 +24,9 @@ export function SettingsView({ onBack }: { onBack?: () => void }): ReactNode {
   const permission = useChat((state) => state.notificationPermission);
   const admin = useChat((state) => state.admin);
   const [name, setName] = useState(prefs.displayName ?? "");
+  // A per-browser choice, like the theme: it never leaves this device, so it is read straight from
+  // storage rather than through the store.
+  const [landing, setLanding] = useState<Landing>(() => readLanding());
 
   return (
     <ViewShell title="Settings" {...(onBack === undefined ? {} : { onBack })}>
@@ -90,6 +94,35 @@ export function SettingsView({ onBack }: { onBack?: () => void }): ReactNode {
             >
               {optedIn ? "Turn off" : "Turn on"}
             </Button>
+          </div>
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-[13px] font-semibold text-kumo-strong">Opening chat</h2>
+          <div className="flex items-start gap-3 rounded-xl border border-kumo-line bg-kumo-elevated p-4">
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-kumo-tint text-kumo-subtle">
+              <House size={16} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-medium text-kumo-strong">Go straight to the last conversation</p>
+              <p className="mt-0.5 text-[12px] leading-5 text-kumo-subtle">
+                Off by default: opening chat shows what is waiting for you first. This setting is kept
+                in this browser only.
+              </p>
+            </div>
+            <label className="flex shrink-0 cursor-pointer items-center gap-2 text-[12px] text-kumo-subtle">
+              <input
+                type="checkbox"
+                checked={landing === "last-channel"}
+                onChange={(event) => {
+                  const next: Landing = event.target.checked ? "last-channel" : "inbox";
+                  setLanding(next);
+                  writeLanding(next);
+                }}
+                className="h-3.5 w-3.5 accent-[var(--color-kumo-brand)]"
+              />
+              Skip the inbox
+            </label>
           </div>
         </section>
 

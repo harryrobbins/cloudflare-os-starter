@@ -199,25 +199,136 @@ Complete 2026-09-20 apart from the protected-deployment smoke, which needs a dep
 
 ## Delight pass (after Stream B, before cleanup)
 
-Ranked by effect against complexity; work top-down and stop at diminishing returns.
+Complete 2026-09-21, all ten items. 217 Worker tests and 254 SPA tests green
+(`pnpm --filter gatekeeper-chat test:run`), `types:check` clean, no lint findings in the package,
+13/13 Playwright scenarios green. **The Worker is untouched**: every change is under `app/`, plus two
+lines in `docs/plans/chat.md` and two e2e assertions noted at the end.
 
-- [ ] 1. Unread return: "N new messages" pill when scrolled up, jump to first unread on entry, sticky date header
-- [ ] 2. Reactions: recent-emoji quick picks, pop animation, "who reacted" tooltip
-- [ ] 3. Send lifecycle: optimistic slide-in, pending state, inline retry; reduced-motion aware
-- [ ] 4. Empty states: first-run `#general` card, channel header card on join
-- [ ] 5. Composer smarts: URL-over-selection makes a link, pasted code becomes a fence, draft pencil in the rail
-- [ ] 6. Quick switcher (`Ctrl/Cmd+K`) with fuzzy channels and people; `?` shortcut sheet
-- [ ] 7. Landing inbox: greeting, unread digest, resume where you left off
-- [ ] 8. Slash commands: `/me`, `/shrug`, `/topic`, `/mute`, `/dm`, `/search`
-- [ ] 9. Images: aspect-ratio placeholders, blur-up, keyboard lightbox, download
-- [ ] 10. Seen-by *avatars* in DMs and groups. The data and a plain "Seen by Alice" line landed in
-      stream E (`readCursors` on the page, the `read` event's `userId`, `ConversationView`'s
-      `data-testid="seen-by"` line); what is left is the avatar stack.
+First, a divergence closed: **the client no longer counts `@channel` or `@here` as mentions.**
+`extractMentionIds` only ever writes `<@id>` rows, so a badge for a bare form vanished on the next
+`badge` event or reload. `mentionsUser` now matches `kind === "user"` alone (`app/src/lib/mentions.ts`);
+chat.md still gates the two bare forms behind explicit limits.
+
+- [x] 1. Unread return: a "N new messages ↓" pill counting what arrived below since the reader left
+      the bottom, a "Jump to first unread" pill when the New-messages rule opens above the viewport
+      (it grows the mounted window when the rule is beyond it, and retires once the rule is reached),
+      and the sticky date band made opaque with a soft tail so it stays legible over the scroll.
+- [x] 2. Reactions: a quick-pick row driven by a localStorage frequency table (`lib/reactions.ts`,
+      shared by the hover bar and a "Frequently used" group at the top of the picker), a `chat-pop`
+      scale on any count change including somebody else's, and a `describeReactors` tooltip and label
+      ("You and Bob Okafor reacted with 👍").
+- [x] 3. Send lifecycle: an optimistic row enters with `chat-rise`, keyed on `local` so the entrance
+      does not replay when the row is re-keyed under its server id; pending is a 40%-opacity timestamp
+      and no spinner; a failure is a quiet inline "Not sent · Retry · Discard" with the cause on the
+      tooltip. All reduced-motion aware through the stylesheet's existing block.
+- [x] 4. Empty states: `ChannelStartCard` at the top of history (topic, purpose, creator and date,
+      member count, Join when not a member) and a `FirstRunCard` for a `#general` with no human
+      messages yet -- what the channel is, and three next steps.
+- [x] 5. Composer smarts: `lib/paste.ts` turns a URL pasted over a selection into a Markdown link and
+      a multi-line paste that scores as code into a fenced block, each with an eight-second Undo hint
+      (a programmatic `setDraft` is invisible to the textarea's undo stack); a pencil marks every rail
+      row holding an unsent draft, threads included.
+- [x] 6. Quick switcher on `Ctrl/Cmd+K` and from the rail's box: `lib/fuzzy.ts` ranks channels and
+      people with word-start and prefix bonuses and highlights the hits, recency wins an empty query
+      (`store/recents.ts`), `#` and `@` narrow it, and the last row hands off to the search view.
+      Plus a `?` sheet listing every shortcut, suppressed while a text field has focus.
+- [x] 7. Landing inbox at `/`: `lib/digest.ts` computes greeting, mentions, unread (direct messages
+      first), followed threads with new replies and recent conversations; "Pick up where you left
+      off" resumes the last channel. Redirecting straight to a conversation is now opt-in
+      ("Skip the inbox" in Settings).
+- [x] 8. Slash commands: `lib/slash.ts` parses `/me`, `/shrug`, `/topic`, `/mute`, `/unmute`, `/dm`
+      and `/search`, with an inline picker while typing `/…`. **Only a known command is intercepted**,
+      so `/deploy the thing` still posts, and no escape syntax is needed.
+- [x] 9. Images: the aspect-ratio box is now reserved for unmeasured images too, a shimmer fills it
+      until `load` (and a cached image that completed before React attached is handled), and the
+      lightbox pages through a message's images with ←/→, Home/End and Esc, showing "2 of 3".
+- [x] 10. Seen-by avatars: `lib/seen.ts` places each other member's monogram after the last message
+      they have read, stacked where several share a position, with `describeSeen` as the tooltip and
+      the accessible label. **Times are shown only for a read this tab watched arrive** over the
+      socket (`ChatState.readCursors` gained a client-side `seenAt`): `ReadCursor` carries a sequence
+      number and nothing else, so a time for a cursor that arrived with the page would be invented.
+      Giving every cursor a real time needs an additive `readAt` on the contract plus a migration and
+      a write-path change, which is more than a tooltip is worth.
+
+Also landed in this pass, because the shell's dock needed it:
+
+- **`?embed=1` and `?compact=1` are now separate.** `embed=1` means only "a shell is listening on
+  `postMessage`"; the single-column layout applies when `compact=1` is present *or* the viewport is
+  narrow, exactly as the narrow rule always worked. `parseEmbedOptions` in `app/src/lib/bridge.ts`
+  (with its own tests), `ChatState.compact`, and `AppShell`'s `narrow` now reads `compact`. The shell
+  loads the dock with `?embed=1&compact=1` and the full `/chat` page with `?embed=1` alone, so that
+  page is bridged *and* wide.
+
+Two things the mock had wrong, found while building against it and fixed to match `src/do/`:
+
+- `badgeSummary` counts every live message above the cursor, thread replies included; the mock
+  excluded replies, so the rail (membership arithmetic) and the badge summary disagreed in `#general`.
+- `GET channels/:id/messages` returns `readCursors` for `dm` and `group`; the mock never sent them,
+  so nothing exercised the seen-by markers.
+
+Two e2e assertions were rewritten for intentional UI changes, not to paper over a break: T7 reads the
+seen-by marker's `aria-label` now that the line is an avatar stack, and T9 reaches the search view
+through the switcher's hand-off row and matches "Jump" exactly (the rail's own button is called
+"Search or jump to…").
 
 ## Phase 2: dock fork commit (submodule)
 
-- [ ] `ChatDock.tsx` in `AuthenticatedShell`, `chatDockBus.ts`, triggers in the sidebar utility strip and editor top bar, `/chat` route, feature flag
-- [ ] Integration test; `docs/customization.md` note
+Complete 2026-09-21 as one commit on the fork branch `feat/chat-dock`, from `a1909a38`
+(`gadgetViewer`). Frontend only: 6 new files and 4 call sites, plus the generated route tree.
+182 frontend tests green (`pnpm --filter @gadgets/workshop-frontend test:run`, 5 of them new),
+`tsc --noEmit` and `tsc -p tsconfig.vite.json` clean, `vite build` clean with the flag on and off.
+
+- [x] `src/components/ChatDock.tsx`: the drawer (`fixed`, full height, 420px, `z-[1200]` — above the
+      activity popover's 1100, below the command palette's 1500) mounted once in `AuthenticatedShell`
+      beside `AccountSelectionModal`, so it also covers the fullscreen workspace editor; the
+      same-origin `<iframe src="/gatekeeper/chat/?embed=1&compact=1">`; the bridge, origin-checked
+      against `window.location.origin` *and* the frame's own `contentWindow`; `chat:badge` into the
+      bus, `chat:notify` into a Kumo toast whose action opens the dock at the permalink, `chat:expand`
+      into a `/chat` navigation, `chat:theme` / `chat:visible` / `chat:open` out; Esc, and
+      Ctrl/Cmd+Shift+L (Ctrl/Cmd+K is the palette's own and Shift+C is Chrome's inspector); an
+      unavailable state with Retry that never removes the trigger
+- [x] `src/chatDockBus.ts`: the flag, the two path bases, open/close/toggle, the badge store
+      (`useSyncExternalStore`-shaped) and the path conversions, in `commandPaletteBus.ts`'s style
+- [x] `src/components/ChatTrigger.tsx`: the rail row (dot for unread, count for mentions) in
+      `Sidebar.tsx`'s primary nav, and the icon button beside `ActivityNotifications` in
+      `GadgetEditor.tsx`'s top bar; plus a flag-gated "Toggle chat" command in `CommandPalette.tsx`,
+      because a chord nobody is told about is not a way in
+- [x] `src/routes/chat.tsx` and `src/routes/chat_.$.tsx` (`chat_` so `/chat/$` does not nest inside
+      the `/chat` component, the `gatekeepers_.$appId` shape), title "Chat"
+- [x] `VITE_CHAT_DOCK` gates all of it; `scripts/deploy.ts` sets it when `chat.enabled`, with a test
+      in `scripts/deploy.test.ts`
+- [x] `src/ChatDock.integration.test.tsx` next to `GadgetUI.integration.test.tsx`; the Team chat
+      section and the upgrade checklist in `docs/customization.md`
+
+Decisions worth knowing:
+
+- **The bridge types are re-declared in the shell, not imported.** `packages/gatekeeper-chat` is not a
+  dependency of the submodule and must not become one: the commit has to keep applying to an upstream
+  tree that has never heard of chat. `protocol.ts` remains the one definition of the wire format, and
+  this file's comment says where it is.
+- **The handshake is an inbound message, not the iframe's `load` event.** `load` also fires for the
+  router's 404 page and for an Access sign-in redirect, both of which are a blank drawer; the app
+  posts its badge totals as soon as its store starts, so that is the proof. No inbound message within
+  15s shows the unavailable state with Retry, and any later message heals it. This is also why
+  `chat:theme` / `chat:visible` are posted on that signal rather than on mount: the app's listener is
+  attached after an `await` in its `main()`, so a post on `load` can be dropped.
+- **The mounting path rides in the `src`; only later changes are `chat:open`.** A permalink opened
+  cold therefore never waits on the handshake, and an in-shell navigation keeps the socket, the drafts
+  and the scroll position.
+- **The frame is unmounted 60s after the drawer closes**, and rebuilt on the next open. The plan says
+  to close the socket when the dock is hidden; the app owns its socket and reacts to
+  `chat:visible false`, so the shell's lever is the frame itself.
+- ~~**The `/chat` page also embeds with `?embed=1`**, so the bridge works there too, but embedded mode
+  forces the compact one-column layout.~~ Closed in the delight pass: `?embed=1` and `?compact=1` are
+  now separate flags (`parseEmbedOptions` in `app/src/lib/bridge.ts`, `ChatState.compact`). `embed=1`
+  means only "a shell is listening on `postMessage`"; the single-column layout applies when
+  `compact=1` is present *or* the viewport is narrow, exactly as the narrow rule always worked. The
+  shell loads the dock with `?embed=1&compact=1` and the full `/chat` page with `?embed=1` alone, so
+  that page is bridged and wide.
+- **With the flag off the bundle keeps `chatDockBus.ts`'s constants** (a few hundred bytes, because
+  `__root.tsx` imports the flag from it) and the route chunks' "not enabled" message. The dock, the
+  triggers, the iframe and the bridge are all gone — verified by grepping `dist/assets` after a build
+  each way.
 
 ## Phase 3 (follow-up)
 

@@ -96,7 +96,7 @@ export function ThreadPane({
             hasMoreBefore={false}
             focusMessageId={null}
             canThread={false}
-            showStart={false}
+            startCard={null}
             emptyState={
               <EmptyState
                 icon={<X size={18} />}

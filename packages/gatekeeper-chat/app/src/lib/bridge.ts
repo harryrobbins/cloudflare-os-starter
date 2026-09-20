@@ -21,9 +21,28 @@ export interface Bridge {
   dispose(): void;
 }
 
-/** True when the app is running inside the shell's drawer. */
-export function isEmbedded(search: string = window.location.search): boolean {
-  return new URLSearchParams(search).get("embed") === "1";
+/**
+ * What the two query flags mean, which is deliberately not the same thing.
+ *
+ * `embed=1` says "there is a shell on the other side of `postMessage`": theme, badge, notify, open and
+ * visibility all route through it. `compact=1` says "you have one column". They were one flag while
+ * the only embedding was the drawer, but the shell also mounts this app at `/chat` as a full page --
+ * bridged, and entitled to the wide three-pane layout. Conflating them gave that page a drawer's
+ * layout on a 1600px screen.
+ *
+ * Compact is a floor, not the whole rule: a narrow viewport is compact whether or not the flag is
+ * set, exactly as it was before.
+ */
+export interface EmbedOptions {
+  /** Talk to the shell over `postMessage`. */
+  readonly bridged: boolean;
+  /** Force the single-column layout regardless of the viewport. */
+  readonly compact: boolean;
+}
+
+export function parseEmbedOptions(search: string = window.location.search): EmbedOptions {
+  const params = new URLSearchParams(search);
+  return { bridged: params.get("embed") === "1", compact: params.get("compact") === "1" };
 }
 
 export function createBridge(handlers: BridgeHandlers, embedded: boolean): Bridge {

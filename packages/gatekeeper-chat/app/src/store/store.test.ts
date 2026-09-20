@@ -614,7 +614,9 @@ describe("read cursors", () => {
     await h.store.start({ embedded: false });
     h.socket.emit({ t: "read", channel: "c1", seq: 5, userId: "alice" });
     h.socket.emit({ t: "read", channel: "c1", seq: 3, userId: "alice" });
-    expect(h.store.state.readCursors.c1).toEqual([{ userId: "alice", lastReadSeq: 5 }]);
+    // `seenAt` is the moment this client watched the read happen; only the cursor is asserted.
+    expect(h.store.state.readCursors.c1).toMatchObject([{ userId: "alice", lastReadSeq: 5 }]);
+    expect(h.store.state.readCursors.c1?.[0]?.seenAt).toBeTypeOf("number");
     // Somebody else's read must not move my own membership.
     expect(h.store.state.memberships.c1?.lastReadSeq).toBe(membership.lastReadSeq);
   });

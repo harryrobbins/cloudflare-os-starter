@@ -22,17 +22,17 @@ import { APP_BASE, GENERAL_CHANNEL_ID, matchPath } from "./contract.js";
 import { AppShell, useLayout } from "./components/AppShell.js";
 import { setAppNavigator } from "./lib/navigate.js";
 import { toRouterPath } from "./lib/nav.js";
+import { lastChannel, readLanding, rememberRecentChannel } from "./store/recents.js";
 import type { ChatStore } from "./store/store.js";
 import { BrowseView } from "./views/BrowseView.js";
 import { ChannelScreen } from "./views/ChannelScreen.js";
 import { DraftsView } from "./views/DraftsView.js";
+import { InboxView } from "./views/InboxView.js";
 import { MentionsView } from "./views/MentionsView.js";
 import { PeopleView } from "./views/PeopleView.js";
 import { SearchView } from "./views/SearchView.js";
 import { SettingsView } from "./views/SettingsView.js";
 import { ThreadsView } from "./views/ThreadsView.js";
-
-const LAST_CHANNEL_KEY = "chat.lastChannel";
 
 /** Set once in `main.tsx`; the index route needs the store before any component has mounted. */
 let store: ChatStore | null = null;
@@ -44,22 +44,26 @@ export function attachStore(next: ChatStore): void {
 const rootRoute = createRootRoute({ component: AppShell });
 
 /**
- * `/` picks a conversation: the last one this browser had open, else `#general`, else the first channel
- * the rail would show. It waits for the channel list rather than guessing, which is why it is a loader.
+ * `/` is the inbox, unless this browser asked for a conversation instead.
+ *
+ * The redirect is still a loader rather than a component decision, because it has to wait for the
+ * channel list: redirecting to a conversation before the list lands would pick `#general` every time.
+ * The inbox itself needs no wait -- the shell holds the loading state, and the digest simply fills in.
  */
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
   loader: async () => {
     if (store === null) return;
+    if (readLanding() === "inbox") return;
     for (let attempt = 0; attempt < 50 && store.state.phase === "loading"; attempt++) {
       await new Promise((resolve) => setTimeout(resolve, 60));
     }
     const state = store.state;
-    const remembered = safeRead(LAST_CHANNEL_KEY);
     const candidates = Object.values(state.channels).filter(
       (channel) => state.memberships[channel.id] !== undefined && !channel.archived,
     );
+    const remembered = lastChannel((id) => candidates.some((channel) => channel.id === id));
     const target =
       (remembered !== null && candidates.find((channel) => channel.id === remembered)) ||
       candidates.find((channel) => channel.id === GENERAL_CHANNEL_ID) ||
@@ -67,7 +71,10 @@ const indexRoute = createRoute({
     if (target === undefined) throw redirect({ to: "/browse" });
     throw redirect({ to: "/c/$channelId", params: { channelId: target.id } });
   },
-  component: () => null,
+  component: function IndexRouteComponent(): ReactNode {
+    const layout = useLayout();
+    return <InboxView onBack={layout.narrow ? layout.openRail : undefined} />;
+  },
 });
 
 const channelRoute = createRoute({
@@ -75,7 +82,7 @@ const channelRoute = createRoute({
   path: "/c/$channelId",
   component: function ChannelRouteComponent(): ReactNode {
     const { channelId } = useParams({ from: "/c/$channelId" });
-    remember(channelId);
+    rememberRecentChannel(channelId);
     return <ChannelScreen channelId={channelId} />;
   },
 });
@@ -85,7 +92,7 @@ const threadRoute = createRoute({
   path: "/c/$channelId/t/$rootId",
   component: function ThreadRouteComponent(): ReactNode {
     const { channelId, rootId } = useParams({ from: "/c/$channelId/t/$rootId" });
-    remember(channelId);
+    rememberRecentChannel(channelId);
     return <ChannelScreen channelId={channelId} rootId={rootId} />;
   },
 });
@@ -96,7 +103,7 @@ const messageRoute = createRoute({
   path: "/c/$channelId/m/$messageId",
   component: function MessageRouteComponent(): ReactNode {
     const { channelId, messageId } = useParams({ from: "/c/$channelId/m/$messageId" });
-    remember(channelId);
+    rememberRecentChannel(channelId);
     return <ChannelScreen channelId={channelId} focusMessageId={messageId} />;
   },
 });
@@ -301,22 +308,6 @@ function navigateToRoute(absolutePath: string): void {
     return;
   }
   void router.navigate({ to: "/" });
-}
-
-function remember(channelId: string): void {
-  try {
-    window.localStorage.setItem(LAST_CHANNEL_KEY, channelId);
-  } catch {
-    /* Blocked storage: the index route falls back to #general. */
-  }
-}
-
-function safeRead(key: string): string | null {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
 }
 
 setAppNavigator(navigateToRoute);

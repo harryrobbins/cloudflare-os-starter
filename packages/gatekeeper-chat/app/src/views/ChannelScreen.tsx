@@ -1,6 +1,6 @@
 // The conversation screen and its right pane.
 //
-// Wide: conversation on the left, thread or details on the right. Narrow (and embedded): one at a time,
+// Wide: conversation on the left, thread or details on the right. Narrow (and compact): one at a time,
 // with the right pane replacing the conversation and a back affordance returning to it. The route owns
 // this rather than the shell, because only the route knows whether a thread is open.
 

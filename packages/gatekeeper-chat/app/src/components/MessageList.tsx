@@ -10,7 +10,7 @@
 // Scroll anchoring is manual: prepending rows changes `scrollHeight`, so the delta is added back to
 // `scrollTop` in a layout effect, before paint, which is what stops the jump.
 
-import { ArrowDown } from "@phosphor-icons/react";
+import { ArrowDown, ArrowUp } from "@phosphor-icons/react";
 import {
   useCallback,
   useEffect,
@@ -25,6 +25,8 @@ import {
 import type { Message } from "../contract.js";
 import { formatDayDivider } from "../lib/format.js";
 import { buildRows } from "../lib/grouping.js";
+import { smoothScroll } from "../lib/motion.js";
+import type { SeenReader } from "../lib/seen.js";
 import type { LocalMessage } from "../store/merge.js";
 import { MessageRow } from "./MessageRow.js";
 import { MessageSkeletons, Spinner } from "./primitives.js";
@@ -49,9 +51,17 @@ export interface MessageListProps {
   readonly hasMoreBefore: boolean;
   readonly focusMessageId: string | null;
   readonly emptyState: ReactNode;
+  /**
+   * Who has read as far as which message, keyed by message id. Only `dm` and `group` conversations
+   * have one; everywhere else it is empty, because `readCursors` is not sent for them.
+   */
+  readonly seenBy?: ReadonlyMap<string, readonly SeenReader[]>;
   readonly canThread: boolean;
-  /** False in the thread pane, where "the beginning of the conversation" means nothing. */
-  readonly showStart: boolean;
+  /**
+   * What to render once history has reached the first message. Null in the thread pane, where "the
+   * beginning of the conversation" means nothing.
+   */
+  readonly startCard: ReactNode;
   readonly onLoadOlder: () => void;
   readonly onAtBottomChange: (atBottom: boolean) => void;
   readonly onOpenThread: (rootId: string) => void;
@@ -74,6 +84,17 @@ export function MessageList(props: MessageListProps): ReactNode {
   const anchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const lastMessageId = props.messages[props.messages.length - 1]?.id ?? null;
   const previousLastId = useRef<string | null>(null);
+  /** The newest message the reader had actually reached, so arrivals below it can be counted. */
+  const [bottomAnchorId, setBottomAnchorId] = useState<string | null>(lastMessageId);
+  /** Is the "New messages" rule inside the viewport? Starts optimistic so the pill never flashes. */
+  const [unreadRuleVisible, setUnreadRuleVisible] = useState(true);
+  /** Which way the rule went. Only an *upward* miss is worth an affordance; scrolling up past it
+      leaves it below, where "Jump to latest" already covers the way back. */
+  const [unreadRuleAbove, setUnreadRuleAbove] = useState(false);
+  /** True once the rule has been on screen: reaching it is what retires the jump affordance. */
+  const [unreadRuleReached, setUnreadRuleReached] = useState(false);
+  const unreadObserverRef = useRef<IntersectionObserver | null>(null);
+  const pendingUnreadScroll = useRef(false);
 
   const rows = useMemo(
     () =>
@@ -93,9 +114,65 @@ export function MessageList(props: MessageListProps): ReactNode {
     [rows, props.focusMessageId],
   );
 
+  const unreadIndex = useMemo(() => rows.findIndex((row) => row.kind === "unread"), [rows]);
+
   const needed = focusIndex === -1 ? mounted : Math.max(mounted, rows.length - focusIndex + 10);
   const start = Math.max(0, rows.length - needed);
   const visible = rows.slice(start);
+
+  /**
+   * How many messages arrived below the reader since they left the bottom.
+   *
+   * Their own sends never count: sending re-pins the list, so a pill offering to show you your own
+   * message would be nonsense. The anchor is the newest row at the moment the list was last pinned.
+   */
+  const newBelow = useMemo(() => {
+    if (atBottom || bottomAnchorId === null) return 0;
+    const index = props.messages.findIndex((message) => message.id === bottomAnchorId);
+    if (index === -1) return 0;
+    let count = 0;
+    for (const message of props.messages.slice(index + 1)) {
+      if (message.authorId !== props.meId) count += 1;
+    }
+    return count;
+  }, [atBottom, bottomAnchorId, props.messages, props.meId]);
+
+  // While the list is pinned, the anchor follows the newest row; leaving the bottom freezes it.
+  useEffect(() => {
+    if (atBottom) setBottomAnchorId(lastMessageId);
+  }, [atBottom, lastMessageId]);
+
+  /**
+   * The rule is off screen when it is not intersecting -- or when windowing has not mounted it at
+   * all, in which case there is no element for the observer to have an opinion about.
+   */
+  const unreadRuleMounted = unreadIndex !== -1 && unreadIndex >= start;
+  const showUnreadJump =
+    unreadIndex !== -1 &&
+    !unreadRuleReached &&
+    // Not mounted at all means windowing has not reached back that far, which can only be upwards.
+    (!unreadRuleMounted || (!unreadRuleVisible && unreadRuleAbove));
+
+  const unreadRuleRef = useCallback((node: HTMLDivElement | null) => {
+    unreadObserverRef.current?.disconnect();
+    unreadObserverRef.current = null;
+    if (node === null || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[entries.length - 1];
+        if (entry === undefined) return;
+        setUnreadRuleVisible(entry.isIntersecting);
+        if (entry.isIntersecting) setUnreadRuleReached(true);
+        const root = entry.rootBounds;
+        if (root !== null) setUnreadRuleAbove(entry.boundingClientRect.bottom <= root.top);
+      },
+      { root: scrollerRef.current, threshold: 0 },
+    );
+    observer.observe(node);
+    unreadObserverRef.current = observer;
+  }, []);
+
+  useEffect(() => () => unreadObserverRef.current?.disconnect(), []);
 
   /**
    * Re-pins to the bottom whenever the content grows underneath a reader who was already there.
@@ -121,6 +198,33 @@ export function MessageList(props: MessageListProps): ReactNode {
   }, []);
 
   useEffect(() => () => observerRef.current?.disconnect(), []);
+
+  const scrollToUnreadRule = useCallback((): void => {
+    const rule = scrollerRef.current?.querySelector<HTMLElement>("[data-unread-rule]");
+    rule?.scrollIntoView({ block: "center", behavior: smoothScroll() });
+  }, []);
+
+  /**
+   * "Jump to first unread". The rule may be above the mounted window, so the window is grown first
+   * and the scroll deferred to the layout effect below -- scrolling to an element that is not in the
+   * DOM yet silently does nothing.
+   */
+  const jumpToUnread = useCallback((): void => {
+    if (unreadIndex === -1) return;
+    const need = Math.min(MAX_MOUNTED, rows.length - unreadIndex + 6);
+    if (need > mounted) {
+      pendingUnreadScroll.current = true;
+      setMounted(need);
+      return;
+    }
+    scrollToUnreadRule();
+  }, [unreadIndex, rows.length, mounted, scrollToUnreadRule]);
+
+  useLayoutEffect(() => {
+    if (!pendingUnreadScroll.current) return;
+    pendingUnreadScroll.current = false;
+    scrollToUnreadRule();
+  });
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     const scroller = scrollerRef.current;
@@ -241,11 +345,9 @@ export function MessageList(props: MessageListProps): ReactNode {
               "Scroll up for earlier messages"
             )}
           </div>
-        ) : props.showStart ? (
-          <div className="px-5 pt-6 pb-2 text-[12px] text-kumo-subtle">
-            This is the very beginning of the conversation.
-          </div>
-        ) : null}
+        ) : (
+          props.startCard
+        )}
 
         {visible.map((row) => {
           if (row.kind === "day") {
@@ -254,10 +356,13 @@ export function MessageList(props: MessageListProps): ReactNode {
               // pane's own background, or its hairlines strike through whatever passes underneath.
               <div
                 key={row.key}
-                className="sticky top-0 z-[2] flex items-center gap-3 bg-kumo-base px-5 py-2"
+                // The band is fully opaque, not translucent: a date you cannot read against the
+                // message sliding under it is worse than no date at all. The gradient tail softens
+                // the edge so the band does not look like a second header.
+                className="sticky top-0 z-[4] flex items-center gap-3 bg-kumo-base px-5 py-2 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-3 after:bg-gradient-to-b after:from-kumo-base after:to-transparent after:content-['']"
               >
                 <span className="h-px flex-1 bg-kumo-line" aria-hidden="true" />
-                <span className="rounded-full border border-kumo-line bg-kumo-base px-2.5 py-0.5 text-[11px] font-semibold text-kumo-subtle">
+                <span className="rounded-full border border-kumo-line bg-kumo-base px-2.5 py-0.5 text-[11px] font-semibold text-kumo-subtle shadow-[0_1px_2px_rgba(20,17,16,0.05)]">
                   {formatDayDivider(row.at)}
                 </span>
                 <span className="h-px flex-1 bg-kumo-line" aria-hidden="true" />
@@ -266,7 +371,13 @@ export function MessageList(props: MessageListProps): ReactNode {
           }
           if (row.kind === "unread") {
             return (
-              <div key={row.key} className="flex items-center gap-3 px-5 py-1.5" role="separator">
+              <div
+                key={row.key}
+                ref={unreadRuleRef}
+                data-unread-rule="true"
+                className="flex items-center gap-3 px-5 py-1.5"
+                role="separator"
+              >
                 <span className="h-px flex-1" style={{ background: "var(--color-chat-unread)" }} aria-hidden="true" />
                 <span
                   className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-white"
@@ -290,19 +401,45 @@ export function MessageList(props: MessageListProps): ReactNode {
               onMentionClick={props.onMentionClick}
               onRetry={props.onRetry}
               onDiscard={props.onDiscard}
+              seenBy={props.seenBy?.get(row.message.id)}
             />
           );
         })}
         </div>
       </div>
 
+      {/* Returning to unread, top and bottom. The top pill is for the rule you have scrolled past
+          or never reached; the bottom one is for what has arrived since you looked away. */}
+      {showUnreadJump && (
+        <button
+          type="button"
+          data-testid="jump-to-unread"
+          onClick={jumpToUnread}
+          // `top-11` clears the sticky day band, which is 36px tall and owns the top of the pane.
+          className="press chat-drop absolute top-11 left-1/2 z-[5] inline-flex -translate-x-1/2 cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold text-white shadow-lg"
+          style={{ background: "var(--color-chat-unread)" }}
+        >
+          <ArrowUp size={13} weight="bold" /> Jump to first unread
+        </button>
+      )}
+
       {!atBottom && (
         <button
           type="button"
-          onClick={() => scrollToBottom("smooth")}
-          className="press absolute right-5 bottom-3 z-[3] inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-kumo-line bg-kumo-control px-3 py-1.5 text-[12px] font-medium text-kumo-default shadow-lg transition-colors hover:border-kumo-ring"
+          data-testid={newBelow > 0 ? "new-messages-pill" : "jump-to-latest"}
+          onClick={() => scrollToBottom(smoothScroll())}
+          className={[
+            "press chat-rise absolute right-5 bottom-3 z-[5] inline-flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium shadow-lg transition-colors",
+            newBelow > 0
+              ? "border border-transparent text-white"
+              : "border border-kumo-line bg-kumo-control text-kumo-default hover:border-kumo-ring",
+          ].join(" ")}
+          style={newBelow > 0 ? { background: "var(--color-chat-unread)" } : undefined}
         >
-          <ArrowDown size={13} /> Jump to latest
+          {newBelow > 0
+            ? `${newBelow} new ${newBelow === 1 ? "message" : "messages"}`
+            : "Jump to latest"}
+          <ArrowDown size={13} weight={newBelow > 0 ? "bold" : "regular"} />
         </button>
       )}
     </div>
