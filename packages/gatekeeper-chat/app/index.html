@@ -5,24 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <title>Chat</title>
-    <script>
-      // Set the theme before the first paint so a dark-mode reload never flashes white. The app
-      // takes over afterwards (stored preference, then the embed bridge's `chat:theme`).
-      (function () {
-        try {
-          var stored = localStorage.getItem("chat.theme");
-          var mode =
-            stored === "light" || stored === "dark"
-              ? stored
-              : window.matchMedia("(prefers-color-scheme: dark)").matches
-                ? "dark"
-                : "light";
-          document.documentElement.dataset.mode = mode;
-        } catch (_) {
-          /* Private mode with blocked storage: the media query default is fine. */
-        }
-      })();
-    </script>
+    <!-- Theme before first paint; a file, not inline, for the CSP (public/theme-boot.js). -->
+    <script src="%BASE_URL%theme-boot.js"></script>
   </head>
   <body>
     <div id="root"></div>

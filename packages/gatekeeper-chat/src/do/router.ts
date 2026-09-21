@@ -15,7 +15,7 @@ import {
   type MeResponse,
   type UserResponse,
 } from "../shared/protocol.js";
-import { FILES_PREFIX, matchApiRoute, WS_PATH, type ApiRouteName } from "../shared/routes.js";
+import { FILES_PREFIX, matchApiRoute, matchFilePath, WS_PATH, type ApiRouteName } from "../shared/routes.js";
 import {
   parseCreateChannel,
   parseEditMessage,
@@ -91,7 +91,11 @@ export async function route(
   }
 
   if (url.pathname === FILES_PREFIX || url.pathname.startsWith(`${FILES_PREFIX}/`)) {
-    return respondWithFile(ctx, url, user);
+    // Bytes, not JSON, so this route is not in the API table (see `matchFilePath`).
+    const file = matchFilePath(url.pathname);
+    if (file === null) return errorResponse("not_found", "No such file.");
+    const outcome = await serveFile(ctx, user.id, file.id, file.thumb);
+    return outcome.ok ? outcome.value : errorResponse(outcome.code, outcome.message);
   }
 
   const match = matchApiRoute(request.method, url.pathname);
@@ -209,7 +213,7 @@ export async function route(
       return respond(await createUpload(ctx, user.id, request));
 
     case "listUsers":
-      return json(listUsers(ctx, url.searchParams.get("cursor"), numberParam(url, "limit") ?? 50));
+      return json(listUsers(ctx, url.searchParams.get("cursor"), numberParam(url, "limit")));
 
     case "getUser": {
       const row = loadUserRow(ctx, params["userId"]!);
@@ -238,18 +242,6 @@ function me(ctx: Ctx, user: UserRow, admin: boolean): MeResponse {
     },
     protocolVersion: PROTOCOL_VERSION,
   };
-}
-
-/** `/files/:id` and `/files/:id/thumb`. Not in the API route table: the response is bytes, not JSON. */
-async function respondWithFile(ctx: Ctx, url: URL, user: UserRow): Promise<Response> {
-  const rest = url.pathname.slice(FILES_PREFIX.length).split("/").filter((part) => part.length > 0);
-  const id = rest[0];
-  const thumb = rest[1] === "thumb";
-  if (id === undefined || rest.length > 2 || (rest.length === 2 && !thumb)) {
-    return errorResponse("not_found", "No such file.");
-  }
-  const outcome = await serveFile(ctx, user.id, decodeURIComponent(id), thumb);
-  return outcome.ok ? outcome.value : errorResponse(outcome.code, outcome.message);
 }
 
 function numberParam(url: URL, key: string): number | undefined {

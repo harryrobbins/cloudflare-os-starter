@@ -113,6 +113,7 @@ const CHANNEL_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 
 /** Opaque ids are generated server-side; accept only what one can look like. */
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const ID_MAX_LENGTH = 64;
 
 export function isId(value: unknown): value is string {
   return typeof value === "string" && ID_PATTERN.test(value);
@@ -122,6 +123,17 @@ function requiredId(source: Json, key: string): Result<string> {
   const raw = source[key];
   if (!isId(raw)) return fail(`${key} must be an identifier`);
   return ok(raw);
+}
+
+/**
+ * A bounded, deduplicated list of ids: the shape every inbound list takes -- channel members,
+ * attachments, subscriptions. Deduplicated here so no handler has to wonder whether it was.
+ */
+function idArray(value: unknown, key: string, maxItems: number): Result<string[]> {
+  const parsed = stringArray(value, key, maxItems, ID_MAX_LENGTH);
+  if (!parsed.ok) return parsed;
+  if (parsed.value.some((id) => !ID_PATTERN.test(id))) return fail(`${key} must contain identifiers`);
+  return ok([...new Set(parsed.value)]);
 }
 
 // --- JSON bodies ------------------------------------------------------------
@@ -171,10 +183,9 @@ export function parseCreateChannel(input: unknown): Result<CreateChannelRequest>
 
   let memberIds: string[] | undefined;
   if (input["memberIds"] !== undefined) {
-    const parsed = stringArray(input["memberIds"], "memberIds", 200, 64);
+    const parsed = idArray(input["memberIds"], "memberIds", 200);
     if (!parsed.ok) return parsed;
-    if (parsed.value.some((id) => !ID_PATTERN.test(id))) return fail("memberIds must be identifiers");
-    memberIds = [...new Set(parsed.value)];
+    memberIds = parsed.value;
   }
   if (channelKind === "dm" && memberIds?.length !== 1) return fail("a dm needs exactly one memberIds entry");
   if (channelKind === "group" && (memberIds === undefined || memberIds.length < 2)) {
@@ -268,10 +279,9 @@ export function parseSendMessage(input: unknown): Result<SendMessageRequest> {
 
   let attachmentIds: string[] | undefined;
   if (input["attachmentIds"] !== undefined) {
-    const parsed = stringArray(input["attachmentIds"], "attachmentIds", MAX_ATTACHMENTS_PER_MESSAGE, 64);
+    const parsed = idArray(input["attachmentIds"], "attachmentIds", MAX_ATTACHMENTS_PER_MESSAGE);
     if (!parsed.ok) return parsed;
-    if (parsed.value.some((id) => !ID_PATTERN.test(id))) return fail("attachmentIds must be identifiers");
-    attachmentIds = [...new Set(parsed.value)];
+    attachmentIds = parsed.value;
   }
 
   // An empty body is only meaningful as an attachment carrier.
@@ -413,10 +423,9 @@ export function parseClientEvent(raw: string | ArrayBuffer): Result<ClientEvent>
 
   switch (parsed["t"]) {
     case "sub": {
-      const channels = stringArray(parsed["channels"], "channels", MAX_SUBSCRIPTIONS, 64);
+      const channels = idArray(parsed["channels"], "channels", MAX_SUBSCRIPTIONS);
       if (!channels.ok) return channels;
-      if (channels.value.some((id) => !ID_PATTERN.test(id))) return fail("channels must be identifiers");
-      return ok({ t: "sub", channels: [...new Set(channels.value)] });
+      return ok({ t: "sub", channels: channels.value });
     }
     case "typing": {
       const channel = requiredId(parsed, "channel");

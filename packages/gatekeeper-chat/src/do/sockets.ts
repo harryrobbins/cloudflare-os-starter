@@ -22,7 +22,6 @@
 
 import {
   MAX_CLIENT_FRAME_BYTES,
-  MAX_SUBSCRIPTIONS,
   PRESENCE_TTL_MS,
   PROTOCOL_VERSION,
   TYPING_THROTTLE_MS,
@@ -32,14 +31,14 @@ import {
   type UserId,
 } from "../shared/protocol.js";
 import { parseClientEvent, utf8Bytes } from "../shared/validate.js";
-import { loadMembership, recipientsOf, requireRead } from "./access.js";
+import { recipientsOf, requireRead } from "./access.js";
 import type { Broadcaster, Ctx } from "./context.js";
 import { newSessionId } from "./ids.js";
 import { typingAllowed } from "./limits.js";
 import { hashId, logDenial, logEvent } from "./logs.js";
 import { toUser, type UserRow } from "./rows.js";
-import { badgeSummary } from "./unread.js";
 import { markRead } from "./channels.js";
+import { badgeSummary } from "./unread.js";
 import { loadUserRow } from "./users.js";
 
 export function readAttachment(ws: WebSocket): SocketAttachment | null {
@@ -233,6 +232,7 @@ export function handleFrame(ctx: Ctx, ws: WebSocket, raw: string | ArrayBuffer):
     return;
   }
 
+
   const user = loadUserRow(ctx, attachment.userId);
   if (user === null) {
     send(ws, { t: "error", code: "unauthenticated", message: "Unknown user." });
@@ -245,15 +245,17 @@ export function handleFrame(ctx: Ctx, ws: WebSocket, raw: string | ArrayBuffer):
       return;
 
     case "sub": {
-      const requested = parsed.value.channels.slice(0, MAX_SUBSCRIPTIONS);
+      // `parseClientEvent` has already bounded the list at MAX_SUBSCRIPTIONS.
+      const requested = parsed.value.channels;
       const permitted = requested.filter((channelId) => requireRead(ctx, channelId, user.id).ok);
       writeAttachment(ws, { ...attachment, channels: permitted, lastSeenAt: now });
-      if (permitted.length !== requested.length) {
-        logDenial("ws_sub", { user: hashId(user.id), dropped: requested.length - permitted.length });
+      const dropped = requested.length - permitted.length;
+      if (dropped > 0) {
+        logDenial("ws_sub", { user: hashId(user.id), dropped });
         send(ws, {
           t: "error",
           code: "forbidden",
-          message: `${requested.length - permitted.length} channel(s) could not be subscribed.`,
+          message: `${dropped} channel(s) could not be subscribed.`,
         });
       }
       return;
@@ -270,11 +272,9 @@ export function handleFrame(ctx: Ctx, ws: WebSocket, raw: string | ArrayBuffer):
 
     case "typing": {
       const channelId = parsed.value.channel;
-      // Membership first, throttle second: a refused typing frame must not consume the budget that
+      // Access first, throttle second: a refused typing frame must not consume the budget that
       // would otherwise let a legitimate one through.
-      const membership = loadMembership(ctx, channelId, user.id);
-      const access = requireRead(ctx, channelId, user.id);
-      if (!access.ok || (access.value.channel.kind !== "public" && membership === null)) {
+      if (!requireRead(ctx, channelId, user.id).ok) {
         logDenial("ws_typing", { user: hashId(user.id), channel: hashId(channelId) });
         send(ws, { t: "error", code: "forbidden", message: "Not a member of that conversation." });
         return;

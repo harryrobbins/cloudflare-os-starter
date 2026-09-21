@@ -7,7 +7,7 @@ import { identityFromClaims } from "../src/access.js";
 import devWorker, * as devEntry from "../src/dev/entry.js";
 import { DEV_COOKIE_NAME, signIdentityId } from "../src/dev/cookie.js";
 import productionWorker, * as productionEntry from "../src/index.js";
-import { serveChat, originAllowed } from "../src/serve.js";
+import { contentSecurityPolicy, serveChat, originAllowed } from "../src/serve.js";
 import { IDENTITY_HEADER, type ErrorEnvelope, type MeResponse } from "../src/shared/protocol.js";
 import { apiPath, APP_BASE, CHAT_PREFIX, WS_PATH } from "../src/shared/routes.js";
 
@@ -200,6 +200,26 @@ describe("serveChat, with an already-verified identity", () => {
     // prefix; forwarding it would bounce the browser out of the app.
     expect(permalink.headers.get("location")).toBeNull();
     expect(await permalink.text()).toContain('<div id="root">');
+  });
+
+  it("sends the shell with a Content Security Policy and no inline script to defeat it", async () => {
+    // chat.md, "Security checklist": frame-ancestors 'self' is what lets the shell's dock frame the
+    // app and nobody else; script-src 'self' is only honest if index.html carries no inline script.
+    for (const path of [APP_BASE, `${APP_BASE}c/general/m/m_1`]) {
+      const response = await serveChat(new Request(`${ORIGIN}${path}`), env, identity);
+      const csp = response.headers.get("content-security-policy") ?? "";
+      expect(csp).toContain("frame-ancestors 'self'");
+      expect(csp).toContain("script-src 'self'");
+      expect(csp).toContain(`connect-src 'self' ${ORIGIN.replace(/^http/, "ws")}`);
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(await response.text()).not.toMatch(/<script(?![^>]*\bsrc=)/);
+    }
+    const asset = await serveChat(new Request(`${ORIGIN}${APP_BASE}theme-boot.js`), env, identity);
+    expect(asset.status).toBe(200);
+    expect(asset.headers.get("content-security-policy")).toBeNull();
+    expect(contentSecurityPolicy({ PUBLIC_BASE_URL: "nonsense" }, "https://chat.example")).toContain(
+      "connect-src 'self' wss://chat.example",
+    );
   });
 
   it("serves the shell for an explicit index.html rather than redirecting out of the prefix", async () => {

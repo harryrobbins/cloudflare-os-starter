@@ -17,6 +17,7 @@ import {
   filePath,
   isWorkerPath,
   matchApiRoute,
+  matchFilePath,
   matchPath,
   permalink,
   WS_PATH,
@@ -83,6 +84,16 @@ describe("routes", () => {
     expect(matchApiRoute("DELETE", apiPath("me"))).toEqual({ methodMismatch: ["GET", "PATCH"] });
     expect(matchApiRoute("GET", `${API_PREFIX}/nope`)).toBeNull();
     expect(matchApiRoute("GET", "/elsewhere")).toBeNull();
+  });
+
+  it("matches a file path without throwing on a malformed escape", () => {
+    expect(matchFilePath(filePath("a1"))).toEqual({ id: "a1", thumb: false });
+    expect(matchFilePath(filePath("a1", true))).toEqual({ id: "a1", thumb: true });
+    expect(matchFilePath("/gatekeeper/chat/files/a1/other")).toBeNull();
+    expect(matchFilePath("/gatekeeper/chat/files")).toBeNull();
+    expect(matchFilePath(apiPath("me"))).toBeNull();
+    // A lone `%` is not a decoding failure worth a URIError: the id simply names no attachment.
+    expect(matchFilePath("/gatekeeper/chat/files/%zz")).toEqual({ id: "%zz", thumb: false });
   });
 
   it("knows which paths the Worker must handle itself", () => {

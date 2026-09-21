@@ -132,6 +132,27 @@ export function filePath(attachmentId: string, thumb = false): string {
   return `${FILES_PREFIX}/${encodeURIComponent(attachmentId)}${thumb ? "/thumb" : ""}`;
 }
 
+export interface FileMatch {
+  readonly id: string;
+  readonly thumb: boolean;
+}
+
+/**
+ * The inverse of {@link filePath}: `/files/:id` and `/files/:id/thumb`, or null for anything else.
+ *
+ * Not in {@link API_ROUTES} because the response is bytes rather than JSON, but resolved through
+ * {@link matchPath} for the same reason the JSON routes are -- it decodes a segment without throwing,
+ * so a path such as `/files/%zz` is "no such file" rather than a URIError escaping the handler.
+ */
+export function matchFilePath(pathname: string): FileMatch | null {
+  if (!pathname.startsWith(`${FILES_PREFIX}/`)) return null;
+  const rest = pathname.slice(FILES_PREFIX.length);
+  const plain = matchPath("/:id", rest);
+  if (plain !== null) return { id: plain["id"]!, thumb: false };
+  const thumb = matchPath("/:id/thumb", rest);
+  return thumb === null ? null : { id: thumb["id"]!, thumb: true };
+}
+
 export interface ApiMatch {
   readonly name: ApiRouteName;
   readonly params: PathParams;

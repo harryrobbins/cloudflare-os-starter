@@ -26,7 +26,7 @@ beforeAll(async () => {
   // reading app/dist directly is not an option here.)
   const response = await env.ASSETS.fetch(`${ORIGIN}/`);
   expect(response.status).toBe(200);
-  const match = /src="([^"]+\.js)"/.exec(await response.text());
+  const match = /<script type="module"[^>]*src="([^"]+\.js)"/.exec(await response.text());
   expect(match, "the built index.html references a module").not.toBeNull();
   hashedModule = match![1]!;
   expect(hashedModule.startsWith(`${BASE}assets/`)).toBe(true);

@@ -46,6 +46,58 @@ export function placeholders(count: number): string {
   return Array.from({ length: count }, () => "?").join(", ");
 }
 
+/** The first row of a query, or null. `SqlStorage.exec` has no "at most one row" mode. */
+export function firstRow<T extends Record<string, SqlStorageValue>>(
+  ctx: Ctx,
+  query: string,
+  ...params: unknown[]
+): T | null {
+  return ctx.sql.exec<T>(query, ...params).toArray()[0] ?? null;
+}
+
+/**
+ * `UPDATE <table> SET <every defined column> WHERE <where>`, in one statement.
+ *
+ * The routes that patch a row all take a partial body, so "write the fields that are present" is the
+ * same shape three times over. One statement rather than one per column, so a row is never seen
+ * half-updated and no transaction is needed. `undefined` means "absent"; an explicit `null` is
+ * written, which is how a nullable column is cleared. The table, the predicate and the column names
+ * are literals from the calling module -- SQLite cannot bind an identifier -- and every value is
+ * bound.
+ */
+export function updateRow(
+  ctx: Ctx,
+  table: string,
+  where: string,
+  whereParams: readonly unknown[],
+  columns: Readonly<Record<string, unknown>>,
+): void {
+  const assignments: string[] = [];
+  const values: unknown[] = [];
+  for (const [column, value] of Object.entries(columns)) {
+    if (value === undefined) continue;
+    assignments.push(`${column} = ?`);
+    values.push(value);
+  }
+  if (assignments.length === 0) return;
+  ctx.sql.exec(
+    `UPDATE ${table} SET ${assignments.join(", ")} WHERE ${where}`,
+    ...values,
+    ...whereParams,
+  );
+}
+
+/**
+ * The single number a `COUNT`, `MAX` or one-column query answers with.
+ *
+ * `MAX` over no rows is a row holding NULL rather than no row at all, so both cases collapse to
+ * {@link fallback} here instead of at every call site.
+ */
+export function scalar(ctx: Ctx, query: string, params: readonly unknown[] = [], fallback = 0): number {
+  const row = firstRow<{ value: number | null }>(ctx, query, ...params);
+  return row?.value ?? fallback;
+}
+
 /**
  * A handler result that carries the error code the HTTP layer and the WebSocket layer both need.
  *

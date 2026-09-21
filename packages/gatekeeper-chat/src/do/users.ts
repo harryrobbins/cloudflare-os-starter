@@ -9,6 +9,7 @@
 import { isAdminEmail } from "../env.js";
 import {
   AGENT_USER_ID,
+  DEFAULT_PAGE_LIMIT,
   GENERAL_CHANNEL_ID,
   MAX_PAGE_LIMIT,
   type ChatIdentity,
@@ -17,7 +18,7 @@ import {
   type UserId,
 } from "../shared/protocol.js";
 import { joinChannelRow, loadChannel } from "./access.js";
-import { placeholders, type Ctx } from "./context.js";
+import { firstRow, placeholders, updateRow, type Ctx } from "./context.js";
 import { toUser, type UserRow } from "./rows.js";
 
 /**
@@ -78,7 +79,7 @@ function joinGeneral(ctx: Ctx, userId: UserId): void {
 }
 
 export function loadUserRow(ctx: Ctx, userId: UserId): UserRow | null {
-  return ctx.sql.exec<UserRow>(`SELECT * FROM users WHERE id = ?`, userId).toArray()[0] ?? null;
+  return firstRow<UserRow>(ctx, `SELECT * FROM users WHERE id = ?`, userId);
 }
 
 /** Hydrates a set of ids in one query, skipping ids that are not real users. */
@@ -91,16 +92,20 @@ export function loadUsers(ctx: Ctx, userIds: Iterable<UserId>): readonly User[] 
     .map((row) => toUser(row, ctx.bus.isOnline(row.id)));
 }
 
-/** The subset of `userIds` that name a real user. Used before a mention row is written. */
+/**
+ * The subset of `userIds` that name a real user.
+ *
+ * Every write that takes ids from a client goes through this: a mention token can name anybody, and
+ * so can the member list of a new conversation.
+ */
 export function existingUserIds(ctx: Ctx, userIds: readonly UserId[]): Set<UserId> {
   if (userIds.length === 0) return new Set();
-  const rows = ctx.sql
-    .exec<{ id: string }>(
-      `SELECT id FROM users WHERE id IN (${placeholders(userIds.length)})`,
-      ...userIds,
-    )
-    .toArray();
-  return new Set(rows.map((row) => row.id));
+  return new Set(
+    ctx.sql
+      .exec<{ id: string }>(`SELECT id FROM users WHERE id IN (${placeholders(userIds.length)})`, ...userIds)
+      .toArray()
+      .map((row) => row.id),
+  );
 }
 
 export function isAdmin(ctx: Ctx, user: UserRow): boolean {
@@ -109,23 +114,18 @@ export function isAdmin(ctx: Ctx, user: UserRow): boolean {
 
 /** `PATCH /api/me`. A cleared `displayName` falls back to the identity-derived name. */
 export function updatePrefs(ctx: Ctx, user: UserRow, patch: UpdateMeRequest): UserRow {
-  const fallback = user.email?.split("@")[0] || user.id;
-  if (patch.displayName !== undefined) {
-    const override = patch.displayName === null || patch.displayName.length === 0 ? null : patch.displayName;
-    ctx.sql.exec(
-      `UPDATE users SET display_name = ?, name = COALESCE(?, ?) WHERE id = ?`,
-      override,
-      override,
-      fallback,
-      user.id,
-    );
-  }
-  if (patch.tz !== undefined) {
-    ctx.sql.exec(`UPDATE users SET tz = ? WHERE id = ?`, patch.tz, user.id);
-  }
-  if (patch.notify !== undefined) {
-    ctx.sql.exec(`UPDATE users SET notify = ? WHERE id = ?`, patch.notify, user.id);
-  }
+  const override =
+    patch.displayName === undefined || patch.displayName === null || patch.displayName.length === 0
+      ? null
+      : patch.displayName;
+  updateRow(ctx, "users", "id = ?", [user.id], {
+    // The resolved `name` follows the override, falling back to the identity-derived local part.
+    ...(patch.displayName === undefined
+      ? {}
+      : { display_name: override, name: override ?? user.email?.split("@")[0] ?? user.id }),
+    tz: patch.tz,
+    notify: patch.notify,
+  });
   const row = loadUserRow(ctx, user.id);
   if (row === null) throw new Error("The user row vanished during a preferences update.");
   return row;
@@ -137,19 +137,18 @@ export interface UserPage {
 }
 
 /**
- * `GET /api/users`. Everyone who has appeared, newest first sight last, paged by id.
+ * `GET /api/users`. Everyone who has appeared, ordered by id.
  *
- * The cursor is the last id of the previous page: ids are time-ordered, so `id > cursor` is a stable
- * keyset with no offset to drift.
+ * The cursor is the last id of the previous page, which makes it a keyset with no offset to drift as
+ * people appear. A user id is an Access subject, so the order is lexicographic rather than temporal;
+ * what matters is only that it is total and stable. An empty cursor sorts before every id, so the
+ * first page needs no second query.
  */
-export function listUsers(ctx: Ctx, cursor: string | null, limit: number): UserPage {
+export function listUsers(ctx: Ctx, cursor: string | null, limit: number = DEFAULT_PAGE_LIMIT): UserPage {
   const size = Math.min(Math.max(limit, 1), MAX_PAGE_LIMIT);
-  const rows =
-    cursor === null
-      ? ctx.sql.exec<UserRow>(`SELECT * FROM users ORDER BY id LIMIT ?`, size + 1).toArray()
-      : ctx.sql
-          .exec<UserRow>(`SELECT * FROM users WHERE id > ? ORDER BY id LIMIT ?`, cursor, size + 1)
-          .toArray();
+  const rows = ctx.sql
+    .exec<UserRow>(`SELECT * FROM users WHERE id > ? ORDER BY id LIMIT ?`, cursor ?? "", size + 1)
+    .toArray();
   const page = rows.slice(0, size);
   return {
     users: page.map((row) => toUser(row, ctx.bus.isOnline(row.id))),

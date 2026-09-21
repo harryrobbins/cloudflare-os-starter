@@ -14,7 +14,7 @@
 // every public channel, so these queries treat it like anybody else.
 
 import { GENERAL_CHANNEL_ID, type ChannelId, type UserId } from "../shared/protocol.js";
-import { allow, placeholders, refuse, type Ctx, type Outcome } from "./context.js";
+import { allow, firstRow, placeholders, refuse, type Ctx, type Outcome } from "./context.js";
 import { hashId, logDenial } from "./logs.js";
 import type { ChannelRow, CountRow, MembershipRow } from "./rows.js";
 
@@ -25,18 +25,15 @@ export interface ChannelAccess {
 }
 
 export function loadChannel(ctx: Ctx, channelId: ChannelId): ChannelRow | null {
-  return ctx.sql.exec<ChannelRow>(`SELECT * FROM channels WHERE id = ?`, channelId).toArray()[0] ?? null;
+  return firstRow<ChannelRow>(ctx, `SELECT * FROM channels WHERE id = ?`, channelId);
 }
 
 export function loadMembership(ctx: Ctx, channelId: ChannelId, userId: UserId): MembershipRow | null {
-  return (
-    ctx.sql
-      .exec<MembershipRow>(
-        `SELECT * FROM memberships WHERE channel_id = ? AND user_id = ?`,
-        channelId,
-        userId,
-      )
-      .toArray()[0] ?? null
+  return firstRow<MembershipRow>(
+    ctx,
+    `SELECT * FROM memberships WHERE channel_id = ? AND user_id = ?`,
+    channelId,
+    userId,
   );
 }
 
@@ -142,11 +139,18 @@ export interface Recipients {
 /** Who a channel event may reach, derived from membership now rather than from a cached list. */
 export function recipientsOf(ctx: Ctx, channelId: ChannelId): Recipients {
   const channel = loadChannel(ctx, channelId);
-  const userIds = memberIdsOf(ctx, channelId);
-  return { everyone: channel?.kind === "public", userIds };
+  if (channel?.kind === "public") return { everyone: true, userIds: [] };
+  return { everyone: false, userIds: memberIdsOf(ctx, channelId) };
 }
 
-/** `#general` cannot be left, and the agent's implicit memberships cannot be dropped. */
-export function leavable(channel: ChannelRow): boolean {
-  return channel.id !== GENERAL_CHANNEL_ID && channel.kind !== "dm";
+/**
+ * Why a conversation cannot be left, or null when it can be.
+ *
+ * `#general` is the one channel nobody may leave (chat.md, "Channels and conversations"), and a
+ * direct message has no "leave": it is the pair of people in it.
+ */
+export function unleavableReason(channel: ChannelRow): string | null {
+  if (channel.id === GENERAL_CHANNEL_ID) return "#general cannot be left.";
+  if (channel.kind === "dm") return "A direct message cannot be left.";
+  return null;
 }

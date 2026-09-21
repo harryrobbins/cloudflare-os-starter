@@ -14,7 +14,7 @@ function randomTail(): string {
 }
 
 /** `<prefix>_<millis base36>_<random>`; 1 to 3 characters of prefix. */
-export function newId(prefix: string, now: number = Date.now()): string {
+function newId(prefix: string, now: number = Date.now()): string {
   return `${prefix}_${now.toString(36)}_${randomTail()}`;
 }
 

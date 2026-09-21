@@ -1,4 +1,5 @@
 // Messages, threads, reactions, and the unread arithmetic they drive.
+import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -301,6 +302,44 @@ describe("threads", () => {
     await alice.send("POST", apiPath("readChannel", { channelId }), { seq: root.message.seq + 1 });
     const after = await alice.get<ChannelListResponse>(apiPath("listChannels"));
     expect(after.badges.threads).toBe(0);
+  });
+
+  it("stops badging a thread in a conversation the follower can no longer see", async () => {
+    // The Threads view filters by visibility, so a badge for a channel somebody was removed from is
+    // a count they can never clear.
+    const workspace = freshWorkspace("thread-badge-revoked");
+    const alice = client(workspace, identity("alice", "Alice"));
+    const bob = client(workspace, identity("bob", "Bob"));
+    await bob.get(apiPath("me"));
+    const created = await alice.send<ChannelResponse>("POST", apiPath("createChannel"), {
+      kind: "private",
+      name: "shared",
+      memberIds: ["bob"],
+    });
+    const channelId = created.channel.id;
+    const root = await post(alice, channelId, "who is on call?");
+    await post(bob, channelId, "not me", { rootId: root.message.id });
+    expect((await alice.get<ChannelListResponse>(apiPath("listChannels"))).badges.threads).toBe(1);
+
+    await runInDurableObject(workspace, (_instance, state) => {
+      state.storage.sql.exec(
+        `DELETE FROM memberships WHERE user_id = 'alice' AND channel_id = ?`,
+        channelId,
+      );
+    });
+    expect((await alice.get<ChannelListResponse>(apiPath("listChannels"))).badges.threads).toBe(0);
+    expect((await alice.get<ThreadListResponse>(apiPath("listThreads"))).threads).toHaveLength(0);
+  });
+
+  it("does not count a thread in a muted conversation", async () => {
+    const { alice, bob, channelId } = await fixture("thread-badge-muted");
+    const root = await post(alice, channelId, "topic");
+    await post(bob, channelId, "reply", { rootId: root.message.id });
+    expect((await alice.get<ChannelListResponse>(apiPath("listChannels"))).badges.threads).toBe(1);
+
+    await alice.send("PATCH", apiPath("updateMembership", { channelId }), { muted: true });
+    // Muted conversations never badge, in the Threads count as much as in the rail.
+    expect((await alice.get<ChannelListResponse>(apiPath("listChannels"))).badges.threads).toBe(0);
   });
 
   it("follows and unfollows explicitly", async () => {

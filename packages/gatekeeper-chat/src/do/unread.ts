@@ -9,8 +9,8 @@
 // writes and what decides whether an old mention notifies again.
 
 import type { BadgeSummary, ChannelId, ReadCursor, UserId } from "../shared/protocol.js";
-import type { Ctx } from "./context.js";
-import type { CountRow, MembershipRow } from "./rows.js";
+import { scalar, type Ctx } from "./context.js";
+import type { CountRow } from "./rows.js";
 
 /**
  * SQL for the effective cursor, given a `memberships` alias.
@@ -18,13 +18,6 @@ import type { CountRow, MembershipRow } from "./rows.js";
  * `MIN(a, b)` here is SQLite's two-argument scalar minimum, not the aggregate.
  */
 const EFFECTIVE_READ_SEQ = `MIN(mb.last_read_seq, COALESCE(mb.manual_unread_seq - 1, mb.last_read_seq))`;
-
-/** The cursor one membership row is at, in JavaScript, for a single-channel answer. */
-export function effectiveReadSeq(membership: MembershipRow): number {
-  const manual = membership.manual_unread_seq;
-  if (manual === null) return membership.last_read_seq;
-  return Math.min(membership.last_read_seq, manual - 1);
-}
 
 /**
  * Everything the rail badges and the document title need.
@@ -75,12 +68,20 @@ export function badgeSummary(ctx: Ctx, userId: UserId): BadgeSummary {
     mentions[row.channel_id] = row.n;
   }
 
-  const threads =
-    ctx.sql
-      .exec<{ n: number }>(
-        `SELECT COUNT(*) AS n
+  // A followed thread only badges while its channel is still one the follower may see and has not
+  // muted: the same two rules the per-channel counts above obey. Without them a thread in a channel
+  // somebody was removed from badges forever -- `GET /api/threads` filters by visibility, so there
+  // would be nothing in the view to clear it with.
+  const threads = scalar(
+    ctx,
+    `SELECT COUNT(*) AS value
            FROM thread_follows f
+           JOIN messages r ON r.id = f.root_id
+           JOIN channels c ON c.id = r.channel_id
+           LEFT JOIN memberships mb ON mb.channel_id = r.channel_id AND mb.user_id = f.user_id
           WHERE f.user_id = ?
+            AND (c.kind = 'public' OR mb.user_id IS NOT NULL)
+            AND COALESCE(mb.muted, 0) = 0
             AND EXISTS (
               SELECT 1 FROM messages rep
                WHERE rep.root_id = f.root_id
@@ -88,25 +89,19 @@ export function badgeSummary(ctx: Ctx, userId: UserId): BadgeSummary {
                  AND rep.author_id <> f.user_id
                  AND rep.deleted_at IS NULL
             )`,
-        userId,
-      )
-      .toArray()[0]?.n ?? 0;
+    [userId],
+  );
 
   return { unread, mentions, threads };
 }
 
 /** Unread replies for one thread, for a {@link import("../shared/protocol.js").ThreadSummary}. */
 export function unreadReplies(ctx: Ctx, rootId: string, userId: UserId, lastReadReplySeq: number): number {
-  return (
-    ctx.sql
-      .exec<{ n: number }>(
-        `SELECT COUNT(*) AS n FROM messages
-          WHERE root_id = ? AND seq > ? AND author_id <> ? AND deleted_at IS NULL`,
-        rootId,
-        lastReadReplySeq,
-        userId,
-      )
-      .toArray()[0]?.n ?? 0
+  return scalar(
+    ctx,
+    `SELECT COUNT(*) AS value FROM messages
+      WHERE root_id = ? AND seq > ? AND author_id <> ? AND deleted_at IS NULL`,
+    [rootId, lastReadReplySeq, userId],
   );
 }
 

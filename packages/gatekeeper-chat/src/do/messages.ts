@@ -36,8 +36,8 @@ import {
   type UserId,
 } from "../shared/protocol.js";
 import { extractMentionIds } from "../shared/validate.js";
-import { requireRead, requireWrite, visibleChannelIds } from "./access.js";
-import { allow, placeholders, refuse, type Ctx, type Outcome } from "./context.js";
+import { memberIdsOf, requireRead, requireWrite, visibleChannelIds } from "./access.js";
+import { allow, firstRow, placeholders, refuse, scalar, type Ctx, type Outcome } from "./context.js";
 import {
   attachmentRowsForMessage,
   attachmentsFor,
@@ -53,7 +53,7 @@ import { consume } from "./limits.js";
 import { hashId, logEvent } from "./logs.js";
 import { asMessageKind, type MessageRow, type UserRow } from "./rows.js";
 import { badgeSummary, otherReadCursors, unreadReplies } from "./unread.js";
-import { loadUsers } from "./users.js";
+import { existingUserIds, loadUsers } from "./users.js";
 
 /** Avatar stacks do not need more than this, and the query is cheaper for the cap. */
 const MAX_THREAD_PARTICIPANTS = 8;
@@ -64,7 +64,7 @@ const LINK_PATTERN = /\bhttps?:\/\/\S/iu;
 // ---------------------------------------------------------------------------
 
 export function loadMessage(ctx: Ctx, messageId: MessageId): MessageRow | null {
-  return ctx.sql.exec<MessageRow>(`SELECT * FROM messages WHERE id = ?`, messageId).toArray()[0] ?? null;
+  return firstRow<MessageRow>(ctx, `SELECT * FROM messages WHERE id = ?`, messageId);
 }
 
 /**
@@ -99,7 +99,7 @@ export function hydrateMessages(ctx: Ctx, rows: readonly MessageRow[]): readonly
   }));
 }
 
-export function hydrateMessage(ctx: Ctx, row: MessageRow): Message {
+function hydrateMessage(ctx: Ctx, row: MessageRow): Message {
   return hydrateMessages(ctx, [row])[0]!;
 }
 
@@ -282,14 +282,13 @@ export async function sendMessage(
 ): Promise<Outcome<SendMessageResponse>> {
   // The replay check comes before the rate limit and before authorization: a retry must return the
   // original message even if the client has since been throttled or has left the channel.
-  const replay = ctx.sql
-    .exec<MessageRow>(
-      `SELECT * FROM messages WHERE author_id = ? AND client_id = ?`,
-      author.id,
-      request.clientId,
-    )
-    .toArray()[0];
-  if (replay !== undefined) {
+  const replay = firstRow<MessageRow>(
+    ctx,
+    `SELECT * FROM messages WHERE author_id = ? AND client_id = ?`,
+    author.id,
+    request.clientId,
+  );
+  if (replay !== null) {
     return allow({
       message: hydrateMessage(ctx, replay),
       deduped: true,
@@ -375,7 +374,7 @@ export async function sendMessage(
         channelId,
         author.id,
       );
-      inserted = ctx.sql.exec<MessageRow>(`SELECT * FROM messages WHERE id = ?`, id).toArray()[0]!;
+      inserted = loadMessage(ctx, id)!;
     });
   } catch {
     await rollbackPromoted(ctx, promoted.value);
@@ -389,7 +388,7 @@ export async function sendMessage(
     const root = loadMessage(ctx, rootRow.id);
     if (root !== null) ctx.bus.toChannel(channelId, { t: "edit", message: hydrateMessage(ctx, root) });
   }
-  ctx.bus.badges(channelMemberIds(ctx, channelId));
+  ctx.bus.badges(memberIdsOf(ctx, channelId));
 
   logEvent("chat.send", {
     channel: hashId(channelId),
@@ -432,21 +431,15 @@ export function postSystemMessage(ctx: Ctx, channelId: ChannelId, body: string):
  */
 function nextSeq(ctx: Ctx, channelId: ChannelId): number {
   ctx.sql.exec(`UPDATE channels SET last_seq = last_seq + 1 WHERE id = ?`, channelId);
-  const row = ctx.sql
-    .exec<{ last_seq: number }>(`SELECT last_seq FROM channels WHERE id = ?`, channelId)
-    .toArray()[0];
-  if (row === undefined) throw new Error(`Channel ${channelId} vanished while allocating a seq.`);
-  return row.last_seq;
+  const seq = scalar(ctx, `SELECT last_seq AS value FROM channels WHERE id = ?`, [channelId], 0);
+  if (seq === 0) throw new Error(`Channel ${channelId} vanished while allocating a seq.`);
+  return seq;
 }
 
 /** Mentioned ids that name a real user. A token naming nobody is left as text and stored nowhere. */
 function resolveMentions(ctx: Ctx, body: string): readonly UserId[] {
   const ids = extractMentionIds(body);
-  if (ids.length === 0) return [];
-  const known = ctx.sql
-    .exec<{ id: string }>(`SELECT id FROM users WHERE id IN (${placeholders(ids.length)})`, ...ids)
-    .toArray();
-  const real = new Set(known.map((row) => row.id));
+  const real = existingUserIds(ctx, ids);
   return ids.filter((id) => real.has(id));
 }
 
@@ -478,13 +471,6 @@ function followThreadRow(
     lastReadReplySeq,
     now,
   );
-}
-
-export function channelMemberIds(ctx: Ctx, channelId: ChannelId): readonly UserId[] {
-  return ctx.sql
-    .exec<{ user_id: string }>(`SELECT user_id FROM memberships WHERE channel_id = ?`, channelId)
-    .toArray()
-    .map((row) => row.user_id);
 }
 
 // ---------------------------------------------------------------------------
@@ -525,7 +511,7 @@ export function editMessage(
 
   const message = hydrateMessage(ctx, loadMessage(ctx, messageId)!);
   ctx.bus.toChannel(row.channel_id, { t: "edit", message });
-  ctx.bus.badges(channelMemberIds(ctx, row.channel_id));
+  ctx.bus.badges(memberIdsOf(ctx, row.channel_id));
   return allow({ message });
 }
 
@@ -600,7 +586,7 @@ export async function deleteMessage(
       ctx.bus.toChannel(row.channel_id, { t: "edit", message: hydrateMessage(ctx, root) });
     }
   }
-  ctx.bus.badges(channelMemberIds(ctx, row.channel_id));
+  ctx.bus.badges(memberIdsOf(ctx, row.channel_id));
   logEvent("chat.delete", {
     channel: hashId(row.channel_id),
     user: hashId(user.id),
@@ -764,23 +750,17 @@ export function setThreadFollow(
   if (follow) {
     // A new follow starts from the latest reply: following a thread is not a request to be told about
     // everything already said in it.
-    const latest =
-      ctx.sql
-        .exec<{ s: number | null }>(`SELECT MAX(seq) AS s FROM messages WHERE root_id = ?`, rootId)
-        .toArray()[0]?.s ?? 0;
-    followThreadRow(ctx, rootId, user.id, latest ?? 0, ctx.now());
+    const latest = scalar(ctx, `SELECT MAX(seq) AS value FROM messages WHERE root_id = ?`, [rootId]);
+    followThreadRow(ctx, rootId, user.id, latest, ctx.now());
   } else {
     ctx.sql.exec(`DELETE FROM thread_follows WHERE root_id = ? AND user_id = ?`, rootId, user.id);
   }
 
-  const lastReadReplySeq =
-    ctx.sql
-      .exec<{ last_read_reply_seq: number }>(
-        `SELECT last_read_reply_seq FROM thread_follows WHERE root_id = ? AND user_id = ?`,
-        rootId,
-        user.id,
-      )
-      .toArray()[0]?.last_read_reply_seq ?? 0;
+  const lastReadReplySeq = scalar(
+    ctx,
+    `SELECT last_read_reply_seq AS value FROM thread_follows WHERE root_id = ? AND user_id = ?`,
+    [rootId, user.id],
+  );
 
   ctx.bus.badges([user.id]);
   return allow({

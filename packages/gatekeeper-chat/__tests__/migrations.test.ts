@@ -4,7 +4,10 @@ import { env, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 import { MIGRATIONS, readSchemaVersion, runMigrations, TARGET_SCHEMA_VERSION } from "../src/migrations.js";
+import { IDENTITY_HEADER, type ErrorEnvelope } from "../src/shared/protocol.js";
 import type { ChatWorkspace } from "../src/workspace.js";
+
+const IDENTITY = { [IDENTITY_HEADER]: JSON.stringify({ id: "alice", email: "alice@example.test" }) };
 
 function workspace(name: string) {
   return env.CHAT_WORKSPACE.get(env.CHAT_WORKSPACE.idFromName(name)) as DurableObjectStub<ChatWorkspace>;
@@ -65,6 +68,23 @@ describe("migrations", () => {
       "notify",
       "tz",
     ]);
+  });
+
+  it("answers an error envelope when a query fails, not a bare 500", async () => {
+    // A broken schema stands in for any bug inside the object: the client must still get the one
+    // envelope the contract defines, with no stack trace in it.
+    const stub = workspace(`internal-${crypto.randomUUID()}`);
+    await stub.fetch(new Request("https://chat/gatekeeper/chat/api/me", { headers: IDENTITY }));
+    await runInDurableObject(stub, (_instance, state) => {
+      state.storage.sql.exec(`DROP TABLE messages`);
+    });
+    const response = await stub.fetch(
+      new Request("https://chat/gatekeeper/chat/api/channels/general/messages", { headers: IDENTITY }),
+    );
+    expect(response.status).toBe(500);
+    const body = (await response.json()) as ErrorEnvelope;
+    expect(body.error.code).toBe("internal");
+    expect(body.error.message).not.toContain("messages");
   });
 
   it("rejects an invalid notify level at the database level", async () => {

@@ -1239,7 +1239,8 @@ export class ChatStore {
 
   /**
    * In-app toast when the conversation is not on screen; a browser notification when the tab is hidden
-   * and the user has opted in. Deduplicated by message id across both paths.
+   * and the user has opted in; when embedded, the shell's toast in both cases. Deduplicated by message
+   * id across every path.
    */
   #maybeNotify(message: Message): void {
     const state = this.#state;
@@ -1267,7 +1268,9 @@ export class ChatStore {
 
     this.#patch({ announcement: `${author}${where}: ${preview}` });
 
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+    // Embedded, the shell shows the toast: this frame may be in a closed drawer (display: none, which
+    // still reports a visible document), and the shell's toast is on screen either way.
+    if (this.#state.embedded || (typeof document !== "undefined" && document.visibilityState === "hidden")) {
       this.#systemNotify(`${author}${where}`, preview, href);
       return;
     }

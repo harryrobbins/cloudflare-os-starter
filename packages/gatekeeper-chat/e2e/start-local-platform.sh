@@ -1,23 +1,38 @@
 #!/usr/bin/env bash
 # Starts the local Cloudflare OS platform with THIS package bound to the dev router as
-# `GATEKEEPER_CHAT`, so `/gatekeeper/chat/*` and the WebSocket upgrade are proved end to end through
-# the real router rather than against the chat Worker directly.
+# `GATEKEEPER_CHAT`, so `/gatekeeper/chat/*`, the WebSocket upgrade and the shell's chat dock are proved
+# end to end through the real router rather than against the chat Worker directly.
 #
-#   packages/gatekeeper-chat/e2e/start-local-platform.sh     # prints PGID and URL, then returns
-#   packages/gatekeeper-chat/e2e/stop-local-platform.sh      # kills the process group
+#   packages/gatekeeper-chat/e2e/start-local-platform.sh     # prints PGIDs and URL, then returns
+#   packages/gatekeeper-chat/e2e/stop-local-platform.sh      # kills both process groups
 #
-# Nothing in `cloudflare-os/` is edited. The submodule's launcher (`scripts/run-dev-server.ts`) is
-# copied into a temp dir and patched there, exactly as
-# `packages/blueprint-whiteboard/e2e/start-local-platform.sh` does, with two extra patches of our own:
+# Two `wrangler dev` processes, not one:
 #
-#   1. the generated dev-router config gains a service binding named by `$EXTRA_ROUTER_SERVICE`
-#      ("GATEKEEPER_CHAT=cfos-chat-dev"), so the router's `GATEKEEPER_*` scan finds it;
-#   2. `$EXTRA_WRANGLER_CONFIGS` is prepended to the `-c` list, so the same multi-config
-#      `wrangler dev` also starts this package's Worker. One workerd, so a service binding between
-#      two configs is a real binding and a WebSocket upgrade survives it.
+#   1. the platform, from the submodule's launcher (`scripts/run-dev-server.ts`) copied into a temp
+#      dir and patched there, exactly as `packages/blueprint-whiteboard/e2e/start-local-platform.sh`
+#      does, plus one patch of our own: the generated dev-router config gains a service binding named
+#      by `$EXTRA_ROUTER_SERVICE` ("GATEKEEPER_CHAT=cfos-chat-dev"), so the router's `GATEKEEPER_*`
+#      scan finds it. Nothing in `cloudflare-os/` is edited.
+#   2. this package's Worker, `wrangler dev -c wrangler.dev.jsonc --port 8788`, started AFTER the
+#      platform. The router reaches it through wrangler's local dev registry (a service binding whose
+#      target runs in another `wrangler dev` on the same machine), and a WebSocket upgrade survives it.
 #
-# The chat Worker keeps its own `wrangler.dev.jsonc` (dev identities, local R2, `app/dist` assets).
-# Env: CFOS_REBUILD=1, CFOS_LOG, CFOS_READY_TIMEOUT -- same meanings as the whiteboard script.
+# Why not one multi-config `wrangler dev` with the chat config appended, which is what the whiteboard
+# needs? Because both the Workshop backend (the frontend dist) and this Worker (`app/dist`) carry an
+# `assets` directory, and one workerd serves ONE asset directory: with the chat config in the list the
+# shell's `/` answered with the chat app's index.html and its bundle 500'd. Two processes keep the two
+# asset servers apart. Two rules the registry imposes, both learned the hard way:
+#
+#   - Same wrangler version on both sides. The platform runs the submodule's wrangler; this package's
+#     own is newer, and the older one prunes a registry entry the newer one wrote, so the router
+#     answered 503 within a minute. The chat Worker is therefore started with `$C/node_modules/.bin/wrangler`.
+#   - Chat after the platform. A platform start prunes entries it did not see come up, so restarting
+#     the platform alone leaves the router with a 503 until the chat process is restarted too.
+#
+# Env: CFOS_REBUILD=1, CFOS_LOG, CFOS_READY_TIMEOUT -- same meanings as the whiteboard script. Plus
+# VITE_CHAT_DOCK (default "true"), which is the *shell's* build-time flag for the chat dock: the
+# frontend dist is rebuilt whenever it does not match, because a dist built without it has no sidebar
+# row, no drawer and no /chat route to check.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,9 +40,12 @@ PKG="$(cd "$HERE/.." && pwd)"
 REPO="$(cd "$PKG/../.." && pwd)"
 C="$REPO/cloudflare-os"
 URL="http://localhost:8787"
+CHAT_PORT=8788
 STATE_DIR="${TMPDIR:-/tmp}/cfos-chat-platform"
 PGID_FILE="$STATE_DIR/pgid"
+CHAT_PGID_FILE="$STATE_DIR/chat.pgid"
 LOG="${CFOS_LOG:-${TMPDIR:-/tmp}/cfos-chat-platform.log}"
+CHAT_LOG="${LOG%.log}.chat.log"
 TIMEOUT="${CFOS_READY_TIMEOUT:-300}"
 
 if [[ -z "$(command -v node)" || "$(command -v node)" == /mnt/c/* ]]; then
@@ -50,83 +68,107 @@ sed -e "s#from \"\./#from \"$C/scripts/#g" \
     -e 's#^function spawnDevWatcher(label: string, command: string, args: string\[\]): void {#&  if (process.env.SPIKE_NO_WATCHERS) return;#' \
     -e 's#^  const srcPath = join(ROOT, "wrangler.jsonc");#&\n  const extraService = process.env.EXTRA_ROUTER_SERVICE;#' \
     -e '0,/^  config.services = config.services || \[\];/s##&\n  if (extraService !== undefined) { const [binding, service] = extraService.split("="); config.services.push({ binding, service }); }#' \
-    -e 's#^const configs = \[#&\n  ...(process.env.EXTRA_WRANGLER_CONFIGS ? process.env.EXTRA_WRANGLER_CONFIGS.split(",") : []),#' \
     "$C/scripts/run-dev-server.ts" > "$PATCHED"
-for needle in 'const SCRIPTS_DIR = "' 'createRequire' '"--no-cache"' 'SPIKE_NO_WATCHERS' \
-              'EXTRA_ROUTER_SERVICE' 'EXTRA_WRANGLER_CONFIGS'; do
-  grep -qF -- "$needle" "$PATCHED" || { echo "patch did not apply ($needle); check $C/scripts/run-dev-server.ts" >&2; exit 1; }
+for needle in 'const SCRIPTS_DIR = "' 'createRequire' '"--no-cache"' 'SPIKE_NO_WATCHERS' 'EXTRA_ROUTER_SERVICE'; do
+  grep -qF "$needle" "$PATCHED" || { echo "patch did not apply: $needle (has run-dev-server.ts changed?)" >&2; exit 1; }
 done
-if grep -qF '"--cache"' "$PATCHED"; then echo 'patch left a "--cache" flag behind' >&2; exit 1; fi
-# Two traps in one line. `\|` is GNU sed's BRE *alternation*, not a literal pipe, so writing the anchor
-# with `\|\|` matches the empty string on every line and rewrites the whole file, silently. And both
-# the router and the workshop-backend generator have a `config.services = config.services || [];`
-# line, so the substitution is addressed to the first match only -- `extraService` is declared in the
-# router's block and is not in scope in the other one.
+# `\|` is alternation in GNU sed's BRE, so the `config.services || []` anchor above is written with
+# `[]` only; make sure it landed exactly once, inside the router block, and not somewhere else.
 if [[ "$(grep -c 'extraService' "$PATCHED")" -ne 2 ]]; then
-  echo "the router-config patch did not apply cleanly (expected exactly 2 extraService lines)" >&2
-  exit 1
+  echo "the router-config patch landed $(grep -c 'extraService' "$PATCHED") times, expected 2" >&2; exit 1
 fi
 awk '/const srcPath = join\(ROOT, "wrangler.jsonc"\);/{r=NR} /extraService/{last=NR} END{exit (r>0 && last>r)?0:1}' "$PATCHED" \
   || { echo "the router-config patch did not land in the router block" >&2; exit 1; }
 
 FRONTEND_DIST="$C/packages/workshop-frontend/dist"
+
+# The chat *dock* is a build-time flag in the shell (`VITE_CHAT_DOCK`, read by
+# `packages/workshop-frontend/src/chatDockBus.ts`), so this script owns it: a run through the real
+# router exists to drive the shell against this Worker, and a dist built without the flag has no
+# sidebar row, no drawer and no /chat route. Default on; `VITE_CHAT_DOCK=false` checks the other build.
+CHAT_DOCK="${VITE_CHAT_DOCK:-true}"
+
 access_mode_build() {
   [[ -d "$FRONTEND_DIST/assets" ]] && grep -rqlE 'authenticateFromCfAccess|Authenticating\.\.\.' "$FRONTEND_DIST/assets" "$FRONTEND_DIST/index.html" 2>/dev/null
 }
+# Which way the *existing* dist was built, so a rebuild happens when the flag changed rather than only
+# when the directory is missing. `CHAT_DOCK_ENABLED` is a folded constant, so exactly one side of
+# `ChatPage`'s `if (!CHAT_DOCK_ENABLED)` survives: the flag-off message is in the bundle iff the flag
+# was off. Prints `true`, `false`, or nothing when there is no dist to read.
+dock_flag_in_dist() {
+  [[ -d "$FRONTEND_DIST/assets" ]] || return 0
+  if grep -rqF 'Team chat is not enabled' "$FRONTEND_DIST/assets"; then echo false; else echo true; fi
+}
 if [[ -n "${CFOS_REBUILD:-}" || ! -d "$C/node_modules" || ! -f "$C/packages/typed-storage/dist/index.js" \
-      || ! -f "$FRONTEND_DIST/index.html" ]] || access_mode_build; then
-  echo "Building typed-storage and the Workshop frontend (~20 s)..."
+      || ! -f "$FRONTEND_DIST/index.html" || "$(dock_flag_in_dist)" != "$CHAT_DOCK" ]] || access_mode_build; then
+  echo "Building typed-storage and the Workshop frontend with VITE_CHAT_DOCK=$CHAT_DOCK (~20 s)..."
   (cd "$C" && pnpm install --frozen-lockfile >/dev/null \
     && pnpm --filter @gadgets/typed-storage build >/dev/null \
-    && env -u VITE_CF_ACCESS_MODE pnpm --filter @gadgets/workshop-frontend exec vite build >/dev/null)
+    && env -u VITE_CF_ACCESS_MODE VITE_CHAT_DOCK="$CHAT_DOCK" \
+         pnpm --filter @gadgets/workshop-frontend exec vite build >/dev/null)
+fi
+# Loudly rather than a shell with no way into chat and no explanation.
+if [[ "$(dock_flag_in_dist)" != "$CHAT_DOCK" ]]; then
+  echo "the frontend dist does not match VITE_CHAT_DOCK=$CHAT_DOCK (got '$(dock_flag_in_dist)');" >&2
+  echo "if ChatPage's flag-off message changed, update dock_flag_in_dist() in this script" >&2
+  exit 1
 fi
 
 # The assets binding reads app/dist once, at start-up.
 echo "Building the chat SPA..."
 (cd "$REPO" && pnpm --filter gatekeeper-chat build >/dev/null)
 
-# A copy of this package's dev config with every path made absolute, in the state dir.
-#
-# The multi-config `wrangler dev` runs from the submodule root, and a custom build's `cwd` defaults to
-# the invocation directory rather than the config's -- so `pnpm exec capnweb-validate` would run in
-# `cloudflare-os/`, which does not have it. (The submodule's own generator sets `build.cwd` per worker
-# for exactly this reason; it only does it for the gatekeepers it discovers.) `main` and the asset
-# directory move with it, so they are absolute too. Nothing in the package is edited.
-CHAT_CONFIG="$STATE_DIR/gatekeeper-chat.wrangler.dev.jsonc"
-CHAT_CONFIG="$CHAT_CONFIG" PKG="$PKG" node -e '
-  const { readFileSync, writeFileSync } = require("node:fs");
-  const { createRequire } = require("node:module");
-  const { parse } = createRequire(process.env.PKG + "/package.json")("jsonc-parser");
-  const pkg = process.env.PKG;
-  const config = parse(readFileSync(pkg + "/wrangler.dev.jsonc", "utf8"));
-  config.main = pkg + "/" + config.main.replace(/^\.\//, "");
-  config.build = { ...config.build, cwd: pkg };
-  if (config.assets) config.assets.directory = pkg + "/" + config.assets.directory.replace(/^\.\//, "");
-  writeFileSync(process.env.CHAT_CONFIG, JSON.stringify(config, null, 2) + "\n");
-'
+stop_all() {
+  for f in "$CHAT_PGID_FILE" "$PGID_FILE"; do
+    [[ -f "$f" ]] && { kill -- "-$(cat "$f")" 2>/dev/null || true; rm -f "$f"; }
+  done
+}
 
+# --- 1. the platform ---------------------------------------------------------------------------
 cd "$C"
 SPIKE_NO_WATCHERS=1 \
 EXTRA_ROUTER_SERVICE="GATEKEEPER_CHAT=cfos-chat-dev" \
-EXTRA_WRANGLER_CONFIGS="$CHAT_CONFIG" \
   setsid node "$PATCHED" --serve-frontend-assets >"$LOG" 2>&1 </dev/null &
 PID=$!
 sleep 0.5
 PGID="$(ps -o pgid= -p "$PID" | tr -d ' ' || true)"
 PGID="${PGID:-$PID}"
 echo "$PGID" > "$PGID_FILE"
-echo "PGID $PGID (log: $LOG)"
+echo "platform PGID $PGID (log: $LOG)"
 
 deadline=$((SECONDS + TIMEOUT))
 until curl -sf -o /dev/null --max-time 30 "$URL/"; do
   if ! kill -0 "$PID" 2>/dev/null; then
-    echo "server exited during startup; tail of $LOG:" >&2; tail -n 40 "$LOG" >&2; rm -f "$PGID_FILE"; exit 1
+    echo "the platform exited during startup; tail of $LOG:" >&2; tail -n 40 "$LOG" >&2; stop_all; exit 1
   fi
   if (( SECONDS > deadline )); then
-    echo "not ready after ${TIMEOUT}s; stopping. tail of $LOG:" >&2; tail -n 40 "$LOG" >&2
-    kill -- "-$PGID" 2>/dev/null || true; rm -f "$PGID_FILE"; exit 1
+    echo "the platform was not ready after ${TIMEOUT}s; stopping. tail of $LOG:" >&2; tail -n 40 "$LOG" >&2
+    stop_all; exit 1
+  fi
+  sleep 2
+done
+
+# --- 2. this Worker, registered with the platform's wrangler ---------------------------------------
+cd "$PKG"
+setsid "$C/node_modules/.bin/wrangler" dev -c wrangler.dev.jsonc --port "$CHAT_PORT" >"$CHAT_LOG" 2>&1 </dev/null &
+CHAT_PID=$!
+sleep 0.5
+CHAT_PGID="$(ps -o pgid= -p "$CHAT_PID" | tr -d ' ' || true)"
+CHAT_PGID="${CHAT_PGID:-$CHAT_PID}"
+echo "$CHAT_PGID" > "$CHAT_PGID_FILE"
+echo "chat PGID $CHAT_PGID (log: $CHAT_LOG)"
+
+# Up on its own port first, then reachable through the router, which is the registry having caught up.
+until curl -sf -o /dev/null --max-time 10 "http://localhost:$CHAT_PORT/gatekeeper/chat/dev/identities" \
+   && curl -sf -o /dev/null --max-time 10 "$URL/gatekeeper/chat/dev/identities"; do
+  if ! kill -0 "$CHAT_PID" 2>/dev/null; then
+    echo "the chat Worker exited during startup; tail of $CHAT_LOG:" >&2; tail -n 40 "$CHAT_LOG" >&2; stop_all; exit 1
+  fi
+  if (( SECONDS > deadline )); then
+    echo "the router did not reach the chat Worker within ${TIMEOUT}s; stopping. tails:" >&2
+    tail -n 20 "$LOG" >&2; tail -n 20 "$CHAT_LOG" >&2; stop_all; exit 1
   fi
   sleep 2
 done
 echo "READY $URL  (chat through the router: $URL/gatekeeper/chat/dev/login?as=dev-admin)"
-echo "stop with: $HERE/stop-local-platform.sh   (or: kill -- -$PGID)"
+echo "stop with: $HERE/stop-local-platform.sh   (or: kill -- -$PGID -$CHAT_PGID)"

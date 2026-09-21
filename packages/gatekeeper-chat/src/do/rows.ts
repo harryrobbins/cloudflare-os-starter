@@ -91,7 +91,7 @@ export type AttachmentRow = {
 
 export type CountRow = { channel_id: string; n: number };
 
-export function isNotifyLevel(value: string): value is NotifyLevel {
+function isNotifyLevel(value: string): value is NotifyLevel {
   return value === "all" || value === "mentions" || value === "none";
 }
 

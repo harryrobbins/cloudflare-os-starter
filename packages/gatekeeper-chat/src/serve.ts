@@ -78,8 +78,8 @@ export async function serveChat(
  * gains nothing.
  */
 function forwardToWorkspace(request: Request, env: ChatEnv, identity: ChatIdentity): Promise<Response> {
+  // `set` rather than `append`, so a copy the browser sent is replaced rather than joined.
   const headers = new Headers(request.headers);
-  headers.delete(IDENTITY_HEADER);
   headers.set(IDENTITY_HEADER, JSON.stringify(identity));
 
   // A WebSocket upgrade's Request cannot be reconstructed with a body, and `new Request(request)`
@@ -113,8 +113,10 @@ async function serveApp(request: Request, env: ChatEnv, url: URL): Promise<Respo
   }
 
   const direct = await env.ASSETS.fetch(assetRequest(request, url, url.pathname));
-  // 2xx is a real asset; 304 answers a conditional request and must be passed through untouched.
-  if (direct.ok || direct.status === 304) return direct;
+  // 2xx is a real asset; 304 answers a conditional request and must be passed through untouched. The
+  // app base itself resolves to `index.html` here, so the shell headers are added by content type.
+  if (direct.ok) return withShellHeaders(direct, env, url);
+  if (direct.status === 304) return direct;
 
   // A miss under `assets/` is a missing build artefact, never a client route: Vite writes hashed
   // filenames there and the router has no path that starts with it. Falling through to the shell
@@ -131,7 +133,55 @@ async function serveApp(request: Request, env: ChatEnv, url: URL): Promise<Respo
   if (!shell.ok) return notFound();
   const headers = new Headers(shell.headers);
   headers.delete("location");
-  return new Response(shell.body, { status: 200, headers });
+  return withShellHeaders(new Response(shell.body, { status: 200, headers }), env, url);
+}
+
+/**
+ * The app shell's Content Security Policy (chat.md, "Security checklist"), on every HTML response and
+ * nothing else: a hashed script or stylesheet needs no policy of its own.
+ *
+ * Scripts are `'self'` only, which is why `index.html` loads its theme bootstrap from a file rather
+ * than inline. Styles allow inline because React and the picker set style attributes; the policy is
+ * there to stop script injection, and a style attribute is not that. Images and media allow `data:`
+ * and `blob:` for monograms and upload previews. The socket is same-origin, but older Safari does not
+ * read `'self'` as covering `wss:`, so the explicit socket origin is listed too. `frame-ancestors
+ * 'self'` is what lets the shell's dock frame this app and nobody else.
+ */
+export function contentSecurityPolicy(env: Pick<ChatEnv, "PUBLIC_BASE_URL">, requestOrigin: string): string {
+  const socket = socketOrigin(env.PUBLIC_BASE_URL) ?? socketOrigin(requestOrigin);
+  return [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "media-src 'self' blob:",
+    `connect-src 'self'${socket === null ? "" : ` ${socket}`}`,
+    "worker-src 'self'",
+    "frame-src 'none'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'self'",
+  ].join("; ");
+}
+
+function socketOrigin(base: string): string | null {
+  try {
+    const url = new URL(base);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return `${url.protocol === "https:" ? "wss" : "ws"}://${url.host}`;
+  } catch {
+    return null;
+  }
+}
+
+function withShellHeaders(response: Response, env: ChatEnv, url: URL): Response {
+  if (!(response.headers.get("content-type") ?? "").includes("text/html")) return response;
+  const headers = new Headers(response.headers);
+  headers.set("content-security-policy", contentSecurityPolicy(env, url.origin));
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("referrer-policy", "same-origin");
+  return new Response(response.body, { status: response.status, headers });
 }
 
 /** Rewrites a prefixed path to the path the asset directory actually holds. */

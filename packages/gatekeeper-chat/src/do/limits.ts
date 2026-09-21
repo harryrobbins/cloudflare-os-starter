@@ -9,7 +9,7 @@
 // which is the right trade for limits whose purpose is stopping a runaway client rather than metering.
 
 import { RATE_LIMITS } from "../shared/protocol.js";
-import { allow, refuse, type Ctx, type Outcome } from "./context.js";
+import { allow, firstRow, refuse, type Ctx, type Outcome } from "./context.js";
 import { hashId, logEvent } from "./logs.js";
 
 export type Bucket = "messages" | "uploads" | "search";
@@ -27,11 +27,6 @@ const BUDGETS: Readonly<Record<Bucket, Budget>> = {
 
 type WindowRow = { window_start: number; count: number };
 
-/** `<userId>:<bucket>`. Both halves are restricted character sets, so the colon cannot collide. */
-function cacheKey(userId: string, bucket: string): string {
-  return `${userId}:${bucket}`;
-}
-
 /**
  * Charges one unit to a budget.
  *
@@ -42,13 +37,12 @@ export function consume(ctx: Ctx, userId: string, bucket: Bucket): Outcome<void>
   const { limit, windowMs } = BUDGETS[bucket];
   const now = ctx.now();
 
-  const current: WindowRow = ctx.sql
-    .exec<WindowRow>(
-      `SELECT window_start, count FROM rate_limits WHERE user_id = ? AND bucket = ?`,
-      userId,
-      bucket,
-    )
-    .toArray()[0] ?? { window_start: now, count: 0 };
+  const current: WindowRow = firstRow<WindowRow>(
+    ctx,
+    `SELECT window_start, count FROM rate_limits WHERE user_id = ? AND bucket = ?`,
+    userId,
+    bucket,
+  ) ?? { window_start: now, count: 0 };
 
   const fresh = now - current.window_start >= windowMs;
   const windowStart = fresh ? now : current.window_start;
@@ -82,7 +76,8 @@ export function consume(ctx: Ctx, userId: string, bucket: Bucket): Outcome<void>
 const typingSeen = new Map<string, number>();
 
 export function typingAllowed(userId: string, channelId: string, now: number, throttleMs: number): boolean {
-  const key = cacheKey(userId, channelId);
+  // Both halves are restricted character sets, so the colon cannot make two keys collide.
+  const key = `${userId}:${channelId}`;
   const last = typingSeen.get(key);
   if (last !== undefined && now - last < throttleMs) return false;
   typingSeen.set(key, now);
@@ -94,9 +89,4 @@ export function typingAllowed(userId: string, channelId: string, now: number, th
     }
   }
   return true;
-}
-
-/** Test seam: drops the typing throttle, which is the only state this module keeps in memory. */
-export function resetTypingThrottle(): void {
-  typingSeen.clear();
 }

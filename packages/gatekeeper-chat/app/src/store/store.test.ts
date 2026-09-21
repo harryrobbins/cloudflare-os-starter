@@ -418,6 +418,25 @@ describe("catch-up after hello", () => {
     ).toHaveLength(0);
   });
 
+  it("forwards a notification to the shell when embedded, even while the tab is visible", async () => {
+    // The dock's frame is display: none while the drawer is closed, and a hidden frame still reports a
+    // visible document -- so an in-frame toast would be one nobody can see.
+    const h = harness();
+    const forwarded: string[] = [];
+    h.store.onNotify = (title, body) => {
+      forwarded.push(`${title}: ${body}`);
+    };
+    await h.store.start({ embedded: true });
+    await h.store.openConversation("c1");
+    h.store.setVisible(false);
+    h.socket.emit({ t: "msg", message: message({ id: "m3", seq: 3, authorId: "alice", body: "look at this" }) });
+    await settle();
+
+    expect(forwarded).toHaveLength(1);
+    expect(forwarded[0]).toContain("look at this");
+    expect(h.store.state.toasts).toHaveLength(0);
+  });
+
   it("merges a socket message and a catch-up page without duplicating the row", async () => {
     const h = harness();
     await h.store.start({ embedded: false });

@@ -22,20 +22,20 @@ import {
 } from "../shared/protocol.js";
 import {
   joinChannelRow,
-  leavable,
   loadChannel,
   loadMembership,
   memberCounts,
   memberIdsOf,
   requireRead,
+  unleavableReason,
 } from "./access.js";
-import { allow, placeholders, refuse, type Ctx, type Outcome } from "./context.js";
+import { allow, firstRow, placeholders, refuse, updateRow, type Ctx, type Outcome } from "./context.js";
 import { newChannelId } from "./ids.js";
 import { hashId, logEvent } from "./logs.js";
-import { advanceThreadCursors, channelMemberIds, postSystemMessage } from "./messages.js";
+import { advanceThreadCursors, postSystemMessage } from "./messages.js";
 import { toChannel, toMembership, type ChannelRow, type MembershipRow, type UserRow } from "./rows.js";
 import { badgeSummary } from "./unread.js";
-import { escapeLike, loadUsers } from "./users.js";
+import { escapeLike, existingUserIds, loadUsers } from "./users.js";
 
 /** Public channels are browsable by everyone, so a rail request returns them all. */
 export function listChannels(ctx: Ctx, user: UserRow): ChannelListResponse {
@@ -123,34 +123,24 @@ export function createChannel(
   const now = ctx.now();
   const others = [...new Set(request.memberIds ?? [])].filter((id) => id !== user.id);
 
-  if (others.length > 0) {
-    const known = ctx.sql
-      .exec<{ id: string }>(`SELECT id FROM users WHERE id IN (${placeholders(others.length)})`, ...others)
-      .toArray();
-    if (known.length !== others.length) {
-      // Never "that address is not allowed to sign in": the directory only knows people who have
-      // opened chat, and saying more would disclose Access eligibility.
-      return refuse("not_found", "One of those people is not in the directory.");
-    }
+  if (existingUserIds(ctx, others).size !== others.length) {
+    // Never "that address is not allowed to sign in": the directory only knows people who have
+    // opened chat, and saying more would disclose Access eligibility.
+    return refuse("not_found", "One of those people is not in the directory.");
   }
 
-  if (request.kind === "dm") {
-    const key = dmKey([user.id, ...others]);
-    const existing = ctx.sql
-      .exec<ChannelRow>(`SELECT * FROM channels WHERE dm_key = ?`, key)
-      .toArray()[0];
-    if (existing !== undefined) {
+  const key = request.kind === "dm" ? dmKey([user.id, ...others]) : null;
+  if (key !== null) {
+    const existing = firstRow<ChannelRow>(ctx, `SELECT * FROM channels WHERE dm_key = ?`, key);
+    if (existing !== null) {
       // Deduplicated, not an error: the caller asked for "the conversation with this person".
       joinChannelRow(ctx, existing, user.id);
       return channelResponse(ctx, existing.id, user.id);
     }
   }
 
-  if (request.name !== undefined) {
-    const clash = ctx.sql
-      .exec<{ id: string }>(`SELECT id FROM channels WHERE name = ?`, request.name)
-      .toArray()[0];
-    if (clash !== undefined) return refuse("conflict", `#${request.name} already exists.`);
+  if (request.name !== undefined && nameTaken(ctx, request.name)) {
+    return refuse("conflict", `#${request.name} already exists.`);
   }
 
   const id = newChannelId(now);
@@ -167,7 +157,7 @@ export function createChannel(
         request.purpose ?? null,
         user.id,
         now,
-        request.kind === "dm" ? dmKey([user.id, ...others]) : null,
+        key,
       );
       for (const memberId of new Set(members)) {
         ctx.sql.exec(
@@ -195,6 +185,11 @@ function dmKey(memberIds: readonly UserId[]): string {
   return [...new Set(memberIds)].toSorted().join(":");
 }
 
+/** Checked before the insert so a clash is a 409 rather than the unique index's bare failure. */
+function nameTaken(ctx: Ctx, name: string, exceptChannelId = ""): boolean {
+  return firstRow(ctx, `SELECT id FROM channels WHERE name = ? AND id <> ?`, name, exceptChannelId) !== null;
+}
+
 export function updateChannel(
   ctx: Ctx,
   user: UserRow,
@@ -213,31 +208,26 @@ export function updateChannel(
   }
   if (channel.archived_at !== null) return refuse("forbidden", "This channel is archived.");
 
-  if (request.name !== undefined && request.name !== channel.name) {
-    const clash = ctx.sql
-      .exec<{ id: string }>(
-        `SELECT id FROM channels WHERE name = ? AND id <> ?`,
-        request.name,
-        channelId,
-      )
-      .toArray()[0];
-    if (clash !== undefined) return refuse("conflict", `#${request.name} already exists.`);
+  const rename = request.name !== undefined && request.name !== channel.name ? request.name : null;
+  if (rename !== null && nameTaken(ctx, rename, channelId)) {
+    return refuse("conflict", `#${rename} already exists.`);
   }
 
-  ctx.storage.transactionSync(() => {
-    if (request.name !== undefined) ctx.sql.exec(`UPDATE channels SET name = ? WHERE id = ?`, request.name, channelId);
-    if (request.topic !== undefined) ctx.sql.exec(`UPDATE channels SET topic = ? WHERE id = ?`, request.topic, channelId);
-    if (request.purpose !== undefined) {
-      ctx.sql.exec(`UPDATE channels SET purpose = ? WHERE id = ?`, request.purpose, channelId);
-    }
+  // One statement, so the three columns cannot be seen half-updated. `topic` and `purpose` are
+  // nullable and an explicit null clears them, which is why absent fields are dropped from the SET
+  // list rather than folded into a COALESCE.
+  updateRow(ctx, "channels", "id = ?", [channelId], {
+    name: request.name,
+    topic: request.topic,
+    purpose: request.purpose,
   });
 
   // Renames go into the message stream, because a channel that changed name under you is otherwise
   // indistinguishable from a channel you have never seen (chat.md: admin actions are system messages).
   const renamed =
-    request.name !== undefined && request.name !== channel.name
-      ? postSystemMessage(ctx, channelId, `${user.name} renamed #${channel.name} to #${request.name}`)
-      : undefined;
+    rename === null
+      ? undefined
+      : postSystemMessage(ctx, channelId, `${user.name} renamed #${channel.name} to #${rename}`);
   return channelResponse(ctx, channelId, user.id, renamed);
 }
 
@@ -261,8 +251,8 @@ export function leaveChannel(ctx: Ctx, user: UserRow, channelId: ChannelId): Out
   const access = requireRead(ctx, channelId, user.id);
   if (!access.ok) return access;
   const { channel } = access.value;
-  if (channel.id === GENERAL_CHANNEL_ID) return refuse("forbidden", "#general cannot be left.");
-  if (!leavable(channel)) return refuse("forbidden", "This conversation cannot be left.");
+  const unleavable = unleavableReason(channel);
+  if (unleavable !== null) return refuse("forbidden", unleavable);
   if (user.id === AGENT_USER_ID) return refuse("forbidden", "The agent's memberships are implicit.");
 
   ctx.sql.exec(`DELETE FROM memberships WHERE channel_id = ? AND user_id = ?`, channelId, user.id);
@@ -294,7 +284,7 @@ export function archiveChannel(
   const notice = postSystemMessage(ctx, channelId, `${user.name} archived #${channel.name}`);
   ctx.sql.exec(`UPDATE channels SET archived_at = ? WHERE id = ?`, ctx.now(), channelId);
   logEvent("chat.channel.archive", { channel: hashId(channelId), user: hashId(user.id), admin });
-  ctx.bus.badges(channelMemberIds(ctx, channelId));
+  ctx.bus.badges(memberIdsOf(ctx, channelId));
   return channelResponse(ctx, channelId, user.id, notice);
 }
 
@@ -376,31 +366,10 @@ export function updateMembership(
     return refuse("forbidden", "Join the channel before setting its preferences.");
   }
 
-  ctx.storage.transactionSync(() => {
-    if (patch.notify !== undefined) {
-      ctx.sql.exec(
-        `UPDATE memberships SET notify = ? WHERE channel_id = ? AND user_id = ?`,
-        patch.notify,
-        channelId,
-        user.id,
-      );
-    }
-    if (patch.muted !== undefined) {
-      ctx.sql.exec(
-        `UPDATE memberships SET muted = ? WHERE channel_id = ? AND user_id = ?`,
-        patch.muted ? 1 : 0,
-        channelId,
-        user.id,
-      );
-    }
-    if (patch.starred !== undefined) {
-      ctx.sql.exec(
-        `UPDATE memberships SET starred = ? WHERE channel_id = ? AND user_id = ?`,
-        patch.starred ? 1 : 0,
-        channelId,
-        user.id,
-      );
-    }
+  updateRow(ctx, "memberships", "channel_id = ? AND user_id = ?", [channelId, user.id], {
+    notify: patch.notify,
+    muted: patch.muted === undefined ? undefined : patch.muted ? 1 : 0,
+    starred: patch.starred === undefined ? undefined : patch.starred ? 1 : 0,
   });
 
   const membership = loadMembership(ctx, channelId, user.id);

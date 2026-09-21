@@ -60,29 +60,25 @@ export function maxUploadBytes(env: Pick<ChatEnv, "MAX_UPLOAD_BYTES">): number {
  * recoverable, a 500 on `/api/me` is not.
  */
 export function adminEmails(env: Pick<ChatEnv, "ADMINS">): readonly string[] {
-  return normalizeEmails(readAdmins(env.ADMINS));
+  const configured = env.ADMINS;
+  let parsed: unknown = configured;
+  if (!Array.isArray(configured)) {
+    if (typeof configured !== "string") return [];
+    try {
+      parsed = JSON.parse(configured || "[]");
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .filter((entry): entry is string => typeof entry === "string")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => entry.length > 0);
 }
 
 /** True when this email is an admin. Case-insensitive; an empty email is never an admin. */
 export function isAdminEmail(env: Pick<ChatEnv, "ADMINS">, email: string | null): boolean {
   if (email === null || email.length === 0) return false;
   return adminEmails(env).includes(email.trim().toLowerCase());
-}
-
-function readAdmins(value: string | readonly string[]): unknown {
-  if (Array.isArray(value)) return value;
-  if (typeof value !== "string") return [];
-  try {
-    return JSON.parse(value || "[]");
-  } catch {
-    return [];
-  }
-}
-
-function normalizeEmails(parsed: unknown): readonly string[] {
-  if (!Array.isArray(parsed)) return [];
-  return parsed
-    .filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
-    .map((entry) => entry.trim().toLowerCase())
-    .filter((entry) => entry.length > 0);
 }

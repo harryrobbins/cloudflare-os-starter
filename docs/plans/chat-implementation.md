@@ -163,7 +163,14 @@ Complete 2026-09-20 apart from the protected-deployment smoke, which needs a dep
       Its own runner (`e2e/run.sh`), deliberately **not** in `test:run`; how to run it is in the
       package README.
 - [x] Local-platform run through the router (`e2e/start-local-platform.sh`, the whiteboard's
-      patched-launcher pattern plus `EXTRA_ROUTER_SERVICE` / `EXTRA_WRANGLER_CONFIGS`)
+      patched-launcher pattern plus `EXTRA_ROUTER_SERVICE`). **Reworked 2026-09-21 into two
+      `wrangler dev` processes** joined by wrangler's local dev registry, because the first version
+      (the chat config appended to the platform's multi-config run) silently served the chat app's
+      `index.html` as the shell's `/`: the Workshop backend and the chat Worker both carry an `assets`
+      directory and one workerd serves one of them. Every chat path looked fine, which is why the
+      2026-09-20 verification passed. The registry needs the same wrangler version on both sides (the
+      submodule's older one prunes the entry the package's newer one writes: 503 within a minute) and
+      the chat process started after the platform. The script and the package README say all this.
 - [ ] Protected-deployment smoke: Access assertion present on HTTP and WebSocket upgrade, invalid
       assertion rejected — still open; it needs the deployed hostname, so it belongs with the release
       smoke test rather than here
@@ -274,8 +281,10 @@ through the switcher's hand-off row and matches "Jump" exactly (the rail's own b
 ## Phase 2: dock fork commit (submodule)
 
 Complete 2026-09-21 as one commit on the fork branch `feat/chat-dock`, from `a1909a38`
-(`gadgetViewer`). Frontend only: 6 new files and 4 call sites, plus the generated route tree.
-182 frontend tests green (`pnpm --filter @gadgets/workshop-frontend test:run`, 5 of them new),
+(`gadgetViewer`), amended the same day after the live check below (`78962428`; the branch is local
+to this machine, not yet pushed to the fork). Frontend only: 6 new files, 4 call sites and one line
+of `index.html`, plus the generated route tree. 184 frontend tests green
+(`pnpm --filter @gadgets/workshop-frontend test:run`, 7 of them new),
 `tsc --noEmit` and `tsc -p tsconfig.vite.json` clean, `vite build` clean with the flag on and off.
 
 - [x] `src/components/ChatDock.tsx`: the drawer (`fixed`, full height, 420px, `z-[1200]` — above the
@@ -330,6 +339,64 @@ Decisions worth knowing:
   triggers, the iframe and the bridge are all gone — verified by grepping `dist/assets` after a build
   each way.
 
+## Live dock check through the router (2026-09-21)
+
+`packages/gatekeeper-chat/e2e/dock-check.mjs`, a Playwright run against the two-process local
+platform, driving the shell (fork commit `feat/chat-dock`, amended to `78962428` from `9b5516ae`;
+the gitlink follows) against this Worker through the real router: 17 steps, all green at the end,
+and the standalone 13-scenario suite still green afterwards. Two browser contexts, one in the shell
+and one on the standalone chat page. Three real bugs, none of which the unit or integration tests
+could see because each needs the shell, the frame and the Worker together:
+
+- **The shell's CSP blocked the dock outright.** `workshop-frontend/index.html` carries
+  `<meta http-equiv="Content-Security-Policy" content="frame-src srcdoc:;">` ("prevents Gadget UI
+  frames from navigating away from their srcdoc. DO NOT REMOVE"), so every `<iframe
+  src="/gatekeeper/chat/…">` was refused with "Framing … violates the following Content Security
+  Policy directive". The dock commit never touched the file. It now reads `frame-src srcdoc: 'self'`,
+  with the comment extended: gadget frames stay sandboxed, and nothing off this origin can be framed
+  either way. Folded into the fork commit.
+- **Notifications never left a closed drawer.** The store forwarded to the shell only when
+  `document.visibilityState === "hidden"`; a frame inside a `display: none` drawer still reports a
+  visible document, so the toast rendered inside the iframe nobody could see. Embedded, every
+  notification now goes to the shell (`#maybeNotify` in `app/src/store/store.ts`, with a store test).
+  The badge was unaffected, which is why the sidebar count worked while the toast did not.
+- **Two frames on `/chat`.** `ChatPage` closed the dock but a plain close keeps the drawer's frame
+  for its 60 s grace, so the page ran two sockets on one conversation for a minute and the "one frame
+  at a time" comment was wrong. `closeChatDock({ unmount: true })` drops it immediately (bus, dock,
+  and an integration test; folded into the fork commit).
+
+Also found and fixed on the way, from chat.md's security checklist: **the chat app's own HTML sent no
+CSP.** `src/serve.ts` now sets `default-src 'self'; script-src 'self'; style-src 'self'
+'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' <ws origin>;
+worker-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self';
+frame-ancestors 'self'` plus `nosniff` and `referrer-policy` on every HTML response, and nothing on
+hashed assets. `script-src 'self'` meant moving the theme bootstrap out of `index.html`'s inline
+script into `app/public/theme-boot.js`; the test asserts the served shell has no inline script.
+`'unsafe-inline'` for styles is deliberate (React and the picker set style attributes; the policy is
+against script injection).
+
+## Review and simplification pass (2026-09-21)
+
+Worker-side, on top of the streams above. Nothing changed shape on the wire.
+
+- **Three SQL helpers in `src/do/context.ts`** replaced the same `.toArray()[0] ?? null` and
+  per-column `UPDATE` patterns across the modules: `firstRow`, `scalar` (which folds `MAX` over no
+  rows and `COUNT` into one fallback) and `updateRow` (one statement for a partial patch, so a row is
+  never seen half-updated and the three `transactionSync` blocks are gone). `idArray` in
+  `validate.ts` is the one bounded-deduplicated-identifier list every inbound list now goes through.
+- **Findings fixed with tests:** a followed thread in a channel the follower was removed from, or
+  has muted, badged forever (the Threads view filters by visibility, so nothing could clear it); a
+  lone `%` in `/files/:id` threw a `URIError` out of the object, which the runtime answered with a bare
+  500 and a stack trace (`matchFilePath` in `routes.ts` decodes without throwing); and any exception
+  inside the object did the same, so `ChatWorkspace.fetch` now answers the contract's `internal`
+  error envelope and logs the cause without the request or the identity. `leaveChannel` explains why
+  a conversation cannot be left (`unleavableReason`); `recipientsOf` no longer loads a member list it
+  will not use for a public channel; the `typing` handler had two access checks that agreed; the
+  search runs one query shape with two SQL texts.
+- **Removed:** dead exports (`methodNotAllowed`, `effectiveReadSeq`, `resetTypingThrottle`,
+  `channelMemberIds`, `MentionKind`, the `*EventType` aliases, a `MAGIC.at` offset nothing used) and
+  a second `delete` before `set` on the identity header.
+
 ## Phase 3 (follow-up)
 
 - [ ] Web Push (service worker, VAPID secret, outbox)
@@ -337,7 +404,8 @@ Decisions worth knowing:
 
 ## Release
 
-- [ ] `pnpm check`, package tests, review pass, simplification pass
+- [x] `pnpm check` (needs Docker Desktop up for the gatekeeper-runtime image, even in dry run),
+      package tests, review pass, simplification pass (above)
 - [ ] Commit on `chat`, fast-forward `main`
 - [ ] `pnpm deploy`; record Worker versions; smoke test in a signed-in browser
 - [ ] Update `chat.md` status line and this file

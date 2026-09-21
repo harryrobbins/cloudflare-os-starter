@@ -187,34 +187,46 @@ cd ../.. && packages/gatekeeper-chat/e2e/stop-dev.sh    # always, also after a f
 
 ### Through the real router
 
-`e2e/start-local-platform.sh` boots the local Cloudflare OS Workshop with this package added to the
-same multi-config `wrangler dev` and bound to the dev router as `GATEKEEPER_CHAT`, so
-`/gatekeeper/chat/*` and the WebSocket upgrade go through the router's `GATEKEEPER_*` scan rather than
-straight to this Worker. Nothing in `cloudflare-os/` is edited: the submodule's launcher is copied to
-a temp dir and patched there, the same trick `packages/blueprint-whiteboard/e2e/start-local-platform.sh`
-uses, with two extra patches that read `EXTRA_ROUTER_SERVICE` and `EXTRA_WRANGLER_CONFIGS`.
+`e2e/start-local-platform.sh` boots the local Cloudflare OS Workshop with the dev router bound to this
+Worker as `GATEKEEPER_CHAT`, so `/gatekeeper/chat/*`, the WebSocket upgrade and the shell's chat dock
+go through the router's `GATEKEEPER_*` scan rather than straight to this Worker. Nothing in
+`cloudflare-os/` is edited: the submodule's launcher is copied to a temp dir and patched there, the
+same trick `packages/blueprint-whiteboard/e2e/start-local-platform.sh` uses, with one extra patch that
+reads `EXTRA_ROUTER_SERVICE`.
 
 ```sh
 eval "$(fnm env)" && fnm use v24.21.0
-packages/gatekeeper-chat/e2e/start-local-platform.sh     # ~2 min cold; prints PGID and URL
+packages/gatekeeper-chat/e2e/start-local-platform.sh     # ~2 min cold; prints PGIDs and URL
 curl -s http://localhost:8787/gatekeeper/chat/dev/identities      # through the router
 open http://localhost:8787/gatekeeper/chat/dev/login?as=dev-admin
+open http://localhost:8787/                                       # the shell, with the Chat row
+node packages/gatekeeper-chat/e2e/dock-check.mjs         # the dock, end to end (see below)
 packages/gatekeeper-chat/e2e/stop-local-platform.sh      # always, also after a failure
 ```
 
-Verified 2026-09-20: `/gatekeeper/chat/`, the hashed assets, `/api/*`, a send and
-`GET /gatekeeper/chat/ws -> 101 Switching Protocols` all reach the chat Worker through the router,
-with no console errors in the SPA. Two things the submodule's launcher does not do for a config it did
-not generate, both handled by the script:
+It is **two `wrangler dev` processes**: the platform on :8787 and this Worker on :8788, joined by
+wrangler's local dev registry (a service binding whose target runs in another `wrangler dev` on the
+same machine; the upgrade survives it). The obvious layout, this package's config appended to the
+platform's multi-config `wrangler dev`, does not work: the Workshop backend (the frontend dist) and
+this Worker (`app/dist`) both carry an `assets` directory and one workerd serves one of them, so the
+shell's `/` answered with the chat app's `index.html` while every chat path looked fine. Two rules the
+registry imposes, both enforced by the script:
 
-- **`build.cwd`.** The multi-config `wrangler dev` runs from `cloudflare-os/`, and a custom build
-  inherits that directory, so `pnpm exec capnweb-validate` would run where it is not installed. The
-  script writes a copy of this package's `wrangler.dev.jsonc` into its state dir with `build.cwd`,
-  `main` and `assets.directory` made absolute.
-- **`\|` is alternation in GNU sed's BRE**, so the obvious anchor for `config.services || []` matches
-  the empty string on every line and silently rewrites the whole launcher; and both the router and the
-  workshop-backend generator have that line, so the substitution is addressed to the first match only.
-  The script checks both, and fails loudly rather than starting something half-patched.
+- **Same wrangler version on both sides.** The platform runs the submodule's wrangler; this package's
+  own is newer, and the older one prunes the entry the newer one wrote, so the router answered 503
+  within a minute of a good start. The chat Worker is run with `cloudflare-os/node_modules/.bin/wrangler`.
+- **Chat after the platform.** A platform start prunes entries it did not see come up. Restarting the
+  platform alone leaves the router on 503 until the chat process is restarted as well; the stop
+  script kills both.
+
+`VITE_CHAT_DOCK` (default `true`) is the shell's build-time flag for the dock; the script rebuilds
+the frontend dist whenever the existing one was built the other way. `e2e/dock-check.mjs` is the
+Playwright run against this layout (17 steps, exit 1 on any failure or framing/CSP error; screenshots
+in `$TMPDIR/cfos-chat-dock`): the sidebar row, the drawer, `Ctrl/Cmd+Shift+L`, Esc, the theme
+handshake, a mention arriving as a shell toast whose Open lands the dock on the permalink, the expand
+button into `/chat/…` with the wide layout and exactly one frame, a direct `/chat/c/general` load, a
+message typed on that page arriving live in a second browser, and the button in the fullscreen
+workspace editor. Green 2026-09-21.
 
 ## Why the Durable Object trusts a header
 

@@ -49,10 +49,3 @@ export function invalidRequest(message: string): Response {
 export function notFound(message = "Not found."): Response {
   return errorResponse("not_found", message);
 }
-
-export function methodNotAllowed(allow: readonly string[]): Response {
-  return json(
-    { error: { code: "invalid_request", message: `Allowed: ${allow.join(", ")}` } } satisfies ErrorEnvelope,
-    { status: 405, headers: { allow: allow.join(", ") } },
-  );
-}

@@ -7,10 +7,11 @@
 import { DurableObject } from "cloudflare:workers";
 
 import type { ChatEnv } from "./env.js";
-import { unauthenticated } from "./http.js";
+import { errorResponse, unauthenticated } from "./http.js";
 import { runMigrations } from "./migrations.js";
 import type { Broadcaster, Ctx } from "./do/context.js";
 import { sweepPending } from "./do/files.js";
+import { logEvent } from "./do/logs.js";
 import { route } from "./do/router.js";
 import { createBroadcaster, handleFrame, readAttachment, socketClosed } from "./do/sockets.js";
 import { touchUser } from "./do/users.js";
@@ -56,8 +57,20 @@ export class ChatWorkspace extends DurableObject<ChatEnv> {
       // here means a wiring mistake, not a user error.
       return unauthenticated("The workspace was reached without a verified identity.");
     }
-    const user = touchUser(this.#ctx, identity);
-    return route(this.#ctx, this.ctx, request, new URL(request.url), user);
+    try {
+      const user = touchUser(this.#ctx, identity);
+      return await route(this.#ctx, this.ctx, request, new URL(request.url), user);
+    } catch (error) {
+      // Anything reaching here is a bug in this object, not a client mistake. The client still gets
+      // the one error envelope the contract defines: the runtime's own 500 carries a stack trace, and
+      // "never return a stack trace" is in chat.md's security checklist. The cause is logged instead,
+      // with no request body and no identity in it.
+      logEvent("chat.error", {
+        method: request.method,
+        message: (error instanceof Error ? error.message : String(error)).slice(0, 200),
+      });
+      return errorResponse("internal", "Team chat could not handle that request.");
+    }
   }
 
   override webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): void {

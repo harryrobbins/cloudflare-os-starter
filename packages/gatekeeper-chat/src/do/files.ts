@@ -14,6 +14,7 @@
 //      the sweep alarm an hour later.
 
 import { maxUploadBytes } from "../env.js";
+import { PRIVATE_CACHE_HEADERS } from "../http.js";
 import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   PENDING_UPLOAD_TTL_MS,
@@ -24,11 +25,11 @@ import {
   type UserId,
 } from "../shared/protocol.js";
 import { isId } from "../shared/validate.js";
-import { allow, placeholders, refuse, type Ctx, type Outcome } from "./context.js";
 import { requireRead } from "./access.js";
+import { allow, placeholders, refuse, scalar, type Ctx, type Outcome } from "./context.js";
 import { newAttachmentId } from "./ids.js";
 import { consume } from "./limits.js";
-import { hashId, logEvent } from "./logs.js";
+import { hashId, logDenial, logEvent } from "./logs.js";
 import { toAttachment, type AttachmentRow } from "./rows.js";
 
 const MAX_FILE_NAME_LENGTH = 255;
@@ -82,9 +83,9 @@ export async function createUpload(
 
   const mime = sniffMime(bytes);
   const name = safeFileName(typeof form.get("name") === "string" ? String(form.get("name")) : file.name);
-  const { width, height } = mime.startsWith("image/")
-    ? clampDimensions(form.get("width"), form.get("height"))
-    : { width: null, height: null };
+  const image = isVerifiedImage(mime);
+  const width = image ? clampDimension(form.get("width")) : null;
+  const height = image ? clampDimension(form.get("height")) : null;
 
   const id = newAttachmentId(ctx.now());
   const key = pendingKey(id);
@@ -120,7 +121,7 @@ export async function createUpload(
     channel: hashId(channelId),
     user: hashId(uploaderId),
     bytes: bytes.byteLength,
-    image: mime.startsWith("image/"),
+    image,
   });
   return allow({ attachment: toAttachment(loadAttachmentRow(ctx, id)!) });
 }
@@ -199,21 +200,20 @@ export function preparePending(
   }
   for (const row of rows) {
     if (row.uploader_id !== uploaderId || row.channel_id !== channelId) {
-      logEvent("chat.deny", { reason: "attachment_owner", user: hashId(uploaderId) });
+      logDenial("attachment_owner", { user: hashId(uploaderId) });
       return refuse("forbidden", "That attachment belongs to another upload.");
     }
   }
-  // Same order as the request, so the message renders its attachments as the sender arranged them.
-  const byId = new Map(rows.map((row) => [row.id, row]));
-  return allow(ids.map((id) => byId.get(id)!));
+  // Row order is upload order, which is also the order `attachmentsFor` hydrates them in.
+  return allow(rows);
 }
 
 /** Final key: `files/<year>/<id>`. Year-partitioned so a bucket listing stays browsable. */
-export function finalKey(id: AttachmentId, now: number): string {
+function finalKey(id: AttachmentId, now: number): string {
   return `files/${new Date(now).getUTCFullYear()}/${id}`;
 }
 
-export function pendingKey(id: AttachmentId): string {
+function pendingKey(id: AttachmentId): string {
   return `pending/${id}`;
 }
 
@@ -273,7 +273,7 @@ export async function discardPending(ctx: Ctx, promoted: readonly PromotedAttach
   }
 }
 
-export function loadAttachmentRow(ctx: Ctx, id: AttachmentId): AttachmentRow | null {
+function loadAttachmentRow(ctx: Ctx, id: AttachmentId): AttachmentRow | null {
   return ctx.sql.exec<AttachmentRow>(`SELECT * FROM attachments WHERE id = ?`, id).toArray()[0] ?? null;
 }
 
@@ -357,10 +357,9 @@ export async function serveFile(
   return allow(
     new Response(object.body, {
       headers: {
+        ...PRIVATE_CACHE_HEADERS,
         "content-type": row.mime,
         "content-length": String(row.bytes),
-        "cache-control": "private, no-store",
-        "x-content-type-options": "nosniff",
         "content-disposition": `${inline ? "inline" : "attachment"}; filename="${asciiFileName(row.name)}"`,
       },
     }),
@@ -389,18 +388,14 @@ export async function sweepPending(ctx: Ctx): Promise<number> {
     ctx.sql.exec(`DELETE FROM attachments WHERE id = ?`, row.id);
   }
   if (stale.length > 0) logEvent("chat.upload.swept", { count: stale.length });
-  return (
-    ctx.sql
-      .exec<{ n: number }>(`SELECT COUNT(*) AS n FROM attachments WHERE message_id IS NULL`)
-      .toArray()[0]?.n ?? 0
-  );
+  return scalar(ctx, `SELECT COUNT(*) AS value FROM attachments WHERE message_id IS NULL`);
 }
 
 // ---------------------------------------------------------------------------
 // Sniffing and names
 // ---------------------------------------------------------------------------
 
-const MAGIC: readonly { readonly mime: string; readonly bytes: readonly number[]; readonly at?: number }[] = [
+const MAGIC: readonly { readonly mime: string; readonly bytes: readonly number[] }[] = [
   { mime: "image/png", bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
   { mime: "image/jpeg", bytes: [0xff, 0xd8, 0xff] },
   { mime: "image/gif", bytes: [0x47, 0x49, 0x46, 0x38] },
@@ -413,11 +408,10 @@ const MAGIC: readonly { readonly mime: string; readonly bytes: readonly number[]
  * `application/octet-stream` with `Content-Disposition: attachment`, which is what makes an svg or an
  * html file harmless: it downloads instead of executing on this origin.
  */
-export function sniffMime(bytes: Uint8Array): string {
+function sniffMime(bytes: Uint8Array): string {
   const head = bytes.subarray(0, SNIFF_BYTES);
   for (const candidate of MAGIC) {
-    const at = candidate.at ?? 0;
-    if (candidate.bytes.every((byte, index) => head[at + index] === byte)) return candidate.mime;
+    if (candidate.bytes.every((byte, index) => head[index] === byte)) return candidate.mime;
   }
   // RIFF....WEBP: a container, so the tag is at offset 8, not the start.
   const riff = [0x52, 0x49, 0x46, 0x46];
@@ -438,13 +432,6 @@ export function isVerifiedImage(mime: string): boolean {
 /** `FormData.get` returns a string or a File; the workers types do not name that union. */
 type FormValue = string | File | null;
 
-function clampDimensions(
-  width: FormValue,
-  height: FormValue,
-): { width: number | null; height: number | null } {
-  return { width: clampDimension(width), height: clampDimension(height) };
-}
-
 function clampDimension(value: FormValue): number | null {
   if (typeof value !== "string") return null;
   const parsed = Number(value);
@@ -453,7 +440,7 @@ function clampDimension(value: FormValue): number | null {
 }
 
 /** Strips directories and control characters; the name is only ever shown, never resolved. */
-export function safeFileName(raw: string): string {
+function safeFileName(raw: string): string {
   const base = raw.split(/[/\\]/u).at(-1) ?? "";
   const cleaned = base.replaceAll(/[\p{Cc}\p{Cf}]/gu, "").trim();
   return (cleaned.length === 0 ? "file" : cleaned).slice(0, MAX_FILE_NAME_LENGTH);

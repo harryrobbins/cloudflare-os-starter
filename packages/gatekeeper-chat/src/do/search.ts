@@ -28,7 +28,7 @@ import { consume } from "./limits.js";
 import { hashId, logEvent } from "./logs.js";
 import { hydrateMessages, loadMessage, parseOffset } from "./messages.js";
 import type { MessageRow, UserRow } from "./rows.js";
-import { loadUsers, matchUsers } from "./users.js";
+import { escapeLike, loadUsers, matchUsers } from "./users.js";
 
 const MAX_QUERY_LENGTH = 512;
 const MAX_TERMS = 16;
@@ -149,7 +149,7 @@ function tokenize(raw: string): readonly string[] {
   return out;
 }
 
-export function parseQuery(
+function parseQuery(
   ctx: Ctx,
   user: UserRow,
   raw: string,
@@ -238,7 +238,8 @@ export function parseQuery(
 function resolveUser(ctx: Ctx, caller: UserRow, value: string): readonly UserId[] {
   const wanted = value.replace(/^@/u, "");
   if (wanted.toLowerCase() === "me") return [caller.id];
-  const rows = ctx.sql
+  const lowered = wanted.toLowerCase();
+  return ctx.sql
     .exec<{ id: string }>(
       `SELECT id FROM users
         WHERE id = ?
@@ -246,12 +247,12 @@ function resolveUser(ctx: Ctx, caller: UserRow, value: string): readonly UserId[
            OR lower(email) = ?
            OR lower(email) LIKE ? ESCAPE '\\'`,
       wanted,
-      wanted.toLowerCase(),
-      wanted.toLowerCase(),
-      `${wanted.toLowerCase().replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}@%`,
+      lowered,
+      lowered,
+      `${escapeLike(lowered)}@%`,
     )
-    .toArray();
-  return rows.map((row) => row.id);
+    .toArray()
+    .map((row) => row.id);
 }
 
 /** Strict `YYYY-MM-DD` to the start of that day, UTC. */
@@ -275,7 +276,7 @@ function parseDay(value: string): number | null {
  * A safe FTS5 MATCH string: every term is a quoted phrase, with `"` doubled, and a trailing `*` kept
  * as a prefix query. A term with no letter or digit is dropped rather than passed to the parser.
  */
-export function ftsMatchString(text: string): string {
+function ftsMatchString(text: string): string {
   const parts: string[] = [];
   for (const token of tokenize(text)) {
     const prefix = token.endsWith("*");
@@ -323,43 +324,27 @@ function runQuery(
     params.push(query.before);
   }
 
+  // Two shapes: with text, FTS5 ranks and highlights; with qualifiers alone there is nothing to rank,
+  // so the newest matching messages win and every hit scores zero.
   const match = ftsMatchString(query.text);
+  const sql =
+    match.length === 0
+      ? `SELECT m.*, 0 AS score, '' AS snip FROM messages m
+          WHERE ${where.join(" AND ")}
+          ORDER BY m.created_at DESC, m.id
+          LIMIT ? OFFSET ?`
+      : `SELECT m.*,
+                bm25(messages_fts) AS score,
+                snippet(messages_fts, 0, '<mark>', '</mark>', '…', ${SNIPPET_TOKENS}) AS snip
+           FROM messages_fts
+           JOIN messages m ON m.rowid = messages_fts.rowid
+          WHERE messages_fts MATCH ?
+            AND ${where.join(" AND ")}
+          ORDER BY score ASC, m.created_at DESC
+          LIMIT ? OFFSET ?`;
+  const bound = match.length === 0 ? params : [match, ...params];
   try {
-    if (match.length === 0) {
-      // Qualifiers only: no text to rank, so the newest matching messages win.
-      return allow(
-        ctx.sql
-          .exec<SearchRow>(
-            `SELECT m.*, 0 AS score, '' AS snip FROM messages m
-              WHERE ${where.join(" AND ")}
-              ORDER BY m.created_at DESC, m.id
-              LIMIT ? OFFSET ?`,
-            ...params,
-            limit,
-            offset,
-          )
-          .toArray(),
-      );
-    }
-    return allow(
-      ctx.sql
-        .exec<SearchRow>(
-          `SELECT m.*,
-                  bm25(messages_fts) AS score,
-                  snippet(messages_fts, 0, '<mark>', '</mark>', '…', ${SNIPPET_TOKENS}) AS snip
-             FROM messages_fts
-             JOIN messages m ON m.rowid = messages_fts.rowid
-            WHERE messages_fts MATCH ?
-              AND ${where.join(" AND ")}
-            ORDER BY score ASC, m.created_at DESC
-            LIMIT ? OFFSET ?`,
-          match,
-          ...params,
-          limit,
-          offset,
-        )
-        .toArray(),
-    );
+    return allow(ctx.sql.exec<SearchRow>(sql, ...bound, limit, offset).toArray());
   } catch {
     // FTS5 rejects a handful of shapes the escaping above does not anticipate; a user-facing
     // validation error beats a 500.

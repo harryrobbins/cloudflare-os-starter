@@ -183,11 +183,11 @@ export class ChatSessionImpl extends RpcTarget implements ChatSession {
     // Defence in depth: the Durable Object filters search by membership, so a hit outside a public
     // channel should be impossible. One stale-cache refresh, then anything still unknown is dropped
     // rather than shown to the agent.
-    let visible = await this.#publicChannelIds();
+    let visible = await this.#loadPublicChannels();
     let hits = result.hits.filter((hit) => visible.has(hit.channelId));
     if (hits.length !== result.hits.length) {
       this.#publicChannels = null;
-      visible = await this.#publicChannelIds();
+      visible = await this.#loadPublicChannels();
       hits = result.hits.filter((hit) => visible.has(hit.channelId));
     }
 
@@ -279,10 +279,6 @@ export class ChatSessionImpl extends RpcTarget implements ChatSession {
       );
     }
     return channel;
-  }
-
-  async #publicChannelIds(): Promise<Set<ChannelId>> {
-    return new Set((await this.#loadPublicChannels()).keys());
   }
 
   async #loadPublicChannels(): Promise<Map<ChannelId, Channel>> {

@@ -202,6 +202,19 @@ describe("downloading", () => {
     expect((await bob.request("GET", filePath(attachment.id, true))).status).toBe(404);
   });
 
+  it("answers an error envelope for a malformed file path", async () => {
+    // `decodeURIComponent` throws on a lone `%`; a throw inside the object is answered by the
+    // runtime with a bare 500 the client cannot parse, so the path is matched rather than decoded.
+    const { alice } = setup("file-malformed");
+    expect(await alice.error("GET", "/gatekeeper/chat/files/%zz")).toMatchObject({
+      status: 404,
+      code: "not_found",
+    });
+    expect(await alice.error("GET", "/gatekeeper/chat/files/a1/nonsense")).toMatchObject({
+      status: 404,
+    });
+  });
+
   it("does not serve a pending upload", async () => {
     const { workspace, alice, aliceId } = setup("file-pending");
     const { attachment } = (await (

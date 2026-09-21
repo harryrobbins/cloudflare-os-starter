@@ -27,7 +27,6 @@ export type ChannelKind = "public" | "private" | "dm" | "group";
 export type UserKind = "person" | "agent";
 export type MessageKind = "user" | "system" | "agent";
 export type NotifyLevel = "all" | "mentions" | "none";
-export type MentionKind = "user" | "channel" | "here" | "agent";
 
 export interface User {
   readonly id: UserId;
@@ -527,8 +526,10 @@ export interface SearchResult {
 // ---------------------------------------------------------------------------
 
 /**
- * `POST /api/uploads` is `multipart/form-data`, not JSON: `channelId` plus one `file` part. The
- * response carries the pending attachment; `SendMessageRequest.attachmentIds` commits it.
+ * `POST /api/uploads` is `multipart/form-data`, not JSON: `channelId` plus one `file` part, plus
+ * optional `name`, `width` and `height`. The response carries the pending attachment;
+ * `SendMessageRequest.attachmentIds` commits it. `PUT /api/me/avatar` is multipart too, with one
+ * `file` part and no response body of its own beyond {@link UserResponse}.
  */
 export interface UploadResponse {
   readonly attachment: Attachment;
@@ -538,8 +539,6 @@ export interface UserListResponse {
   readonly users: readonly User[];
   readonly cursor: string | null;
 }
-
-/** `PUT /api/me/avatar` is `multipart/form-data` with one `file` part. */
 
 /** `POST`/`DELETE /api/push/subscribe` */
 export interface PushSubscribeRequest {
@@ -566,8 +565,6 @@ export type ClientEvent =
   | { readonly t: "typing"; readonly channel: ChannelId }
   | { readonly t: "read"; readonly channel: ChannelId; readonly seq: number }
   | { readonly t: "ping" };
-
-export type ClientEventType = ClientEvent["t"];
 
 /**
  * Server to client.
@@ -621,8 +618,6 @@ export type ServerEvent =
       readonly threads: number;
     }
   | { readonly t: "error"; readonly code: ErrorCode; readonly message: string };
-
-export type ServerEventType = ServerEvent["t"];
 
 /**
  * What `serializeAttachment()` persists per hibernatable socket. Small on purpose: it is rewritten
