@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Tessera harness</title>
+  <style>
+    html, body { margin: 0; height: 100%; font: 13px system-ui, sans-serif; }
+    body { display: flex; flex-direction: column; }
+    header { display: flex; gap: 12px; align-items: center; padding: 6px 12px; background: #f3f3f3; border-bottom: 1px solid #ddd; }
+    #pane { flex: 1; min-height: 0; }
+    #pane iframe { display: block; width: 100%; height: 100%; border: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Tessera harness</strong>
+    <span id="status">starting...</span>
+    <button id="reload" type="button">Reload pane</button>
+    <button id="reset" type="button">Reset state</button>
+    <a href="?procgen=1">with PROCGEN</a>
+    <a href="?">no bindings</a>
+  </header>
+  <div id="pane"></div>
+  <script type="module" src="/harness/parent.js"></script>
+</body>
+</html>

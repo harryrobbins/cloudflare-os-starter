@@ -5,6 +5,8 @@ packages/*/.wrangler/
 .wrangler/
 dist/
 
+scratch
+
 # Generated per-deploy config and local overrides
 packages/*/wrangler.prod.jsonc
 packages/*/wrangler.dev.jsonc

@@ -1,0 +1,21 @@
+{
+  "name": "blueprint-tessera",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:gadget": "node scripts/build.mjs",
+    "pack:gadget": "node scripts/build.mjs && node scripts/pack-gadget.mjs",
+    "test:run": "vitest run",
+    "test:e2e": "node --test --test-concurrency=1 e2e/harness.test.mjs",
+    "harness": "node harness/serve.mjs"
+  },
+  "devDependencies": {
+    "capnweb": "catalog:",
+    "esbuild": "0.28.1",
+    "playwright": "1.61.0",
+    "tessera": "github:harryrobbins/tessera#5fb8520292d7753aa59199b2c865262d400230e1",
+    "vitest": "catalog:",
+    "yjs": "13.6.31"
+  }
+}

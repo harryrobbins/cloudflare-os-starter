@@ -1,0 +1,17 @@
+{
+  "blueprintId": "format.tessera",
+  "title": "Tessera Mosaic",
+  "description": "Every row a card: explore demo collections or a connected data source as a GPU mosaic that flies between grid, bars, cross-tab, scatter and map layouts.",
+  "output": {
+    "id": "tessera",
+    "noun": "Mosaic",
+    "plural": "Mosaics",
+    "icon": "chartBar"
+  },
+  "author": {
+    "type": "user",
+    "name": "Surprisingly Ltd",
+    "id": "harryrobbins@gmail.com"
+  },
+  "revision": 3
+}
