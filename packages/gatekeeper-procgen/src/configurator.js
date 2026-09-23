@@ -20,4 +20,11 @@ host.getInitialResource().then(initial => {
 }).catch(() => {});
 const update = () => host.setSelectionReady(valid());
 seed.addEventListener("input", update); profile.addEventListener("change", update);
-host.resize(390, 230); update();
+// Report the form's real height as both the frame and layout height. The host treats a frame taller
+// than its layout as an open popup and stops clipping it, which let the frame cover the modal footer.
+const reportSize = () => {
+  const height = Math.ceil(document.documentElement.getBoundingClientRect().height);
+  host.resize(height, height);
+};
+new ResizeObserver(reportSize).observe(document.documentElement);
+reportSize(); update();
