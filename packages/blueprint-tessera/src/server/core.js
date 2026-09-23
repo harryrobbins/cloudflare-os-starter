@@ -6,7 +6,10 @@
 // restart the facet, so neither cache can go stale. Tables are never written to durable storage.
 
 import { DEFAULT_STATE, gadgetState, loadOptions, sourceId as validSourceId, tableName } from '../shared/validation.js'
+import { isMissingMethod } from './errors.js'
 import { procgen } from './sources/procgen.js'
+
+export { isMissingMethod }
 
 export const STATE_KEY = 'state'
 export const PROBE_TIMEOUT_MS = 3_000
@@ -31,15 +34,6 @@ const encoder = new TextEncoder()
 /** UTF-8 byte length of a value's JSON (Workers have TextEncoder, not Buffer). */
 export const jsonBytes = value => encoder.encode(JSON.stringify(value)).length
 const mb = bytes => (bytes / 1048576).toFixed(1)
-
-/**
- * A rejection that means the binding does not have the method at all (a KV namespace, another
- * gatekeeper, a plain object): an answer, not a transient failure, so it is never retried.
- */
-export function isMissingMethod(error) {
-  if (error instanceof TypeError && /is not a function/.test(error.message)) return true
-  return /does not implement|not implemented|no such method|unknown method|method .*(not found|missing|does not exist)|is not a function/i.test(message(error))
-}
 
 /** Thrown when a load passes the size guard; `atRows` is how many rows it had read by then. */
 class TooLargeError extends Error {
@@ -159,7 +153,7 @@ export function createCore({
       }
       let result
       try {
-        result = await source.adapter.loadTable(source.stub, table, { maxRows, title: summary.title, onPage })
+        result = await source.adapter.loadTable(source.stub, table, { maxRows, title: summary.title, totalRows: summary.exactRecords, onPage })
       } catch (error) {
         if (error instanceof TooLargeError) throw error
         throw unavailable(source.id, error)

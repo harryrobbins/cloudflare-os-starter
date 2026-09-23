@@ -2,15 +2,66 @@ import { describe, expect, it, vi } from 'vitest'
 import { isBrokenStubError } from '../src/client/helpers.js'
 import { createCore, isMissingMethod, jsonBytes, PROBE_RETRY_MS, SIZE_FAILURE_MS, STATE_KEY } from '../src/server/core.js'
 import { mapColumns, procgen } from '../src/server/sources/procgen.js'
+import { generateRecord } from '../../gatekeeper-procgen/src/generator.ts'
 import { fakeProcgen, memoryStorage } from './fake-procgen.js'
 
+const resource = { url: 'procgen://commerce/v1/demo/small', scenario: 'commerce', version: 'v1', seed: 'demo', profile: 'small' }
+
 const queries = session => session.calls.filter(([name]) => name === 'query')
+/** Connector reads of either kind: each is one observation on the connection. */
+const reads = session => session.calls.filter(([name]) => name === 'query' || name === 'table')
 const never = () => new Promise(() => {})
 const probes = session => session.calls.filter(([name]) => name === 'describeDataset').length
 
 describe('procgen adapter', () => {
-  it('pages 100 rows at a time with a fixed limit and stops at the cap', async () => {
+  it('loads a table in one table() call: a stable sample with joined facets, decoded to rows', async () => {
     const session = fakeProcgen()
+    const table = await procgen.loadTable(session, 'orders', { maxRows: 250, title: 'Orders' })
+    expect(session.calls.map(([name]) => name)).toEqual(['table'])
+    expect(session.calls[0][1]).toEqual({ collection: 'orders', limit: 250, sample: { seed: 'tessera' } })
+    expect(table).toMatchObject({ name: 'Orders', truncated: true, totalRows: 10_000 })
+    expect(table.rows).toHaveLength(250)
+    expect(table.columns.map(c => c.name)).toEqual(['id', 'customer_id', 'status', 'created_at', 'total_minor', 'currency_code', 'customer.tier', 'customer.country_code'])
+    expect(table.columns.at(-1)).toEqual({ name: 'customer.country_code', title: 'customer country code', type: 'string', semantic: 'country_code' })
+    expect(table.columns[4]).toEqual({ name: 'total_minor', type: 'number', semantic: 'currency_minor', currency: 'USD' })
+    const ids = table.rows.map(row => Number(row[0]))
+    expect(Math.max(...ids) - Math.min(...ids)).toBeGreaterThan(9_000)
+    for (const row of table.rows.slice(0, 20)) {
+      const order = generateRecord(resource, 'orders', Number(row[0]))
+      const customer = generateRecord(resource, 'customers', Number(order.customer_id))
+      expect(row).toEqual([order.id, order.customer_id, order.status, order.created_at, order.total_minor, 'USD', customer.tier, customer.country_code])
+    }
+    const again = await procgen.loadTable(fakeProcgen(), 'orders', { maxRows: 100 })
+    expect(again.rows).toEqual(table.rows.slice(0, 100))
+  })
+
+  it('reads a table that fits whole in ID order, reports it complete, and feeds onPage 100 rows at a time', async () => {
+    const seen = []
+    const session = fakeProcgen()
+    const table = await procgen.loadTable(session, 'daily_metrics', { maxRows: 2_000, totalRows: 730, onPage: rows => seen.push(rows.length) })
+    expect(session.calls[0][1]).toEqual({ collection: 'daily_metrics', limit: 2_000 })
+    expect(table).toMatchObject({ truncated: false, totalRows: 730 })
+    expect(table.rows[0][1]).toBe('2023-01-01T00:00:00.000Z')
+    expect(table.rows).toHaveLength(730)
+    expect(seen).toEqual([100, 100, 100, 100, 100, 100, 100, 30])
+  })
+
+  it('falls back to paging query() once for a gatekeeper without table(), and remembers it', async () => {
+    const session = fakeProcgen()
+    let tableCalls = 0
+    session.table = async () => { tableCalls++; throw new Error('The RPC receiver does not implement the method "table".') }
+    expect((await procgen.loadTable(session, 'orders', { maxRows: 150 })).rows).toHaveLength(150)
+    expect((await procgen.loadTable(session, 'orders', { maxRows: 150 })).rows).toHaveLength(150)
+    expect(tableCalls).toBe(1)
+    expect(queries(session)).toHaveLength(4)
+    const failing = fakeProcgen()
+    failing.table = async () => { throw new Error('Record ID is out of range') }
+    await expect(procgen.loadTable(failing, 'orders', { maxRows: 5 })).rejects.toThrow('out of range')
+    expect(queries(failing)).toHaveLength(0)
+  })
+
+  it('pages 100 rows at a time with a fixed limit and stops at the cap', async () => {
+    const session = fakeProcgen({ table: false })
     const table = await procgen.loadTable(session, 'orders', { maxRows: 250 })
     expect(table.rows).toHaveLength(250)
     expect(queries(session).map(([, request]) => request.limit)).toEqual([100, 100, 100])
@@ -19,7 +70,7 @@ describe('procgen adapter', () => {
   })
 
   it('reads a whole small table and reports it complete', async () => {
-    const session = fakeProcgen()
+    const session = fakeProcgen({ table: false })
     const table = await procgen.loadTable(session, 'daily_metrics', { maxRows: 2_000 })
     expect(table.rows).toHaveLength(730)
     expect(table.truncated).toBe(false)
@@ -28,7 +79,7 @@ describe('procgen adapter', () => {
   })
 
   it('uses a limit under 100 when the cap is smaller', async () => {
-    const session = fakeProcgen()
+    const session = fakeProcgen({ table: false })
     const table = await procgen.loadTable(session, 'customers', { maxRows: 7 })
     expect(table.rows).toHaveLength(7)
     expect(queries(session)).toHaveLength(1)
@@ -36,13 +87,13 @@ describe('procgen adapter', () => {
   })
 
   it('maps fields to columns: drops json, keeps timestamps and semantics, adds currency', async () => {
-    const events = await procgen.loadTable(fakeProcgen(), 'events', { maxRows: 3 })
+    const events = await procgen.loadTable(fakeProcgen({ table: false }), 'events', { maxRows: 3 })
     expect(events.columns.map(c => c.name)).toEqual(['id', 'customer_id', 'event_type', 'occurred_at'])
     expect(events.columns[3]).toEqual({ name: 'occurred_at', type: 'timestamp' })
     expect(events.columns[0]).toEqual({ name: 'id', type: 'string', semantic: 'id' })
     expect(events.rows[0]).toHaveLength(4)
 
-    const metrics = await procgen.loadTable(fakeProcgen(), 'daily_metrics', { maxRows: 1 })
+    const metrics = await procgen.loadTable(fakeProcgen({ table: false }), 'daily_metrics', { maxRows: 1 })
     expect(metrics.columns.find(c => c.name === 'revenue_minor')).toEqual({ name: 'revenue_minor', type: 'number', semantic: 'currency_minor', currency: 'USD' })
     expect(metrics.columns.find(c => c.name === 'conversion_rate')).toEqual({ name: 'conversion_rate', type: 'number' })
     const date = metrics.columns.findIndex(c => c.name === 'date')
@@ -86,7 +137,7 @@ describe('procgen adapter', () => {
   })
 
   it('hands each page\'s new rows to onPage, which can abort the read', async () => {
-    const session = fakeProcgen()
+    const session = fakeProcgen({ table: false })
     const seen = []
     await expect(procgen.loadTable(session, 'orders', { maxRows: 1_000, onPage: rows => { seen.push(rows.length); if (seen.length === 2) throw new Error('stop') } })).rejects.toThrow('stop')
     expect(seen).toEqual([100, 100])
@@ -253,13 +304,13 @@ describe('core loadTable', () => {
     const storage = memoryStorage()
     const core = createCore({ env: { PROCGEN: session }, storage })
     const first = await core.loadTable('PROCGEN', 'orders', { maxRows: 500 })
-    const before = queries(session).length
+    const before = reads(session).length
     expect(await core.loadTable('PROCGEN', 'orders', { maxRows: 500 })).toBe(first)
     const smaller = await core.loadTable('PROCGEN', 'orders', { maxRows: 120 })
     expect(smaller.rows).toEqual(first.rows.slice(0, 120))
-    expect(queries(session).length).toBe(before)
+    expect(reads(session).length).toBe(before)
     await core.loadTable('PROCGEN', 'orders', { maxRows: 600 })
-    expect(queries(session).length).toBe(before + 6)
+    expect(reads(session).length).toBe(before + 1)
     expect(storage.map.size).toBe(0)
   })
 
@@ -267,9 +318,9 @@ describe('core loadTable', () => {
     const session = fakeProcgen()
     const core = createCore({ env: { PROCGEN: session }, storage: memoryStorage() })
     await core.loadTable('PROCGEN', 'daily_metrics', { maxRows: 1_000 })
-    const before = queries(session).length
+    const before = reads(session).length
     expect((await core.loadTable('PROCGEN', 'daily_metrics', { maxRows: 10_000 })).rows).toHaveLength(730)
-    expect(queries(session).length).toBe(before)
+    expect(reads(session).length).toBe(before)
   })
 
   it('names unknown tables and sources, and validates arguments before any read', async () => {
@@ -279,7 +330,7 @@ describe('core loadTable', () => {
     await expect(core.loadTable('PROCGEN_9', 'orders')).rejects.toThrow("Connections tab")
     await expect(core.loadTable('PROCGEN', 'Orders; drop')).rejects.toThrow('Invalid table name')
     await expect(core.loadTable('demo', 'orders')).rejects.toThrow('Invalid source id')
-    expect(queries(session)).toHaveLength(0)
+    expect(reads(session)).toHaveLength(0)
   })
 
   it('refuses a result as soon as it passes the size guard, remembering the refusal briefly', async () => {
@@ -290,15 +341,15 @@ describe('core loadTable', () => {
       const error = await core.loadTable('PROCGEN', 'orders', { maxRows: 10_000 }).catch(e => e)
       expect(error.message).toMatch(/^Too large: Orders passed the 0 MB limit at \d+ rows \(.* MB\); load fewer rows\.$/)
       expect(isBrokenStubError(error)).toBe(false)
-      const reads = queries(session).length
-      expect(reads).toBeLessThan(10) // of the 100 a 10,000-row load would make
+      const count = reads(session).length
+      expect(count).toBe(1)
       await expect(core.loadTable('PROCGEN', 'orders', { maxRows: 2_000 })).rejects.toThrow('Too large')
-      expect(queries(session).length).toBe(reads)
+      expect(reads(session).length).toBe(count)
       expect((await core.loadTable('PROCGEN', 'orders', { maxRows: 50 })).rows).toHaveLength(50)
       await vi.advanceTimersByTimeAsync(SIZE_FAILURE_MS)
-      const before = queries(session).length
+      const before = reads(session).length
       await expect(core.loadTable('PROCGEN', 'orders', { maxRows: 2_000 })).rejects.toThrow('Too large')
-      expect(queries(session).length).toBeGreaterThan(before)
+      expect(reads(session).length).toBeGreaterThan(before)
     } finally { vi.useRealTimers() }
   })
 
@@ -320,9 +371,9 @@ describe('core loadTable', () => {
 
   it('prefixes gatekeeper errors so the client never mistakes them for its own dead stub', async () => {
     const session = fakeProcgen()
-    const query = session.query
-    let fail = 'query'
-    session.query = async request => { if (fail === 'query') throw new Error('RPC session was disconnected'); return query(request) }
+    const read = session.table
+    let fail = 'table'
+    session.table = async request => { if (fail === 'table') throw new Error('RPC session was disconnected'); return read(request) }
     const core = createCore({ env: { PROCGEN: session }, storage: memoryStorage() })
     const error = await core.loadTable('PROCGEN', 'orders', { maxRows: 5 }).catch(e => e)
     expect(error.message).toBe('Data source PROCGEN is unavailable: RPC session was disconnected')

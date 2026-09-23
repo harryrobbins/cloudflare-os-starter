@@ -12,7 +12,7 @@ const BASE_TIME = Date.UTC(2021, 0, 1);
 export type CollectionName = keyof (typeof PROFILE_CARDINALITIES)["small"];
 export const COLLECTION_NAMES: CollectionName[] = ["customers", "products", "orders", "order_items", "events", "daily_metrics"];
 
-function hash(seed: string, namespace: string, id: number): number {
+export function hash(seed: string, namespace: string, id: number): number {
   let h = 2166136261;
   const value = `${seed}\0${namespace}\0${id}`;
   for (let i = 0; i < value.length; i++) { h ^= value.charCodeAt(i); h = Math.imul(h, 16777619); }
@@ -33,13 +33,16 @@ function orderTotal(orderId: number, productCount: number): number {
 
 const field = (name: string, type: "string" | "number" | "boolean" | "timestamp" | "json", semanticType?: "id" | "email" | "country_code" | "currency_minor", references?: { collection: string; field: string }) => ({ name, type, nullable: false, ...(semanticType && { semanticType }), ...(references && { references }) });
 
-const DEFINITIONS = {
-  customers: { title: "Customers", description: "Synthetic customer accounts.", fields: [field("id", "string", "id"), field("name", "string"), field("email", "string", "email"), field("tier", "string"), field("country_code", "string", "country_code"), field("created_at", "timestamp")], parent: undefined },
-  products: { title: "Products", description: "Synthetic product catalog.", fields: [field("id", "string", "id"), field("sku", "string"), field("title", "string"), field("category", "string"), field("price_minor", "number", "currency_minor"), field("currency_code", "string"), field("in_stock", "boolean")], parent: undefined },
-  orders: { title: "Orders", description: "Customer orders with three line items each.", fields: [field("id", "string", "id"), field("customer_id", "string", "id", { collection: "customers", field: "id" }), field("status", "string"), field("created_at", "timestamp"), field("total_minor", "number", "currency_minor"), field("currency_code", "string")], parent: "customer_id" },
+/** Marks a low-cardinality categorical field: a facet table() can join in and facetCounts() can count. */
+const facet = <F extends ReturnType<typeof field>>(f: F) => ({ ...f, facet: true as const });
+
+export const DEFINITIONS = {
+  customers: { title: "Customers", description: "Synthetic customer accounts.", fields: [field("id", "string", "id"), field("name", "string"), field("email", "string", "email"), facet(field("tier", "string")), facet(field("country_code", "string", "country_code")), field("created_at", "timestamp")], parent: undefined },
+  products: { title: "Products", description: "Synthetic product catalog.", fields: [field("id", "string", "id"), field("sku", "string"), field("title", "string"), facet(field("category", "string")), field("price_minor", "number", "currency_minor"), field("currency_code", "string"), facet(field("in_stock", "boolean"))], parent: undefined },
+  orders: { title: "Orders", description: "Customer orders with three line items each.", fields: [field("id", "string", "id"), field("customer_id", "string", "id", { collection: "customers", field: "id" }), facet(field("status", "string")), field("created_at", "timestamp"), field("total_minor", "number", "currency_minor"), field("currency_code", "string")], parent: "customer_id" },
   order_items: { title: "Order items", description: "Exactly three line items for every order.", fields: [field("id", "string", "id"), field("order_id", "string", "id", { collection: "orders", field: "id" }), field("product_id", "string", "id", { collection: "products", field: "id" }), field("quantity", "number"), field("unit_price_minor", "number", "currency_minor")], parent: "order_id" },
-  events: { title: "Events", description: "Synthetic customer activity events.", fields: [field("id", "string", "id"), field("customer_id", "string", "id", { collection: "customers", field: "id" }), field("event_type", "string"), field("occurred_at", "timestamp"), field("properties", "json")], parent: "customer_id" },
-  daily_metrics: { title: "Daily metrics", description: "A 730-day modeled commerce series with dataset-scaled volume, trend, weekly and annual seasonality, campaigns, and seeded noise.", fields: [field("id", "string", "id"), field("date", "timestamp"), field("day_index", "number"), field("weekday", "string"), field("visitors", "number"), field("sessions", "number"), field("signups", "number"), field("orders", "number"), field("units_sold", "number"), field("revenue_minor", "number", "currency_minor"), field("marketing_spend_minor", "number", "currency_minor"), field("conversion_rate", "number"), field("avg_order_value_minor", "number", "currency_minor"), field("currency_code", "string"), field("campaign", "string")], parent: undefined },
+  events: { title: "Events", description: "Synthetic customer activity events.", fields: [field("id", "string", "id"), field("customer_id", "string", "id", { collection: "customers", field: "id" }), facet(field("event_type", "string")), field("occurred_at", "timestamp"), field("properties", "json")], parent: "customer_id" },
+  daily_metrics: { title: "Daily metrics", description: "A 730-day modeled commerce series with dataset-scaled volume, trend, weekly and annual seasonality, campaigns, and seeded noise.", fields: [field("id", "string", "id"), field("date", "timestamp"), field("day_index", "number"), facet(field("weekday", "string")), field("visitors", "number"), field("sessions", "number"), field("signups", "number"), field("orders", "number"), field("units_sold", "number"), field("revenue_minor", "number", "currency_minor"), field("marketing_spend_minor", "number", "currency_minor"), field("conversion_rate", "number"), field("avg_order_value_minor", "number", "currency_minor"), field("currency_code", "string"), facet(field("campaign", "string"))], parent: undefined },
 } as const;
 
 function dailyMetrics(resource: DatasetResource, id: number): Record<string, unknown> {

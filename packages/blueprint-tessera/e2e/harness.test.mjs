@@ -275,6 +275,18 @@ test('5. with PROCGEN, the Data popover lists tables; daily_metrics loads 730 ca
   })
 })
 
+test('5b. a sampled orders load brings the joined customer facets in one read', async () => {
+  await withHarness('?procgen=1', async h => {
+    const frame = await h.frame()
+    await frame.locator('#tg-data-btn').click()
+    await frame.locator('#tg-data-popover').waitFor({ state: 'visible' })
+    await frame.locator('button[data-tg-table="orders"][data-tg-source="PROCGEN"]').click()
+    await until(() => inGadget(h, g => g.count() === 2_000), { timeout: 30_000, message: '2,000 cards (the default cap of 10,000 orders)' })
+    const facets = await frame.locator('#colorBy option').evaluateAll(els => els.map(el => el.value))
+    for (const facet of ['status', 'customer tier', 'customer country code']) assert.ok(facets.includes(facet), `${facet} is a facet (${facets})`)
+  })
+})
+
 test('6. without a connector, the Data popover shows the connect hint', async () => {
   await withHarness('', async h => {
     const frame = await h.frame()

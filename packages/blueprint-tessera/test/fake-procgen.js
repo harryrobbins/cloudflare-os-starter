@@ -2,15 +2,17 @@
 // generator, so schemas, record shapes and counts match the deployed gatekeeper. Like the real
 // one, a cursor is bound to the exact query (collection and limit) and a limit over 100 is refused.
 // Every call is recorded in `calls`, standing in for the gatekeeper's observation records.
+// `table: false` models a gatekeeper deployed before table() existed.
 
 import { COLLECTION_NAMES, countFor, generateRecord, isCollection, schemaFor } from '../../gatekeeper-procgen/src/generator.ts'
+import { table } from '../../gatekeeper-procgen/src/table.ts'
 
 const encode = body => Buffer.from(JSON.stringify(body)).toString('base64url')
 
-export function fakeProcgen({ seed = 'demo', profile = 'small', describe } = {}) {
+export function fakeProcgen({ seed = 'demo', profile = 'small', describe, table: withTable = true } = {}) {
   const resource = { url: `procgen://commerce/v1/${seed}/${profile}`, scenario: 'commerce', version: 'v1', seed, profile }
   const calls = []
-  return {
+  const session = {
     calls,
     async describeDataset() {
       calls.push(['describeDataset'])
@@ -43,7 +45,13 @@ export function fakeProcgen({ seed = 'demo', profile = 'small', describe } = {})
       for (let id = offset + 1; id <= end; id++) records.push(generateRecord(resource, request.collection, id))
       return { schema: schemaFor(resource, request.collection), records, ...(end < total ? { nextCursor: encode({ collection: request.collection, limit, offset: end }) } : {}) }
     },
+    async table(request) {
+      calls.push(['table', request])
+      return structuredClone(table(resource, request))
+    },
   }
+  if (!withTable) delete session.table
+  return session
 }
 
 /** An in-memory stand-in for ctx.storage (get/put with structured-clone semantics). */

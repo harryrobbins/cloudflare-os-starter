@@ -1,9 +1,10 @@
 import { DurableObject, RpcStub, RpcTarget, WorkerEntrypoint } from "cloudflare:workers";
 import { skipRpcValidation, validateRpc } from "capnweb-validate";
 import type { AccountDescription, ApprovalQueue, Gatekeeper, GatekeeperConnectCallback, GatekeeperConnectOptions, GatekeeperUser, GatekeeperUserVerifier, ResourceConfiguratorFrame, ResourceDescription, SupportedResource, VendorDescription } from "@gadgets/workshop-shared/gatekeeper";
-import type { AggregateRequest, AggregateResult, CollectionSchema, CollectionSummary, DatasetDescription, QueryPage, QueryRequest, SyntheticDataSession } from "./types.js";
+import type { AggregateRequest, AggregateResult, CollectionSchema, CollectionSummary, DatasetDescription, FacetCountsRequest, FacetCountsResult, QueryPage, QueryRequest, SyntheticDataSession, TableRequest, TableResult } from "./types.js";
 import { aggregate, candidateIds, COLLECTION_NAMES, countFor, generateRecord, isCollection, schemaFor, type CollectionName } from "./generator.js";
 import { PROCGEN_POLICY } from "./policy.js";
+import { facetCounts, table } from "./table.js";
 import { parseResourceUrl, type DatasetResource } from "./resource.js";
 import { CONFIGURATOR_HTML, TYPES_CODE } from "./generated.js";
 
@@ -110,6 +111,14 @@ export class SyntheticDataSessionImpl extends RpcTarget implements SyntheticData
     const limitGroups = request.limitGroups ?? PROCGEN_POLICY.defaultGroupLimit; if (!Number.isInteger(limitGroups) || limitGroups < 1 || limitGroups > PROCGEN_POLICY.maxGroups) throw new Error(`Group limit must be 1-${PROCGEN_POLICY.maxGroups}.`);
     const result = aggregate(this.resource, request); if (result.groups.length > limitGroups) throw new Error(`Result has ${result.groups.length} groups; raise limitGroups within the allowed maximum.`);
     await this.observe("aggregate", request.collection, result.groups.length); return result;
+  }
+  async table(request: TableRequest): Promise<TableResult> {
+    const result = table(this.resource, request);
+    await this.observe(result.sampled ? "table (sampled)" : "table", result.collection, result.rowCount); return result;
+  }
+  async facetCounts(request: FacetCountsRequest): Promise<FacetCountsResult> {
+    const result = facetCounts(this.resource, request);
+    await this.observe(result.exact ? "facet counts" : "facet counts (estimated)", request.collection, result.facets.length); return result;
   }
   [Symbol.dispose](): void { this.queue[Symbol.dispose](); }
 }

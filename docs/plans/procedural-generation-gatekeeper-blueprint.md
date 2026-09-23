@@ -255,6 +255,17 @@ Use strings for exact integer aggregate results that may exceed JavaScript's saf
 
 Set conservative default and hard maximum limits. Reject unsupported predicates or aggregates with structured errors that list valid indexes and aggregate shapes. Cursors must be opaque, versioned, tamper-evident, and bound to the normalized query and dataset resource.
 
+## Bulk reads: table() and facetCounts()
+
+Added 2026-09-23 (`packages/gatekeeper-procgen/src/table.ts`). Paging `query()` costs one observation per 100 rows, and it cannot join, so a mosaic or chart that wants 10,000 orders with each customer's tier took 100 activity records and still lacked the tier. Two calls cover that case, each one observation:
+
+- `table({collection, fields?, where?, sample?, limit?})` returns up to 20,000 rows, column-major, with low-cardinality string columns dictionary-encoded. A field path may follow one declared reference: `customer.tier` on orders, `product.category` on order items. By default it returns the collection's own non-json fields followed by every facet field one reference away. `where` takes up to 4 predicates (`eq`, `in`, `gt`, `gte`, `lt`, `lte`) on any field path. IDs compare as numbers. `sample` reads a keyed affine permutation of the ID space instead of the first IDs. The multiplier is coprime with the collection size, so a sample spreads evenly over the modular foreign keys, where a fixed stride would alias. Rows come back in sample order, so the first k rows of a sample of n are the sample of k.
+- `facetCounts({collection, fields, where?})` counts the values of facet fields (fields marked `facet: true` in the schema). Without `where` it derives exact counts where the generator's structure allows: order status by ID, and counts over a reference weighted by children per parent. With the item-to-product stride of 3571 (a prime), each full cycle of products hits every product once. Otherwise it scans. When the scan would pass the budget it counts a permutation sample, scales the counts up and returns `exact: false`.
+
+Both calls stop after generating `PROCGEN_POLICY.maxScanRecords` (200,000) records, joined records included. They report `scannedRecords` and `complete`, so a selective `where` on a medium collection returns what it found rather than scanning further. This deliberately relaxes the rule below against full scans: the budget bounds the work. On a laptop, the worst case is about 0.7 s of CPU (a filter that matches nothing on 5 million events, with a join). A 20,000-row sample with joins takes about 0.25 s.
+
+Not done: caching estimated facet counts per seed in the Gatekeeper's storage, and a SQL subset compiled to the same plan. Add those if a consumer needs them.
+
 ## Capability and sharing policy
 
 The generated data contains no customer information or caller-specific secrets. All users connected to the same resource can reproduce it. The observer policy may therefore accept authenticated collaborators for v1, but tests must prove that generation never mixes in account data, request headers, secrets, or deployment metadata.

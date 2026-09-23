@@ -7,6 +7,13 @@ export const PROCGEN_POLICY = Object.freeze({
   defaultGroupLimit: 25,
   maxGroups: 100,
   maxCursorBytes: 1024,
+  defaultTableLimit: 2_000,
+  maxTableLimit: 20_000,
+  maxTableFields: 32,
+  maxInValues: 50,
+  maxFacetFields: 8,
+  /** Records one table() or facetCounts() call may generate, joined records included. */
+  maxScanRecords: 200_000,
   maxSeedLength: 64,
   seedPattern: /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/,
 });

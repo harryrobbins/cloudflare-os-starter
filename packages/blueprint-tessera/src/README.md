@@ -14,13 +14,7 @@ An agent can bind a connection with `setGadgetBinding({gadget, source, name: 'PR
 
 ## Row caps and activity
 
-Every connector read is recorded as an activity on the connection. In a chat preview, each read is also posted as a chat message. Tables are read in pages of 100 rows, so a load makes about one read per 100 rows:
-
-| Rows | Reads |
-|---|---|
-| 500 | 5 |
-| 2,000 (default) | 20 |
-| 10,000 (maximum) | 100 |
+Every connector read is recorded as an activity on the connection. In a chat preview, each read is also posted as a chat message. A load is one read: the Synthetic Data `table()` call. When the table has more rows than `maxRows`, the read is a spread-out sample, which is the same sample on every load. Otherwise it is the whole table in ID order. The load also joins the facets of referenced records, such as an order's `customer tier` and `customer country code`. A connection deployed before `table()` existed is read in pages of 100 rows instead, one read per page.
 
 `maxRows` is clamped to 1 to 10,000. A load stops as soon as its rows pass about 8 MB of JSON and fails with a `Too large:` error, so load fewer rows. For a minute afterwards, a request for as many rows fails at once without reading again. Errors from the connection itself start with `Data source <id> is unavailable:`. Repeated loads of the same table, or of fewer rows of it, are served from memory with no new reads.
 
@@ -29,7 +23,7 @@ Every connector read is recorded as an activity on the connection. In a chat pre
 - `getState() → State` returns the saved state, or `{source: {kind: 'demo'}, rev: 0}` if nothing is saved.
 - `setState(state) → State` validates the state, stores it and returns it with a new `rev`. Any `rev` you send is ignored, and the last writer wins. It throws on an invalid state or one over 16 KB.
 - `listSources() → Source[]` returns `[{id: 'demo', kind: 'demo', title: 'Demo collections'}, …connectors]`. Each connector is either `{id, kind: 'procgen', title, description, tables: [{name, title, description?, exactRecords}]}` or `{id, kind, title, description, error}`. The `id` is the binding name, such as `PROCGEN`.
-- `loadTable(sourceId, table, {maxRows}?) → TableData` returns `{name, columns: [{name, type, semantic?, currency?}], rows: unknown[][], truncated, totalRows?}`. Rows are row-major and aligned with `columns`. `type` is `string`, `number`, `boolean` or `timestamp` (an ISO string). JSON fields are dropped. Money fields carry `semantic: 'currency_minor'` and `currency` (from the table's `currency_code`) and hold amounts in minor units.
+- `loadTable(sourceId, table, {maxRows}?) → TableData` returns `{name, columns: [{name, type, semantic?, currency?}], rows: unknown[][], truncated, totalRows?}`. Rows are row-major and aligned with `columns`. Joined facets are named with a dot (`customer.tier`) and carry a `title` (`customer tier`), which is the name Tessera shows and the one to use in `view` fields. `type` is `string`, `number`, `boolean` or `timestamp` (an ISO string). JSON fields are dropped. Money fields carry `semantic: 'currency_minor'` and `currency` (from the table's `currency_code`) and hold amounts in minor units.
 
 ## State
 
