@@ -104,6 +104,7 @@ Backend error reporting is enabled without a vendor account. Explicit upstream i
 - Open the router's hostname and confirm Access signs in with the expected identity, and that it is the only public route into the deployment.
 - Open `/admin`, confirm the email is an administrator, and set Context, Scheduler and Custom Gatekeepers to disabled, optional, or enabled.
 - Set Synthetic Data to optional or enabled, create a `commerce/v1` dataset resource, and open Data Explorer from **New**.
+- Open **New → Tessera Mosaic**. It shows demo collections without setup. Add Synthetic Data in the gadget's Connections tab, then load a table from its **Data** button.
 - If Context Artifacts is enabled, create a Git-backed collection and confirm its repository can be populated and refreshed.
 - Enable the Custom Gatekeeper, ask for deployment information, and confirm its read appears as an observation.
 - Open the Error Reporter Worker's [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/) and verify its structured `error_report` query surface.
@@ -118,7 +119,7 @@ Backend error reporting is enabled without a vendor account. Explicit upstream i
 | Sign-in, routes, AI, storage, observability, Worker identities | [`deployment.jsonc`](deployment.jsonc) | Yes |
 | Logs, traces, error destinations, browser reporting | [Observability guide](docs/observability.md) | Sometimes |
 | Organization APIs and capabilities | [`packages/custom-gatekeeper`](packages/custom-gatekeeper/README.md) | Yes |
-| Formats offered under **New** (this deployment ships a live kanban Board, a live Whiteboard and a Notebook beside Docs, Sheets and Slides) | [`formats/`](formats) and [Bundled formats](docs/customization.md#bundled-formats); ad hoc promotion in `/admin` | Yes for bundled, no for promoted |
+| Formats offered under **New** (this deployment ships a live kanban Board, a live Whiteboard, a Notebook, a Data Explorer, a Wave and a Tessera Mosaic beside Docs, Sheets and Slides) | [`formats/`](formats) and [Bundled formats](docs/customization.md#bundled-formats); ad hoc promotion in `/admin` | Yes for bundled, no for promoted |
 | Team chat at `/gatekeeper/chat/` (channels, DMs, threads, search, uploads) | `deployment.jsonc.chat` and [Team chat](docs/customization.md#team-chat) | Yes |
 | Notebook Python execution (optional, disabled by default) | `deployment.jsonc.runtime`, [runtime guide](packages/gatekeeper-runtime/README.md) and [implementation/validation plan](docs/plans/notebook-ide-blueprints.md) | Yes |
 | Product behavior unavailable through Worker boundaries | Pinned upstream fork/commit | Yes |

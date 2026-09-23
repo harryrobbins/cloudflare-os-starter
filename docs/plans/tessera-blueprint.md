@@ -2,7 +2,7 @@
 
 Build a Cloudflare OS blueprint that embeds [Tessera](https://harryrobbins.github.io/tessera/), the WebGL2 unit-visualisation engine. In Tessera, every row of a dataset is a card that flies between grid, bars, cross-tab, scatter and map layouts. A new gadget opens on Tessera's built-in demo collections. Once someone binds a data connector, the same gadget shows that connector's tables.
 
-**Status:** Approved for implementation (2026-09-23). Revised after a code-level review: opaque-origin harness, core/wrapper server split, asynchronous worker fallback, observation volume, and the procgen schema facts. Harry owns the Tessera repo (`github.com/harryrobbins/tessera`) and has agreed that it can be refactored into an installable library.
+**Status:** Implemented and deployed on 2026-09-23 as revision 3 (see [Deployment record](#deployment-record-2026-09-23)). The signed-in production checks are pending. The plan was revised after a code-level review: opaque-origin harness, core/wrapper server split, asynchronous worker fallback, observation volume, and the procgen schema facts. Harry owns the Tessera repo (`github.com/harryrobbins/tessera`) and has agreed that it can be refactored into an installable library.
 
 ## Decisions
 

@@ -224,7 +224,7 @@ Formats are the blueprints offered under **New** in the composer. You can promot
 
 - **What it points at.** The directory holds `<name>.gadget` archives, each with a `<name>.json` sidecar that sets `blueprintId`, `title`, `description`, `output` and `revision`.
 - **How the deploy uses it.** The deploy passes the directory's absolute path to the Workshop build as `FORMAT_BLUEPRINTS_DIR`.
-- **It replaces upstream's formats.** The directory replaces upstream's default set rather than adding to it. That is why this repository's [`formats/`](../formats) carries copies of Docs, Sheets and Slides beside its own Board and Whiteboard. The deploy refuses a directory with no archives, or an archive with no sidecar.
+- **It replaces upstream's formats.** The directory replaces upstream's default set rather than adding to it. That is why this repository's [`formats/`](../formats) carries copies of Docs, Sheets and Slides beside its own formats (Board, Whiteboard, Notebook, Data Explorer, Wave and Tessera Mosaic). The deploy refuses a directory with no archives, or an archive with no sidecar.
 - **Updating a format.** A deployment reinstalls a format only when its `revision` or presentation changes. Bump `revision` with every code change.
 - **Never change a `blueprintId`.** It is the install key.
 
@@ -235,6 +235,9 @@ This repository builds these formats from source, and each package's tests fail 
 | Board (`format.board`) | [`packages/blueprint-kanban`](../packages/blueprint-kanban/README.md) | `pnpm --filter blueprint-kanban pack:gadget` |
 | Whiteboard (`format.whiteboard`) | [`packages/blueprint-whiteboard`](../packages/blueprint-whiteboard/README.md) | `pnpm --filter blueprint-whiteboard pack:gadget` |
 | Data Explorer (`format.procgen-explorer`) | [`packages/blueprint-procgen-explorer`](../packages/blueprint-procgen-explorer/README.md) | `pnpm --filter blueprint-procgen-explorer pack:gadget` |
+| Notebook (`format.notebook`) | [`packages/blueprint-notebook`](../packages/blueprint-notebook/README.md) | `pnpm --filter blueprint-notebook pack:gadget` |
+| Wave (`format.wave`) | [`packages/blueprint-wave`](../packages/blueprint-wave/README.md) | `pnpm --filter blueprint-wave pack:gadget` |
+| Tessera Mosaic (`format.tessera`) | [`packages/blueprint-tessera`](../packages/blueprint-tessera/README.md) | `pnpm --filter blueprint-tessera pack:gadget` |
 
 Each command rebuilds `formats/<name>.gadget` and bumps its revision.
 
