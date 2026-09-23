@@ -52,7 +52,7 @@ import {
 import { newMessageId } from "./ids.js";
 import { consume } from "./limits.js";
 import { hashId, logEvent } from "./logs.js";
-import { asMessageKind, type MessageRow, type UserRow } from "./rows.js";
+import { asMessageKind, toUser, type MessageRow, type UserRow } from "./rows.js";
 import { badgeSummary, otherReadCursors, unreadReplies } from "./unread.js";
 import { existingUserIds, loadUsers } from "./users.js";
 
@@ -409,7 +409,9 @@ export async function sendMessage(
     recordAgentRequest(ctx, author, access.value.channel, inserted!, options.workshopAccount ?? null);
 
   const message = hydrateMessage(ctx, inserted!);
-  ctx.bus.toChannel(channelId, { t: "msg", message });
+  // The author rides along: the one person a recipient is most likely not to know yet is somebody
+  // posting for the first time.
+  ctx.bus.toChannel(channelId, { t: "msg", message, author: toUser(author, ctx.bus.isOnline(author.id)) });
   if (rootRow !== null) {
     const root = loadMessage(ctx, rootRow.id);
     if (root !== null) ctx.bus.toChannel(channelId, { t: "edit", message: hydrateMessage(ctx, root) });

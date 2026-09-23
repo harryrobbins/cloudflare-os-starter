@@ -628,6 +628,11 @@ function createMockApi(workspace: MockWorkspace): ChatApi {
       return { users: workspace.seed.users, cursor: null };
     },
 
+    async getUsers(ids: readonly UserId[]): Promise<UserListResponse> {
+      await delay(40);
+      return { users: workspace.seed.users.filter((user) => ids.includes(user.id)), cursor: null };
+    },
+
     async getUser(userId: UserId): Promise<{ user: User }> {
       await delay(40);
       const user = workspace.seed.users.find((candidate) => candidate.id === userId);
@@ -1022,6 +1027,9 @@ export function createMockTransport(): Transport {
       };
       workspace.commit(message);
       workspace.emit({ t: "msg", message });
+    },
+    introduceUser(user): void {
+      if (!workspace.seed.users.some((candidate) => candidate.id === user.id)) workspace.seed.users.push(user);
     },
     setOnline(userIds): void {
       workspace.online = [...userIds];

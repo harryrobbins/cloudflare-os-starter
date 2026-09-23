@@ -15,6 +15,7 @@ import {
   type ChatIdentity,
   type MeResponse,
   type OkResponse,
+  type UserListResponse,
   type UserResponse,
 } from "../shared/protocol.js";
 import { FILES_PREFIX, matchApiRoute, matchFilePath, WS_PATH, type ApiRouteName } from "../shared/routes.js";
@@ -29,6 +30,7 @@ import {
   parseUpdateMembership,
   parseUpdateChannel,
   parseUpdateMe,
+  parseUserIds,
   type Result,
 } from "../shared/validate.js";
 import {
@@ -59,7 +61,7 @@ import { toPrefs, toUser, type UserRow } from "./rows.js";
 import { search } from "./search.js";
 import { acceptSocket } from "./sockets.js";
 import { badgeSummary } from "./unread.js";
-import { isAdmin, listUsers, loadUserRow, updatePrefs, visibleInDirectory } from "./users.js";
+import { isAdmin, listUsers, loadUserRow, updatePrefs, usersByIds, visibleInDirectory } from "./users.js";
 
 /** Turns an {@link Outcome} into the contract's response or its error envelope. */
 function respond<T>(outcome: Outcome<T>): Response {
@@ -235,8 +237,15 @@ export async function route(
     case "createUpload":
       return respond(await createUpload(ctx, user.id, request));
 
-    case "listUsers":
+    case "listUsers": {
+      const ids = url.searchParams.get("ids");
+      if (ids !== null) {
+        return validated(parseUserIds(ids), (wanted) =>
+          json({ users: usersByIds(ctx, user, wanted), cursor: null } satisfies UserListResponse),
+        );
+      }
       return json(listUsers(ctx, user, url.searchParams.get("cursor"), numberParam(url, "limit")));
+    }
 
     case "getUser": {
       const row = loadUserRow(ctx, params["userId"]!);

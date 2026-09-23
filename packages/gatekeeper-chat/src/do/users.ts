@@ -212,6 +212,24 @@ export function listUsers(
   };
 }
 
+/**
+ * `GET /api/users?ids=`: the entries for these ids the viewer may see, in one query. How a client
+ * names somebody a live event mentioned by id only.
+ */
+export function usersByIds(ctx: Ctx, viewer: UserRow, userIds: readonly UserId[]): readonly User[] {
+  const ids = [...new Set(userIds)].slice(0, MAX_PAGE_LIMIT);
+  if (ids.length === 0) return [];
+  const filter = directoryFilter(viewer);
+  return ctx.sql
+    .exec<UserRow>(
+      `SELECT u.* FROM users u WHERE u.id IN (${placeholders(ids.length)}) AND ${filter.sql} ORDER BY u.id`,
+      ...ids,
+      ...filter.params,
+    )
+    .toArray()
+    .map((row) => toUser(row, ctx.bus.isOnline(row.id)));
+}
+
 /** Searches the directory by display name or email local part, for the search page's top section. */
 export function matchUsers(ctx: Ctx, viewer: UserRow, text: string, limit: number): readonly User[] {
   if (text.length === 0) return [];

@@ -235,6 +235,7 @@ function harness(): Harness {
       throw new ApiError("not_implemented", "no uploads", 501);
     },
     listUsers: async () => ({ users: [me, alice], cursor: null }),
+    getUsers: async () => ({ users: [], cursor: null }),
     getUser: async () => ({ user: alice }),
   };
 
@@ -751,5 +752,71 @@ describe("the Agent", () => {
     expect(retry).toHaveBeenCalledWith("m2");
     const found = h.store.state.conversations[conversationKey("c1")]?.messages.find((entry) => entry.id === "m2");
     expect(found?.agentRequest?.state).toBe("pending");
+  });
+});
+
+describe("people the client has never seen", () => {
+  const carol: User = { ...me, id: "carol", name: "Carol", email: "carol@example.test" };
+
+  it("fetches an unknown author from a live `msg`, once, and names them", async () => {
+    const h = harness();
+    const getUsers = vi.fn(async (ids: readonly string[]) => ({
+      users: ids.includes("carol") ? [carol] : [],
+      cursor: null,
+    }));
+    h.api.getUsers = getUsers;
+    await h.store.start({ embedded: false });
+    await h.store.openConversation("c1");
+
+    h.socket.emit({ t: "msg", message: message({ id: "m3", seq: 3, authorId: "carol", body: "hi, I'm new" }) });
+    h.socket.emit({ t: "typing", channel: "c1", user: "carol" });
+    await vi.waitFor(() => expect(h.store.state.users["carol"]?.name).toBe("Carol"));
+    // Two events naming the same stranger, one request.
+    expect(getUsers).toHaveBeenCalledTimes(1);
+    expect(getUsers).toHaveBeenCalledWith(["carol"]);
+  });
+
+  it("uses the author the server embeds, with no round trip", async () => {
+    const h = harness();
+    const getUsers = vi.fn(async () => ({ users: [], cursor: null }));
+    h.api.getUsers = getUsers;
+    await h.store.start({ embedded: false });
+    h.socket.emit({ t: "msg", message: message({ id: "m3", seq: 3, authorId: "carol" }), author: carol });
+    expect(h.store.state.users["carol"]?.name).toBe("Carol");
+    await settle();
+    expect(getUsers).not.toHaveBeenCalled();
+  });
+
+  it("notices ids from every event that names people: reactions, reads, presence, typing, mentions", async () => {
+    const h = harness();
+    const asked: string[][] = [];
+    h.api.getUsers = async (ids) => {
+      asked.push([...ids]);
+      return { users: [], cursor: null };
+    };
+    await h.store.start({ embedded: false });
+    await h.store.openConversation("c1");
+    h.socket.emit({ t: "react", channel: "c1", id: "m1", reactions: [{ emoji: "👍", userIds: ["r1"] }] });
+    h.socket.emit({ t: "read", channel: "c1", seq: 1, userId: "r2" });
+    h.socket.emit({ t: "presence", online: ["r3", "me"] });
+    h.socket.emit({ t: "typing", channel: "c1", user: "r4" });
+    h.socket.emit({
+      t: "edit",
+      message: message({ id: "m1", seq: 1, mentions: [{ kind: "user", userId: "r5" }] }),
+    });
+    await vi.waitFor(() => expect(asked.flat().toSorted()).toEqual(["r1", "r2", "r3", "r4", "r5"]));
+  });
+
+  it("does not ask again for somebody who is not there", async () => {
+    const h = harness();
+    const getUsers = vi.fn(async () => ({ users: [], cursor: null }));
+    h.api.getUsers = getUsers;
+    await h.store.start({ embedded: false });
+    for (let i = 0; i < 5; i++) {
+      h.socket.emit({ t: "typing", channel: "c1", user: "ghost" });
+      await vi.waitFor(() => expect(getUsers).toHaveBeenCalledTimes(1));
+    }
+    await settle();
+    expect(getUsers).toHaveBeenCalledTimes(1);
   });
 });

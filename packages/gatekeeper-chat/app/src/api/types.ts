@@ -102,6 +102,8 @@ export interface ChatApi {
   ): Promise<Attachment>;
 
   listUsers(cursor?: string): Promise<UserListResponse>;
+  /** Several directory entries by id, in one request. An id the directory does not show is absent. */
+  getUsers(ids: readonly UserId[]): Promise<UserListResponse>;
   getUser(userId: UserId): Promise<{ user: import("../contract.js").User }>;
 }
 
@@ -132,6 +134,11 @@ export interface MockControls {
   /** Delivers a message from somebody else, as if it arrived over the socket. */
   injectMessage(channelId: ChannelId, authorId: UserId, body: string): void;
   setOnline(userIds: readonly UserId[]): void;
+  /**
+   * Adds somebody to the fake's directory without telling this client, the way a colleague who signs
+   * in after the tab loaded looks to it: they exist, and nothing has named them yet.
+   */
+  introduceUser(user: import("../contract.js").User): void;
   startTyping(channelId: ChannelId, userId: UserId): void;
   /** Fakes a dropped connection so the reconnecting banner can be photographed. */
   setConnected(connected: boolean): void;

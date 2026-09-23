@@ -93,3 +93,21 @@ describe("the directory", () => {
     expect(directoryFilter({ id: "harry", kind: "person" }).sql).toBe("u.kind IN ('person', 'agent')");
   });
 });
+
+describe("naming people a client has never seen", () => {
+  it("looks several people up by id in one request, through the same rule", async () => {
+    const workspace = freshWorkspace("people-ids");
+    const harry = client(workspace, identity("harry", "Harry"));
+    await client(workspace, identity("nia", "Nia")).get(apiPath("me"));
+    await client(workspace, identity("guest", "Guest")).get(apiPath("me"));
+    await runInDurableObject(workspace, (_instance, state) => {
+      state.storage.sql.exec(`UPDATE users SET kind = 'restricted' WHERE id = 'guest'`);
+    });
+
+    const found = await harry.get<UserListResponse>(`${apiPath("listUsers")}?ids=nia,guest,nobody,${AGENT_USER_ID}`);
+    expect(found.users.map((user) => user.id)).toEqual([AGENT_USER_ID, "nia"]);
+    expect(found.cursor).toBeNull();
+    expect(await harry.status("GET", `${apiPath("listUsers")}?ids=not%20an%20id`)).toBe(400);
+    expect(await harry.status("GET", `${apiPath("listUsers")}?ids=${Array.from({ length: 101 }, (_, i) => `u${i}`).join(",")}`)).toBe(400);
+  });
+});

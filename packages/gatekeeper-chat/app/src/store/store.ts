@@ -69,6 +69,15 @@ const THEME_KEY = "chat.theme";
 const NOTIFY_OPT_IN_KEY = "chat.notifications";
 /** Floor between two `listChannels` triggered by an unrecognised channel id. */
 const UNKNOWN_CHANNEL_REFRESH_MS = 5_000;
+/**
+ * Unknown people are looked up in batches: ids noticed within this window go in one request, so a burst
+ * of events naming the same newcomer (their message, their typing, a reaction) costs one round trip.
+ */
+const USER_RESOLVE_DELAY_MS = 30;
+/** An id the directory did not return is not asked for again until this has passed. */
+const MISSING_USER_RETRY_MS = 5 * 60_000;
+/** After a failed lookup (offline, a 5xx), the ids in it wait this long before another try. */
+const FAILED_USER_RETRY_MS = 30_000;
 const TYPING_TTL_MS = 6000;
 /** How long a toast lives. Errors are sticky; everything else clears itself. */
 const TOAST_TIMEOUT_MS = 6000;
@@ -199,14 +208,19 @@ export class ChatStore {
     switch (event.t) {
       case "hello": {
         this.#patch({ users: { ...this.#state.users, [event.user.id]: event.user }, me: event.user });
+        this.#retryMissingUsers();
         void this.#catchUp(event.lastSeq);
         this.#subscribeAll();
         return;
       }
       case "msg":
+        // The server names the author in the event; merge them before the message lands, so neither
+        // the row nor a notification ever renders them as "Unknown".
+        if (event.author !== undefined) this.#mergeUsers([event.author]);
         this.#receive(event.message);
         return;
       case "edit":
+        this.#noticeUsers(userIdsOf([event.message]));
         this.#applyToConversations(event.message.channelId, event.message.rootId, (conversation) => ({
           ...conversation,
           messages: mergeMessages(conversation.messages, [event.message]),
@@ -221,6 +235,7 @@ export class ChatStore {
         });
         return;
       case "agent":
+        this.#noticeUsers([event.request.requesterId]);
         // Every conversation of the channel, not just the message's own: a top-level question is
         // also the root of the thread its answer goes into, and that pane holds a copy of it.
         this.#forEachConversationOf(event.channel, (key, conversation) => {
@@ -231,6 +246,7 @@ export class ChatStore {
         });
         return;
       case "react":
+        this.#noticeUsers(event.reactions.flatMap((reaction) => reaction.userIds));
         this.#forEachConversationOf(event.channel, (key, conversation) => {
           this.#setConversation(key, {
             ...conversation,
@@ -243,6 +259,7 @@ export class ChatStore {
         // this tab's rail agrees) or somebody else's, in a dm or group, which only moves "seen by".
         // The server always sets `userId`; it is optional in the type so a mock need not.
         if (event.userId !== undefined && event.userId !== this.#state.me?.id) {
+          this.#noticeUsers([event.userId]);
           this.#applyReadCursor(event.channel, event.userId, event.seq);
           return;
         }
@@ -259,9 +276,11 @@ export class ChatStore {
       }
       case "presence":
         this.#patch({ online: event.online });
+        this.#noticeUsers(event.online);
         return;
       case "typing": {
         if (event.user === this.#state.me?.id) return;
+        this.#noticeUsers([event.user]);
         const forChannel = { ...this.#state.typing[event.channel] };
         forChannel[event.user] = Date.now() + TYPING_TTL_MS;
         this.#patch({ typing: { ...this.#state.typing, [event.channel]: forChannel } });
@@ -382,6 +401,7 @@ export class ChatStore {
 
   /** Applies one arriving message everywhere it belongs, then decides whether to notify. */
   #receive(message: Message, options: { catchUp?: boolean } = {}): void {
+    this.#noticeUsers(userIdsOf([message]));
     const channel = this.#state.channels[message.channelId];
     if (channel !== undefined && message.seq > channel.lastSeq) {
       this.#patch({
@@ -455,6 +475,8 @@ export class ChatStore {
         limit: DEFAULT_PAGE_LIMIT,
       });
       this.#mergeUsers(page.users);
+      // A page names its authors; a mention, a reactor or an asker on it may still be a stranger.
+      this.#noticeUsers(userIdsOf(page.messages));
       this.#mergeReadCursors(channelId, page.readCursors);
       const channel = this.#state.channels[channelId];
       if (channel !== undefined && page.channelLastSeq > channel.lastSeq) {
@@ -503,6 +525,7 @@ export class ChatStore {
         limit: DEFAULT_PAGE_LIMIT,
       });
       this.#mergeUsers(page.users);
+      this.#noticeUsers(userIdsOf(page.messages));
       const current = this.#state.conversations[key] ?? EMPTY_CONVERSATION;
       this.#setConversation(key, {
         ...current,
@@ -1440,6 +1463,60 @@ export class ChatStore {
     this.#patch({ users: { ...this.#state.users, ...byId(users) } });
   }
 
+  // --- people this client has not seen -----------------------------------------------------------
+  //
+  // Live events carry ids, not people: a `typing`, a reaction, a read cursor, a mention. The HTTP pages
+  // bring their authors with them, but somebody who signs in after this tab loaded -- and then posts,
+  // types or reacts -- is named by an event and by nothing else, and used to render as "Unknown" until
+  // a reload. Every id an event names goes through `#noticeUsers`; the unknown ones are batched into
+  // `GET /api/users?ids=`, deduplicated against what is already queued or in flight, and an id the
+  // directory does not return is left alone for a while rather than asked for on every frame.
+
+  readonly #wantedUsers = new Set<UserId>();
+  readonly #missingUsers = new Map<UserId, number>();
+  #resolveScheduled = false;
+
+  #noticeUsers(userIds: Iterable<UserId>): void {
+    const now = Date.now();
+    let added = false;
+    for (const id of userIds) {
+      if (id.length === 0 || this.#state.users[id] !== undefined || this.#wantedUsers.has(id)) continue;
+      if ((this.#missingUsers.get(id) ?? 0) > now) continue;
+      this.#wantedUsers.add(id);
+      added = true;
+    }
+    if (!added || this.#resolveScheduled) return;
+    this.#resolveScheduled = true;
+    this.#later(() => void this.#resolveUsers(), USER_RESOLVE_DELAY_MS);
+  }
+
+  async #resolveUsers(): Promise<void> {
+    const ids = [...this.#wantedUsers].slice(0, MAX_PAGE_LIMIT);
+    let found: readonly User[] | null = null;
+    try {
+      found = (await this.#api.getUsers(ids)).users;
+    } catch {
+      // Quietly: nothing the person did failed, and the name arrives with the next event or page.
+    }
+    const retryAt = Date.now() + (found === null ? FAILED_USER_RETRY_MS : MISSING_USER_RETRY_MS);
+    if (found !== null) this.#mergeUsers(found);
+    const returned = new Set((found ?? []).map((user) => user.id));
+    for (const id of ids) {
+      this.#wantedUsers.delete(id);
+      if (!returned.has(id)) this.#missingUsers.set(id, retryAt);
+    }
+    this.#resolveScheduled = false;
+    if (this.#wantedUsers.size > 0) {
+      this.#resolveScheduled = true;
+      this.#later(() => void this.#resolveUsers(), USER_RESOLVE_DELAY_MS);
+    }
+  }
+
+  /** A reconnect is a fresh start: somebody missing an hour ago may have signed in since. */
+  #retryMissingUsers(): void {
+    this.#missingUsers.clear();
+  }
+
   #setConversation(key: string, conversation: ConversationState): void {
     this.#patch({ conversations: { ...this.#state.conversations, [key]: conversation } });
   }
@@ -1468,6 +1545,18 @@ export class ChatStore {
       if (key === channelId || key.startsWith(`${channelId}:`)) visit(key, conversation);
     }
   }
+}
+
+/** Every person a set of messages names: authors, mentions, reactors, askers. */
+function userIdsOf(messages: readonly Message[]): UserId[] {
+  const ids: UserId[] = [];
+  for (const message of messages) {
+    ids.push(message.authorId);
+    for (const mention of message.mentions) if (mention.kind === "user") ids.push(mention.userId);
+    for (const reaction of message.reactions) ids.push(...reaction.userIds);
+    if (message.agentRequest !== undefined) ids.push(message.agentRequest.requesterId);
+  }
+  return ids;
 }
 
 function byId<T extends { id: string }>(items: readonly T[]): Record<string, T> {

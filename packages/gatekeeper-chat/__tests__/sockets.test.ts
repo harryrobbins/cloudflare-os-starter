@@ -85,6 +85,17 @@ describe("fan-out", () => {
     socket.close();
   });
 
+  it("carries the author with the message, so a newcomer's first post is never Unknown", async () => {
+    const { alice, bob } = setup("fanout-author");
+    const socket = await bob.socket();
+    await socket.next("hello");
+
+    await post(alice, GENERAL_CHANNEL_ID, "my first message");
+    const event = await socket.next("msg");
+    expect(event.author).toMatchObject({ id: "alice", name: "Alice", kind: "person" });
+    socket.close();
+  });
+
   it("never delivers a private channel to a non-member", async () => {
     const { alice, bob } = setup("fanout-private");
     await bob.get(apiPath("me"));

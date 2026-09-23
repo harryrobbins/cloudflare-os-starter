@@ -370,6 +370,15 @@ export function parseEmoji(value: string): Result<string> {
 
 // --- query strings ----------------------------------------------------------
 
+/** `?ids=a,b,c` for the directory lookup: identifiers only, at most a page of them. */
+export function parseUserIds(raw: string): Result<readonly string[]> {
+  const ids = raw.split(",").filter((id) => id.length > 0);
+  if (ids.length === 0) return fail("ids must name at least one user");
+  if (ids.length > MAX_PAGE_LIMIT) return fail(`ids names at most ${MAX_PAGE_LIMIT} users`);
+  if (ids.some((id) => !ID_PATTERN.test(id))) return fail("ids must contain identifiers");
+  return ok(ids);
+}
+
 export function parseListMessagesQuery(params: URLSearchParams): Result<ListMessagesQuery> {
   const cursors = ["before", "after", "around"].filter((key) => params.has(key));
   if (cursors.length > 1) return fail("use at most one of before, after or around");

@@ -184,6 +184,8 @@ export function createHttpApi(): ChatApi {
 
     listUsers: (cursor?: string) =>
       request<UserListResponse>("GET", apiPath("listUsers") + query({ cursor })),
+    getUsers: (ids: readonly UserId[]) =>
+      request<UserListResponse>("GET", apiPath("listUsers") + query({ ids: ids.join(",") })),
     getUser: (userId: UserId) => request<{ user: User }>("GET", apiPath("getUser", { userId })),
   };
 }

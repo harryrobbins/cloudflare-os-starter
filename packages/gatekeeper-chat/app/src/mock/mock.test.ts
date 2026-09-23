@@ -78,3 +78,39 @@ describe("the mock Agent", () => {
     await until(() => question()?.agentRequest?.state === "replied");
   });
 });
+
+describe("a colleague the client has never seen", () => {
+  it("is named, not Unknown, when they post live", async () => {
+    const chat = await started();
+    await chat.openConversation(GENERAL_CHANNEL_ID);
+    // They signed in after this tab loaded the directory: the mock knows them, the store does not.
+    chat.mock!.introduceUser({
+      id: "u-newcomer",
+      name: "Nia Newcomer",
+      email: "nia@example.test",
+      avatarKey: null,
+      firstSeenAt: Date.now(),
+      lastSeenAt: Date.now(),
+      tz: null,
+      online: true,
+    });
+    expect(chat.state.users["u-newcomer"]).toBeUndefined();
+    chat.mock!.injectMessage(GENERAL_CHANNEL_ID, "u-newcomer", "Hello, I just joined");
+    await until(() => chat.state.users["u-newcomer"] !== undefined);
+    expect(chat.state.users["u-newcomer"]?.name).toBe("Nia Newcomer");
+
+    // And from an event that carries only an id.
+    chat.mock!.introduceUser({
+      id: "u-quiet",
+      name: "Quinn Quiet",
+      email: "quinn@example.test",
+      avatarKey: null,
+      firstSeenAt: Date.now(),
+      lastSeenAt: Date.now(),
+      tz: null,
+      online: true,
+    });
+    chat.mock!.startTyping(GENERAL_CHANNEL_ID, "u-quiet");
+    await until(() => chat.state.users["u-quiet"]?.name === "Quinn Quiet");
+  });
+});

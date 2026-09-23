@@ -610,6 +610,10 @@ export interface UploadResponse {
   readonly attachment: Attachment;
 }
 
+/**
+ * `GET /api/users?ids=a,b,c` answers with {@link UserListResponse} too: the entries for those ids that
+ * the directory shows the caller, at most {@link MAX_PAGE_LIMIT} of them, and `cursor: null`.
+ */
 export interface UserListResponse {
   readonly users: readonly User[];
   readonly cursor: string | null;
@@ -658,7 +662,16 @@ export type ServerEvent =
       /** Per-channel high-water marks at connect time, so the client knows what to catch up on. */
       readonly lastSeq: Readonly<Record<ChannelId, number>>;
     }
-  | { readonly t: "msg"; readonly message: Message }
+  | {
+      readonly t: "msg";
+      readonly message: Message;
+      /**
+       * The author's directory entry, so a client that has never seen them can name them without a
+       * round trip -- somebody posting for the first time is exactly the person it does not know yet.
+       * Optional: a client still resolves any id it does not know (`GET /api/users?ids=`).
+       */
+      readonly author?: User;
+    }
   | { readonly t: "edit"; readonly message: Message }
   | {
       readonly t: "del";
