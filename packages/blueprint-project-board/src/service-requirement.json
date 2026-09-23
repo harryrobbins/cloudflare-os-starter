@@ -1,0 +1,7 @@
+{
+  "service": "records",
+  "moduleId": "projects",
+  "apiMajor": 1,
+  "features": ["issues", "comments", "workflow"],
+  "scopes": ["projects.read", "issues.read", "issues.create", "issues.edit", "issues.transition", "comments.create"]
+}

@@ -1,0 +1,17 @@
+{
+  "blueprintId": "format.project-report",
+  "title": "Project Report",
+  "description": "A read-only report on an organisation Projects datastore: issue counts by state, priority and assignee, recent activity and CSV export.",
+  "output": {
+    "id": "report",
+    "noun": "Project report",
+    "plural": "Project reports",
+    "icon": "chartBar"
+  },
+  "author": {
+    "type": "user",
+    "name": "Surprisingly Ltd",
+    "id": "harryrobbins@gmail.com"
+  },
+  "revision": 1
+}

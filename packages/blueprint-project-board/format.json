@@ -1,0 +1,17 @@
+{
+  "blueprintId": "format.project-board",
+  "title": "Project Board",
+  "description": "Plan and move issues in an organisation Projects datastore. Records belong to the organisation; every change is approved and saved by the Records service.",
+  "output": {
+    "id": "board",
+    "noun": "Project board",
+    "plural": "Project boards",
+    "icon": "kanban"
+  },
+  "author": {
+    "type": "user",
+    "name": "Surprisingly Ltd",
+    "id": "harryrobbins@gmail.com"
+  },
+  "revision": 1
+}
