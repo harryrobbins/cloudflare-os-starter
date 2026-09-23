@@ -128,6 +128,62 @@ export interface Message {
   readonly mentions: readonly Mention[];
   /** Echoed back on the sender's own message so an optimistic row can be reconciled. */
   readonly clientId?: string;
+  /**
+   * Present on a message that asked the Agent something (an `@agent` mention in a public channel, or
+   * any message in a direct conversation with Agent): where that request stands. Absent on every other
+   * message.
+   */
+  readonly agentRequest?: AgentRequest;
+  /** Present on the Agent's answer: whose question it answers, and where the full conversation is. */
+  readonly agentReply?: AgentReply;
+}
+
+// ---------------------------------------------------------------------------
+// Agent replies (the Workshop's ExternalMessageGateway)
+// ---------------------------------------------------------------------------
+
+/**
+ * `pending` is queued in the Durable Object's outbox and not yet accepted by the Workshop (including
+ * a transient failure waiting for its next attempt); `accepted` means the Workshop took it and the
+ * agent is working; `replied` and `failed` are terminal until somebody retries.
+ */
+export type AgentRequestState = "pending" | "accepted" | "replied" | "failed";
+
+export interface AgentRequest {
+  readonly state: AgentRequestState;
+  /** Who asked. Only they may retry, and only their Workshop account answers. */
+  readonly requesterId: UserId;
+  /** Why it failed, for humans. Null unless `failed`. */
+  readonly error: string | null;
+  /** True when a Retry could change the outcome (never for a conversation the Agent may not answer). */
+  readonly retryable: boolean;
+  /** The requester's workspace chat, once the Workshop has accepted the request. */
+  readonly chatPath: string | null;
+  /** The Agent's reply, once posted. */
+  readonly replyId: MessageId | null;
+  readonly updatedAt: Timestamp;
+}
+
+export interface AgentReply {
+  /** The asking message. */
+  readonly requestId: MessageId;
+  readonly requesterId: UserId;
+  /**
+   * The same-origin path, in the platform shell, of the workspace chat that produced the answer
+   * (`/workspace/<id>?chat=<n>`). It opens the asker's own workspace, which only they can enter, so
+   * the app offers it to them alone; it is a path, never a URL, and it is opened in the top window.
+   */
+  readonly chatPath: string | null;
+}
+
+/** Whether this deployment can route a question to the Agent at all. From `/api/me`. */
+export interface AgentStatus {
+  /**
+   * `enabled` when the chat Worker is bound to the Workshop's ExternalMessageGateway
+   * (`chat.agentReplies` in deployment.jsonc); `disabled` otherwise, and the app says so rather than
+   * showing an Agent that never answers.
+   */
+  readonly replies: "enabled" | "disabled";
 }
 
 export interface ThreadSummary {
@@ -215,7 +271,19 @@ export const RATE_LIMITS = {
   messagesPerMinute: 30,
   uploadsPerHour: 20,
   searchesPerMinute: 60,
+  /** Questions to the Agent, retries included: each one is a model run billed to the asker. */
+  agentRequestsPerHour: 20,
 } as const;
+
+/**
+ * The context a question to the Agent carries: at most this many earlier messages of the same
+ * conversation (the thread, or the channel's or DM's top level), newest kept first, and at most
+ * {@link AGENT_CONTEXT_BYTES} of their text. Nothing from any other conversation is ever included.
+ */
+export const AGENT_CONTEXT_MESSAGES = 20;
+export const AGENT_CONTEXT_BYTES = 16 * 1024;
+/** How long an accepted request may wait for the Workshop's answer before it is marked failed. */
+export const AGENT_REPLY_TIMEOUT_MS = 15 * 60 * 1000;
 
 /**
  * How often a connected client should send `{t:"ping"}`.
@@ -286,6 +354,7 @@ export interface MeResponse {
   readonly prefs: UserPrefs;
   /** From the `ADMINS` var, after identity verification. Never a client-supplied flag. */
   readonly admin: boolean;
+  readonly agent: AgentStatus;
   readonly badges: BadgeSummary;
   readonly limits: {
     readonly maxBodyBytes: number;
@@ -443,6 +512,12 @@ export interface EditMessageRequest {
 export interface MessageResponse {
   readonly message: Message;
 }
+
+/**
+ * `POST /api/messages/:messageId/agent/retry` answers with {@link MessageResponse}: the asking
+ * message, its `agentRequest` back to `pending`. Only the person who asked may retry, and only a
+ * `failed` request that is `retryable`.
+ */
 
 /** `DELETE /api/messages/:messageId` */
 export interface DeleteMessageResponse {
@@ -609,6 +684,18 @@ export type ServerEvent =
       readonly seq: number;
       readonly userId?: UserId;
     }
+  /**
+   * A question to the Agent changed state. Sent to the conversation's recipients like `edit`, so every
+   * viewer's copy of the asking message shows the same status, and the app derives "Agent is working"
+   * for the conversation from the `pending` and `accepted` ones.
+   */
+  | {
+      readonly t: "agent";
+      readonly channel: ChannelId;
+      readonly id: MessageId;
+      readonly rootId: MessageId | null;
+      readonly request: AgentRequest;
+    }
   | { readonly t: "presence"; readonly online: readonly UserId[] }
   | { readonly t: "typing"; readonly channel: ChannelId; readonly user: UserId }
   | {
@@ -649,6 +736,15 @@ export interface ChatIdentity {
   readonly id: UserId;
   readonly email: string;
   readonly name?: string;
+  /**
+   * The name the Workshop keys this person's account by, and so the `callerEmail` a question to the
+   * Agent is sent as. In production it is the Access `email` claim *exactly as the assertion carries
+   * it*: the Workshop's Access sign-in calls `users.idFromName(payload.email)` without normalising
+   * it, while {@link ChatIdentity.email} is lowercased, and a differently-cased name is a different
+   * account. On a dev server it is the local password account's username. Never logged, never sent
+   * to a client.
+   */
+  readonly workshopAccount?: string;
 }
 
 export const IDENTITY_HEADER = "x-chat-user";

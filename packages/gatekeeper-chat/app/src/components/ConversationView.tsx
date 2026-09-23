@@ -17,6 +17,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { GENERAL_CHANNEL_ID, type Message, type NotifyLevel } from "../contract.js";
+import { agentHint, agentWorking, isAgentDm } from "../lib/agent.js";
 import { channelLabel, isDirect } from "../lib/labels.js";
 import { permalinkUrl } from "../lib/nav.js";
 import { pluralise } from "../lib/format.js";
@@ -29,7 +30,7 @@ import { firstUnreadSeq } from "../store/unread.js";
 import { ChannelStartCard, FirstRunCard } from "./ChannelStartCard.js";
 import { Composer } from "./Composer.js";
 import { MessageList } from "./MessageList.js";
-import { Button, EmptyState, IconButton, PresenceDot } from "./primitives.js";
+import { AppBadge, Button, EmptyState, IconButton, PresenceDot } from "./primitives.js";
 
 /** A shared empty map, so the memoised rows are not re-rendered by a new reference every paint. */
 const NO_MARKERS: ReadonlyMap<string, never[]> = new Map();
@@ -170,6 +171,9 @@ export function ConversationView({
   const typingNames = Object.keys(typing ?? {})
     .filter((id) => id !== meId)
     .map((id) => users[id]?.name ?? "Someone");
+  const topLevel = conversation.messages.filter((message) => message.rootId === null);
+  // A question waiting on the Agent reads like somebody typing: it is the same "an answer is coming".
+  if (agentWorking(topLevel)) typingNames.unshift("The Agent");
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-kumo-base">
@@ -198,7 +202,7 @@ export function ConversationView({
         <>
           <MessageList
             key={channelId}
-            messages={conversation.messages.filter((message) => message.rootId === null)}
+            messages={topLevel}
             meId={meId}
             firstUnreadSeq={unreadFrom}
             loading={conversation.loading}
@@ -261,7 +265,9 @@ export function ConversationView({
                   ))}
                 </span>
                 {typingNames.length === 1
-                  ? `${typingNames[0]} is typing…`
+                  ? typingNames[0] === "The Agent"
+                    ? "The Agent is working…"
+                    : `${typingNames[0]} is typing…`
                   : `${typingNames.slice(0, 2).join(" and ")} are typing…`}
               </span>
             )}
@@ -281,8 +287,9 @@ export function ConversationView({
         </>
       )}
 
-      {/* Presence of the other person in a DM, announced quietly under the header. */}
-      {channel.kind === "dm" && (
+      {/* Presence of the other person in a DM, announced quietly under the header. The Agent has
+          none: it is an app, so its DM says what it does instead. */}
+      {channel.kind === "dm" && !isAgentDm(channel) && (
         <span className="sr-only" aria-live="polite">
           {online.includes(channel.memberIds?.find((id) => id !== meId) ?? "")
             ? `${label} is online`
@@ -309,6 +316,7 @@ function Header({
   const store = useStore();
   const channel = useChat((state) => state.channels[channelId]);
   const membership = useChat((state) => state.memberships[channelId]);
+  const agentReplies = useChat((state) => state.agentReplies);
   const [notifyOpen, setNotifyOpen] = useState(false);
   if (channel === undefined) return null;
 
@@ -328,6 +336,14 @@ function Header({
           <Hash size={15} className="shrink-0 text-kumo-subtle" />
         )}
         <h1 className="truncate text-[15px] font-semibold text-kumo-strong">{label}</h1>
+        {isAgentDm(channel) && (
+          <>
+            <AppBadge />
+            <span className="hidden truncate text-[12px] text-kumo-subtle md:inline" data-testid="agent-hint">
+              {agentHint(agentReplies)}
+            </span>
+          </>
+        )}
         {membership !== undefined && (
           <IconButton
             label={membership.starred ? "Remove star" : "Star this conversation"}

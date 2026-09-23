@@ -12,7 +12,7 @@ import { RATE_LIMITS } from "../shared/protocol.js";
 import { allow, firstRow, refuse, type Ctx, type Outcome } from "./context.js";
 import { hashId, logEvent } from "./logs.js";
 
-export type Bucket = "messages" | "uploads" | "search";
+export type Bucket = "messages" | "uploads" | "search" | "agent";
 
 interface Budget {
   readonly limit: number;
@@ -23,6 +23,7 @@ const BUDGETS: Readonly<Record<Bucket, Budget>> = {
   messages: { limit: RATE_LIMITS.messagesPerMinute, windowMs: 60_000 },
   uploads: { limit: RATE_LIMITS.uploadsPerHour, windowMs: 60 * 60 * 1000 },
   search: { limit: RATE_LIMITS.searchesPerMinute, windowMs: 60_000 },
+  agent: { limit: RATE_LIMITS.agentRequestsPerHour, windowMs: 60 * 60 * 1000 },
 };
 
 type WindowRow = { window_start: number; count: number };

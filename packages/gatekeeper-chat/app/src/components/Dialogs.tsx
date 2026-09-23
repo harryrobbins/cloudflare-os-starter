@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { MAX_CHANNEL_NAME_LENGTH, MAX_TOPIC_LENGTH, type ChannelKind } from "../contract.js";
 import { useChat, useStore } from "../hooks/store.js";
-import { Avatar, Button } from "./primitives.js";
+import { agentHint, isAgent, isAgentId } from "../lib/agent.js";
+import { AppBadge, Avatar, Button } from "./primitives.js";
 import { Modal } from "./Modal.js";
 
 export function NewChannelDialog({
@@ -137,6 +138,7 @@ export function NewMessageDialog({
   const users = useChat((state) => state.users);
   const directory = useChat((state) => state.directory);
   const meId = useChat((state) => state.me?.id);
+  const agentReplies = useChat((state) => state.agentReplies);
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -152,6 +154,8 @@ export function NewMessageDialog({
     const needle = query.trim().toLowerCase();
     return Object.values(users)
       .filter((user) => user.id !== meId && !picked.includes(user.id))
+      // The Agent answers a one-to-one DM only, so it is never offered as part of a group.
+      .filter((user) => !(isAgent(user) && picked.length > 0) && !picked.some((id) => isAgentId(id)))
       .filter(
         (user) =>
           needle.length === 0 ||
@@ -232,10 +236,21 @@ export function NewMessageDialog({
                 }}
                 className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-kumo-tint"
               >
-                <Avatar name={user.name} id={user.id} size={28} online={user.online} />
+                <Avatar
+                  name={user.name}
+                  id={user.id}
+                  size={28}
+                  online={user.online}
+                  kind={isAgent(user) ? "agent" : "user"}
+                />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] text-kumo-default">{user.name}</span>
-                  <span className="block truncate text-[11px] text-kumo-inactive">{user.email ?? ""}</span>
+                  <span className="flex items-center gap-1.5 truncate text-[13px] text-kumo-default">
+                    {user.name}
+                    {isAgent(user) && <AppBadge />}
+                  </span>
+                  <span className="block truncate text-[11px] text-kumo-inactive">
+                    {isAgent(user) ? agentHint(agentReplies) : (user.email ?? "")}
+                  </span>
                 </span>
               </button>
             </li>

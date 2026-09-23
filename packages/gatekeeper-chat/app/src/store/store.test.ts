@@ -153,6 +153,7 @@ function harness(): Harness {
       user: me,
       prefs: { displayName: null, tz: null, notify: "all" },
       admin: false,
+      agent: { replies: "enabled" },
       badges: { unread: {}, mentions: {}, threads: 0 },
       limits: { maxBodyBytes: 8192, maxUploadBytes: 1024, maxAttachmentsPerMessage: 10 },
       protocolVersion: 1,
@@ -206,6 +207,22 @@ function harness(): Harness {
       reactions: [{ emoji: "👍", userIds: ["me"] }],
     }),
     removeReaction: async (messageId) => ({ messageId, channelId: "c1", reactions: [] }),
+    retryAgent: async (messageId) => ({
+      message: message({
+        id: messageId,
+        seq: 2,
+        authorId: "me",
+        agentRequest: {
+          state: "pending",
+          requesterId: "me",
+          error: null,
+          retryable: false,
+          chatPath: null,
+          replyId: null,
+          updatedAt: 50,
+        },
+      }),
+    }),
     listThreads: async () => ({ threads: [], users: [], cursor: null }),
     followThread: async () => {
       throw new ApiError("not_found", "no thread", 404);
@@ -687,5 +704,52 @@ describe("subscriptions", () => {
     const subs = (h.socket.sent as ClientEvent[]).filter((event) => event.t === "sub");
     expect(subs).toHaveLength(1);
     expect(subs[0]).toMatchObject({ channels: expect.arrayContaining(["c1", "c-dm"]) });
+  });
+});
+
+function agentRequest(state: "pending" | "accepted" | "replied" | "failed", updatedAt: number) {
+  return {
+    state,
+    requesterId: "me",
+    error: state === "failed" ? "No model" : null,
+    retryable: state === "failed",
+    chatPath: state === "accepted" ? "/workspace/w?chat=1" : null,
+    replyId: null,
+    updatedAt,
+  };
+}
+
+describe("the Agent", () => {
+
+  it("reads whether replies are enabled from /api/me", async () => {
+    const h = harness();
+    await h.store.start({ embedded: false });
+    expect(h.store.state.agentReplies).toBe("enabled");
+  });
+
+  it("applies an `agent` event to the channel and to the question's own thread", async () => {
+    const h = harness();
+    h.history = [message({ id: "m1", seq: 1 }), message({ id: "m2", seq: 2, authorId: "me", body: "@agent hi" })];
+    await h.store.start({ embedded: false });
+    await h.store.openConversation("c1");
+    await h.store.openConversation("c1", { rootId: "m2" });
+
+    h.socket.emit({ t: "agent", channel: "c1", id: "m2", rootId: null, request: agentRequest("accepted", 10) });
+    for (const key of [conversationKey("c1"), conversationKey("c1", "m2")]) {
+      const found = h.store.state.conversations[key]?.messages.find((entry) => entry.id === "m2");
+      expect(found?.agentRequest).toMatchObject({ state: "accepted", chatPath: "/workspace/w?chat=1" });
+    }
+  });
+
+  it("retries through the API and shows the question as pending again", async () => {
+    const h = harness();
+    h.history = [message({ id: "m1", seq: 1 }), message({ id: "m2", seq: 2, authorId: "me", agentRequest: agentRequest("failed", 5) })];
+    await h.store.start({ embedded: false });
+    await h.store.openConversation("c1");
+    const retry = vi.spyOn(h.api, "retryAgent");
+    await h.store.retryAgent("m2");
+    expect(retry).toHaveBeenCalledWith("m2");
+    const found = h.store.state.conversations[conversationKey("c1")]?.messages.find((entry) => entry.id === "m2");
+    expect(found?.agentRequest?.state).toBe("pending");
   });
 });

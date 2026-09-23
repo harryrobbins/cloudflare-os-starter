@@ -16,7 +16,8 @@ import { highlightRuns, rankItems } from "../lib/fuzzy.js";
 import { channelLabel, isDirect, otherMemberIds } from "../lib/labels.js";
 import { useChat } from "../hooks/store.js";
 import { readRecentChannels, recencyRank } from "../store/recents.js";
-import { Avatar, PresenceDot } from "./primitives.js";
+import { isAgent } from "../lib/agent.js";
+import { AppBadge, Avatar, PresenceDot } from "./primitives.js";
 
 type Entry =
   | { readonly kind: "channel"; readonly id: string; readonly label: string; readonly detail: string; readonly channel: Channel }
@@ -328,9 +329,10 @@ function Row({
           ),
         )}
       </span>
-      {entry.kind === "person" && (
+      {entry.kind === "person" && !isAgent(entry.user) && (
         <PresenceDot online={online.includes(entry.user.id)} className="h-2 w-2 shrink-0" />
       )}
+      {entry.kind === "person" && isAgent(entry.user) && <AppBadge className="shrink-0" />}
       {entry.detail.length > 0 && (
         <span className="max-w-[45%] shrink-0 truncate text-[11px] text-kumo-inactive">
           {entry.detail}

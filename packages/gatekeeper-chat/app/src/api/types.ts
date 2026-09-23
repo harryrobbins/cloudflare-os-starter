@@ -85,6 +85,8 @@ export interface ChatApi {
   editMessage(messageId: MessageId, body: string): Promise<MessageResponse>;
   deleteMessage(messageId: MessageId): Promise<DeleteMessageResponse>;
   addReaction(messageId: MessageId, emoji: string): Promise<ReactionResponse>;
+  /** Asks the Agent again after a failure. Only the person who asked may. */
+  retryAgent(messageId: MessageId): Promise<MessageResponse>;
   removeReaction(messageId: MessageId, emoji: string): Promise<ReactionResponse>;
 
   listThreads(query?: ListThreadsQuery): Promise<ThreadListResponse>;

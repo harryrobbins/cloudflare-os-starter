@@ -20,6 +20,8 @@ import { isRecord } from "../shared/validate.js";
 import { DEV_COOKIE_NAME, readCookie, signIdentityId, verifyIdentityCookie } from "./cookie.js";
 
 export { ChatWorkspace } from "../workspace.js";
+// Minted through `ctx.exports` by the agent outbox, so the dev entry must export it as well.
+export { ChatAgentReply } from "../agent-reply.js";
 
 // Every Durable Object class named in a `migrations` tag has to be exported by whatever `main` points
 // at, or the runtime refuses to start ("Class extends value undefined"). `wrangler.dev.jsonc` carries
@@ -107,7 +109,10 @@ function logout(): Response {
   });
 }
 
-/** Parses `DEV_IDENTITIES`. A malformed value yields none, so the dev server simply refuses entry. */
+/**
+ * Parses `DEV_IDENTITIES`: `{id, email, name?, workshopAccount?}` each. A malformed value yields none,
+ * so the dev server simply refuses entry.
+ */
 function devIdentities(env: DevEnv): readonly ChatIdentity[] {
   try {
     const parsed: unknown = JSON.parse(env.DEV_IDENTITIES || "[]");
@@ -115,10 +120,17 @@ function devIdentities(env: DevEnv): readonly ChatIdentity[] {
     const out: ChatIdentity[] = [];
     for (const entry of parsed) {
       if (!isRecord(entry)) continue;
-      const { id, email, name } = entry;
+      const { id, email, name, workshopAccount } = entry;
       if (typeof id !== "string" || id.length === 0) continue;
       if (typeof email !== "string" || email.length === 0) continue;
-      out.push({ id, email: email.toLowerCase(), ...(typeof name === "string" ? { name } : {}) });
+      out.push({
+        id,
+        email: email.toLowerCase(),
+        ...(typeof name === "string" ? { name } : {}),
+        // The local Workshop's accounts are password accounts named by username, not by address, so
+        // an identity may say which one it is; production takes the Access email verbatim instead.
+        workshopAccount: typeof workshopAccount === "string" && workshopAccount.length > 0 ? workshopAccount : email,
+      });
     }
     return out;
   } catch {

@@ -65,6 +65,7 @@ export const API_ROUTES = {
   deleteMessage: { method: "DELETE", path: "/messages/:messageId" },
   addReaction: { method: "PUT", path: "/messages/:messageId/reactions/:emoji" },
   removeReaction: { method: "DELETE", path: "/messages/:messageId/reactions/:emoji" },
+  retryAgent: { method: "POST", path: "/messages/:messageId/agent/retry" },
 
   listThreads: { method: "GET", path: "/threads" },
   followThread: { method: "POST", path: "/threads/:rootId/follow" },

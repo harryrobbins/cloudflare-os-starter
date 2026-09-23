@@ -5,6 +5,8 @@
 // do actual work.
 
 import {
+  AGENT_USER_ID,
+  AGENT_USER_NAME,
   GENERAL_CHANNEL_ID,
   type Attachment,
   type Channel,
@@ -94,7 +96,7 @@ export function buildSeed(): Seed {
     user("u-dan", "Dan Weiss", "dan@example.test", false, now),
     user("u-eve", "Eve Novak", "eve@example.test", true, now),
     user("u-fran", "Fran Mbeki", "fran@example.test", false, now),
-    { ...user("u-agent", "Agent", "agent@example.test", true, now), email: null },
+    { ...user(AGENT_USER_ID, AGENT_USER_NAME, "agent@example.test", false, now), email: null, kind: "agent" },
   ];
 
   const attachments = new Map<string, { dataUrl: string; thumbUrl: string }>();
@@ -136,7 +138,7 @@ export function buildSeed(): Seed {
     { at: now - 300 * MINUTE, by: "u-alice", body: "Reminder: **freeze is at 16:00**. Anything not merged by then rides the next train." },
     { at: now - 296 * MINUTE, by: "u-alice", body: "I'll do the release notes." },
     { at: now - 240 * MINUTE, by: "u-dan", body: "Deleted for now", kind: "user", deleted: true },
-    { at: now - 180 * MINUTE, by: "u-agent", body: "I've summarised the week's incidents in [the postmortem doc](https://example.test/postmortem). Two of the three were the same DO eviction.", kind: "agent" },
+    { at: now - 180 * MINUTE, by: AGENT_USER_ID, body: "I've summarised the week's incidents in [the postmortem doc](https://example.test/postmortem). Two of the three were the same DO eviction.", kind: "agent" },
     { at: now - 95 * MINUTE, by: "u-cara", body: "That matches what I saw. Nice one." },
     { at: now - 42 * MINUTE, by: "u-bob", body: `${userToken(ME)} can you look at the rail spacing before the freeze? It's 2px out at narrow widths.`, id: "m-mention-rail" },
     // Three images on one message: a portrait, a landscape and a second landscape, so the inline row
@@ -237,8 +239,8 @@ export function buildSeed(): Seed {
 
   messages.push(
     ...conversation("c-releases", [
-      { by: "u-agent", body: "**v1.3.9** released.\n\n- Upload cap raised to 10 MiB\n- Thread follow state persists\n- Fixed the reconnect storm after a redeploy", at: now - 4 * DAY, kind: "agent" },
-      { by: "u-agent", body: "**v1.4.0** released.\n\n- Permalinks\n- Search qualifiers\n- Presence", at: now - 100 * MINUTE, kind: "agent" },
+      { by: AGENT_USER_ID, body: "**v1.3.9** released.\n\n- Upload cap raised to 10 MiB\n- Thread follow state persists\n- Fixed the reconnect storm after a redeploy", at: now - 4 * DAY, kind: "agent" },
+      { by: AGENT_USER_ID, body: "**v1.4.0** released.\n\n- Permalinks\n- Search qualifiers\n- Presence", at: now - 100 * MINUTE, kind: "agent" },
     ]),
   );
 

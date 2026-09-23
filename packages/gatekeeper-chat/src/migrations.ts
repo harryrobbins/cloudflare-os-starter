@@ -7,7 +7,8 @@
 //     re-runs cleanly.
 //   * The applied version is recorded in `schema_meta`, not inferred from the tables present.
 //
-// Version 1 is what `/api/me` needs; version 2 is the rest of the plan's schema block.
+// Version 1 is what `/api/me` needs; version 2 is the rest of the plan's schema block; version 3 is
+// the agent outbox.
 //
 // `ALTER TABLE ... ADD COLUMN` has no `IF NOT EXISTS`, so {@link addColumn} checks
 // `pragma_table_info` first -- otherwise a migration that is re-run after a partial failure throws
@@ -252,6 +253,54 @@ export const MIGRATIONS: readonly Migration[] = [
       `);
 
       seedBuiltins(sql);
+    },
+  },
+  {
+    version: 3,
+    description: "the agent outbox: one row per question to the Agent",
+    up(sql) {
+      // Written *before* the Workshop is called, so a question survives an eviction, a failed call
+      // and a deploy between asking and answering (src/do/agent.ts). `agent_links` from version 2
+      // stays unused: the gateway keys the workspace chat by `chat_key` itself, so there is no link
+      // to keep here.
+      sql.exec(`
+        CREATE TABLE IF NOT EXISTS agent_requests (
+          -- The asking message. One question per message, so this is also the idempotency key.
+          message_id      TEXT PRIMARY KEY,
+          channel_id      TEXT NOT NULL,
+          -- Where the reply goes: the thread root for a channel question, the DM's own thread or
+          -- NULL (inline) for a direct message.
+          reply_root_id   TEXT,
+          requester_id    TEXT NOT NULL,
+          -- ChatIdentity.workshopAccount at asking time: the gateway's callerEmail. Never logged.
+          caller_account  TEXT NOT NULL,
+          -- The gateway's chatKey: one workspace chat per conversation (a thread, or a DM).
+          chat_key        TEXT NOT NULL,
+          -- Frozen at asking time, so an automatic retry sends exactly what was first sent.
+          prompt          TEXT NOT NULL,
+          state           TEXT NOT NULL
+                          CHECK (state IN ('pending', 'accepted', 'replied', 'failed')),
+          retryable       INTEGER NOT NULL DEFAULT 1,
+          -- Bumped by a manual retry. The gateway's messageKey is derived from it, so a retry after
+          -- the Workshop accepted a question is a new question rather than a deduplicated replay.
+          generation      INTEGER NOT NULL DEFAULT 0,
+          attempts        INTEGER NOT NULL DEFAULT 0,
+          next_attempt_at INTEGER,
+          chat_path       TEXT,
+          reply_id        TEXT,
+          error           TEXT,
+          created_at      INTEGER NOT NULL,
+          updated_at      INTEGER NOT NULL,
+          accepted_at     INTEGER
+        )
+      `);
+      sql.exec(`CREATE INDEX IF NOT EXISTS agent_requests_state ON agent_requests (state, next_attempt_at)`);
+      sql.exec(
+        `CREATE INDEX IF NOT EXISTS agent_requests_chat ON agent_requests (requester_id, chat_key, created_at)`,
+      );
+      sql.exec(
+        `CREATE INDEX IF NOT EXISTS agent_requests_reply ON agent_requests (reply_id) WHERE reply_id IS NOT NULL`,
+      );
     },
   },
 ];

@@ -11,6 +11,10 @@ import { serveChat } from "./serve.js";
 
 export { ChatWorkspace } from "./workspace.js";
 
+// Where the Workshop delivers an `@agent` answer (src/agent-reply.ts). Never bound: the agent outbox
+// mints it through `ctx.exports`, which is why it only has to be exported from this module.
+export { ChatAgentReply } from "./agent-reply.js";
+
 // The agent-facing half, reached over RPC from the Workshop rather than over HTTP (see
 // `src/vendor/`). `ChatAccount`, `ChatVerifier` and `ChatGatekeeper` are resolved through
 // `ctx.exports`, which is why they only have to be exported from this module.

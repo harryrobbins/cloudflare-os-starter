@@ -10,9 +10,12 @@
 // fake that says yes to everything hides exactly the bugs this app has.
 
 import {
+  AGENT_CONTEXT_MESSAGES,
+  AGENT_USER_ID,
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   PROTOCOL_VERSION,
+  type AgentRequest,
   type Attachment,
   type BadgeSummary,
   type Channel,
@@ -56,6 +59,7 @@ import {
 } from "../contract.js";
 import { ApiError, type ChatApi, type ChatSocket, type MockControls, type SocketStatus, type Transport } from "../api/types.js";
 import { setFileUrlResolver } from "../lib/files.js";
+import { mentionsAgent } from "../contract.js";
 import { mentionsUser, parseMentions } from "../lib/mentions.js";
 import { buildSeed, ME, placeholderImage, type Seed } from "./seed.js";
 
@@ -69,7 +73,9 @@ class MockWorkspace {
   /** `clientId` -> committed message, which is what makes a resend idempotent. */
   readonly committed = new Map<string, Message>();
   readonly listeners = new Set<(event: ServerEvent) => void>();
-  online: UserId[] = ["u-alice", "u-bob", "u-eve", "u-agent", ME];
+  // Never the Agent: it is an app, not a person, and has no presence (src/do/sockets.ts only ever
+  // counts people's sockets).
+  online: UserId[] = ["u-alice", "u-bob", "u-eve", ME];
   connected = true;
   failWrites = 0;
   failCode: ErrorCode = "internal";
@@ -211,6 +217,7 @@ function createMockApi(workspace: MockWorkspace): ChatApi {
         user: workspace.me(),
         prefs: workspace.prefs,
         admin: true,
+        agent: { replies: "enabled" },
         badges: workspace.badges(),
         limits: { maxBodyBytes: 8192, maxUploadBytes: 10 * 1024 * 1024, maxAttachmentsPerMessage: 10 },
         protocolVersion: PROTOCOL_VERSION,
@@ -464,10 +471,29 @@ function createMockApi(workspace: MockWorkspace): ChatApi {
         mentions: parseMentions(request.body),
         clientId: request.clientId,
       };
-      workspace.commit(message);
-      workspace.emit({ t: "msg", message });
-      maybeReply(workspace, message);
-      return { message, deduped: false, badges: workspace.badges() };
+      const asked = askAgent(workspace, message);
+      workspace.commit(asked);
+      workspace.emit({ t: "msg", message: asked });
+      if (asked.agentRequest === undefined) maybeReply(workspace, asked);
+      else if (asked.agentRequest.state === "pending") answerAsAgent(workspace, asked);
+      return { message: asked, deduped: false, badges: workspace.badges() };
+    },
+
+    async retryAgent(messageId: MessageId): Promise<MessageResponse> {
+      await delay();
+      const original = workspace.seed.messages.find((candidate) => candidate.id === messageId);
+      const request = original?.agentRequest;
+      if (original === undefined || request === undefined) {
+        throw new ApiError("not_found", "That message did not ask the Agent anything.", 404);
+      }
+      if (request.requesterId !== ME) throw new ApiError("forbidden", "Only the person who asked can retry.", 403);
+      if (request.state !== "failed" || !request.retryable) {
+        throw new ApiError("conflict", "This question is not waiting for a retry.", 409);
+      }
+      retriedQuestions.add(messageId);
+      const message = setAgentRequest(workspace, original, pendingRequest());
+      answerAsAgent(workspace, message);
+      return { message };
     },
 
     async editMessage(messageId: MessageId, body: string): Promise<MessageResponse> {
@@ -762,6 +788,108 @@ function snippetFor(body: string, text: string): string {
     flat.slice(index + text.length, end) +
     suffix
   );
+}
+
+// --- the Agent ---------------------------------------------------------------------------------
+//
+// The same rules as src/do/agent.ts, minus the Workshop: a mention in a public channel or any
+// message in a DM with Agent asks; a mention anywhere else is refused on the message. The answer
+// arrives a couple of seconds later, in the asking message's thread (inline in a DM). A question
+// containing "fail" is answered the way a colleague without an AI model is -- a retryable refusal in
+// the Workshop's own words -- and a retry of it succeeds, so the Retry path can be clicked through.
+
+/** Questions that have been retried once, so the second answer to a "fail" question succeeds. */
+const retriedQuestions = new Set<MessageId>();
+
+function pendingRequest(): AgentRequest {
+  return {
+    state: "pending",
+    requesterId: ME,
+    error: null,
+    retryable: false,
+    chatPath: null,
+    replyId: null,
+    updatedAt: Date.now(),
+  };
+}
+
+function askAgent(workspace: MockWorkspace, message: Message): Message {
+  const channel = workspace.channel(message.channelId);
+  const dmWithAgent =
+    channel.kind === "dm" &&
+    channel.memberIds?.length === 2 &&
+    channel.memberIds.includes(AGENT_USER_ID);
+  if (!dmWithAgent && !mentionsAgent(message.body)) return message;
+  if (!dmWithAgent && channel.kind !== "public") {
+    return {
+      ...message,
+      agentRequest: {
+        ...pendingRequest(),
+        state: "failed",
+        error: "The Agent only answers in public channels and in a direct message with it, so nothing from this conversation was sent to it.",
+      },
+    };
+  }
+  return { ...message, agentRequest: pendingRequest() };
+}
+
+function setAgentRequest(workspace: MockWorkspace, message: Message, request: AgentRequest): Message {
+  const index = workspace.seed.messages.findIndex((candidate) => candidate.id === message.id);
+  const updated: Message = { ...(index === -1 ? message : workspace.seed.messages[index]!), agentRequest: request };
+  if (index !== -1) workspace.seed.messages[index] = updated;
+  workspace.emit({ t: "agent", channel: message.channelId, id: message.id, rootId: message.rootId, request });
+  return updated;
+}
+
+function answerAsAgent(workspace: MockWorkspace, asked: Message): void {
+  const chatPath = `/workspace/mock-chat-agent?chat=1`;
+  const retried = retriedQuestions.has(asked.id);
+  setTimeout(() => {
+    if (/\bfail\b/iu.test(asked.body) && !retried) {
+      setAgentRequest(workspace, asked, {
+        ...pendingRequest(),
+        state: "failed",
+        retryable: true,
+        error: "Your Cloudflare OS account needs an AI model configured before it can respond.",
+        updatedAt: Date.now(),
+      });
+      return;
+    }
+    setAgentRequest(workspace, asked, { ...pendingRequest(), state: "accepted", chatPath, updatedAt: Date.now() });
+  }, 500);
+  setTimeout(() => {
+    const current = workspace.seed.messages.find((candidate) => candidate.id === asked.id);
+    if (current?.agentRequest?.state !== "accepted") return;
+    const channel = workspace.channel(asked.channelId);
+    const reply: Message = {
+      id: `m-${Math.random().toString(36).slice(2, 10)}`,
+      channelId: asked.channelId,
+      seq: workspace.nextSeq(asked.channelId),
+      rootId: channel.kind === "dm" ? asked.rootId : (asked.rootId ?? asked.id),
+      authorId: AGENT_USER_ID,
+      body: `Here is what I found, based on the last ${AGENT_CONTEXT_MESSAGES} messages here.\n\n- The freeze lifts on **Friday**\n- Deploys resume after the release notes are out`,
+      kind: "agent",
+      createdAt: Date.now(),
+      editedAt: null,
+      deletedAt: null,
+      replyCount: 0,
+      lastReplyAt: null,
+      reactions: [],
+      attachments: [],
+      mentions: [],
+      agentReply: { requestId: asked.id, requesterId: ME, chatPath },
+    };
+    workspace.commit(reply);
+    workspace.emit({ t: "msg", message: reply });
+    const root = workspace.seed.messages.find((candidate) => candidate.id === reply.rootId);
+    if (root !== undefined) workspace.emit({ t: "edit", message: root });
+    setAgentRequest(workspace, current, {
+      ...current.agentRequest,
+      state: "replied",
+      replyId: reply.id,
+      updatedAt: Date.now(),
+    });
+  }, 2400);
 }
 
 /** Makes the fake feel alive: somebody types, then answers, a few seconds after you post. */

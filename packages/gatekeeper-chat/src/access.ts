@@ -63,5 +63,9 @@ export function identityFromClaims(payload: JWTPayload): ChatIdentity | null {
   const email = payload["email"];
   if (typeof sub !== "string" || sub.length === 0) return null;
   if (typeof email !== "string" || email.length === 0) return null;
-  return { id: sub, email: email.trim().toLowerCase() };
+  // `workshopAccount` is the claim verbatim, not the normalised address: the Workshop names the
+  // account `users.idFromName(payload.email)` at Access sign-in (workshop-backend/src/server.ts,
+  // `authenticateFromCfAccess`), so `Harry@Example.com` and `harry@example.com` are two accounts
+  // there. Normalising it here would make the agent answer as nobody.
+  return { id: sub, email: email.trim().toLowerCase(), workshopAccount: email };
 }

@@ -26,6 +26,7 @@ import { channelLabel, isDirect, otherMemberIds } from "../lib/labels.js";
 import { parseConversationKey } from "../store/drafts.js";
 import { compareChannels, isUnread } from "../store/unread.js";
 import { useChat } from "../hooks/store.js";
+import { isAgentDm } from "../lib/agent.js";
 import { Avatar, CountBadge, PresenceDot, SectionLabel } from "./primitives.js";
 
 export function Rail({
@@ -169,7 +170,8 @@ function presenceOf(
   online: readonly string[],
   meId: string | undefined,
 ): boolean | undefined {
-  if (channel.kind !== "dm") return undefined;
+  // An app has no presence: a DM with the Agent gets no dot at all rather than a permanent grey one.
+  if (channel.kind !== "dm" || isAgentDm(channel)) return undefined;
   const others = otherMemberIds(channel, meId);
   return others.some((id) => online.includes(id));
 }

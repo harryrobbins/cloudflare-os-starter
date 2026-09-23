@@ -5,7 +5,7 @@
 // user's own optimistic send. Every one of them goes through `mergeMessages`, so "last writer wins per
 // id, ordered by seq, pending rows pinned to the bottom" is a single rule rather than three.
 
-import type { Message, MessageId, Reaction, UserId } from "../contract.js";
+import type { AgentRequest, Message, MessageId, Reaction, UserId } from "../contract.js";
 
 /**
  * A message that has not been committed yet. Its `seq` is this sentinel, which sorts it after every
@@ -161,6 +161,22 @@ export function applyReactions(
   reactions: readonly Reaction[],
 ): LocalMessage[] {
   return existing.map((message) => (message.id === id ? { ...message, reactions } : message));
+}
+
+/**
+ * A question to the Agent changed state. Never goes backwards: two events can cross (the `accepted`
+ * one from the alarm and the `replied` one from the answer), and a stale one must not undo a newer.
+ */
+export function applyAgentRequest(
+  existing: readonly LocalMessage[],
+  id: MessageId,
+  request: AgentRequest,
+): LocalMessage[] {
+  return existing.map((message) => {
+    if (message.id !== id) return message;
+    if (message.agentRequest !== undefined && message.agentRequest.updatedAt > request.updatedAt) return message;
+    return { ...message, agentRequest: request };
+  });
 }
 
 /** The optimistic half of a reaction toggle: add or remove the caller's id from one emoji's list. */

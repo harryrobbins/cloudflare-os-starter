@@ -13,7 +13,8 @@ import { fileUrl, isInlineImage } from "../lib/files.js";
 import { channelLabel, isDirect, isGeneral } from "../lib/labels.js";
 import { useChat, useStore } from "../hooks/store.js";
 import { conversationKey } from "../store/drafts.js";
-import { Avatar, Button, EmptyState, IconButton } from "./primitives.js";
+import { isAgent } from "../lib/agent.js";
+import { AppBadge, Avatar, Button, EmptyState, IconButton } from "./primitives.js";
 
 type Tab = "about" | "members" | "files";
 
@@ -166,11 +167,18 @@ export function ChannelDetails({
                       onClick={() => void store.openDm(id)}
                       className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-kumo-tint"
                     >
-                      <Avatar name={user.name} id={user.id} size={28} online={user.online} />
+                      <Avatar
+                        name={user.name}
+                        id={user.id}
+                        size={28}
+                        online={user.online}
+                        kind={isAgent(user) ? "agent" : "user"}
+                      />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] text-kumo-default">
+                        <span className="flex items-center gap-1.5 truncate text-[13px] text-kumo-default">
                           {user.name}
                           {user.id === meId && <span className="text-kumo-inactive"> (you)</span>}
+                          {isAgent(user) && <AppBadge />}
                         </span>
                         <span className="block truncate text-[11px] text-kumo-inactive">
                           {user.email ?? ""}

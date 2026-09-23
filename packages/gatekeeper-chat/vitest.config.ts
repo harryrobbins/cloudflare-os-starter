@@ -1,7 +1,8 @@
 // Tests run inside workerd via @cloudflare/vitest-pool-workers, on the same compatibility date and
 // flags as wrangler.jsonc so a passing test says something about production.
 //
-// The two auxiliary workers exist for the spikes. They are plain JavaScript on purpose: auxiliary
+// The first two auxiliary workers exist for the spikes; the third stands in for the Workshop's
+// ExternalMessageGateway in the agent suites. They are plain JavaScript on purpose: auxiliary
 // workers are handed straight to Miniflare and never see Vite, so they cannot import TypeScript or a
 // workspace package. Their job is to be *other Workers*, which is the only way to exercise the thing
 // the router actually does -- reach this Worker over a service binding, WebSocket upgrade included.
@@ -49,7 +50,17 @@ export default defineConfig({
         },
         assets: { directory: "./app/dist", binding: "ASSETS", routerConfig: ASSET_ROUTER },
 
-        serviceBindings: { ROUTER: "spike-router" },
+        serviceBindings: {
+          ROUTER: "spike-router",
+          // The agent suites: the Workshop's gateway as deploy.ts binds it, and a side door that
+          // lets a test deliver the answer the way the Overseer would (__tests__/aux/workshop-gateway.js).
+          WORKSHOP_GATEWAY: {
+            name: "mock-workshop",
+            entrypoint: "ExternalMessageGateway",
+            props: { source: "chat" },
+          },
+          WORKSHOP_CONTROL: { name: "mock-workshop", entrypoint: "Control" },
+        },
 
         workers: [
           {
@@ -68,6 +79,14 @@ export default defineConfig({
             compatibilityFlags: COMPATIBILITY_FLAGS,
             durableObjects: { SPIKE_WS: { className: "SpikeWs" } },
             assets: { directory: "./app/dist", binding: "ASSETS", routerConfig: ASSET_ROUTER },
+          },
+          {
+            name: "mock-workshop",
+            modules: true,
+            scriptPath: "./__tests__/aux/workshop-gateway.js",
+            compatibilityDate: COMPATIBILITY_DATE,
+            compatibilityFlags: COMPATIBILITY_FLAGS,
+            durableObjects: { TARGETS: { className: "TargetStore", useSQLite: true } },
           },
         ],
       },

@@ -7,6 +7,7 @@
 
 import type { ChatEnv } from "../env.js";
 import type { ChannelId, ErrorCode, ServerEvent, UserId } from "../shared/protocol.js";
+import type { AgentGateway } from "./agent.js";
 
 /** Delivery to live sockets. Implemented by the Durable Object, which owns `ctx.getWebSockets`. */
 export interface Broadcaster {
@@ -39,6 +40,14 @@ export interface Ctx {
   now(): number;
   /** Makes sure the pending-upload sweep alarm is set. Idempotent. */
   armSweep(): Promise<void>;
+  /**
+   * Makes sure the object's one alarm fires no later than `at`. The alarm serves the upload sweep
+   * and the agent outbox alike, and each run works out when it is next needed, so an early wake is
+   * harmless and a late one is the only thing to avoid.
+   */
+  wakeAt(at: number): Promise<void>;
+  /** The Workshop's gateway for `@agent` questions, or null when agent replies are turned off. */
+  readonly agentGateway: AgentGateway | null;
 }
 
 /** `?, ?, ?` for an `IN (...)` list. Bound parameters only; never interpolated values. */

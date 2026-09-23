@@ -12,6 +12,7 @@ import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   MAX_BODY_BYTES,
   PROTOCOL_VERSION,
+  type ChatIdentity,
   type MeResponse,
   type OkResponse,
   type UserResponse,
@@ -40,12 +41,15 @@ import {
   updateChannel,
   updateMembership,
 } from "./channels.js";
+import { retryAgentRequest } from "./agent.js";
 import type { Ctx, Outcome } from "./context.js";
 import { createUpload, serveFile } from "./files.js";
 import {
   deleteMessage,
   editMessage,
+  hydrateMessages,
   listMessages,
+  loadMessage,
   listThreads,
   sendMessage,
   setReaction,
@@ -83,6 +87,7 @@ export async function route(
   request: Request,
   url: URL,
   user: UserRow,
+  identity: ChatIdentity,
 ): Promise<Response> {
   if (url.pathname === WS_PATH) {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
@@ -173,7 +178,11 @@ export async function route(
       const body = await readJson(request);
       const parsed = parseSendMessage(body);
       if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
-      return respond(await sendMessage(ctx, user, params["channelId"]!, parsed.value));
+      return respond(
+        await sendMessage(ctx, user, params["channelId"]!, parsed.value, {
+          workshopAccount: identity.workshopAccount ?? null,
+        }),
+      );
     }
 
     case "editMessage": {
@@ -191,6 +200,15 @@ export async function route(
       return validated(parseEmoji(params["emoji"] ?? ""), (emoji) =>
         respond(setReaction(ctx, user, params["messageId"]!, emoji, name === "addReaction")),
       );
+
+    case "retryAgent": {
+      const retried = retryAgentRequest(ctx, user, params["messageId"]!, identity.workshopAccount ?? null);
+      if (!retried.ok) return respond(retried);
+      await ctx.wakeAt(ctx.now());
+      const row = loadMessage(ctx, params["messageId"]!);
+      if (row === null) return errorResponse("not_found", "No such message.");
+      return json({ message: hydrateMessages(ctx, [row])[0]! });
+    }
 
     case "listThreads":
       return validated(parseListThreadsQuery(url.searchParams), (query) =>
@@ -241,6 +259,7 @@ function me(ctx: Ctx, user: UserRow, admin: boolean): MeResponse {
     user: toUser(user, true),
     prefs: toPrefs(user),
     admin,
+    agent: { replies: ctx.agentGateway === null ? "disabled" : "enabled" },
     badges: badgeSummary(ctx, user.id),
     limits: {
       maxBodyBytes: MAX_BODY_BYTES,

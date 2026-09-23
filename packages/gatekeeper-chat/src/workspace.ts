@@ -2,13 +2,18 @@
 //
 // This file is wiring only. It runs the migrations, builds the {@link Ctx} every module under
 // `src/do/` is handed, and forwards the four things the runtime calls: `fetch`, the two hibernation
-// callbacks, and `alarm`. The behaviour lives in `src/do/`, one file per responsibility.
+// callbacks, and `alarm` -- plus the one RPC method the Worker's `ChatAgentReply` entrypoint calls
+// when the Workshop answers a question. The behaviour lives in `src/do/`, one file per
+// responsibility.
 
 import { DurableObject } from "cloudflare:workers";
+
+import type { SubmitExternalMessageInput } from "@gadgets/workshop-shared/external-message-gateway";
 
 import type { ChatEnv } from "./env.js";
 import { errorResponse, unauthenticated } from "./http.js";
 import { runMigrations } from "./migrations.js";
+import { deliverAgentReply, runAgentOutbox, type AgentGateway } from "./do/agent.js";
 import type { Broadcaster, Ctx } from "./do/context.js";
 import { sweepPending } from "./do/files.js";
 import { logEvent } from "./do/logs.js";
@@ -30,6 +35,7 @@ const SWEEP_INTERVAL_MS = 15 * 60 * 1000;
 export class ChatWorkspace extends DurableObject<ChatEnv> {
   readonly #bus: Broadcaster;
   readonly #ctx: Ctx;
+  #outbox: Promise<unknown> = Promise.resolve();
 
   constructor(ctx: DurableObjectState, env: ChatEnv) {
     super(ctx, env);
@@ -46,7 +52,9 @@ export class ChatWorkspace extends DurableObject<ChatEnv> {
       env,
       bus: this.#bus,
       now: () => Date.now(),
-      armSweep: () => this.#armSweep(),
+      armSweep: () => this.#wakeAt(Date.now() + SWEEP_INTERVAL_MS),
+      wakeAt: (at) => this.#wakeAt(at),
+      agentGateway: workshopGateway(ctx, env),
     };
   }
 
@@ -59,7 +67,7 @@ export class ChatWorkspace extends DurableObject<ChatEnv> {
     }
     try {
       const user = touchUser(this.#ctx, identity);
-      return await route(this.#ctx, this.ctx, request, new URL(request.url), user);
+      return await route(this.#ctx, this.ctx, request, new URL(request.url), user, identity);
     } catch (error) {
       // Anything reaching here is a bug in this object, not a client mistake. The client still gets
       // the one error envelope the contract defines: the runtime's own 500 carries a stack trace, and
@@ -85,14 +93,51 @@ export class ChatWorkspace extends DurableObject<ChatEnv> {
     socketClosed(this.#ctx, readAttachment(ws)?.userId ?? null);
   }
 
+  /**
+   * The one alarm, shared by the pending-upload sweep and the agent outbox. Each half says when it
+   * next needs to run; the earlier of the two is set. A throw leaves the runtime to retry the alarm,
+   * which is what a failed outbox write should get.
+   */
   override async alarm(): Promise<void> {
     const remaining = await sweepPending(this.#ctx);
-    if (remaining > 0) await this.ctx.storage.setAlarm(Date.now() + SWEEP_INTERVAL_MS);
+    const agentNext = await this.#runOutbox();
+    const wakes = [remaining > 0 ? Date.now() + SWEEP_INTERVAL_MS : null, agentNext].filter(
+      (at): at is number => at !== null,
+    );
+    if (wakes.length > 0) await this.#wakeAt(Math.min(...wakes));
   }
 
   /** Test and operations seam: runs the sweep now instead of waiting for the alarm. */
   async sweepUploads(): Promise<number> {
     return sweepPending(this.#ctx);
+  }
+
+  /** Test and operations seam: runs the agent outbox now instead of waiting for the alarm. */
+  async runAgentOutbox(): Promise<number | null> {
+    return this.#runOutbox();
+  }
+
+  /**
+   * One outbox run at a time. The alarm is the only production caller and the runtime never overlaps
+   * two alarms, but the test seam above can land mid-run, and two overlapping runs would each hand the
+   * same question to the Workshop.
+   */
+  #runOutbox(): Promise<number | null> {
+    const run = this.#outbox.then(() => runAgentOutbox(this.#ctx));
+    this.#outbox = run.catch(() => undefined);
+    return run;
+  }
+
+  /**
+   * The Workshop's answer to one question, from `ChatAgentReply.onGadgetResponse`. At least once:
+   * posting is idempotent per question, and a throw asks the Workshop to deliver it again.
+   */
+  async deliverAgentReply(
+    requestId: string,
+    messageKey: string,
+    text: string,
+  ): Promise<"posted" | "duplicate" | "ignored"> {
+    return deliverAgentReply(this.#ctx, requestId, messageKey, text);
   }
 
   /** Test seam: the schema version actually recorded in this object's database. */
@@ -104,10 +149,58 @@ export class ChatWorkspace extends DurableObject<ChatEnv> {
     );
   }
 
-  async #armSweep(): Promise<void> {
-    if ((await this.ctx.storage.getAlarm()) !== null) return;
-    await this.ctx.storage.setAlarm(Date.now() + SWEEP_INTERVAL_MS);
+  /**
+   * Moves the alarm earlier, never later. Inside `alarm()` the runtime reports no alarm (the one
+   * running has been consumed) unless something set a new one during the run, so the handler's own
+   * re-arm and a wake requested mid-run both land.
+   */
+  async #wakeAt(at: number): Promise<void> {
+    const current = await this.ctx.storage.getAlarm();
+    if (current !== null && current <= at) return;
+    await this.ctx.storage.setAlarm(at);
   }
+}
+
+/**
+ * The Workshop's `ExternalMessageGateway`, as the agent outbox calls it, or null when this deployment
+ * has no `WORKSHOP_GATEWAY` binding.
+ *
+ * The reply target is a `ChatAgentReply` stub from `ctx.exports`: a service stub of this Worker with
+ * the question's ids in its props, which the Workshop's Overseer `dup()`s and keeps in its own storage
+ * until the answer is ready -- that is what `allow_irrevocable_stub_storage` is for. The stub minted
+ * here is only lent to the call, so it is disposed as soon as the call settles; the Overseer's copy is
+ * the Overseer's to dispose.
+ */
+function workshopGateway(state: DurableObjectState, env: ChatEnv): AgentGateway | null {
+  const gateway = env.WORKSHOP_GATEWAY;
+  if (gateway === undefined) return null;
+  return {
+    async submit(submission) {
+      const target = state.exports.ChatAgentReply({
+        props: {
+          workspaceId: state.id.toString(),
+          requestId: submission.requestId,
+          messageKey: submission.messageKey,
+        },
+      });
+      try {
+        return await gateway.submitExternalMessage({
+          callerEmail: submission.callerEmail,
+          gadgetKey: submission.gadgetKey,
+          chatKey: submission.chatKey,
+          messageKey: submission.messageKey,
+          gadgetTitle: submission.gadgetTitle,
+          prompt: submission.prompt,
+          // A service stub, not an `RpcTarget`: the contract's type describes what the Workshop calls
+          // (`onGadgetResponse`), which `ChatAgentReply` implements, and only a service stub can be
+          // stored durably on the other side.
+          chatGatewayRpcTarget: target as unknown as SubmitExternalMessageInput["chatGatewayRpcTarget"],
+        });
+      } finally {
+        (target as Partial<Disposable>)[Symbol.dispose]?.();
+      }
+    },
+  };
 }
 
 /** Reads and narrows the identity header the Worker set. */
@@ -121,8 +214,13 @@ export function readIdentity(request: Request): ChatIdentity | null {
     return null;
   }
   if (!isRecord(parsed)) return null;
-  const { id, email, name } = parsed;
+  const { id, email, name, workshopAccount } = parsed;
   if (typeof id !== "string" || id.length === 0) return null;
   if (typeof email !== "string" || email.length === 0) return null;
-  return { id, email, ...(typeof name === "string" && name.length > 0 ? { name } : {}) };
+  return {
+    id,
+    email,
+    ...(typeof name === "string" && name.length > 0 ? { name } : {}),
+    ...(typeof workshopAccount === "string" && workshopAccount.length > 0 ? { workshopAccount } : {}),
+  };
 }

@@ -41,10 +41,11 @@ import {
 import { useChat, useStore } from "../hooks/store.js";
 import { describeSeen, type SeenReader } from "../lib/seen.js";
 import type { LocalMessage } from "../store/merge.js";
+import { AgentReplyFooter, AgentRequestStatus } from "./AgentStatus.js";
 import { Attachments } from "./Attachments.js";
 import { EmojiPicker } from "./EmojiPicker.js";
 import { Markdown } from "./Markdown.js";
-import { Avatar, IconButton } from "./primitives.js";
+import { AppBadge, Avatar, IconButton } from "./primitives.js";
 
 export interface MessageRowProps {
   readonly message: LocalMessage;
@@ -201,11 +202,7 @@ export const MessageRow = memo(function MessageRow({
               <span className="text-[13px] font-semibold text-kumo-strong">
                 {author?.name ?? "Unknown"}
               </span>
-              {message.kind === "agent" && (
-                <span className="rounded bg-kumo-brand/15 px-1 py-px text-[10px] font-semibold text-kumo-brand uppercase">
-                  agent
-                </span>
-              )}
+              {message.kind === "agent" && <AppBadge />}
               <time
                 dateTime={new Date(message.createdAt).toISOString()}
                 title={pending ? "Sending" : undefined}
@@ -332,6 +329,14 @@ export const MessageRow = memo(function MessageRow({
               </button>
             </div>
           )}
+          {!tombstone && (
+            <AgentRequestStatus
+              message={message}
+              meId={meId}
+              onRetry={() => void store.retryAgent(message.id)}
+            />
+          )}
+          {!tombstone && <AgentReplyFooter message={message} meId={meId} />}
           {seenBy !== undefined && seenBy.length > 0 && (
             <SeenStack readers={seenBy} nameOf={(id) => users[id]?.name} />
           )}

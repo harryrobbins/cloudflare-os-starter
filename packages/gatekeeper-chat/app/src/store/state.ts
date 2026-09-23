@@ -105,6 +105,8 @@ export interface ChatState {
   readonly me: User | null;
   readonly prefs: UserPrefs;
   readonly admin: boolean;
+  /** Whether `@agent` is answered on this deployment (`/api/me`'s `agent.replies`). */
+  readonly agentReplies: "enabled" | "disabled";
   readonly limits: {
     readonly maxBodyBytes: number;
     readonly maxUploadBytes: number;
@@ -169,6 +171,7 @@ export const INITIAL_STATE: ChatState = {
   me: null,
   prefs: { displayName: null, tz: null, notify: "all" },
   admin: false,
+  agentReplies: "enabled",
   limits: { maxBodyBytes: 8192, maxUploadBytes: 10 * 1024 * 1024, maxAttachmentsPerMessage: 10 },
   channels: {},
   memberships: {},

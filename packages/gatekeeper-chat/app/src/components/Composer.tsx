@@ -9,7 +9,7 @@
 // Uploads start the moment a file is pasted or dropped, so the progress bar is real rather than a
 // pre-send fiction, and a queued attachment can be removed before the message is sent.
 
-import { At, Hash, Paperclip, PaperPlaneRight, Terminal, SmileySticker, X } from "@phosphor-icons/react";
+import { At, Hash, Paperclip, PaperPlaneRight, Robot, Terminal, SmileySticker, X } from "@phosphor-icons/react";
 import {
   useCallback,
   useEffect,
@@ -38,6 +38,7 @@ import { searchEmoji } from "../lib/emoji.js";
 import { formatBytes } from "../lib/format.js";
 import { channelLabel } from "../lib/labels.js";
 import { useChat, useStore } from "../hooks/store.js";
+import { composerAgentNote } from "../lib/agent.js";
 import { useNavigate } from "@tanstack/react-router";
 import { EmojiPicker } from "./EmojiPicker.js";
 import { Avatar, IconButton, Spinner } from "./primitives.js";
@@ -76,6 +77,9 @@ export function Composer({
   const channels = useChat((state) => state.channels);
   const meId = useChat((state) => state.me?.id);
   const maxBytes = useChat((state) => state.limits.maxBodyBytes);
+  const agentReplies = useChat((state) => state.agentReplies);
+  // Said before sending, not after: what asking the Agent shares, or that it will not be asked here.
+  const agentNote = composerAgentNote(channels[channelId], draft, agentReplies);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastTypingAt = useRef(0);
@@ -356,6 +360,19 @@ export function Composer({
 
   return (
     <div className="relative px-4 pt-1 pb-4">
+      {agentNote !== null && (
+        <p
+          role="note"
+          data-testid="agent-note"
+          className={[
+            "mb-1.5 flex items-start gap-1.5 px-1 text-[11px] leading-4",
+            agentNote.tone === "warn" ? "text-kumo-warning" : "text-kumo-subtle",
+          ].join(" ")}
+        >
+          <Robot size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <span>{agentNote.text}</span>
+        </p>
+      )}
       <div
         onDragOver={(event) => {
           event.preventDefault();

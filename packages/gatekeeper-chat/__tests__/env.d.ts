@@ -16,6 +16,11 @@ declare global {
       DEV_IDENTITY_SECRET: string;
       /** Spikes 2 and 3: the router-shaped auxiliary Worker. */
       ROUTER: Fetcher;
+      /** The mock Workshop's `Control` entrypoint (__tests__/aux/workshop-gateway.js). */
+      WORKSHOP_CONTROL: Fetcher & {
+        calls(prefix: string): Promise<Array<Record<string, unknown>>>;
+        respond(messageKey: string, text: string): Promise<void>;
+      };
     }
   }
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Message } from "../contract.js";
 import {
+  applyAgentRequest,
   applyDelete,
   applyReactions,
   localLastSeq,
@@ -220,5 +221,24 @@ describe("localLastSeq", () => {
 
   it("is zero for an empty conversation", () => {
     expect(localLastSeq([])).toBe(0);
+  });
+});
+
+function request(state: "pending" | "accepted" | "replied", updatedAt: number) {
+  return { state, requesterId: "me", error: null, retryable: false, chatPath: null, replyId: null, updatedAt };
+}
+
+describe("applyAgentRequest", () => {
+
+  it("sets the request on the one message it names", () => {
+    const merged = applyAgentRequest([message({ id: "a", seq: 1 }), message({ id: "b", seq: 2 })], "b", request("accepted", 5));
+    expect(merged[0]!.agentRequest).toBeUndefined();
+    expect(merged[1]!.agentRequest?.state).toBe("accepted");
+  });
+
+  it("never lets an older event undo a newer one", () => {
+    const replied = applyAgentRequest([message({ id: "a", seq: 1 })], "a", request("replied", 9));
+    const stale = applyAgentRequest(replied, "a", request("accepted", 5));
+    expect(stale[0]!.agentRequest?.state).toBe("replied");
   });
 });

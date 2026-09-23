@@ -87,6 +87,53 @@ describe("migrations", () => {
     expect(body.error.message).not.toContain("messages");
   });
 
+  it("upgrades an object at version 2, the previous release, to the agent outbox without touching its data", async () => {
+    // Stands in for the deployed object: everything version 2 wrote is there, version 3's table is
+    // not, and the recorded version says 2.
+    const stub = workspace(`upgrade-${crypto.randomUUID()}`);
+    await stub.fetch(new Request("https://chat/gatekeeper/chat/api/me", { headers: IDENTITY }));
+    await runInDurableObject(stub, (_instance, state) => {
+      state.storage.sql.exec(
+        `INSERT INTO messages (id, channel_id, seq, author_id, body, kind, created_at)
+         VALUES ('m_old', 'general', 1, 'alice', 'from before', 'user', 1)`,
+      );
+      state.storage.sql.exec(`DROP TABLE agent_requests`);
+      state.storage.sql.exec(`UPDATE schema_meta SET value = 2 WHERE key = 'schema_version'`);
+
+      expect(runMigrations(state.storage)).toBe(TARGET_SCHEMA_VERSION);
+      const tables = state.storage.sql
+        .exec<{ name: string }>(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agent_requests'`)
+        .toArray();
+      expect(tables).toHaveLength(1);
+      const kept = state.storage.sql.exec<{ body: string }>(`SELECT body FROM messages WHERE id = 'm_old'`).toArray();
+      expect(kept).toEqual([{ body: "from before" }]);
+      const users = state.storage.sql.exec<{ id: string }>(`SELECT id FROM users ORDER BY id`).toArray();
+      expect(users.map((row) => row.id)).toEqual(["agent", "alice"]);
+    });
+  });
+
+  it("leaves versions 1 and 2 as they were released: version 3 only adds", () => {
+    // An applied migration is never edited. Their descriptions are the cheapest fingerprint of that.
+    expect(MIGRATIONS.slice(0, 2).map((migration) => migration.description)).toEqual([
+      "users and the schema version record",
+      "channels, memberships, messages with FTS, threads, reactions, attachments, limits",
+    ]);
+    expect(MIGRATIONS[2]?.description).toBe("the agent outbox: one row per question to the Agent");
+  });
+
+  it("rejects an invalid agent request state at the database level", async () => {
+    const stub = workspace(`agent-check-${crypto.randomUUID()}`);
+    await runInDurableObject(stub, (_instance, state) => {
+      expect(() =>
+        state.storage.sql.exec(
+          `INSERT INTO agent_requests (message_id, channel_id, requester_id, caller_account, chat_key,
+                                       prompt, state, created_at, updated_at)
+           VALUES ('m1', 'general', 'u1', 'u1@x', 'k', '', 'thinking', 0, 0)`,
+        ),
+      ).toThrow();
+    });
+  });
+
   it("rejects an invalid notify level at the database level", async () => {
     const stub = workspace(`check-${crypto.randomUUID()}`);
     await runInDurableObject(stub, (_instance, state) => {

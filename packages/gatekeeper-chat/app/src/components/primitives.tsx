@@ -35,12 +35,25 @@ export function Avatar({
       >
         {initials(name)}
       </span>
-      {online !== undefined && (
+      {/* An app has no presence: the Agent never gets a person's online or offline dot. */}
+      {online !== undefined && kind !== "agent" && (
         <PresenceDot
           online={online}
           className="absolute -right-0.5 -bottom-0.5 ring-2 ring-kumo-base"
         />
       )}
+    </span>
+  );
+}
+
+/** Marks the built-in Agent as an app wherever its name appears. */
+export function AppBadge({ className = "" }: { className?: string }): ReactNode {
+  return (
+    <span
+      title="A built-in app, not a person"
+      className={`rounded bg-kumo-brand/15 px-1 py-px text-[10px] font-semibold text-kumo-brand uppercase ${className}`}
+    >
+      App
     </span>
   );
 }

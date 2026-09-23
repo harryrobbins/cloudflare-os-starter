@@ -6,6 +6,7 @@ import { X } from "@phosphor-icons/react";
 import { useCallback, useEffect, type ReactNode } from "react";
 
 import type { Message } from "../contract.js";
+import { agentWorking } from "../lib/agent.js";
 import { channelLabel } from "../lib/labels.js";
 import { permalinkUrl } from "../lib/nav.js";
 import { pluralise } from "../lib/format.js";
@@ -60,6 +61,7 @@ export function ThreadPane({
     conversation.messages.find((message) => message.id === rootId) ??
     channelMessages.find((message) => message.id === rootId);
   const replies = conversation.messages.filter((message) => message.rootId === rootId);
+  const working = agentWorking(root === undefined ? replies : [root, ...replies]);
   const label = channel === undefined ? "" : channelLabel(channel, users, meId);
   const following = thread?.following ?? true;
 
@@ -116,8 +118,10 @@ export function ThreadPane({
             onDiscard={(clientId) => store.discardSend(key, clientId)}
             onFocusHandled={() => store.clearFocusMessage(channelId, rootId)}
           />
-          <p className="px-5 pb-1 text-[11px] text-kumo-inactive">
-            {pluralise(replies.length, "reply", "replies")} in this thread
+          <p className="px-5 pb-1 text-[11px] text-kumo-inactive" aria-live="polite">
+            {working
+              ? "The Agent is working on an answer for this thread…"
+              : `${pluralise(replies.length, "reply", "replies")} in this thread`}
           </p>
           <Composer
             channelId={channelId}

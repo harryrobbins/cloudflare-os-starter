@@ -1,13 +1,15 @@
 // The people directory. A person appears the first time they sign in to the platform -- the shell tells
 // chat once per session -- so the empty and partial states say that rather than implying an invite flow
-// that does not exist.
+// that does not exist. The Agent is listed too, as an app: no presence dot, and a line saying what it
+// does (or that it is switched off here) in place of "last seen".
 
 import { MagnifyingGlass, Users } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { formatRelative } from "../lib/format.js";
 import { useChat, useStore } from "../hooks/store.js";
-import { Avatar, Button, EmptyState, Skeleton } from "../components/primitives.js";
+import { AppBadge, Avatar, Button, EmptyState, Skeleton } from "../components/primitives.js";
+import { agentHint, isAgent } from "../lib/agent.js";
 import { ViewShell } from "./ViewShell.js";
 
 export function PeopleView({
@@ -21,6 +23,7 @@ export function PeopleView({
   const users = useChat((state) => state.users);
   const meId = useChat((state) => state.me?.id);
   const directory = useChat((state) => state.directory);
+  const agentReplies = useChat((state) => state.agentReplies);
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -36,13 +39,20 @@ export function PeopleView({
           user.name.toLowerCase().includes(needle) ||
           user.email?.toLowerCase().includes(needle) === true,
       )
-      .toSorted((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name));
+      // The Agent first, then people online, then everyone else by name.
+      .toSorted(
+        (a, b) =>
+          Number(isAgent(b)) - Number(isAgent(a)) ||
+          Number(b.online) - Number(a.online) ||
+          a.name.localeCompare(b.name),
+      );
   }, [users, query]);
+  const peopleCount = Object.values(users).filter((user) => !isAgent(user)).length;
 
   return (
     <ViewShell
       title="People"
-      subtitle={`${Object.keys(users).length} in this deployment`}
+      subtitle={`${peopleCount} ${peopleCount === 1 ? "person" : "people"} in this deployment`}
       {...(onBack === undefined ? {} : { onBack })}
     >
       <div className="sticky top-0 z-[1] border-b border-kumo-line bg-kumo-base px-4 py-3">
@@ -77,17 +87,28 @@ export function PeopleView({
               key={user.id}
               className="flex items-center gap-3 rounded-xl border border-kumo-line bg-kumo-elevated p-3"
             >
-              <Avatar name={user.name} id={user.id} size={36} online={user.online} />
+              <Avatar
+                name={user.name}
+                id={user.id}
+                size={36}
+                online={user.online}
+                kind={isAgent(user) ? "agent" : "user"}
+              />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium text-kumo-strong">
+                <p className="flex items-center gap-1.5 truncate text-[13px] font-medium text-kumo-strong">
                   {user.name}
                   {user.id === meId && <span className="text-kumo-inactive"> (you)</span>}
+                  {isAgent(user) && <AppBadge />}
                 </p>
-                <p className="truncate text-[11px] text-kumo-subtle">
-                  {user.online ? "Online now" : `Last seen ${formatRelative(user.lastSeenAt)}`}
+                <p className="truncate text-[11px] text-kumo-subtle" data-testid={isAgent(user) ? "agent-hint" : undefined}>
+                  {isAgent(user)
+                    ? agentHint(agentReplies)
+                    : user.online
+                      ? "Online now"
+                      : `Last seen ${formatRelative(user.lastSeenAt)}`}
                 </p>
               </div>
-              {user.id !== meId && (
+              {user.id !== meId && !(isAgent(user) && agentReplies === "disabled") && (
                 <Button size="sm" variant="secondary" onClick={() => onOpenDm(user.id)}>
                   Message
                 </Button>

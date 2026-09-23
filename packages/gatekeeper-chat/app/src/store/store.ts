@@ -37,6 +37,7 @@ import {
   mergeMessages,
   optimisticMessage,
   planCatchUp,
+  applyAgentRequest,
   applyDelete,
   applyReactions,
   reconcileSend,
@@ -158,6 +159,7 @@ export class ChatStore {
         me: me.user,
         prefs: me.prefs,
         admin: me.admin,
+        agentReplies: me.agent.replies,
         limits: me.limits,
         badges: channels.badges,
         channels: byId(channels.channels),
@@ -215,6 +217,16 @@ export class ChatStore {
           this.#setConversation(key, {
             ...conversation,
             messages: applyDelete(conversation.messages, event.id, event.tombstone),
+          });
+        });
+        return;
+      case "agent":
+        // Every conversation of the channel, not just the message's own: a top-level question is
+        // also the root of the thread its answer goes into, and that pane holds a copy of it.
+        this.#forEachConversationOf(event.channel, (key, conversation) => {
+          this.#setConversation(key, {
+            ...conversation,
+            messages: applyAgentRequest(conversation.messages, event.id, event.request),
           });
         });
         return;
@@ -709,6 +721,23 @@ export class ChatStore {
       });
     } catch (cause) {
       this.#toast({ tone: "error", title: "Could not delete the message", body: describe(cause) });
+    }
+  }
+
+  /** Asks the Agent again after a failed question. The server checks that the caller asked it. */
+  async retryAgent(messageId: MessageId): Promise<void> {
+    try {
+      const { message } = await this.#api.retryAgent(messageId);
+      if (message.agentRequest === undefined) return;
+      const request = message.agentRequest;
+      this.#forEachConversationOf(message.channelId, (key, conversation) => {
+        this.#setConversation(key, {
+          ...conversation,
+          messages: applyAgentRequest(conversation.messages, message.id, request),
+        });
+      });
+    } catch (cause) {
+      this.#toast({ tone: "error", title: "Could not ask the Agent again", body: describe(cause) });
     }
   }
 

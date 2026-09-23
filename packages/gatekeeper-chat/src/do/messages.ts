@@ -37,6 +37,7 @@ import {
 } from "../shared/protocol.js";
 import { extractMentionIds } from "../shared/validate.js";
 import { memberIdsOf, requireRead, requireWrite, visibleChannelIds } from "./access.js";
+import { agentFieldsFor, forgetAgentRequest, recordAgentRequest } from "./agent.js";
 import { allow, firstRow, placeholders, refuse, scalar, type Ctx, type Outcome } from "./context.js";
 import {
   attachmentRowsForMessage,
@@ -79,6 +80,7 @@ export function hydrateMessages(ctx: Ctx, rows: readonly MessageRow[]): readonly
   const reactions = reactionsFor(ctx, ids);
   const attachments = attachmentsFor(ctx, ids);
   const mentions = mentionsFor(ctx, ids);
+  const agent = agentFieldsFor(ctx, ids);
   return rows.map((row) => ({
     id: row.id,
     channelId: row.channel_id,
@@ -96,6 +98,7 @@ export function hydrateMessages(ctx: Ctx, rows: readonly MessageRow[]): readonly
     attachments: attachments.get(row.id) ?? [],
     mentions: mentions.get(row.id) ?? [],
     ...(row.client_id === null ? {} : { clientId: row.client_id }),
+    ...agent.get(row.id),
   }));
 }
 
@@ -274,11 +277,25 @@ function existsAround(
 // Send
 // ---------------------------------------------------------------------------
 
+export interface SendOptions {
+  /**
+   * The sender's Workshop account (`ChatIdentity.workshopAccount`), which a question to the Agent is
+   * asked as. Only the HTTP route sets it, from the verified identity.
+   */
+  readonly workshopAccount?: string | null;
+  /**
+   * The Agent posting an answer (src/do/agent.ts). Exempt from the message budget, which exists to
+   * stop a runaway client: an answer is one per question, and the question already paid for it.
+   */
+  readonly agentReply?: boolean;
+}
+
 export async function sendMessage(
   ctx: Ctx,
   author: UserRow,
   channelId: ChannelId,
   request: SendMessageRequest,
+  options: SendOptions = {},
 ): Promise<Outcome<SendMessageResponse>> {
   // The replay check comes before the rate limit and before authorization: a retry must return the
   // original message even if the client has since been throttled or has left the channel.
@@ -296,8 +313,10 @@ export async function sendMessage(
     });
   }
 
-  const limited = consume(ctx, author.id, "messages");
-  if (!limited.ok) return limited;
+  if (options.agentReply !== true) {
+    const limited = consume(ctx, author.id, "messages");
+    if (!limited.ok) return limited;
+  }
 
   const access = requireWrite(ctx, channelId, author.id);
   if (!access.ok) return access;
@@ -382,6 +401,13 @@ export async function sendMessage(
   }
   await discardPending(ctx, promoted.value);
 
+  // Before hydrating, so the sender's response and everyone's `msg` event already carry the
+  // question's state (src/do/agent.ts). Only SQLite is written here; the Workshop is called from the
+  // alarm this wakes.
+  const asked =
+    options.agentReply !== true &&
+    recordAgentRequest(ctx, author, access.value.channel, inserted!, options.workshopAccount ?? null);
+
   const message = hydrateMessage(ctx, inserted!);
   ctx.bus.toChannel(channelId, { t: "msg", message });
   if (rootRow !== null) {
@@ -398,6 +424,7 @@ export async function sendMessage(
     attachments: promoted.value.length,
     mentions: mentionIds.length,
   });
+  if (asked) await ctx.wakeAt(now);
   return allow({ message, deduped: false, badges: badgeSummary(ctx, author.id) });
 }
 
@@ -545,6 +572,8 @@ export async function deleteMessage(
   ctx.storage.transactionSync(() => {
     ctx.sql.exec(`DELETE FROM attachments WHERE message_id = ?`, messageId);
     ctx.sql.exec(`DELETE FROM mentions WHERE message_id = ?`, messageId);
+    // A withdrawn question is not answered: an answer arriving later finds no row and is dropped.
+    forgetAgentRequest(ctx, messageId);
     ctx.sql.exec(`DELETE FROM reactions WHERE message_id = ?`, messageId);
     if (keepTombstone) {
       ctx.sql.exec(

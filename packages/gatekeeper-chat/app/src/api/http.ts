@@ -163,6 +163,8 @@ export function createHttpApi(): ChatApi {
       request<ReactionResponse>("PUT", apiPath("addReaction", { messageId, emoji })),
     removeReaction: (messageId: MessageId, emoji: string) =>
       request<ReactionResponse>("DELETE", apiPath("removeReaction", { messageId, emoji })),
+    retryAgent: (messageId: MessageId) =>
+      request<MessageResponse>("POST", apiPath("retryAgent", { messageId })),
 
     listThreads: (params: ListThreadsQuery = {}) =>
       request<ThreadListResponse>(

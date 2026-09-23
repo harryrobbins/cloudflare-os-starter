@@ -6,6 +6,7 @@
 // client mistake into a 500 and, on the WebSocket path, into a dropped connection.
 
 import {
+  AGENT_USER_ID,
   DEFAULT_PAGE_LIMIT,
   MAX_ATTACHMENTS_PER_MESSAGE,
   MAX_BODY_BYTES,
@@ -346,6 +347,16 @@ export function extractMentionIds(body: string): readonly string[] {
     if (id !== undefined) seen.add(id);
   }
   return [...seen];
+}
+
+/**
+ * True when a body asks the Agent something: the `<@agent>` token autocomplete inserts, or a bare
+ * `@agent` typed without it (the one reserved name the composer does not turn into a token -- see
+ * `app/src/lib/mentions.ts`). Case-insensitive for the bare form, because people type `@Agent`.
+ */
+export function mentionsAgent(body: string): boolean {
+  if (extractMentionIds(body).includes(AGENT_USER_ID)) return true;
+  return /(^|[^\w@])@agent\b/iu.test(body);
 }
 
 /** A reaction emoji arrives as a path segment, so it is validated on its own. */

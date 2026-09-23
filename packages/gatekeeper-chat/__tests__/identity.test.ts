@@ -74,7 +74,16 @@ describe("identityFromClaims", () => {
     expect(identityFromClaims({ sub: "abc123", email: "Harry@Example.Test" })).toEqual({
       id: "abc123",
       email: "harry@example.test",
+      workshopAccount: "Harry@Example.Test",
     });
+  });
+
+  it("keeps the email claim verbatim as the Workshop account the agent is asked as", () => {
+    // The Workshop names an Access account `users.idFromName(payload.email)` without normalising it,
+    // so the lowercased contact address would name a different (empty) account there.
+    const identity = identityFromClaims({ sub: "abc123", email: " Mixed.Case@Example.Test" });
+    expect(identity?.email).toBe("mixed.case@example.test");
+    expect(identity?.workshopAccount).toBe(" Mixed.Case@Example.Test");
   });
 
   it("refuses claims with no subject or no email", () => {
