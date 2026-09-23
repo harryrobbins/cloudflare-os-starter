@@ -1,5 +1,6 @@
-// The people directory. "A person appears in the directory the first time they open chat", so the empty
-// and partial states say that rather than implying an invite flow that does not exist.
+// The people directory. A person appears the first time they sign in to the platform -- the shell tells
+// chat once per session -- so the empty and partial states say that rather than implying an invite flow
+// that does not exist.
 
 import { MagnifyingGlass, Users } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -67,7 +68,7 @@ export function PeopleView({
         <EmptyState
           icon={<Users size={20} />}
           title="Nobody matches that"
-          body="People appear here the first time they open chat; nobody is invited or approved."
+          body="People appear here the first time they sign in to the platform; nobody is invited or approved."
         />
       ) : (
         <ul className="grid gap-2 p-4 sm:grid-cols-2">

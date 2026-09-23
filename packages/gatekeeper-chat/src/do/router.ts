@@ -13,6 +13,7 @@ import {
   MAX_BODY_BYTES,
   PROTOCOL_VERSION,
   type MeResponse,
+  type OkResponse,
   type UserResponse,
 } from "../shared/protocol.js";
 import { FILES_PREFIX, matchApiRoute, matchFilePath, WS_PATH, type ApiRouteName } from "../shared/routes.js";
@@ -54,7 +55,7 @@ import { toPrefs, toUser, type UserRow } from "./rows.js";
 import { search } from "./search.js";
 import { acceptSocket } from "./sockets.js";
 import { badgeSummary } from "./unread.js";
-import { isAdmin, listUsers, loadUserRow, updatePrefs } from "./users.js";
+import { isAdmin, listUsers, loadUserRow, updatePrefs, visibleInDirectory } from "./users.js";
 
 /** Turns an {@link Outcome} into the contract's response or its error envelope. */
 function respond<T>(outcome: Outcome<T>): Response {
@@ -111,6 +112,10 @@ export async function route(
   switch (name) {
     case "me":
       return json(me(ctx, user, admin));
+
+    case "markSeen":
+      // `touchUser` already ran in `ChatWorkspace.fetch`, which is the whole point of the call.
+      return json({ ok: true } satisfies OkResponse);
 
     case "updateMe": {
       const body = await readJson(request);
@@ -213,11 +218,13 @@ export async function route(
       return respond(await createUpload(ctx, user.id, request));
 
     case "listUsers":
-      return json(listUsers(ctx, url.searchParams.get("cursor"), numberParam(url, "limit")));
+      return json(listUsers(ctx, user, url.searchParams.get("cursor"), numberParam(url, "limit")));
 
     case "getUser": {
       const row = loadUserRow(ctx, params["userId"]!);
-      if (row === null) return errorResponse("not_found", "No such person.");
+      if (row === null || !visibleInDirectory(ctx, user, row.id)) {
+        return errorResponse("not_found", "No such person.");
+      }
       return json({ user: toUser(row, ctx.bus.isOnline(row.id)) });
     }
 

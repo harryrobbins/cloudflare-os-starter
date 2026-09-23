@@ -242,7 +242,7 @@ export function NewMessageDialog({
           ))}
           {matches.length === 0 && (
             <li className="px-2 py-6 text-center text-[12px] text-kumo-subtle">
-              Nobody else matches that. People appear here once they have opened chat.
+              Nobody else matches that. People appear here once they have signed in to the platform.
             </li>
           )}
         </ul>

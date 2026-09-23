@@ -43,6 +43,12 @@ export const API_ROUTES = {
   me: { method: "GET", path: "/me" },
   updateMe: { method: "PATCH", path: "/me" },
   setAvatar: { method: "PUT", path: "/me/avatar" },
+  /**
+   * "This person has signed in to the platform." The shell calls it once per session so colleagues
+   * who have never opened chat still appear under People; the Durable Object's `touchUser` runs on
+   * every request, so the route itself has nothing left to do.
+   */
+  markSeen: { method: "POST", path: "/me/seen" },
 
   listChannels: { method: "GET", path: "/channels" },
   createChannel: { method: "POST", path: "/channels" },

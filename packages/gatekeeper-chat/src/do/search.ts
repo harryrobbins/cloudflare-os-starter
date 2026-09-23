@@ -93,7 +93,7 @@ export function search(
 
   // One user list: the directory matches for the top section plus every author on this page, so the
   // client never needs a second request to render a name.
-  const directory = matchUsers(ctx, query.text, TOP_SECTION_LIMIT);
+  const directory = matchUsers(ctx, user, query.text, TOP_SECTION_LIMIT);
   const authorIds = new Set<UserId>(page.map((row) => row.author_id));
   for (const entry of directory) authorIds.delete(entry.id);
 

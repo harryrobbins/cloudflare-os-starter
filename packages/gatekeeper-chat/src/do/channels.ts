@@ -35,7 +35,7 @@ import { hashId, logEvent } from "./logs.js";
 import { advanceThreadCursors, postSystemMessage } from "./messages.js";
 import { toChannel, toMembership, type ChannelRow, type MembershipRow, type UserRow } from "./rows.js";
 import { badgeSummary } from "./unread.js";
-import { escapeLike, existingUserIds, loadUsers } from "./users.js";
+import { escapeLike, loadUsers, visibleUserIds } from "./users.js";
 
 /** Public channels are browsable by everyone, so a rail request returns them all. */
 export function listChannels(ctx: Ctx, user: UserRow): ChannelListResponse {
@@ -123,9 +123,10 @@ export function createChannel(
   const now = ctx.now();
   const others = [...new Set(request.memberIds ?? [])].filter((id) => id !== user.id);
 
-  if (existingUserIds(ctx, others).size !== others.length) {
+  if (visibleUserIds(ctx, user, others).size !== others.length) {
     // Never "that address is not allowed to sign in": the directory only knows people who have
-    // opened chat, and saying more would disclose Access eligibility.
+    // signed in, and saying more would disclose Access eligibility. Somebody the directory rule hides
+    // from the caller is "not in the directory" too.
     return refuse("not_found", "One of those people is not in the directory.");
   }
 

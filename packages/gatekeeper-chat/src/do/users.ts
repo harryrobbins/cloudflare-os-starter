@@ -2,9 +2,15 @@
 //
 // "Signing in through Access is membership. Nobody is invited, approved or asked for a name"
 // (chat.md, "People and identity"): the upsert below is the whole account model. A person appears in
-// the directory the first time they open chat, which is also why the directory never answers
-// questions about addresses that have not appeared -- doing so would disclose who is allowed to sign
-// in.
+// the directory the first time any request of theirs reaches the object -- opening chat, or the
+// platform shell's once-per-session `POST /api/me/seen` -- which is also why the directory never
+// answers questions about addresses that have not appeared: doing so would disclose who is allowed to
+// sign in.
+//
+// Who may *see* whom in the directory is decided in exactly one place, {@link directoryFilter}. Today
+// every signed-in person is a trusted colleague and sees everybody; guests or people with more
+// limited access are expected later, and hiding them (or hiding the directory from them) is a change
+// to that one function rather than to each listing.
 
 import { isAdminEmail } from "../env.js";
 import {
@@ -108,6 +114,44 @@ export function existingUserIds(ctx: Ctx, userIds: readonly UserId[]): Set<UserI
   );
 }
 
+/**
+ * THE directory rule, as a SQL predicate over a `users` row aliased `u`, for one viewer.
+ *
+ * Every listing, lookup and "may I start a conversation with them" check goes through it, so the
+ * directory can be narrowed later -- guests seeing only the people they share a channel with, or
+ * being hidden from everyone else -- by changing this function alone. Today it admits every row:
+ * everyone who can sign in is one of the deployment owner's colleagues, and the built-in Agent is
+ * listed so it can be messaged.
+ */
+export function directoryFilter(viewer: Pick<UserRow, "id" | "kind">): {
+  readonly sql: string;
+  readonly params: readonly unknown[];
+} {
+  void viewer;
+  return { sql: "u.kind IN ('person', 'agent')", params: [] };
+}
+
+/** {@link directoryFilter} for one row: may `viewer` see `userId` in the directory? */
+export function visibleInDirectory(ctx: Ctx, viewer: UserRow, userId: UserId): boolean {
+  return visibleUserIds(ctx, viewer, [userId]).has(userId);
+}
+
+/** The subset of `userIds` that `viewer` may see in the directory. */
+export function visibleUserIds(ctx: Ctx, viewer: UserRow, userIds: readonly UserId[]): Set<UserId> {
+  if (userIds.length === 0) return new Set();
+  const filter = directoryFilter(viewer);
+  return new Set(
+    ctx.sql
+      .exec<{ id: string }>(
+        `SELECT u.id AS id FROM users u WHERE u.id IN (${placeholders(userIds.length)}) AND ${filter.sql}`,
+        ...userIds,
+        ...filter.params,
+      )
+      .toArray()
+      .map((row) => row.id),
+  );
+}
+
 export function isAdmin(ctx: Ctx, user: UserRow): boolean {
   return isAdminEmail(ctx.env, user.email);
 }
@@ -137,17 +181,29 @@ export interface UserPage {
 }
 
 /**
- * `GET /api/users`. Everyone who has appeared, ordered by id.
+ * `GET /api/users`. Everyone who has appeared and {@link directoryFilter} lets the viewer see,
+ * ordered by id.
  *
  * The cursor is the last id of the previous page, which makes it a keyset with no offset to drift as
  * people appear. A user id is an Access subject, so the order is lexicographic rather than temporal;
  * what matters is only that it is total and stable. An empty cursor sorts before every id, so the
  * first page needs no second query.
  */
-export function listUsers(ctx: Ctx, cursor: string | null, limit: number = DEFAULT_PAGE_LIMIT): UserPage {
+export function listUsers(
+  ctx: Ctx,
+  viewer: UserRow,
+  cursor: string | null,
+  limit: number = DEFAULT_PAGE_LIMIT,
+): UserPage {
   const size = Math.min(Math.max(limit, 1), MAX_PAGE_LIMIT);
+  const filter = directoryFilter(viewer);
   const rows = ctx.sql
-    .exec<UserRow>(`SELECT * FROM users WHERE id > ? ORDER BY id LIMIT ?`, cursor ?? "", size + 1)
+    .exec<UserRow>(
+      `SELECT u.* FROM users u WHERE u.id > ? AND ${filter.sql} ORDER BY u.id LIMIT ?`,
+      cursor ?? "",
+      ...filter.params,
+      size + 1,
+    )
     .toArray();
   const page = rows.slice(0, size);
   return {
@@ -157,16 +213,18 @@ export function listUsers(ctx: Ctx, cursor: string | null, limit: number = DEFAU
 }
 
 /** Searches the directory by display name or email local part, for the search page's top section. */
-export function matchUsers(ctx: Ctx, text: string, limit: number): readonly User[] {
+export function matchUsers(ctx: Ctx, viewer: UserRow, text: string, limit: number): readonly User[] {
   if (text.length === 0) return [];
   const like = `%${escapeLike(text.toLowerCase())}%`;
+  const filter = directoryFilter(viewer);
   const rows = ctx.sql
     .exec<UserRow>(
-      `SELECT * FROM users
-       WHERE lower(name) LIKE ? ESCAPE '\\' OR lower(email) LIKE ? ESCAPE '\\'
-       ORDER BY name LIMIT ?`,
+      `SELECT u.* FROM users u
+       WHERE (lower(u.name) LIKE ? ESCAPE '\\' OR lower(u.email) LIKE ? ESCAPE '\\') AND ${filter.sql}
+       ORDER BY u.name LIMIT ?`,
       like,
       like,
+      ...filter.params,
       limit,
     )
     .toArray();
