@@ -31,6 +31,7 @@ const packageDirs = {
   errorReporter: "packages/error-reporter",
   runtime: "packages/gatekeeper-runtime",
   chat: "packages/gatekeeper-chat",
+  webSearch: "packages/gatekeeper-websearch",
 } as const;
 const generatedPaths = Object.fromEntries(
   Object.entries(packageDirs).map(([name, dir]) => [name, join(root, dir, generatedName)]),
@@ -79,6 +80,10 @@ const errorReportingPaths = [
 
 const chatPaths = [
   "workers.chat.name",
+];
+
+const webSearchPaths = [
+  "workers.webSearch.name",
 ];
 
 const resourcePaths = [
@@ -180,6 +185,7 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
     ...(config.aiGateway?.enabled ? aiGatewayPaths : []),
     ...(config.errorReporting?.enabled ? errorReportingPaths : []),
     ...(config.chat?.enabled ? chatPaths : []),
+    ...(config.webSearch?.enabled ? webSearchPaths : []),
   ];
   for (const path of activePaths) {
     const value = valueAt(config, path);
@@ -212,6 +218,13 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
       ...activeConfig,
       workers: { ...activeConfig.workers, chat: undefined },
       chat: undefined,
+    };
+  }
+  if (!config.webSearch?.enabled) {
+    activeConfig = {
+      ...activeConfig,
+      workers: { ...activeConfig.workers, webSearch: undefined },
+      webSearch: undefined,
     };
   }
   const placeholder = JSON.stringify(activeConfig).match(/<[^>]+>/)?.[0];
@@ -252,11 +265,12 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
     .filter(([key]) => key !== "errorReporter" || config.errorReporting.enabled)
     // A dormant chat name may collide with nothing, because no chat Worker is deployed for it.
     .filter(([key]) => key !== "chat" || (config.chat?.enabled ?? false))
+    .filter(([key]) => key !== "webSearch" || (config.webSearch?.enabled ?? false))
     .map(([, worker]) => worker!.name);
   if (new Set(workerNames).size !== workerNames.length) {
     throw new Error(
-      "Router, Workshop, Context, Scheduler, Synthetic Data, chat, and custom Gatekeeper names must " +
-      "be unique.");
+      "Router, Workshop, Context, Scheduler, Synthetic Data, chat, web search, and custom Gatekeeper " +
+      "names must be unique.");
   }
   if (!workerNames.every((name) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(name))) {
     throw new Error("Worker names must use lowercase letters, numbers, and hyphens.");
@@ -608,6 +622,8 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
   if (config.runtime?.enabled && !runtime) throw new Error("Python runtime base configuration is required.");
   const chat = config.chat?.enabled ? structuredClone(bases.chat) : undefined;
   if (config.chat?.enabled && !chat) throw new Error("Team chat base configuration is required.");
+  const webSearch = config.webSearch?.enabled ? structuredClone(bases.webSearch) : undefined;
+  if (config.webSearch?.enabled && !webSearch) throw new Error("Web search base configuration is required.");
   const origin = publicOrigin(config);
 
   setCommon(router, config, config.workers.router.name, config.workers.router.route);
@@ -708,6 +724,12 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
       service: config.workers.chat!.name,
       entrypoint: "GatekeeperVendor",
     }] : []),
+    // RPC only, like Synthetic Data: agents reach it through the Workshop, never the router.
+    ...(webSearch ? [{
+      binding: "GATEKEEPER_WEBSEARCH",
+      service: config.workers.webSearch!.name,
+      entrypoint: "GatekeeperVendor",
+    }] : []),
   ];
   if (runtime && config.runtime) {
     setCommon(runtime, config, config.runtime.workerName);
@@ -798,11 +820,19 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     // `app/dist` behind its own Access check (`run_worker_first`), and the router only proxies to it.
   }
 
+  if (webSearch && config.webSearch) {
+    setCommon(webSearch, config, config.workers.webSearch!.name);
+    webSearch.vars = webSearchVars(config, origin);
+    // `secrets.required: ["OPENROUTER_API_KEY"]` is inherited from the package's wrangler.jsonc, so
+    // wrangler refuses to deploy until the key has been installed with `wrangler secret put`.
+  }
+
   const generated: GeneratedConfigs = {
     router, workshop, context, scheduler, procgen, customGatekeeper,
     ...(errorReporter && { errorReporter }),
     ...(runtime && { runtime }),
     ...(chat && { chat }),
+    ...(webSearch && { webSearch }),
   };
   requireNoDevValues(generated, "generated production config");
   return generated;
@@ -904,6 +934,7 @@ export function buildCommands(config: DeploymentConfig): BuildCommand[] {
     // capnweb-validate build as a `build.command`, so wrangler runs it at deploy time, exactly as the
     // custom Gatekeeper's does.
     ...(config.chat?.enabled ? [{ args: ownBuild("gatekeeper-chat") }] : []),
+    ...(config.webSearch?.enabled ? [{ args: ownBuild("gatekeeper-websearch") }] : []),
     ...(config.errorReporting.enabled ? [{ args: ownBuild("error-reporter") }] : []),
     // Access mode is a build-time constant in the frontend bundle (`src/useAuth.ts`), so it is set
     // here rather than inherited: a bundle built under a different value is wrong, not just stale.
@@ -928,6 +959,23 @@ export function buildCommands(config: DeploymentConfig): BuildCommand[] {
       }),
     },
   ];
+}
+
+/**
+ * The web search gate's deployment-specific detector lists: literal strings no query may contain,
+ * and private hostname suffixes. JSON arrays, which wrangler passes through as structured vars.
+ */
+export function webSearchVars(config: DeploymentConfig, origin: string): Record<string, string[]> {
+  const publicHost = new URL(origin).hostname;
+  const accessHost = new URL(config.access.issuer).hostname;
+  const route = config.workers.router.route;
+  const parent = route.customDomain?.split(".").slice(1).join(".");
+  const derived = parent?.includes(".") ? [parent] : [];
+  return {
+    BLOCKED_TERMS: [...new Set([config.accountId, accessHost, ...(config.webSearch?.blockedTerms ?? [])])],
+    PRIVATE_DOMAINS: config.webSearch?.privateDomains ?? derived,
+    PUBLIC_HOSTS: [publicHost],
+  };
 }
 
 /** `chat.agentReplies`, defaulted: on whenever chat itself is. */
@@ -960,6 +1008,7 @@ export function deployOrder(config: DeploymentConfig): (keyof typeof packageDirs
     "procgen",
     "customGatekeeper",
     ...(config.runtime?.enabled ? ["runtime" as const] : []),
+    ...(config.webSearch?.enabled ? ["webSearch" as const] : []),
     ...(chatFirst ? chat : []),
     "workshop",
     ...(chatFirst ? [] : chat),
@@ -1144,6 +1193,9 @@ async function main(): Promise<void> {
     errorReporter: await readJsonc(join(root, packageDirs.errorReporter, "wrangler.jsonc")),
     ...(config.runtime?.enabled ? { runtime: await readJsonc(join(root, packageDirs.runtime, "wrangler.jsonc")) } : {}),
     ...(config.chat?.enabled ? { chat: await readJsonc(join(root, packageDirs.chat, "wrangler.jsonc")) } : {}),
+    ...(config.webSearch?.enabled
+      ? { webSearch: await readJsonc(join(root, packageDirs.webSearch, "wrangler.jsonc")) }
+      : {}),
   });
   reportAiGateway(config);
 

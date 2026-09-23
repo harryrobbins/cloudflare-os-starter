@@ -85,6 +85,7 @@ async function baseConfigs(): Promise<BaseConfigs> {
     errorReporter: await baseConfig("../packages/error-reporter/wrangler.jsonc"),
     runtime: await baseConfig("../packages/gatekeeper-runtime/wrangler.jsonc"),
     chat: await chatBaseConfig(),
+    webSearch: await baseConfig("../packages/gatekeeper-websearch/wrangler.jsonc"),
   };
 }
 
@@ -481,6 +482,54 @@ test("deploys Synthetic Data privately and binds it only to the Workshop", async
   assert.equal(generated.router.services!.some(
     (service) => service.service === "acme-cloudflare-os-procgen"), false);
   assert.ok(buildCommands(validConfig).some(({ args }) => args.includes("gatekeeper-procgen")));
+});
+
+test("deploys web search only when enabled, privately, with its key required", async () => {
+  const bases = await baseConfigs();
+  const off = generateConfigs(validConfig, bases);
+  assert.equal(off.webSearch, undefined);
+  assert.equal(off.workshop.services!.some((s) => s.binding === "GATEKEEPER_WEBSEARCH"), false);
+  assert.equal(deployOrder(validConfig).includes("webSearch"), false);
+  assert.equal(buildCommands(validConfig).some(({ args }) => args.includes("gatekeeper-websearch")), false);
+
+  const config = validateConfig(variant((c) => {
+    c.workers.webSearch = { name: "acme-cloudflare-os-websearch" };
+    c.webSearch = { enabled: true, blockedTerms: ["project-nightjar"] };
+  }));
+  const generated = generateConfigs(config, bases);
+  const ws = generated.webSearch!;
+  assert.equal(ws.name, "acme-cloudflare-os-websearch");
+  assert.equal(ws.workers_dev, false);
+  assert.equal(ws.preview_urls, false);
+  assert.equal(ws.routes, undefined);
+  assert.deepEqual(ws.secrets, { required: ["OPENROUTER_API_KEY"] });
+  assert.deepEqual(ws.vars, {
+    BLOCKED_TERMS: ["0123456789abcdef0123456789abcdef", new URL(validConfig.access.issuer).hostname, "project-nightjar"],
+    PRIVATE_DOMAINS: ["example.com"],
+    PUBLIC_HOSTS: ["os.example.com"],
+  });
+  assert.deepEqual(generated.workshop.services!.find((s) => s.binding === "GATEKEEPER_WEBSEARCH"), {
+    binding: "GATEKEEPER_WEBSEARCH",
+    service: "acme-cloudflare-os-websearch",
+    entrypoint: "GatekeeperVendor",
+  });
+  assert.equal(generated.router.services!.some((s) => s.service === "acme-cloudflare-os-websearch"), false);
+  const order = deployOrder(config);
+  assert.ok(order.indexOf("webSearch") < order.indexOf("workshop"));
+  assert.ok(buildCommands(config).some(({ args }) => args.includes("gatekeeper-websearch")));
+});
+
+test("requires a web search Worker name only when web search is enabled", () => {
+  assert.throws(() => validateConfig(variant((c) => { c.webSearch = { enabled: true }; })),
+    /workers\.webSearch\.name/);
+  assert.doesNotThrow(() => validateConfig(variant((c) => {
+    c.webSearch = { enabled: false };
+    c.workers.webSearch = { name: "<web-search-worker>" };
+  })));
+  assert.throws(() => validateConfig(variant((c) => {
+    c.webSearch = { enabled: true };
+    c.workers.webSearch = { name: c.workers.procgen.name };
+  })), /must be unique/);
 });
 
 test("keeps every Worker behind the router off the public internet", async () => {

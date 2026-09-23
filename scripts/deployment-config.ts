@@ -142,6 +142,29 @@ export interface ChatConfig {
   agentReplies?: boolean;
 }
 
+/**
+ * Privacy-gated web search and fetch: one RPC-only Gatekeeper Worker bound to the Workshop as
+ * `GATEKEEPER_WEBSEARCH`. Every query and URL is checked by pattern detectors and the Jev decision
+ * model before it leaves. Needs the `OPENROUTER_API_KEY` secret on its Worker, installed with
+ * `wrangler secret put`; wrangler refuses the deploy without it.
+ *
+ * Absent or disabled generates nothing.
+ */
+export interface WebSearchConfig {
+  /** Whether the web search Worker is built, deployed and bound at all. */
+  enabled: boolean;
+  /**
+   * Extra literal strings no query or URL may contain, on top of the account ID and the Access team
+   * domain, which are always included.
+   */
+  blockedTerms?: string[];
+  /**
+   * Hostname suffixes that are private. Absent derives the parent domain of the router's custom
+   * domain (`cfos.example.com` gives `example.com`); the public origin itself is always allowed.
+   */
+  privateDomains?: string[];
+}
+
 /** Worker telemetry. Maps onto wrangler's `observability` block. */
 export interface DeploymentObservabilityConfig {
   enabled: boolean;
@@ -180,6 +203,8 @@ export interface DeploymentConfig {
     errorReporter?: { name: string };
     /** Team chat. Only required when `chat.enabled`. */
     chat?: { name: string };
+    /** Privacy-gated web search. Only required when `webSearch.enabled`. */
+    webSearch?: { name: string };
   };
   /** Optional private Python execution service; disabled unless explicitly enabled. */
   runtime?: { enabled: boolean; workerName: string; maxInstances: number };
@@ -192,6 +217,8 @@ export interface DeploymentConfig {
   errorReporting: { enabled: boolean; environment?: string; release?: string | null };
   /** Team chat. Absent means disabled, as does `enabled: false`. */
   chat?: ChatConfig;
+  /** Privacy-gated web search. Absent means disabled, as does `enabled: false`. */
+  webSearch?: WebSearchConfig;
   /** Workshop KV/R2. `null` requests Wrangler automatic provisioning. */
   resources: {
     blueprintsKvNamespaceId: string | null;
@@ -267,6 +294,8 @@ export interface GeneratedConfigs {
   errorReporter?: ProdWranglerConfig;
   /** Absent when `chat.enabled` is false or the block is missing. */
   chat?: ProdWranglerConfig;
+  /** Absent when `webSearch.enabled` is false or the block is missing. */
+  webSearch?: ProdWranglerConfig;
 }
 
 /** The upstream base configs the generated ones are derived from. */
@@ -282,6 +311,8 @@ export interface BaseConfigs {
   errorReporter: ProdWranglerConfig;
   /** Team chat base; required only when chat is enabled. */
   chat?: ProdWranglerConfig;
+  /** Web search base; required only when web search is enabled. */
+  webSearch?: ProdWranglerConfig;
 }
 
 /** One build step `deploy.ts` runs before deploying. See `buildCommands`. */

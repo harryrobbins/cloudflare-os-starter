@@ -40,7 +40,11 @@
 
     // Team chat: serves its own app at /gatekeeper/chat/ through the router. Only deployed while
     // the "chat" block below is enabled.
-    "chat": { "name": "cfos-chat" }
+    "chat": { "name": "cfos-chat" },
+
+    // Privacy-gated web search and fetch. RPC-only; only deployed while the "webSearch" block
+    // below is enabled.
+    "webSearch": { "name": "cfos-websearch" }
   },
 
   // This starter deploys Cloudflare Access mode. Cloudflare OS also supports built-in password
@@ -182,5 +186,18 @@
     "headSamplingRate": 1,
     "logs": { "invocationLogs": false },
     "traces": { "enabled": false, "headSamplingRate": 0.1 }
+  },
+
+  // Web search with a privacy gate: every query and URL is checked by pattern detectors and the
+  // Jev decision model (via OpenRouter) before it leaves. Clear queries run at once, uncertain ones
+  // wait for the user's approval, and personal data, identifiers or secrets are refused.
+  // Needs an OpenRouter key on its Worker, never in this file:
+  //   CLOUDFLARE_ACCOUNT_ID=<id> pnpm exec wrangler secret put OPENROUTER_API_KEY --name cfos-websearch
+  // Plan: docs/plans/web-search-gatekeeper.md
+  "webSearch": {
+    "enabled": true,
+    // Extra strings no query may contain, on top of the account ID and Access team domain.
+    "blockedTerms": []
+    // "privateDomains": absent derives "surprisingly.ltd" from the router's custom domain.
   }
 }
