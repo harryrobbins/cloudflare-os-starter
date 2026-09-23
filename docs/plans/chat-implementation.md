@@ -400,7 +400,16 @@ Worker-side, on top of the streams above. Nothing changed shape on the wire.
 ## Phase 3 (follow-up)
 
 - [ ] Web Push (service worker, VAPID secret, outbox)
-- [ ] `@agent` mentions through `ExternalMessageGateway`
+- [x] `@agent` mentions through `ExternalMessageGateway` (branch `chat-agent`, 2026-09-23). One "Chat
+      agent" workspace per person rather than per channel (the Overseer is owned by its first caller);
+      outbox as schema version 3; `ChatAgentReply` as the stored reply target; `chat.agentReplies` in
+      deployment.jsonc (default on); a fork fix to the Overseer (`57aa6553`), which called `dup()` on a
+      service stub. Proved end to end against the real Workshop by `e2e/agent-check.mjs` (10/10, fake
+      model) -- README, "Agent".
+- [x] People lists everyone who has signed in to the platform: the shell's dock posts `/api/me/seen`
+      once per session (fork `07046b97`), and one `directoryFilter` decides who sees whom.
+- [x] Authors a tab has never seen are named, not "Unknown": `msg` carries its author, and the store
+      resolves any other unknown id through `GET /api/users?ids=`.
 
 ## Release
 

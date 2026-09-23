@@ -104,6 +104,7 @@ The Workshop frontend is not involved in phase 1 at all. Phase 2 adds one small 
 ### The agent in chat
 
 - `@agent` as a mention in any public channel or thread sends the message (plus the last 20 messages of context) to the Workshop's external message gateway. Each channel maps to one agent workspace and each thread to one agent chat, so the agent keeps context per thread. The reply arrives as a message from the "Agent" member with a link to the agent chat.
+  - **Built (2026-09-23), with one change to that mapping:** the Overseer that receives a question is owned by its first caller and refuses everyone else, so a workspace per *channel* would answer only whoever asked first. It is one workspace per *person* instead (`gadgetKey = user:<chat user id>`, titled "Chat agent"), one agent chat per thread (`chatKey = channel:<id>:thread:<root>`) or per DM (`dm:<id>`), and the question is asked as the asker's own Workshop account and model. A one-to-one DM with Agent asks with every message; private channels and group conversations are refused on the message. Design, reliability and the fork fix it needed: `packages/gatekeeper-chat/README.md`, "Agent".
 - In any workspace the agent can use the ambient `ChatSession`: `listChannels()`, `readMessages(channel, cursor)`, `search(query)`, `postMessage(channel, text, threadId?)`. Reads are observations; posting is an action with approval. Private conversations are not visible to the agent in v1, because the ambient account is not yet linked to a user identity (see [open questions](#open-questions)).
 
 ## Technical design
@@ -275,7 +276,7 @@ Why it is acceptable: it touches no backend, no shared types, and no gadget runt
 ### Phase 3: Web Push and polish
 
 - Service worker, VAPID secret, subscription management UI in chat settings, durable delivery outbox, sending rules and cleanup.
-- `@agent` mention routing through the external message gateway.
+- ~~`@agent` mention routing through the external message gateway.~~ Done 2026-09-23 (see [The agent in chat](#the-agent-in-chat)).
 - Channel details pane (pinned messages, files), Mentions & reactions view, and quiet hours. Defer message forwarding and link previews until there is a clear permission model; server-side link fetching needs SSRF protection and content limits.
 
 ## Estimates
