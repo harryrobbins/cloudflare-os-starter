@@ -90,6 +90,9 @@
         },
         "~deepseek/deepseek-flash-latest": {
           "name": "DeepSeek Flash latest (OpenRouter)", "contextWindow": 1048576, "outputLimit": 393216
+        },
+        "xiaomi/mimo-v2.6-pro": {
+          "name": "Xiaomi MiMo V2.6 Pro (OpenRouter)", "contextWindow": 1048576, "outputLimit": 131072
         }
       }
     }
