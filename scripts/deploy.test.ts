@@ -5,7 +5,8 @@ import { isAbsolute, join } from "node:path";
 import test from "node:test";
 import { parse, type ParseError } from "jsonc-parser";
 import {
-  aiGatewayPlan, buildCommands, deployOrder, formatBlueprintsPath, generateConfigs, validateConfig,
+  aiGatewayPlan, buildCommands, deployOrder, formatBlueprintsPath, generateConfigs, recordsQueues,
+  validateConfig,
 } from "./deploy.ts";
 import type {
   BaseConfigs,
@@ -86,6 +87,7 @@ async function baseConfigs(): Promise<BaseConfigs> {
     runtime: await baseConfig("../packages/gatekeeper-runtime/wrangler.jsonc"),
     chat: await chatBaseConfig(),
     webSearch: await baseConfig("../packages/gatekeeper-websearch/wrangler.jsonc"),
+    records: await baseConfig("../packages/gatekeeper-records/wrangler.jsonc"),
   };
 }
 
@@ -1133,4 +1135,188 @@ test("binds the Workshop's gateway to chat for @agent answers unless agentReplie
     /agentReplies is true while chat.enabled is false/i);
   // Disabled chat with the switch simply absent is the ordinary case, and generates no chat Worker.
   assert.equal(generateConfigs(variant((c) => { c.chat = { enabled: false }; }), bases).chat, undefined);
+});
+
+const recordsAppHyperdrive = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const recordsPublisherHyperdrive = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const recordsApiAudience = "c".repeat(64);
+
+/** {@link validConfig} with Records switched on, plus any further `mutate`. */
+function recordsVariant(mutate: (config: Record<string, any>) => void = () => {}): DeploymentConfig {
+  return variant((c) => {
+    c.workers.records = { name: "acme-cloudflare-os-records" };
+    c.records = {
+      enabled: true,
+      hyperdriveId: recordsAppHyperdrive,
+      publisherHyperdriveId: recordsPublisherHyperdrive,
+      apiAccessAudience: recordsApiAudience,
+    };
+    mutate(c);
+  });
+}
+
+test("generates nothing Records-related when Records is disabled or absent", async () => {
+  const bases = await baseConfigs();
+  for (const config of [
+    validConfig,
+    variant((c) => { c.records = { enabled: false }; }),
+    // Dormant: placeholders and junk in a disabled block are not validated.
+    variant((c) => {
+      c.workers.records = { name: "<RECORDS_WORKER_NAME>" };
+      c.records = {
+        enabled: false,
+        hyperdriveId: "<RECORDS_APP_HYPERDRIVE_ID>",
+        publisherHyperdriveId: "<RECORDS_APP_HYPERDRIVE_ID>",
+        apiAccessAudience: "",
+      };
+    }),
+  ]) {
+    const generated = generateConfigs(config, bases);
+    assert.equal(generated.records, undefined);
+    assert.equal(generated.router.services!.some((s) => s.binding === "GATEKEEPER_RECORDS"), false);
+    assert.equal(generated.workshop.services!.some((s) => s.binding === "GATEKEEPER_RECORDS"), false);
+    assert.equal(Object.values(generated).some((w) => w?.hyperdrive || w?.queues), false);
+    assert.equal(deployOrder(config).includes("records"), false);
+    assert.equal(buildCommands(config).some(({ args }) => args.includes("gatekeeper-records")), false);
+  }
+  // A disabled Records name is free to collide, because nothing is deployed under it.
+  validateConfig(variant((c) => {
+    c.workers.records = { name: c.workers.workshop.name };
+    c.records = { enabled: false };
+  }));
+  assert.throws(
+    () => validateConfig(recordsVariant((c) => { c.workers.records.name = c.workers.workshop.name; })),
+    /unique/i);
+});
+
+test("the repository's deployment.jsonc keeps Records disabled", async () => {
+  const errors: ParseError[] = [];
+  const config = parse(
+    await readFile(new URL("../deployment.jsonc", import.meta.url), "utf8"), errors,
+    { allowTrailingComma: true }) as DeploymentConfig;
+  assert.deepEqual(errors, []);
+  assert.equal(config.records?.enabled, false);
+  assert.equal(typeof config.workers.records?.name, "string");
+  validateConfig(config);
+});
+
+test("generates the Records Worker with both uncached Hyperdrive IDs, its queues and vars", async () => {
+  const bases = await baseConfigs();
+  const generated = generateConfigs(recordsVariant(), bases);
+  const records = generated.records!;
+  assert.equal(records.name, "acme-cloudflare-os-records");
+  assert.equal(records.account_id, validConfig.accountId);
+  assert.equal(records.workers_dev, false);
+  assert.equal(records.preview_urls, false);
+  assert.equal(records.routes, undefined);
+  // Only the IDs: caching must be disabled on both configurations, which lives on the Hyperdrive
+  // configuration itself and cannot be expressed (or overridden) here.
+  assert.deepEqual(records.hyperdrive, [
+    { binding: "HYPERDRIVE", id: recordsAppHyperdrive },
+    { binding: "HYPERDRIVE_PUBLISHER", id: recordsPublisherHyperdrive },
+  ]);
+  assert.deepEqual(records.queues!.producers, [
+    { binding: "CHANGES", queue: "acme-cloudflare-os-records-changes" },
+  ]);
+  assert.equal(records.queues!.consumers!.length, 1);
+  assert.deepEqual(records.queues!.consumers![0], {
+    ...bases.records!.queues!.consumers![0],
+    queue: "acme-cloudflare-os-records-changes",
+    dead_letter_queue: "acme-cloudflare-os-records-changes-dlq",
+  });
+  assert.deepEqual(records.vars, {
+    CF_ACCESS_ISS: "https://acme.cloudflareaccess.com",
+    CF_ACCESS_AUD: "access-audience",
+    RECORDS_API_ACCESS_AUD: recordsApiAudience,
+    PUBLIC_BASE_URL: "https://os.example.com",
+  });
+  // Inherited from the package's wrangler.jsonc.
+  assert.deepEqual(records.migrations, bases.records!.migrations);
+  assert.deepEqual(records.triggers, bases.records!.triggers);
+  assert.deepEqual(records.ratelimits, bases.records!.ratelimits);
+  assert.deepEqual(records.build, bases.records!.build);
+  assert.equal(records.secrets, undefined);
+
+  const custom = generateConfigs(recordsVariant((c) => {
+    c.records.changesQueue = "records-feed";
+    c.records.deadLetterQueue = "records-feed-dead";
+  }), bases).records!;
+  assert.equal(custom.queues!.producers![0].queue, "records-feed");
+  assert.equal(custom.queues!.consumers![0].queue, "records-feed");
+  assert.equal(custom.queues!.consumers![0].dead_letter_queue, "records-feed-dead");
+  assert.deepEqual(recordsQueues(recordsVariant()), {
+    changes: "acme-cloudflare-os-records-changes",
+    deadLetter: "acme-cloudflare-os-records-changes-dlq",
+  });
+});
+
+test("never ships the Records Worker's dev-only localConnectionString", async () => {
+  const bases = await baseConfigs();
+  // The base config does carry them, for wrangler dev.
+  assert.ok(bases.records!.hyperdrive!.every((entry) => entry.localConnectionString));
+  const generated = generateConfigs(recordsVariant(), bases);
+  const text = JSON.stringify(generated);
+  assert.equal(text.includes("localConnectionString"), false);
+  assert.equal(text.includes("records-test-only"), false);
+  assert.equal(text.includes("postgres://"), false);
+});
+
+test("serves Records through the router and binds its vendor to the Workshop", async () => {
+  const generated = generateConfigs(recordsVariant(), await baseConfigs());
+  assert.deepEqual(generated.router.services!.find((s) => s.binding === "GATEKEEPER_RECORDS"), {
+    binding: "GATEKEEPER_RECORDS",
+    service: "acme-cloudflare-os-records",
+  });
+  assert.deepEqual(generated.workshop.services!.find((s) => s.binding === "GATEKEEPER_RECORDS"), {
+    binding: "GATEKEEPER_RECORDS",
+    service: "acme-cloudflare-os-records",
+    entrypoint: "GatekeeperVendor",
+  });
+  // The router remains the sole public entrypoint.
+  for (const [name, worker] of Object.entries(generated) as [string, ProdWranglerConfig][]) {
+    if (name === "router") continue;
+    assert.equal(worker.routes, undefined, `${name} carries a public route`);
+    assert.equal(worker.workers_dev, false, `${name} answers on workers.dev`);
+  }
+});
+
+test("deploys Records before the Workshop and router that bind it, and builds it first", () => {
+  const config = recordsVariant();
+  const order = deployOrder(config);
+  assert.ok(order.indexOf("records") >= 0);
+  assert.ok(order.indexOf("records") < order.indexOf("workshop"), order.join(" "));
+  assert.ok(order.indexOf("records") < order.indexOf("router"), order.join(" "));
+  assert.equal(new Set(order).size, order.length);
+  assert.ok(deployOrder(recordsVariant((c) => { c.chat.agentAccess = true; })).indexOf("records") <
+    deployOrder(recordsVariant((c) => { c.chat.agentAccess = true; })).indexOf("workshop"));
+
+  const commands = buildCommands(config).map(({ args }) => args.join(" "));
+  const app = commands.indexOf("--filter gatekeeper-records exec node build-app.mjs");
+  const tsc = commands.findIndex((c) => c.includes("vp run -F gatekeeper-records --no-cache build"));
+  assert.ok(app >= 0 && tsc > app, commands.join("\n"));
+});
+
+test("rejects missing, malformed or shared Records Hyperdrive IDs and audiences", () => {
+  assert.doesNotThrow(() => validateConfig(recordsVariant()));
+  for (const [mutate, message] of [
+    [(c: Record<string, any>) => { delete c.workers.records; }, /workers\.records\.name/],
+    [(c: Record<string, any>) => { delete c.records.hyperdriveId; }, /records\.hyperdriveId/],
+    [(c: Record<string, any>) => { c.records.publisherHyperdriveId = ""; }, /records\.publisherHyperdriveId/],
+    [(c: Record<string, any>) => { c.records.hyperdriveId = "not-a-hyperdrive-id"; }, /32 hexadecimal/],
+    [(c: Record<string, any>) => { c.records.publisherHyperdriveId = "abc"; }, /32 hexadecimal/],
+    [(c: Record<string, any>) => { c.records.hyperdriveId = "<RECORDS_APP_HYPERDRIVE_ID>"; }, /placeholder/i],
+    [(c: Record<string, any>) => { c.records.publisherHyperdriveId = recordsAppHyperdrive.toUpperCase(); },
+      /must be different Hyperdrive configurations/],
+    [(c: Record<string, any>) => { delete c.records.apiAccessAudience; }, /records\.apiAccessAudience/],
+    [(c: Record<string, any>) => { c.records.apiAccessAudience = "records-audience"; }, /AUD tag/],
+    [(c: Record<string, any>) => {
+      c.access.audience = recordsApiAudience;
+    }, /same as access\.audience/],
+    [(c: Record<string, any>) => { c.records.enabled = "yes"; }, /records\.enabled must be a boolean/],
+    [(c: Record<string, any>) => { c.records.changesQueue = "Records_Changes"; }, /records\.changesQueue/],
+    [(c: Record<string, any>) => { c.records.deadLetterQueue = c.records.changesQueue = "same"; },
+      /must be different queues/],
+  ] as const) {
+    assert.throws(() => validateConfig(recordsVariant(mutate)), message);
+  }
 });

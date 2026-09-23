@@ -32,6 +32,7 @@ const packageDirs = {
   runtime: "packages/gatekeeper-runtime",
   chat: "packages/gatekeeper-chat",
   webSearch: "packages/gatekeeper-websearch",
+  records: "packages/gatekeeper-records",
 } as const;
 const generatedPaths = Object.fromEntries(
   Object.entries(packageDirs).map(([name, dir]) => [name, join(root, dir, generatedName)]),
@@ -43,6 +44,12 @@ const maxChatUploadBytes = 100 * 1024 * 1024;
 // The chat SPA is uploaded from here through the Worker's own `assets` binding.
 const chatAssetsDir = "app/dist";
 const accountIdPattern = /^[a-f\d]{32}$/i;
+// Hyperdrive configuration IDs have the same shape as account IDs.
+const hyperdriveIdPattern = accountIdPattern;
+// An Access application's AUD tag: 64 hexadecimal characters.
+const accessAudiencePattern = /^[a-f\d]{64}$/i;
+// Queue names: lowercase letters, numbers and hyphens, at most 63 characters.
+const queueNamePattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 const requiredPaths = [
   "accountId",
@@ -84,6 +91,13 @@ const chatPaths = [
 
 const webSearchPaths = [
   "workers.webSearch.name",
+];
+
+const recordsPaths = [
+  "workers.records.name",
+  "records.hyperdriveId",
+  "records.publisherHyperdriveId",
+  "records.apiAccessAudience",
 ];
 
 const resourcePaths = [
@@ -186,6 +200,7 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
     ...(config.errorReporting?.enabled ? errorReportingPaths : []),
     ...(config.chat?.enabled ? chatPaths : []),
     ...(config.webSearch?.enabled ? webSearchPaths : []),
+    ...(config.records?.enabled === true ? recordsPaths : []),
   ];
   for (const path of activePaths) {
     const value = valueAt(config, path);
@@ -227,6 +242,13 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
       webSearch: undefined,
     };
   }
+  if (config.records?.enabled !== true) {
+    activeConfig = {
+      ...activeConfig,
+      workers: { ...activeConfig.workers, records: undefined },
+      records: undefined,
+    };
+  }
   const placeholder = JSON.stringify(activeConfig).match(/<[^>]+>/)?.[0];
   if (placeholder) throw new Error(`Replace deployment placeholder ${placeholder}.`);
 
@@ -266,11 +288,12 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
     // A dormant chat name may collide with nothing, because no chat Worker is deployed for it.
     .filter(([key]) => key !== "chat" || (config.chat?.enabled ?? false))
     .filter(([key]) => key !== "webSearch" || (config.webSearch?.enabled ?? false))
+    .filter(([key]) => key !== "records" || config.records?.enabled === true)
     .map(([, worker]) => worker!.name);
   if (new Set(workerNames).size !== workerNames.length) {
     throw new Error(
-      "Router, Workshop, Context, Scheduler, Synthetic Data, chat, web search, and custom Gatekeeper " +
-      "names must be unique.");
+      "Router, Workshop, Context, Scheduler, Synthetic Data, chat, web search, Records, and custom " +
+      "Gatekeeper names must be unique.");
   }
   if (!workerNames.every((name) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(name))) {
     throw new Error("Worker names must use lowercase letters, numbers, and hyphens.");
@@ -317,6 +340,7 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
 
   validateAiGateway(config);
   validateChat(config);
+  validateRecords(config);
 
   if (typeof config.errorReporting.enabled !== "boolean") {
     throw new Error("Error reporting enabled must be a boolean.");
@@ -560,6 +584,70 @@ function validateChat(config: DeploymentConfig): void {
   }
 }
 
+/**
+ * The Records block. Dormant unless enabled, like chat: a disabled deployment generates no Records
+ * Worker, so nothing else in the block has to be valid -- placeholders included.
+ *
+ * What cannot be checked from here: that both Hyperdrive configurations have query caching
+ * DISABLED. Permission and registry reads must be fresh, and a cached read can serve a revoked
+ * grant. That is an operator prerequisite (deployment.jsonc) and not something this script can see.
+ */
+function validateRecords(config: DeploymentConfig): void {
+  const records = config.records;
+  if (records === undefined) return;
+  if (records === null || typeof records !== "object" || Array.isArray(records)) {
+    throw new Error('records must be an object when present. Use { "enabled": false } to turn it off.');
+  }
+  if (typeof records.enabled !== "boolean") {
+    throw new Error("records.enabled must be a boolean.");
+  }
+  if (!records.enabled) return;
+  for (const key of ["hyperdriveId", "publisherHyperdriveId"] as const) {
+    if (!hyperdriveIdPattern.test(records[key])) {
+      throw new Error(
+        `records.${key} must be a Hyperdrive configuration ID: 32 hexadecimal characters ` +
+        "(wrangler hyperdrive list).");
+    }
+  }
+  if (records.hyperdriveId.toLowerCase() === records.publisherHyperdriveId.toLowerCase()) {
+    throw new Error(
+      "records.hyperdriveId and records.publisherHyperdriveId must be different Hyperdrive " +
+      "configurations: one connects as the runtime application role (records_app), the other as the " +
+      "outbox publisher role (records_publisher), and neither role may act as the other.");
+  }
+  if (!accessAudiencePattern.test(records.apiAccessAudience)) {
+    throw new Error(
+      "records.apiAccessAudience must be an Access application AUD tag (64 hexadecimal characters): " +
+      "the path-specific Access application protecting /gatekeeper/records/v1/*.");
+  }
+  if (records.apiAccessAudience.toLowerCase() === config.access.audience.toLowerCase()) {
+    throw new Error(
+      "records.apiAccessAudience is the same as access.audience. The machine API needs its own " +
+      "path-specific Access application (service tokens) for /gatekeeper/records/v1/*, separate " +
+      "from the one people sign in through.");
+  }
+  const queues = recordsQueues(config);
+  for (const [key, name] of [["changesQueue", queues.changes], ["deadLetterQueue", queues.deadLetter]]) {
+    if (typeof name !== "string" || !queueNamePattern.test(name)) {
+      throw new Error(
+        `records.${key} must be omitted or a queue name of lowercase letters, numbers and hyphens ` +
+        "(at most 63 characters).");
+    }
+  }
+  if (queues.changes === queues.deadLetter) {
+    throw new Error("records.changesQueue and records.deadLetterQueue must be different queues.");
+  }
+}
+
+/** The Records change queue and its dead-letter queue, defaults applied. */
+export function recordsQueues(config: DeploymentConfig): { changes: string; deadLetter: string } {
+  const worker = config.workers.records?.name;
+  return {
+    changes: config.records?.changesQueue ?? `${worker}-changes`,
+    deadLetter: config.records?.deadLetterQueue ?? `${worker}-changes-dlq`,
+  };
+}
+
 /** `aiGateway.models` with empty providers dropped, or undefined when nothing remains. */
 function extraModels(config: DeploymentConfig): AiGatewayModels | undefined {
   const entries = Object.entries(config.aiGateway.models ?? {})
@@ -624,6 +712,8 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
   if (config.chat?.enabled && !chat) throw new Error("Team chat base configuration is required.");
   const webSearch = config.webSearch?.enabled ? structuredClone(bases.webSearch) : undefined;
   if (config.webSearch?.enabled && !webSearch) throw new Error("Web search base configuration is required.");
+  const records = config.records?.enabled ? structuredClone(bases.records) : undefined;
+  if (config.records?.enabled && !records) throw new Error("Records base configuration is required.");
   const origin = publicOrigin(config);
 
   setCommon(router, config, config.workers.router.name, config.workers.router.route);
@@ -639,6 +729,11 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     // it. Plain fetch, like the three above.
     ...(config.chat?.enabled
       ? [{ binding: "GATEKEEPER_CHAT", service: config.workers.chat!.name }]
+      : []),
+    // /gatekeeper/records: the machine API (/v1, behind its own path-specific Access application)
+    // and the people connect flow. Plain fetch; the router stays the sole public entrypoint.
+    ...(records
+      ? [{ binding: "GATEKEEPER_RECORDS", service: config.workers.records!.name }]
       : []),
   ];
 
@@ -728,6 +823,12 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     ...(webSearch ? [{
       binding: "GATEKEEPER_WEBSEARCH",
       service: config.workers.webSearch!.name,
+      entrypoint: "GatekeeperVendor",
+    }] : []),
+    // No props: the vendor scopes nothing to a domain; datastore scoping is per account binding.
+    ...(records ? [{
+      binding: "GATEKEEPER_RECORDS",
+      service: config.workers.records!.name,
       entrypoint: "GatekeeperVendor",
     }] : []),
   ];
@@ -827,14 +928,68 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     // wrangler refuses to deploy until the key has been installed with `wrangler secret put`.
   }
 
+  if (records && config.records) {
+    setCommon(records, config, config.workers.records!.name);
+    records.vars = {
+      // The same people trust boundary the Workshop and chat get: the connect flow verifies the
+      // Access JWT of the person connecting.
+      CF_ACCESS_ISS: config.access.issuer.replace(/\/$/, ""),
+      CF_ACCESS_AUD: config.access.audience,
+      // The machine API's own, path-specific Access application (service tokens).
+      RECORDS_API_ACCESS_AUD: config.records.apiAccessAudience,
+      PUBLIC_BASE_URL: origin,
+    };
+    // Both Hyperdrive configurations must have query caching DISABLED (checked by the operator, not
+    // here). Rebuilt from the base bindings so `localConnectionString`, which is for `wrangler dev`
+    // against a disposable database only, never reaches a deployed config.
+    const hyperdriveIds: Record<string, string> = {
+      HYPERDRIVE: config.records.hyperdriveId,
+      HYPERDRIVE_PUBLISHER: config.records.publisherHyperdriveId,
+    };
+    const baseHyperdrive = records.hyperdrive ?? [];
+    for (const binding of Object.keys(hyperdriveIds)) {
+      if (!baseHyperdrive.some((entry) => entry.binding === binding)) {
+        throw new Error(`${packageDirs.records}/wrangler.jsonc declares no ${binding} Hyperdrive binding.`);
+      }
+    }
+    records.hyperdrive = baseHyperdrive.map(({ binding }) => {
+      const id = hyperdriveIds[binding];
+      if (!id) {
+        throw new Error(
+          `${packageDirs.records}/wrangler.jsonc declares Hyperdrive binding ${binding}, which ` +
+          "deployment.jsonc has no ID for.");
+      }
+      return { binding, id };
+    });
+    const queues = recordsQueues(config);
+    const baseQueues = records.queues ?? {};
+    if (!baseQueues.producers?.length || !baseQueues.consumers?.length) {
+      throw new Error(`${packageDirs.records}/wrangler.jsonc must declare a queue producer and consumer.`);
+    }
+    // One queue: the Worker produces change events and consumes them itself, failing over to the DLQ.
+    records.queues = {
+      producers: baseQueues.producers.map((producer) => ({ ...producer, queue: queues.changes })),
+      consumers: baseQueues.consumers.map((consumer) => ({
+        ...consumer,
+        queue: queues.changes,
+        dead_letter_queue: queues.deadLetter,
+      })),
+    };
+    // Migrations, the cron trigger, the rate limiter and the capnweb-validate build step are
+    // inherited from the package's wrangler.jsonc. No secrets: database credentials live in the
+    // Hyperdrive configurations.
+  }
+
   const generated: GeneratedConfigs = {
     router, workshop, context, scheduler, procgen, customGatekeeper,
     ...(errorReporter && { errorReporter }),
     ...(runtime && { runtime }),
     ...(chat && { chat }),
     ...(webSearch && { webSearch }),
+    ...(records && { records }),
   };
   requireNoDevValues(generated, "generated production config");
+  requireNoLocalConnectionStrings(generated);
   return generated;
 }
 
@@ -867,6 +1022,20 @@ function requireNoDevValues(configs: BaseConfigs | GeneratedConfigs, where: stri
       throw new Error(
         `${name}: ${where} has a dev entry point (main: ${worker.main}). Production must boot the ` +
         "module with no identity bypass in it.");
+    }
+  }
+}
+
+/**
+ * A Hyperdrive `localConnectionString` is a dev database URL with a password in it. It belongs to
+ * `wrangler dev`; in a deployed config it is at best ignored and at worst a leaked credential.
+ */
+function requireNoLocalConnectionStrings(configs: GeneratedConfigs): void {
+  for (const [name, worker] of Object.entries(configs) as [string, ProdWranglerConfig | undefined][]) {
+    if (worker?.hyperdrive?.some((entry) => "localConnectionString" in entry)) {
+      throw new Error(
+        `${name}: generated production config carries a Hyperdrive localConnectionString, which is ` +
+        "for wrangler dev only.");
     }
   }
 }
@@ -935,6 +1104,14 @@ export function buildCommands(config: DeploymentConfig): BuildCommand[] {
     // custom Gatekeeper's does.
     ...(config.chat?.enabled ? [{ args: ownBuild("gatekeeper-chat") }] : []),
     ...(config.webSearch?.enabled ? [{ args: ownBuild("gatekeeper-websearch") }] : []),
+    // Records: its Data management SPA is inlined into src/generated/ by build-app.mjs (a one-shot
+    // Vite build, no watch), which the Worker imports -- so it runs first. Then the package's `build`
+    // task, a `tsc` type-check. The Worker bundle itself is the capnweb-validate `build.command` in
+    // its wrangler.jsonc, which wrangler runs at deploy time.
+    ...(config.records?.enabled ? [
+      { args: ["--filter", "gatekeeper-records", "exec", "node", "build-app.mjs"] },
+      { args: ownBuild("gatekeeper-records") },
+    ] : []),
     ...(config.errorReporting.enabled ? [{ args: ownBuild("error-reporter") }] : []),
     // Access mode is a build-time constant in the frontend bundle (`src/useAuth.ts`), so it is set
     // here rather than inherited: a bundle built under a different value is wrong, not just stale.
@@ -1009,6 +1186,8 @@ export function deployOrder(config: DeploymentConfig): (keyof typeof packageDirs
     "customGatekeeper",
     ...(config.runtime?.enabled ? ["runtime" as const] : []),
     ...(config.webSearch?.enabled ? ["webSearch" as const] : []),
+    // Records binds nothing; the Workshop (vendor) and the router (/gatekeeper/records) bind it.
+    ...(config.records?.enabled ? ["records" as const] : []),
     ...(chatFirst ? chat : []),
     "workshop",
     ...(chatFirst ? [] : chat),
@@ -1050,6 +1229,16 @@ function requireChatPackage(config: DeploymentConfig): void {
     throw new Error(
       `chat.enabled is true but ${packageDirs.chat}/wrangler.jsonc is missing. Add the package, or ` +
       "set chat.enabled to false.");
+  }
+}
+
+/** The Records package's base config has to exist before anything can be generated for it. */
+function requireRecordsPackage(config: DeploymentConfig): void {
+  if (!config.records?.enabled) return;
+  if (!existsSync(join(root, packageDirs.records, "wrangler.jsonc"))) {
+    throw new Error(
+      `records.enabled is true but ${packageDirs.records}/wrangler.jsonc is missing. Add the ` +
+      "package, or set records.enabled to false.");
   }
 }
 
@@ -1183,6 +1372,7 @@ async function main(): Promise<void> {
   const config = await readDeployment(join(root, "deployment.jsonc"));
   requireFormatBlueprints(config);
   requireChatPackage(config);
+  requireRecordsPackage(config);
   const generated = generateConfigs(config, {
     router: await readJsonc(join(root, packageDirs.router, "wrangler.jsonc")),
     workshop: await readJsonc(join(root, packageDirs.workshop, "wrangler.jsonc")),
@@ -1195,6 +1385,9 @@ async function main(): Promise<void> {
     ...(config.chat?.enabled ? { chat: await readJsonc(join(root, packageDirs.chat, "wrangler.jsonc")) } : {}),
     ...(config.webSearch?.enabled
       ? { webSearch: await readJsonc(join(root, packageDirs.webSearch, "wrangler.jsonc")) }
+      : {}),
+    ...(config.records?.enabled
+      ? { records: await readJsonc(join(root, packageDirs.records, "wrangler.jsonc")) }
       : {}),
   });
   reportAiGateway(config);

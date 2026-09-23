@@ -165,6 +165,41 @@ export interface WebSearchConfig {
   privateDomains?: string[];
 }
 
+/**
+ * Organisation Records: one Worker serving the machine API and the people connect flow under
+ * `/gatekeeper/records/` through the router, and bound to the Workshop as a Gatekeeper vendor. Its
+ * data lives in an operator-provisioned Postgres database reached through two Hyperdrive
+ * configurations; change notifications go through a Queue with a dead-letter queue.
+ *
+ * Absent or disabled generates nothing: no Worker, and no `GATEKEEPER_RECORDS` binding on the router
+ * or the Workshop. Nothing here is provisioned automatically -- see the operator prerequisites in
+ * `deployment.jsonc`.
+ */
+export interface RecordsConfig {
+  /** Whether the Records Worker is built, deployed and bound at all. */
+  enabled: boolean;
+  /**
+   * Hyperdrive configuration (32 hex characters) for the runtime application role
+   * (`records_app`). Becomes the `HYPERDRIVE` binding. Query caching MUST be disabled on it:
+   * permission and registry reads must be fresh.
+   */
+  hyperdriveId: string;
+  /**
+   * Hyperdrive configuration for the outbox publisher role (`records_publisher`). Becomes the
+   * `HYPERDRIVE_PUBLISHER` binding. Caching disabled, and distinct from `hyperdriveId`.
+   */
+  publisherHyperdriveId: string;
+  /**
+   * AUD tag of the separate, path-specific Access application protecting
+   * `/gatekeeper/records/v1/*` (service tokens). Becomes `RECORDS_API_ACCESS_AUD`.
+   */
+  apiAccessAudience: string;
+  /** Change-notification queue. Absent means `<workers.records.name>-changes`. */
+  changesQueue?: string;
+  /** Its dead-letter queue. Absent means `<workers.records.name>-changes-dlq`. */
+  deadLetterQueue?: string;
+}
+
 /** Worker telemetry. Maps onto wrangler's `observability` block. */
 export interface DeploymentObservabilityConfig {
   enabled: boolean;
@@ -205,6 +240,8 @@ export interface DeploymentConfig {
     chat?: { name: string };
     /** Privacy-gated web search. Only required when `webSearch.enabled`. */
     webSearch?: { name: string };
+    /** Organisation Records. Only required when `records.enabled`. */
+    records?: { name: string };
   };
   /** Optional private Python execution service; disabled unless explicitly enabled. */
   runtime?: { enabled: boolean; workerName: string; maxInstances: number };
@@ -219,6 +256,8 @@ export interface DeploymentConfig {
   chat?: ChatConfig;
   /** Privacy-gated web search. Absent means disabled, as does `enabled: false`. */
   webSearch?: WebSearchConfig;
+  /** Organisation Records. Absent means disabled, as does `enabled: false`. */
+  records?: RecordsConfig;
   /** Workshop KV/R2. `null` requests Wrangler automatic provisioning. */
   resources: {
     blueprintsKvNamespaceId: string | null;
@@ -278,6 +317,26 @@ export type ProdWranglerConfig =
     secrets?: { required: string[] };
     /** Artifacts namespaces. An array, unlike upstream's single-binding declaration. */
     artifacts?: { binding: string; namespace: string }[];
+    /**
+     * Hyperdrive bindings. `localConnectionString` is for `wrangler dev` only and never appears in a
+     * generated config.
+     */
+    hyperdrive?: { binding: string; id: string; localConnectionString?: string }[];
+    /** Queue producers and consumers. */
+    queues?: {
+      producers?: { binding: string; queue: string }[];
+      consumers?: {
+        queue: string;
+        max_batch_size?: number;
+        max_batch_timeout?: number;
+        max_retries?: number;
+        dead_letter_queue?: string;
+      }[];
+    };
+    /** Cron triggers. */
+    triggers?: { crons: string[] };
+    /** Rate limiting bindings. */
+    ratelimits?: { name: string; namespace_id: string; simple: { limit: number; period: number } }[];
   };
 
 /** The generated configs, keyed as `deployment.jsonc` keys them. */
@@ -296,6 +355,8 @@ export interface GeneratedConfigs {
   chat?: ProdWranglerConfig;
   /** Absent when `webSearch.enabled` is false or the block is missing. */
   webSearch?: ProdWranglerConfig;
+  /** Absent when `records.enabled` is false or the block is missing. */
+  records?: ProdWranglerConfig;
 }
 
 /** The upstream base configs the generated ones are derived from. */
@@ -313,6 +374,8 @@ export interface BaseConfigs {
   chat?: ProdWranglerConfig;
   /** Web search base; required only when web search is enabled. */
   webSearch?: ProdWranglerConfig;
+  /** Records base; required only when Records is enabled. */
+  records?: ProdWranglerConfig;
 }
 
 /** One build step `deploy.ts` runs before deploying. See `buildCommands`. */

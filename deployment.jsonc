@@ -44,7 +44,11 @@
 
     // Privacy-gated web search and fetch. RPC-only; only deployed while the "webSearch" block
     // below is enabled.
-    "webSearch": { "name": "cfos-websearch" }
+    "webSearch": { "name": "cfos-websearch" },
+
+    // Organisation Records: serves /gatekeeper/records/ through the router and is bound to the
+    // Workshop as a Gatekeeper. Only deployed while the "records" block below is enabled.
+    "records": { "name": "cfos-records" }
   },
 
   // This starter deploys Cloudflare Access mode. Cloudflare OS also supports built-in password
@@ -202,5 +206,44 @@
     // Extra strings no query may contain, on top of the account ID and Access team domain.
     "blockedTerms": []
     // "privateDomains": absent derives "surprisingly.ltd" from the router's custom domain.
+  },
+
+  // Organisation Records: shared, organisation-owned project data in Postgres, reached through
+  // Hyperdrive. Serves a machine API at /gatekeeper/records/v1/* and a connect flow for people at
+  // /gatekeeper/records/connect, both through the router (still the only public entrypoint), and
+  // is bound to the Workshop as a Gatekeeper. false deploys nothing Records-related and nothing in
+  // this block is checked, so the placeholders below are fine while it stays off.
+  //
+  // Operator prerequisites, in order, before setting "enabled": true (nothing here is provisioned
+  // by the deploy):
+  //   1. Create the Postgres database.
+  //   2. Apply the schema with the migration-owner connection string:
+  //        RECORDS_MIGRATION_URL=<migration-owner-url> pnpm --filter @records/schema db:migrate
+  //   3. Create login users for the records_app and records_publisher roles.
+  //   4. Create two Hyperdrive configurations over that database -- one logging in as records_app
+  //      (hyperdriveId), one as records_publisher (publisherHyperdriveId) -- each with query
+  //      CACHING DISABLED (wrangler hyperdrive create ... --caching-disabled). Permission and
+  //      registry reads must be fresh; the deploy cannot check this for you.
+  //   5. Create the change queue and its dead-letter queue (defaults: <workers.records.name>-changes
+  //      and <workers.records.name>-changes-dlq): wrangler queues create <name>.
+  //   6. Create a separate, path-specific Access application for <public host>/gatekeeper/records/v1/*
+  //      with a service token policy; its AUD tag is apiAccessAudience.
+  //   7. Seed the organisation and its first admin (same migration-owner URL):
+  //        RECORDS_MIGRATION_URL=<migration-owner-url> pnpm --filter @records/schema db:bootstrap \
+  //          "<organisation>" <admin e-mail> "<admin name>"
+  //   8. Fill in the values below and set "enabled": true. No Worker secrets are needed: database
+  //      credentials live in the Hyperdrive configurations.
+  // Plan: docs/plans/organisation-datastores.md
+  "records": {
+    "enabled": false,
+    // Hyperdrive configuration IDs (32 hex characters), distinct, both with caching disabled.
+    "hyperdriveId": "<RECORDS_APP_HYPERDRIVE_ID>",
+    "publisherHyperdriveId": "<RECORDS_PUBLISHER_HYPERDRIVE_ID>",
+    // AUD tag of the path-specific Access application for /gatekeeper/records/v1/*.
+    "apiAccessAudience": "<RECORDS_API_ACCESS_AUD>"
+    // Optional queue names; absent uses the defaults above. To set them, add a comma above and
+    // uncomment:
+    // "changesQueue": "cfos-records-changes",
+    // "deadLetterQueue": "cfos-records-changes-dlq"
   }
 }
