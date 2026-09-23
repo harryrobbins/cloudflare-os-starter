@@ -267,10 +267,10 @@ Agents tick items (`[x]`) as they finish them and note anything deferred inline.
 - [x] D1 Review the diffs (Tessera and blueprint), and fix findings
 - [x] D2 (pinned `5fb8520`) Push Tessera `embed-api`; switch the blueprint dependency to `github:harryrobbins/tessera#<sha>`; reinstall; repack (expect a revision bump); the lockfile has no `link:` entry
 - [x] D3 Root `pnpm check` passes
-- [ ] D4 Commit to the starter `main`; gitleaks is clean
-- [ ] D5 `pnpm deploy`; record Worker versions here
-- [ ] D6 Production smoke check (Access redirect); list signed-in checks for Harry
-- [ ] D7 Update memory (deploy state)
+- [x] D4 Commit to the starter `main`; gitleaks is clean
+- [x] D5 `pnpm deploy`; record Worker versions here
+- [x] D6 Production smoke check (Access redirect); list signed-in checks for Harry
+- [x] D7 Update memory (deploy state)
 
 ## Risks
 
@@ -285,3 +285,29 @@ Agents tick items (`[x]`) as they finish them and note anything deferred inline.
 - A Google Sheets or BigQuery adapter once `gatekeeper-google` is deployed.
 - Paste or drop CSV into the gadget. There is no file upload in the sandbox, but `paste` events work.
 - Opt-in birds and pixels via server-side `.js` data modules loaded lazily.
+
+## Deployment record (2026-09-23)
+
+Committed as starter `3157780`, with Tessera pinned at `embed-api` `5fb8520` (pushed to GitHub; `main` and the Pages demo are untouched). `pnpm check` passed, then `pnpm deploy` exited 0. `format.tessera` shipped at revision 3; the Workshop upload is 7.3 MB (2.4 MB gzip).
+
+| Worker | Version |
+| --- | --- |
+| `cfos-error-reporter` | `b8a0fd9b-1ba6-4afe-a43a-ea114bf5a31a` |
+| `cfos-context` | `9ec8f13e-1ca7-4a56-9c61-ae2dfafd1354` |
+| `cfos-scheduler` | `aad19896-b4de-447d-b7de-94596480f2d5` |
+| `cfos-procgen` | `6369e18f-ab97-4512-922f-6f49366b34d1` |
+| `cfos-custom-gatekeeper` | `9df9dede-607d-4274-b730-30d9a7358ce8` |
+| `cfos-notebook-python` | `049644b5-c723-40aa-9396-bddcd9a4ac69` |
+| `cfos-websearch` | `32a3b80b-5f9d-4393-b267-09bc555cf407` |
+| `cfos-workshop` | `838a8d92-109e-4ea2-8fea-9590bb4f68b3` |
+| `cfos-chat` | `139efb4d-29a6-4889-9c11-20de0f1c9f56` |
+| `cfos-router` | `c143eaab-8c6f-42ab-b027-ecf95e0b77cd` |
+
+An unauthenticated probe of `https://cfos.surprisingly.ltd/` returns 302 to the Access login, as expected.
+
+Signed-in checks still to do. Access blocks automated sign-in, so these are for Harry:
+
+1. **New → Tessera Mosaic** opens without a setup page and shows tax cases on the map. Switch the collection and the layout, then reload: the choice is kept.
+2. **Titanic** shows 1,309 cards.
+3. **Connections tab → Synthetic Data** (it is named `PROCGEN`; if a chat is open, accept its changes). The frame reloads. Then **Data → Daily metrics** shows 730 cards, and "Loaded 730 rows" appears.
+4. Check the gadget's Activity: each 100 rows is one recorded read.
