@@ -1,0 +1,8 @@
+{
+  "intent": {
+    "operation": "createIssue",
+    "input": { "title": "Fix login", "projectId": "00000000-0000-4000-8000-000000000a01", "priority": "high", "description": null },
+    "idempotencyKey": "k-0001-abcdef"
+  },
+  "canonical": "{\"input\":{\"description\":null,\"priority\":\"high\",\"projectId\":\"00000000-0000-4000-8000-000000000a01\",\"title\":\"Fix login\"},\"key\":\"k-0001-abcdef\",\"operation\":\"createIssue\",\"service\":\"records\",\"v\":1}"
+}

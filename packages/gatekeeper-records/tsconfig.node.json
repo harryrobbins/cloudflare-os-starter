@@ -1,0 +1,14 @@
+{
+  "extends": "../../cloudflare-os/tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ESNext", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "types": ["node", "./worker-configuration.d.ts"],
+    "noEmit": true
+  },
+  "include": ["./__tests__/*.ts", "./vitest.worker.config.ts"],
+  "exclude": ["app", "node_modules", ".wrangler"]
+}

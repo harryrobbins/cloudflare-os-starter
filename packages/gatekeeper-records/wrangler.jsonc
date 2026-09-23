@@ -1,0 +1,60 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "gatekeeper-records",
+  "main": ".wrangler/validate/src/index.ts",
+  "build": {
+    "command": "pnpm exec capnweb-validate build --out .wrangler/validate",
+    "watch_dir": "src"
+  },
+  "compatibility_date": "2026-08-04",
+  // allow_irrevocable_stub_storage: the connect flow keeps the Workshop's callback, and the feed
+  // keeps each enabled hook's initiator, in Durable Object storage.
+  "compatibility_flags": ["allow_irrevocable_stub_storage", "nodejs_compat"],
+  "migrations": [
+    {
+      "tag": "v0",
+      "new_sqlite_classes": ["RecordsGatekeeper", "RecordsConnectFlow", "DatastoreFeed"]
+    }
+  ],
+  // Two Hyperdrive configurations over the same database, each with query caching DISABLED
+  // (permission and registry reads must be fresh): the runtime application role and the outbox
+  // publisher role. IDs are filled in by scripts/deploy.ts from deployment.jsonc; the local
+  // connection strings are for `wrangler dev` against a disposable database only.
+  "hyperdrive": [
+    { "binding": "HYPERDRIVE", "id": "00000000000000000000000000000000", "localConnectionString": "postgres://records_app_login:records-test-only@127.0.0.1:54329/records_dev" },
+    { "binding": "HYPERDRIVE_PUBLISHER", "id": "00000000000000000000000000000001", "localConnectionString": "postgres://records_publisher_login:records-test-only@127.0.0.1:54329/records_dev" }
+  ],
+  "queues": {
+    "producers": [{ "binding": "CHANGES", "queue": "records-changes" }],
+    "consumers": [
+      {
+        "queue": "records-changes",
+        "max_batch_size": 50,
+        "max_batch_timeout": 1,
+        "max_retries": 10,
+        "dead_letter_queue": "records-changes-dlq"
+      }
+    ]
+  },
+  // Backstop for the outbox publisher: writes also trigger an immediate publish, so this only
+  // matters after a failure or a late-committing transaction. It also prunes delivery state.
+  "triggers": { "crons": ["* * * * *"] },
+  "ratelimits": [
+    { "name": "API_RATE_LIMITER", "namespace_id": "4711", "simple": { "limit": 300, "period": 60 } }
+  ],
+  // scripts/deploy.ts fills these from deployment.jsonc.
+  "vars": {
+    // Access team issuer, e.g. https://<team>.cloudflareaccess.com
+    "CF_ACCESS_ISS": "",
+    // Audience of the Workshop's own Access application (people signing in).
+    "CF_ACCESS_AUD": "",
+    // Audience of the separate, path-specific Access application for /gatekeeper/records/v1/*.
+    "RECORDS_API_ACCESS_AUD": "",
+    "PUBLIC_BASE_URL": ""
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": { "invocation_logs": false }
+  }
+}

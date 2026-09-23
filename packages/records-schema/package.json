@@ -1,0 +1,32 @@
+{
+  "name": "@records/schema",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/migrate.ts",
+    "./manifest": "./src/manifest.ts",
+    "./bootstrap": "./src/bootstrap.ts",
+    "./testing": "./src/testing.ts",
+    "./global-setup": "./src/global-setup.ts"
+  },
+  "scripts": {
+    "types:check": "tsc --noEmit",
+    "test:run": "vitest run",
+    "db:status": "node src/cli.ts status",
+    "db:migrate": "node src/cli.ts migrate",
+    "db:manifest": "node src/cli.ts manifest",
+    "db:bootstrap": "node src/cli.ts bootstrap"
+  },
+  "dependencies": {
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "@records/contracts": "workspace:*",
+    "@types/node": "26.1.0",
+    "embedded-postgres": "17.9.0-beta.17",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

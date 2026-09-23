@@ -1,0 +1,15 @@
+{
+  "extends": "../../cloudflare-os/tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ESNext"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["./worker-configuration.d.ts", "@cloudflare/vitest-pool-workers/types"],
+    "noEmit": true
+  },
+  // The Worker and its workerd suite. The Node suites (__tests__/*.test.ts) type-check under
+  // tsconfig.node.json, and the Data app under tsconfig.app.json.
+  "include": ["./src/**/*.ts", "./__tests__/workerd/**/*.ts"],
+  "exclude": ["app", "node_modules", ".wrangler"]
+}

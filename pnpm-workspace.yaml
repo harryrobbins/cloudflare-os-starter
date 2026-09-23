@@ -44,6 +44,8 @@ overrides:
   '@types/node': 26.1.0
 
 allowBuilds:
+  # Links the embedded Postgres binaries the Records database tests run against.
+  '@embedded-postgres/linux-x64': true
   '@google/genai': true
   core-js-pure: true
   esbuild: true

@@ -1,0 +1,49 @@
+{
+  "name": "gatekeeper-records",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "types:check": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.app.json",
+    "generate": "node scripts/gen-types.mjs && node scripts/build-configurator.mjs && node build-app.mjs",
+    "test:run": "vitest run && vitest run --config vitest.worker.config.ts && vitest run --config app/vitest.config.ts",
+    "test:workerd": "vitest run --config vitest.worker.config.ts",
+    "test:app": "vitest run --config app/vitest.config.ts"
+  },
+  "dependencies": {
+    "@gadgets/workshop-shared": "workspace:*",
+    "@records/contracts": "workspace:*",
+    "capnweb": "catalog:",
+    "capnweb-validate": "catalog:",
+    "jose": "catalog:",
+    "postgres": "^3.4.7",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/kumo": "^2.9.2",
+    "@cloudflare/vitest-pool-workers": "catalog:",
+    "@phosphor-icons/react": "^2.1.10",
+    "@records/schema": "workspace:*",
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "26.1.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^5.2.0",
+    "embedded-postgres": "17.9.0-beta.17",
+    "jsdom": "^26.1.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwindcss": "^4.3.3",
+    "terser": "^5.49.2",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "catalog:",
+    "wrangler": "catalog:",
+    "esbuild": "0.28.1"
+  }
+}

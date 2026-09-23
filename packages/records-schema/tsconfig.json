@@ -1,0 +1,13 @@
+{
+  "extends": "../../cloudflare-os/tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ESNext"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["src", "__tests__"]
+}
