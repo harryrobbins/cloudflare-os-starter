@@ -513,11 +513,19 @@ function validateChat(config: DeploymentConfig): void {
   if (typeof chat.enabled !== "boolean") {
     throw new Error("chat.enabled must be a boolean.");
   }
+  if (chat.agentReplies !== undefined && typeof chat.agentReplies !== "boolean") {
+    throw new Error("chat.agentReplies must be a boolean when present.");
+  }
   if (!chat.enabled) {
     if (chat.agentAccess) {
       throw new Error(
         "chat.agentAccess is true while chat.enabled is false: there would be no chat Worker for " +
         "the Workshop to bind. Enable chat, or drop agentAccess.");
+    }
+    if (chat.agentReplies) {
+      throw new Error(
+        "chat.agentReplies is true while chat.enabled is false: there would be no chat Worker to " +
+        "answer @agent in. Enable chat, or drop agentReplies.");
     }
     return;
   }
@@ -772,6 +780,20 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
       { binding: "FILES", ...(config.chat.filesBucket
         ? { bucket_name: config.chat.filesBucket } : {}) },
     ];
+    // `@agent` answers: the Workshop's ExternalMessageGateway, the same entrypoint-plus-props shape
+    // as the Workshop's own ERROR_REPORTER binding. `source` is the gateway's namespace for this
+    // caller's keys (its workspaces are named `chat:user:<id>`), so it is fixed here rather than
+    // configurable: changing it would orphan every asker's existing "Chat agent" workspace.
+    if (agentRepliesEnabled(config)) {
+      chat.services = [{
+        binding: "WORKSHOP_GATEWAY",
+        service: config.workers.workshop.name,
+        entrypoint: "ExternalMessageGateway",
+        props: { source: "chat" },
+      }];
+    } else {
+      delete chat.services;
+    }
     // `assets` is inherited untouched, unlike the Workshop's: chat serves its own SPA from
     // `app/dist` behind its own Access check (`run_worker_first`), and the router only proxies to it.
   }
@@ -908,15 +930,29 @@ export function buildCommands(config: DeploymentConfig): BuildCommand[] {
   ];
 }
 
+/** `chat.agentReplies`, defaulted: on whenever chat itself is. */
+export function agentRepliesEnabled(config: DeploymentConfig): boolean {
+  return (config.chat?.enabled ?? false) && config.chat?.agentReplies !== false;
+}
+
 /**
  * The Workers to deploy, in order. Data rather than a sequence of calls so the order is testable:
  * every binding points *backwards* in this list, so a deploy that fails part-way leaves the previous
  * Workers bound to what they were bound to before.
  *
- * Chat comes before the Workshop and the router because both bind it: the router to route
- * /gatekeeper/chat, the Workshop (when `chat.agentAccess`) to reach its Gatekeeper vendor.
+ * The router always binds chat, so chat precedes it. Chat and the Workshop can bind each other:
+ * chat binds the Workshop's ExternalMessageGateway for `@agent` answers (`chat.agentReplies`, on by
+ * default), and the Workshop binds chat's Gatekeeper vendor under `chat.agentAccess` (off by
+ * default). With only the first, the Workshop goes first and every binding still points backwards.
+ * With both it is a cycle, which the platform accepts between two Workers that already exist; chat
+ * then goes first, as it always has for `agentAccess`, and its binding to the Workshop is the one
+ * forward edge -- so a *first-ever* deploy with both switched on must be run once with
+ * `agentReplies: false` (README, "Agent"): a binding's target has to exist when the Worker holding
+ * it is deployed, which is also why `agentAccess` is its own switch.
  */
 export function deployOrder(config: DeploymentConfig): (keyof typeof packageDirs)[] {
+  const chat = config.chat?.enabled ? ["chat" as const] : [];
+  const chatFirst = config.chat?.agentAccess === true;
   return [
     ...(config.errorReporting.enabled ? ["errorReporter" as const] : []),
     "context",
@@ -924,8 +960,9 @@ export function deployOrder(config: DeploymentConfig): (keyof typeof packageDirs
     "procgen",
     "customGatekeeper",
     ...(config.runtime?.enabled ? ["runtime" as const] : []),
-    ...(config.chat?.enabled ? ["chat" as const] : []),
+    ...(chatFirst ? chat : []),
     "workshop",
+    ...(chatFirst ? [] : chat),
     // Last: it binds every one of the above.
     "router",
   ];

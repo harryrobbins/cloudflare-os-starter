@@ -136,7 +136,14 @@
 
     // Hard cap per upload, in bytes (10 MiB). Becomes the Worker's MAX_UPLOAD_BYTES; an upload
     // arrives as one Worker request body, so the platform's 100 MiB is the ceiling here.
-    "maxUploadBytes": 10485760
+    "maxUploadBytes": 10485760,
+
+    // @agent answers: a question in a public channel (or a DM with Agent) goes to the asker's own
+    // Workshop account and model through the Workshop's ExternalMessageGateway, and the answer is
+    // posted back as the Agent. Each colleague needs a Workshop account with an AI model before the
+    // Agent can answer them. Absent or true binds it (the Workshop is then deployed before chat);
+    // false turns replies off and chat says so. See packages/gatekeeper-chat/README.md, "Agent".
+    "agentReplies": true
 
     // The agent-facing half: binds chat to the Workshop as a Gatekeeper vendor, so every workspace
     // gets an ambient ChatSession (public channels: read and search; posting is an approved action).

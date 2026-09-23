@@ -1035,23 +1035,53 @@ test("refuses a production config carrying a dev identity bypass", async () => {
   generateConfigs(validConfig, bases);
 });
 
-test("deploys chat before the Workshop and the router", () => {
+test("deploys chat after the Workshop it binds, and before the router that binds it", () => {
   const order = deployOrder(validConfig);
 
-  assert.ok(order.indexOf("chat") < order.indexOf("workshop"), order.join(" "));
+  // chat.agentReplies (on by default) binds the Workshop's gateway, so the Workshop goes first.
+  assert.ok(order.indexOf("workshop") < order.indexOf("chat"), order.join(" "));
   assert.ok(order.indexOf("chat") < order.indexOf("router"), order.join(" "));
   // The router stays last: it binds every Worker before it.
   assert.equal(order.at(-1), "router");
-  assert.equal(order.at(-2), "workshop");
   // Every Worker is deployed exactly once, and only the ones this deployment enables.
   assert.equal(new Set(order).size, order.length);
   assert.deepEqual(deployOrder(variant((c) => {
     c.chat.enabled = false;
     c.errorReporting = { enabled: false };
   })), ["context", "scheduler", "procgen", "customGatekeeper", "workshop", "router"]);
-  // Enabled: after every Worker it does not bind, before the two that bind it.
   assert.deepEqual(order, [
-    "errorReporter", "context", "scheduler", "procgen", "customGatekeeper", "chat",
-    "workshop", "router",
+    "errorReporter", "context", "scheduler", "procgen", "customGatekeeper", "workshop", "chat",
+    "router",
   ]);
+  // agentAccess makes the Workshop bind chat's vendor too. That cycle is only deployable between
+  // Workers that already exist, and chat keeps the place it has always had for agentAccess.
+  assert.deepEqual(deployOrder(variant((c) => { c.chat.agentAccess = true; })), [
+    "errorReporter", "context", "scheduler", "procgen", "customGatekeeper", "chat", "workshop",
+    "router",
+  ]);
+});
+
+test("binds the Workshop's gateway to chat for @agent answers unless agentReplies is false", async () => {
+  const bases = await baseConfigs();
+  // On by default: the entrypoint and props the Workshop's ExternalMessageGateway requires.
+  assert.deepEqual(generateConfigs(validConfig, bases).chat!.services, [{
+    binding: "WORKSHOP_GATEWAY",
+    service: "acme-cloudflare-os-backend",
+    entrypoint: "ExternalMessageGateway",
+    props: { source: "chat" },
+  }]);
+  assert.deepEqual(
+    generateConfigs(variant((c) => { c.chat.agentReplies = true; }), bases).chat!.services,
+    generateConfigs(validConfig, bases).chat!.services);
+  // Off: no binding at all, which is what the chat Worker reads as "replies are turned off".
+  assert.equal(generateConfigs(variant((c) => { c.chat.agentReplies = false; }), bases).chat!.services,
+    undefined);
+
+  assert.throws(() => validateConfig(variant((c) => { c.chat.agentReplies = "yes"; })),
+    /chat.agentReplies must be a boolean/);
+  assert.throws(
+    () => validateConfig(variant((c) => { c.chat = { enabled: false, agentReplies: true }; })),
+    /agentReplies is true while chat.enabled is false/i);
+  // Disabled chat with the switch simply absent is the ordinary case, and generates no chat Worker.
+  assert.equal(generateConfigs(variant((c) => { c.chat = { enabled: false }; }), bases).chat, undefined);
 });

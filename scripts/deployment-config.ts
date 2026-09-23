@@ -131,6 +131,15 @@ export interface ChatConfig {
    * reason nothing in chat itself explains.
    */
   agentAccess?: boolean;
+  /**
+   * Whether `@agent` in chat is answered: the chat Worker binds the Workshop's
+   * `ExternalMessageGateway` entrypoint as `WORKSHOP_GATEWAY`, and a question is asked of the
+   * asker's own Workshop account and model. Absent means on whenever chat is enabled; `false` leaves
+   * the binding out, and chat then shows the Agent as switched off rather than as a member that
+   * never answers. Unrelated to `agentAccess`, which is the opposite direction (workspace agents
+   * reading chat).
+   */
+  agentReplies?: boolean;
 }
 
 /** Worker telemetry. Maps onto wrangler's `observability` block. */
