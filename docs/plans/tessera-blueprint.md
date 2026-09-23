@@ -311,3 +311,28 @@ Signed-in checks still to do. Access blocks automated sign-in, so these are for 
 2. **Titanic** shows 1,309 cards.
 3. **Connections tab → Synthetic Data** (it is named `PROCGEN`; if a chat is open, accept its changes). The frame reloads. Then **Data → Daily metrics** shows 730 cards, and "Loaded 730 rows" appears.
 4. Check the gadget's Activity: each 100 rows is one recorded read.
+
+## Deployment record: one-call reads (2026-09-24)
+
+Starter `main` `380d36d` was deployed from a clean worktree with `pnpm deploy`, which exited 0. It adds `de8b794`: the Synthetic Data `table()` and `facetCounts()` calls, and Tessera's one-read loads with joined facets. `format.tessera` shipped at revision 4. The `cloudflare-os` submodule was at `e50a905`, unchanged from the previous deploy. Uncommitted work in the main checkout was not included. The Jev connector (`feat/jev-connector`) is not merged, so the live Workshop has no `GATEKEEPER_JEV` binding. The Workshop version before this deploy did not have one either.
+
+| Worker | Version |
+| --- | --- |
+| `cfos-error-reporter` | `a8fe0ee5-e39c-43fe-9674-2468de3fcac9` |
+| `cfos-context` | `89db895b-3cde-4489-a95c-0c106c04fb06` |
+| `cfos-scheduler` | `585601a5-518c-4b5a-8c5d-57ec65a9733c` |
+| `cfos-procgen` | `80bc5684-32f3-490f-89db-46a3f99d3db1` |
+| `cfos-custom-gatekeeper` | `5c5d85eb-4cfd-430b-aa5d-293866f88b47` |
+| `cfos-notebook-python` | `d8bf4a0b-b42c-49b3-a296-6dca6d9418cc` |
+| `cfos-websearch` | `8247101f-f651-45e7-9f32-e8270c28f1f1` |
+| `cfos-workshop` | `36f8075c-ee3c-4611-9095-a62a7872a939` |
+| `cfos-chat` | `6ee4a48d-65df-4495-aff0-07868371015a` |
+| `cfos-router` | `bdad0d34-d7e7-44fc-b7eb-28a14c41a6dd` |
+
+An unauthenticated probe of `https://cfos.surprisingly.ltd/` returns 302 to the Access login, as expected.
+
+Signed-in checks for Harry:
+
+1. Open a Tessera Mosaic with Synthetic Data connected, then choose **Data → Orders**. It loads 2,000 cards spread over all 10,000 orders. The Color menu lists **customer tier** and **customer country code**.
+2. The gadget's Activity shows one read for that load, not 20.
+3. **Daily metrics** still loads all 730 rows in date order.
