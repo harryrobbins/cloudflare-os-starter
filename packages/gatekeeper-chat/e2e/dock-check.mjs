@@ -7,28 +7,23 @@
 //   packages/gatekeeper-chat/e2e/stop-local-platform.sh
 //
 // Two browser contexts: A is the person in the shell (platform account `admin`, chat identity
-// `dev-admin`), B writes to them from the standalone chat page (`beta` / `dev-user`). The platform's
+// `dev-admin`), B writes to them from the standalone chat page (`beta` / `dev-user`). Step 6 adds a
+// third, C (`gamma` / `dev-colleague`), who signs in to the platform and never opens chat. The platform's
 // accounts and the chat Durable Object persist across runs in wrangler's local state, so every count
 // is relative to what was there before and every message carries a fresh marker.
-import { createRequire } from 'node:module'
 import { mkdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 
-const HERE = dirname(fileURLToPath(import.meta.url))
-const PKG = join(HERE, '..')
-const REPO = join(PKG, '..', '..')
-const { chromium } = createRequire(join(PKG, 'package.json'))('playwright')
-
-const BASE = process.env.CFOS_URL ?? 'http://localhost:8787'
+import { BASE, REPO, chatApi, chatDevCookie, chatDevLogin, chromium, signUpOrIn, until } from './platform-helpers.mjs'
 const SHOTS = process.env.CHAT_DOCK_SHOTS ?? join(process.env.TMPDIR ?? '/tmp', 'cfos-chat-dock')
 mkdirSync(SHOTS, { recursive: true })
 const ARCHIVE = join(REPO, 'formats', 'whiteboard.gadget')
 
 const A = { user: 'admin', pass: 'chatdock123', chat: 'dev-admin' }
 const B = { user: 'beta', pass: 'chatdock123', chat: 'dev-user' }
+/** Signs in to the platform and never opens chat: the People check (step 6). */
+const C = { user: 'gamma', pass: 'chatdock123', chat: 'dev-colleague' }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const shot = (page, name) => page.screenshot({ path: `${SHOTS}/${name}.png` })
 
 /** Console errors, page errors and 5xx, kept for the framing/CSP summary at the end. */
@@ -40,71 +35,6 @@ function watch(page, label, sink) {
   page.on('response', (r) => {
     if (r.status() >= 500) sink.push(`${label} http ${r.status()}: ${r.request().method()} ${r.url()}`)
   })
-}
-
-async function until(check, timeout, what) {
-  const deadline = Date.now() + timeout
-  let last
-  for (;;) {
-    try {
-      last = await check()
-      if (last) return last
-    } catch (err) {
-      last = err.message
-    }
-    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what} (last: ${last})`)
-    await sleep(250)
-  }
-}
-
-// --- the platform's own sign-up (mirrors packages/blueprint-whiteboard/e2e/platform-helpers.mjs) ---
-
-async function completeOnboarding(page) {
-  const heading = page.getByRole('heading', { name: "Let's set you up" })
-  try {
-    await heading.waitFor({ timeout: 8_000 })
-  } catch {
-    return
-  }
-  const finish = page.getByRole('button', { name: "Let's build" })
-  for (let i = 0; i < 6 && !(await finish.isVisible()); i++) {
-    await page.getByRole('button', { name: 'Next', exact: true }).click()
-  }
-  await finish.click()
-  await heading.waitFor({ state: 'detached', timeout: 30_000 })
-}
-
-async function signUpOrIn(page, username, password) {
-  await page.goto(`${BASE}/signup`)
-  await page.getByLabel('Username').fill(username)
-  await page.getByLabel('Password', { exact: true }).fill(password)
-  await page.getByLabel('Confirm Password').fill(password)
-  await page.getByRole('button', { name: 'Create account' }).click()
-  const outcome = await Promise.race([
-    page.waitForFunction(() => !!localStorage.getItem('authToken'), null, { timeout: 30_000 }).then(() => 'ok'),
-    page.getByText('Username already exists').waitFor({ timeout: 30_000 }).then(() => 'exists'),
-  ])
-  if (outcome === 'exists') {
-    await page.goto(`${BASE}/`)
-    await page.getByLabel('Username').fill(username)
-    await page.getByLabel('Password', { exact: true }).fill(password)
-    await page.getByRole('button', { name: 'Sign in' }).click()
-    await page.waitForFunction(() => !!localStorage.getItem('authToken'), null, { timeout: 30_000 })
-  } else {
-    await page.waitForURL((u) => new URL(u).pathname === '/', { timeout: 30_000 })
-  }
-  await completeOnboarding(page)
-}
-
-/**
- * The chat identity: in production the Worker verifies an Access assertion; locally
- * `wrangler.dev.jsonc` points `main` at `src/dev/entry.ts` and a signed `chat_dev_identity` cookie
- * stands in. Per browser context, scoped to `/gatekeeper/chat/`, which the shell's same-origin
- * iframe sends too.
- */
-async function chatDevLogin(page, id) {
-  await page.goto(`${BASE}/gatekeeper/chat/dev/login?as=${encodeURIComponent(id)}`, { waitUntil: 'domcontentloaded' })
-  await page.locator('a[data-channel-id="general"]').first().waitFor({ timeout: 30_000 })
 }
 
 // --- locators -----------------------------------------------------------------
@@ -291,6 +221,55 @@ await step('5b the editor has the chat button and it opens the dock', async () =
   await until(async () => (await dockState(a)) === 'false', 10_000, 'dock open from the editor')
   await appLoaded(dockFrame(a)).waitFor({ timeout: 30_000 })
   await shot(a, '08-editor-dock')
+})
+
+// 6. People from platform sign-ins, and the Agent as an app
+let knownBefore = null
+await step('6a a colleague who only loads the shell is announced to chat once, with no chat frame', async () => {
+  const lookup = await chatApi(b.context(), 'GET', `/users?ids=${C.chat}`)
+  knownBefore = lookup.users.length > 0
+  const context = await browser.newContext({ viewport: { width: 1400, height: 900 } })
+  await chatDevCookie(context, C.chat)
+  const c = await context.newPage()
+  watch(c, 'C', problems)
+  const seen = c.waitForResponse(
+    (r) => r.url().endsWith('/gatekeeper/chat/api/me/seen') && r.request().method() === 'POST',
+    { timeout: 90_000 },
+  )
+  await signUpOrIn(c, C.user, C.pass)
+  const response = await seen
+  if (response.status() !== 200) throw new Error(`POST /api/me/seen -> ${response.status()}`)
+  await c.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' })
+  await sidebarChat(c).waitFor({ timeout: 30_000 })
+  if ((await c.locator('iframe[title="Team chat"]').count()) !== 0) throw new Error('the dock frame was mounted')
+  await context.close()
+  return knownBefore ? 'announced (already known from an earlier run)' : 'announced; unknown to chat before'
+})
+await step('6b they appear under People for another user', async () => {
+  const lookup = await chatApi(b.context(), 'GET', `/users?ids=${C.chat}`)
+  if (lookup.users[0]?.name !== 'Dev Colleague') throw new Error(`lookup ${JSON.stringify(lookup)}`)
+  await b.goto(`${BASE}/gatekeeper/chat/people`)
+  await b.getByText('Dev Colleague').first().waitFor({ timeout: 20_000 })
+  await shot(b, '09-people-colleague')
+  return knownBefore === false ? 'absent before 6a, listed after' : 'listed'
+})
+await step('6c the Agent is listed as an app with what it does, not as an offline person', async () => {
+  const hint = b.getByTestId('agent-hint').first()
+  await hint.waitFor({ timeout: 10_000 })
+  const text = await hint.innerText()
+  if (!/Mention @agent in a public channel/.test(text)) throw new Error(`hint "${text}"`)
+  return text
+})
+await step('6d the composer says what asking the Agent sends, before sending', async () => {
+  await b.goto(`${BASE}/gatekeeper/chat/c/general`)
+  const field = b.locator('textarea[aria-label^="Message "]').first()
+  await field.waitFor({ timeout: 20_000 })
+  await field.fill('@agent what changed this week?')
+  const note = b.getByTestId('agent-note')
+  await note.waitFor({ timeout: 10_000 })
+  await shot(b, '10-agent-disclosure')
+  await field.fill('')
+  return (await note.innerText().catch(() => '')).slice(0, 80) || 'shown'
 })
 
 await browser.close()

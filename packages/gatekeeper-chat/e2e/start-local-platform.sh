@@ -33,6 +33,15 @@
 # VITE_CHAT_DOCK (default "true"), which is the *shell's* build-time flag for the chat dock: the
 # frontend dist is rebuilt whenever it does not match, because a dist built without it has no sidebar
 # row, no drawer and no /chat route to check.
+#
+# CHAT_IN_PLATFORM=1 is the other layout, for `@agent` (e2e/agent-check.mjs): this Worker runs INSIDE
+# the platform's workerd, appended to its multi-config `wrangler dev` (one more patch:
+# `EXTRA_WORKER_CONFIG`), from a generated copy of wrangler.dev.jsonc with no `assets` -- so the API
+# works and the SPA does not. It exists because a question to the Agent hands the Workshop a
+# `ctx.exports` service stub to call back, and a service stub cannot cross two workerd processes:
+# each encrypts its stub tokens with its own key, and the platform logs "channel token failed
+# authentication" for every call. In production both Workers run in one account and the stub
+# travels like the gatekeepers' account stubs the Workshop already stores.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -68,8 +77,9 @@ sed -e "s#from \"\./#from \"$C/scripts/#g" \
     -e 's#^function spawnDevWatcher(label: string, command: string, args: string\[\]): void {#&  if (process.env.SPIKE_NO_WATCHERS) return;#' \
     -e 's#^  const srcPath = join(ROOT, "wrangler.jsonc");#&\n  const extraService = process.env.EXTRA_ROUTER_SERVICE;#' \
     -e '0,/^  config.services = config.services || \[\];/s##&\n  if (extraService !== undefined) { const [binding, service] = extraService.split("="); config.services.push({ binding, service }); }#' \
+    -e 's#^  \.\.\.gatekeepers\.map(gk => join(gk\.dir, "wrangler\.dev\.jsonc")),#&\n  ...(process.env.EXTRA_WORKER_CONFIG ? [process.env.EXTRA_WORKER_CONFIG] : []),#' \
     "$C/scripts/run-dev-server.ts" > "$PATCHED"
-for needle in 'const SCRIPTS_DIR = "' 'createRequire' '"--no-cache"' 'SPIKE_NO_WATCHERS' 'EXTRA_ROUTER_SERVICE'; do
+for needle in 'const SCRIPTS_DIR = "' 'createRequire' '"--no-cache"' 'SPIKE_NO_WATCHERS' 'EXTRA_ROUTER_SERVICE' 'EXTRA_WORKER_CONFIG'; do
   grep -qF "$needle" "$PATCHED" || { echo "patch did not apply: $needle (has run-dev-server.ts changed?)" >&2; exit 1; }
 done
 # `\|` is alternation in GNU sed's BRE, so the `config.services || []` anchor above is written with
@@ -124,10 +134,31 @@ stop_all() {
   done
 }
 
+# --- in-platform layout: this Worker's dev config, minus `assets`, for the platform's own workerd -----
+EXTRA_WORKER_CONFIG=""
+if [[ -n "${CHAT_IN_PLATFORM:-}" ]]; then
+  mkdir -p "$PKG/.wrangler/in-platform"
+  EXTRA_WORKER_CONFIG="$PKG/.wrangler/in-platform/wrangler.jsonc"
+  (cd "$REPO" && PKG="$PKG" OUT="$EXTRA_WORKER_CONFIG" node --input-type=module -e '
+    import { createRequire } from "node:module";
+    import { readFileSync, writeFileSync } from "node:fs";
+    const { parse } = createRequire(process.cwd() + "/package.json")("jsonc-parser");
+    const pkg = process.env.PKG;
+    const config = parse(readFileSync(pkg + "/wrangler.dev.jsonc", "utf8"), [], { allowTrailingComma: true });
+    delete config.assets;
+    delete config["$schema"];
+    config.main = pkg + "/" + config.main;
+    config.build = { ...config.build, cwd: pkg, watch_dir: pkg + "/src" };
+    writeFileSync(process.env.OUT, JSON.stringify(config, null, 2));
+  ')
+  echo "chat runs inside the platform process (API only, no SPA): $EXTRA_WORKER_CONFIG"
+fi
+
 # --- 1. the platform ---------------------------------------------------------------------------
 cd "$C"
 SPIKE_NO_WATCHERS=1 \
 EXTRA_ROUTER_SERVICE="GATEKEEPER_CHAT=cfos-chat-dev" \
+EXTRA_WORKER_CONFIG="$EXTRA_WORKER_CONFIG" \
   setsid node "$PATCHED" --serve-frontend-assets >"$LOG" 2>&1 </dev/null &
 PID=$!
 sleep 0.5
@@ -147,6 +178,19 @@ until curl -sf -o /dev/null --max-time 30 "$URL/"; do
   fi
   sleep 2
 done
+
+if [[ -n "$EXTRA_WORKER_CONFIG" ]]; then
+  until curl -sf -o /dev/null --max-time 10 "$URL/gatekeeper/chat/dev/identities"; do
+    if (( SECONDS > deadline )); then
+      echo "the router did not reach the in-platform chat Worker within ${TIMEOUT}s; tail of $LOG:" >&2
+      tail -n 30 "$LOG" >&2; stop_all; exit 1
+    fi
+    sleep 2
+  done
+  echo "READY $URL  (chat API inside the platform: $URL/gatekeeper/chat/dev/login?as=dev-admin; no SPA)"
+  echo "stop with: $HERE/stop-local-platform.sh   (or: kill -- -$PGID)"
+  exit 0
+fi
 
 # --- 2. this Worker, registered with the platform's wrangler ---------------------------------------
 cd "$PKG"
