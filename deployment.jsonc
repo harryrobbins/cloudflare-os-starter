@@ -48,7 +48,10 @@
 
     // Organisation Records: serves /gatekeeper/records/ through the router and is bound to the
     // Workshop as a Gatekeeper. Only deployed while the "records" block below is enabled.
-    "records": { "name": "cfos-records" }
+    "records": { "name": "cfos-records" },
+
+    // Jev decisions. RPC-only; only deployed while the "jev" block below is enabled.
+    "jev": { "name": "cfos-jev" }
   },
 
   // This starter deploys Cloudflare Access mode. Cloudflare OS also supports built-in password
@@ -245,5 +248,12 @@
     // uncomment:
     // "changesQueue": "cfos-records-changes",
     // "deadLetterQueue": "cfos-records-changes-dlq"
-  }
+  },
+
+  // Jev decisions: TypeSafe's Jev decision model (yes/no, choice and score questions with
+  // probabilities) for agents and Gadgets, as a connector. Jev answers OpenRouter's Decisions API
+  // rather than chat completions, so it cannot be listed under aiGateway.models.
+  // Needs an OpenRouter key on its Worker, never in this file:
+  //   CLOUDFLARE_ACCOUNT_ID=<id> pnpm exec wrangler secret put OPENROUTER_API_KEY --name cfos-jev
+  "jev": { "enabled": true }
 }

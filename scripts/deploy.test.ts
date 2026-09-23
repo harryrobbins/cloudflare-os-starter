@@ -88,6 +88,7 @@ async function baseConfigs(): Promise<BaseConfigs> {
     chat: await chatBaseConfig(),
     webSearch: await baseConfig("../packages/gatekeeper-websearch/wrangler.jsonc"),
     records: await baseConfig("../packages/gatekeeper-records/wrangler.jsonc"),
+    jev: await baseConfig("../packages/gatekeeper-jev/wrangler.jsonc"),
   };
 }
 
@@ -531,6 +532,48 @@ test("requires a web search Worker name only when web search is enabled", () => 
   assert.throws(() => validateConfig(variant((c) => {
     c.webSearch = { enabled: true };
     c.workers.webSearch = { name: c.workers.procgen.name };
+  })), /must be unique/);
+});
+
+test("deploys Jev only when enabled, privately, with its key required", async () => {
+  const bases = await baseConfigs();
+  const off = generateConfigs(validConfig, bases);
+  assert.equal(off.jev, undefined);
+  assert.equal(off.workshop.services!.some((s) => s.binding === "GATEKEEPER_JEV"), false);
+  assert.equal(deployOrder(validConfig).includes("jev"), false);
+  assert.equal(buildCommands(validConfig).some(({ args }) => args.includes("gatekeeper-jev")), false);
+
+  const config = validateConfig(variant((c) => {
+    c.workers.jev = { name: "acme-cloudflare-os-jev" };
+    c.jev = { enabled: true };
+  }));
+  const generated = generateConfigs(config, bases);
+  const jev = generated.jev!;
+  assert.equal(jev.name, "acme-cloudflare-os-jev");
+  assert.equal(jev.workers_dev, false);
+  assert.equal(jev.preview_urls, false);
+  assert.equal(jev.routes, undefined);
+  assert.deepEqual(jev.secrets, { required: ["OPENROUTER_API_KEY"] });
+  assert.deepEqual(generated.workshop.services!.find((s) => s.binding === "GATEKEEPER_JEV"), {
+    binding: "GATEKEEPER_JEV",
+    service: "acme-cloudflare-os-jev",
+    entrypoint: "GatekeeperVendor",
+  });
+  assert.equal(generated.router.services!.some((s) => s.service === "acme-cloudflare-os-jev"), false);
+  const order = deployOrder(config);
+  assert.ok(order.indexOf("jev") < order.indexOf("workshop"));
+  assert.ok(buildCommands(config).some(({ args }) => args.includes("gatekeeper-jev")));
+});
+
+test("requires a Jev Worker name only when Jev is enabled", () => {
+  assert.throws(() => validateConfig(variant((c) => { c.jev = { enabled: true }; })), /workers\.jev\.name/);
+  assert.doesNotThrow(() => validateConfig(variant((c) => {
+    c.jev = { enabled: false };
+    c.workers.jev = { name: "<jev-worker>" };
+  })));
+  assert.throws(() => validateConfig(variant((c) => {
+    c.jev = { enabled: true };
+    c.workers.jev = { name: c.workers.webSearch?.name ?? c.workers.procgen.name };
   })), /must be unique/);
 });
 

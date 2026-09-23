@@ -200,6 +200,19 @@ export interface RecordsConfig {
   deadLetterQueue?: string;
 }
 
+/**
+ * Jev decisions: one RPC-only Gatekeeper Worker bound to the Workshop as `GATEKEEPER_JEV`, giving
+ * agents and Gadgets TypeSafe's Jev decision model over OpenRouter's Decisions API (Jev speaks no
+ * chat completions, so it cannot be an AI model). Needs the `OPENROUTER_API_KEY` secret on its
+ * Worker, installed with `wrangler secret put`; wrangler refuses the deploy without it.
+ *
+ * Absent or disabled generates nothing.
+ */
+export interface JevConfig {
+  /** Whether the Jev Worker is built, deployed and bound at all. */
+  enabled: boolean;
+}
+
 /** Worker telemetry. Maps onto wrangler's `observability` block. */
 export interface DeploymentObservabilityConfig {
   enabled: boolean;
@@ -242,6 +255,8 @@ export interface DeploymentConfig {
     webSearch?: { name: string };
     /** Organisation Records. Only required when `records.enabled`. */
     records?: { name: string };
+    /** Jev decisions. Only required when `jev.enabled`. */
+    jev?: { name: string };
   };
   /** Optional private Python execution service; disabled unless explicitly enabled. */
   runtime?: { enabled: boolean; workerName: string; maxInstances: number };
@@ -258,6 +273,8 @@ export interface DeploymentConfig {
   webSearch?: WebSearchConfig;
   /** Organisation Records. Absent means disabled, as does `enabled: false`. */
   records?: RecordsConfig;
+  /** Jev decisions. Absent means disabled, as does `enabled: false`. */
+  jev?: JevConfig;
   /** Workshop KV/R2. `null` requests Wrangler automatic provisioning. */
   resources: {
     blueprintsKvNamespaceId: string | null;
@@ -357,6 +374,8 @@ export interface GeneratedConfigs {
   webSearch?: ProdWranglerConfig;
   /** Absent when `records.enabled` is false or the block is missing. */
   records?: ProdWranglerConfig;
+  /** Absent when `jev.enabled` is false or the block is missing. */
+  jev?: ProdWranglerConfig;
 }
 
 /** The upstream base configs the generated ones are derived from. */
@@ -376,6 +395,8 @@ export interface BaseConfigs {
   webSearch?: ProdWranglerConfig;
   /** Records base; required only when Records is enabled. */
   records?: ProdWranglerConfig;
+  /** Jev base; required only when Jev is enabled. */
+  jev?: ProdWranglerConfig;
 }
 
 /** One build step `deploy.ts` runs before deploying. See `buildCommands`. */

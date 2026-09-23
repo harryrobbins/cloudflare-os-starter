@@ -33,6 +33,7 @@ const packageDirs = {
   chat: "packages/gatekeeper-chat",
   webSearch: "packages/gatekeeper-websearch",
   records: "packages/gatekeeper-records",
+  jev: "packages/gatekeeper-jev",
 } as const;
 const generatedPaths = Object.fromEntries(
   Object.entries(packageDirs).map(([name, dir]) => [name, join(root, dir, generatedName)]),
@@ -98,6 +99,10 @@ const recordsPaths = [
   "records.hyperdriveId",
   "records.publisherHyperdriveId",
   "records.apiAccessAudience",
+];
+
+const jevPaths = [
+  "workers.jev.name",
 ];
 
 const resourcePaths = [
@@ -201,6 +206,7 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
     ...(config.chat?.enabled ? chatPaths : []),
     ...(config.webSearch?.enabled ? webSearchPaths : []),
     ...(config.records?.enabled === true ? recordsPaths : []),
+    ...(config.jev?.enabled ? jevPaths : []),
   ];
   for (const path of activePaths) {
     const value = valueAt(config, path);
@@ -249,6 +255,13 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
       records: undefined,
     };
   }
+  if (!config.jev?.enabled) {
+    activeConfig = {
+      ...activeConfig,
+      workers: { ...activeConfig.workers, jev: undefined },
+      jev: undefined,
+    };
+  }
   const placeholder = JSON.stringify(activeConfig).match(/<[^>]+>/)?.[0];
   if (placeholder) throw new Error(`Replace deployment placeholder ${placeholder}.`);
 
@@ -289,11 +302,12 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
     .filter(([key]) => key !== "chat" || (config.chat?.enabled ?? false))
     .filter(([key]) => key !== "webSearch" || (config.webSearch?.enabled ?? false))
     .filter(([key]) => key !== "records" || config.records?.enabled === true)
+    .filter(([key]) => key !== "jev" || (config.jev?.enabled ?? false))
     .map(([, worker]) => worker!.name);
   if (new Set(workerNames).size !== workerNames.length) {
     throw new Error(
-      "Router, Workshop, Context, Scheduler, Synthetic Data, chat, web search, Records, and custom " +
-      "Gatekeeper names must be unique.");
+      "Router, Workshop, Context, Scheduler, Synthetic Data, chat, web search, Records, Jev, and " +
+      "custom Gatekeeper names must be unique.");
   }
   if (!workerNames.every((name) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(name))) {
     throw new Error("Worker names must use lowercase letters, numbers, and hyphens.");
@@ -714,6 +728,8 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
   if (config.webSearch?.enabled && !webSearch) throw new Error("Web search base configuration is required.");
   const records = config.records?.enabled ? structuredClone(bases.records) : undefined;
   if (config.records?.enabled && !records) throw new Error("Records base configuration is required.");
+  const jev = config.jev?.enabled ? structuredClone(bases.jev) : undefined;
+  if (config.jev?.enabled && !jev) throw new Error("Jev base configuration is required.");
   const origin = publicOrigin(config);
 
   setCommon(router, config, config.workers.router.name, config.workers.router.route);
@@ -829,6 +845,11 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     ...(records ? [{
       binding: "GATEKEEPER_RECORDS",
       service: config.workers.records!.name,
+      entrypoint: "GatekeeperVendor",
+    }] : []),
+    ...(jev ? [{
+      binding: "GATEKEEPER_JEV",
+      service: config.workers.jev!.name,
       entrypoint: "GatekeeperVendor",
     }] : []),
   ];
@@ -980,6 +1001,11 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     // Hyperdrive configurations.
   }
 
+  if (jev && config.jev) {
+    // RPC only, and like web search it inherits `secrets.required: ["OPENROUTER_API_KEY"]`.
+    setCommon(jev, config, config.workers.jev!.name);
+  }
+
   const generated: GeneratedConfigs = {
     router, workshop, context, scheduler, procgen, customGatekeeper,
     ...(errorReporter && { errorReporter }),
@@ -987,6 +1013,7 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     ...(chat && { chat }),
     ...(webSearch && { webSearch }),
     ...(records && { records }),
+    ...(jev && { jev }),
   };
   requireNoDevValues(generated, "generated production config");
   requireNoLocalConnectionStrings(generated);
@@ -1112,6 +1139,7 @@ export function buildCommands(config: DeploymentConfig): BuildCommand[] {
       { args: ["--filter", "gatekeeper-records", "exec", "node", "build-app.mjs"] },
       { args: ownBuild("gatekeeper-records") },
     ] : []),
+    ...(config.jev?.enabled ? [{ args: ownBuild("gatekeeper-jev") }] : []),
     ...(config.errorReporting.enabled ? [{ args: ownBuild("error-reporter") }] : []),
     // Access mode is a build-time constant in the frontend bundle (`src/useAuth.ts`), so it is set
     // here rather than inherited: a bundle built under a different value is wrong, not just stale.
@@ -1188,6 +1216,7 @@ export function deployOrder(config: DeploymentConfig): (keyof typeof packageDirs
     ...(config.webSearch?.enabled ? ["webSearch" as const] : []),
     // Records binds nothing; the Workshop (vendor) and the router (/gatekeeper/records) bind it.
     ...(config.records?.enabled ? ["records" as const] : []),
+    ...(config.jev?.enabled ? ["jev" as const] : []),
     ...(chatFirst ? chat : []),
     "workshop",
     ...(chatFirst ? [] : chat),
@@ -1389,6 +1418,7 @@ async function main(): Promise<void> {
     ...(config.records?.enabled
       ? { records: await readJsonc(join(root, packageDirs.records, "wrangler.jsonc")) }
       : {}),
+    ...(config.jev?.enabled ? { jev: await readJsonc(join(root, packageDirs.jev, "wrangler.jsonc")) } : {}),
   });
   reportAiGateway(config);
 
