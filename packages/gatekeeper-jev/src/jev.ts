@@ -85,6 +85,20 @@ export function describeJevAccount(): AccountDescription {
 
 class FixedResourceConfigurator extends RpcTarget {}
 
+/**
+ * Refuses a Gatekeeper that was not made for an explicit connection. Before connections were
+ * explicit, the Workshop installed this class in every workspace as an ambient capsule, created
+ * without props; such an instance may still exist until the Workshop retires it, and must stay
+ * inert -- no sessions, and no pending action applied -- whatever the Workshop does.
+ */
+export function assertExplicitConnection(props: unknown): void {
+  let url = (props as { resourceUrl?: unknown } | undefined)?.resourceUrl;
+  if (url !== JEV_RESOURCE.urlPattern) {
+    throw new Error(
+      "Jev decisions is now connected per workspace. Connect it to this workspace to use it here.");
+  }
+}
+
 function isText(value: unknown): boolean {
   return typeof value === "string" ? value.trim() !== "" : !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -260,6 +274,8 @@ export class JevGatekeeper extends DurableObject<Cloudflare.Env> implements Gate
       url: "jev://decisions",
       title: "Jev decisions",
       snippet: "Calibrated yes/no, choice and score decisions from TypeSafe's Jev.",
+      // Usable only while a gadget binds it or a chat that accepted it still holds it.
+      revocable: true,
       suggestedBindingName: "JEV",
       tsType: "JevSession",
     };
@@ -274,6 +290,7 @@ export class JevGatekeeper extends DurableObject<Cloudflare.Env> implements Gate
   }
 
   async startSession(queue: RpcStub<ApprovalQueue>): Promise<JevSession> {
+    assertExplicitConnection(this.ctx.props);
     return new JevSessionImpl(queue.dup(), this);
   }
 
@@ -281,6 +298,7 @@ export class JevGatekeeper extends DurableObject<Cloudflare.Env> implements Gate
   async removeObserver(_id: string): Promise<void> {}
 
   async applyAction(_action: number): Promise<void> {
+    assertExplicitConnection(this.ctx.props);
     throw new Error("Jev decisions take no actions.");
   }
 
@@ -324,7 +342,9 @@ export class JevAccount extends WorkerEntrypoint<Cloudflare.Env> implements Gate
     class: DurableObjectClass<Gatekeeper<JevSession>>; resource: SupportedResource;
   }> {
     parseJevResourceUrl(url);
-    return { class: this.ctx.exports.JevGatekeeper({}), resource: JEV_RESOURCE };
+    return { class: this.ctx.exports.JevGatekeeper({ props: { resourceUrl: JEV_RESOURCE.urlPattern } }),
+      resource: JEV_RESOURCE,
+    };
   }
 
   async startResourceConfigurator(pattern: string): Promise<ResourceConfiguratorFrame> {

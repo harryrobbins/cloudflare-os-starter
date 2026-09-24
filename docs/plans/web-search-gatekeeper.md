@@ -425,3 +425,9 @@ times, against live Jev.
   decides whether each person adds the account themselves; it no longer grants access to any
   workspace. Workspaces that had the old ambient capsule have it retired on their next open, with
   its storage left in place. See [customization](../customization.md#web-search-and-jev).
+- **Revocation.** Connections are `revocable` (a `ResourceDescription` flag the Workshop honours in
+  `workshop-backend/src/connection-grants.ts`). A chat's agent reaches one only while a gadget binds
+  it or that chat still holds the request it accepted, which it can **Disconnect**. When the last
+  grant goes, pending approvals are cancelled and the facet is stopped. The Gatekeeper also refuses
+  sessions and actions unless it was created for an explicit connection (`resourceUrl` prop), so
+  instances left over from the ambient build are inert even before the Workshop retires them.

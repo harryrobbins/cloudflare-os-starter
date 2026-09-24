@@ -5,6 +5,7 @@ import typesSource from "../src/types.d.ts?raw";
 import TYPES_CODE from "../src/types-code.js";
 import type { GateDecision } from "../src/classifier/gate.js";
 import {
+  assertExplicitConnection,
   describeWebSearchAccount,
   describeWebSearchVendor,
   GatekeeperVendor,
@@ -150,7 +151,7 @@ describe("websearch connections", () => {
     expect(first).toEqual({ class: "WebSearchGatekeeper", resource: WEB_RESOURCE });
     await account.getGatekeeperClassFor("websearch://web/");
     // One Gatekeeper per connection: each workspace keeps its own approvals and audit log.
-    expect(made).toHaveLength(2);
+    expect(made).toEqual([{ props: { resourceUrl: "websearch://web" } }, { props: { resourceUrl: "websearch://web" } }]);
     await expect(account.getGatekeeperClassFor("https://example.com/")).rejects.toThrow(/one resource/);
     await expect(account.ensureResources(["websearch://*"])).rejects.toThrow(/one resource/);
     expect(await account.ensureResources(["websearch://web"])).toEqual({});
@@ -163,5 +164,14 @@ describe("websearch connections", () => {
     expect(CONFIGURATOR_HTML).toContain('data-resource-url="websearch://web"');
     expect(CONFIGURATOR_HTML).toContain("setSelectionReady");
     await expect(account.startResourceConfigurator("jev://decisions")).rejects.toThrow(/one resource/);
+  });
+});
+
+describe("gatekeepers from before connections were explicit", () => {
+  it("stay inert: an ambient capsule, created without props, gets no session and applies nothing", () => {
+    expect(() => assertExplicitConnection({})).toThrow(/connected per workspace/);
+    expect(() => assertExplicitConnection(undefined)).toThrow(/connected per workspace/);
+    expect(() => assertExplicitConnection({ resourceUrl: "jev://decisions" })).toThrow(/connected per workspace/);
+    expect(() => assertExplicitConnection({ resourceUrl: "websearch://web" })).not.toThrow();
   });
 });
