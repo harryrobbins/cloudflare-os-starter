@@ -26,7 +26,10 @@ Run these from the repository root. Node comes from fnm (`fnm use v24.21.0`).
 pnpm --filter blueprint-whiteboard test:run      # unit tests (node) + server tests (workerd)
 pnpm --filter blueprint-whiteboard build:gadget  # dist/server.js, dist/client.js, dist/README.md
 pnpm --filter blueprint-whiteboard pack:gadget   # build, then write formats/whiteboard.gadget (bumps revision on change)
+pnpm --filter blueprint-whiteboard benchmark     # performance report (JSON + Markdown, no board content)
 ```
+
+Large-board performance: `test/performance/` holds deterministic 500/2,000/5,000-object fixtures, the CI proxy tests (`model.test.js` against `budgets.js`: bytes, scans, rendered SVG counts, presence fan-out; no timings) and the committed baseline with the snapshot/delta decision ([`test/performance/baseline.md`](test/performance/baseline.md)). `benchmark` writes `test/performance/results/benchmark.{json,md}`.
 
 The `test` task that `pnpm test` and `pnpm check` run also rebuilds `dist/` and fails if `formats/whiteboard.gadget` is stale. **Run `pack:gadget` and commit the archive with every source change.**
 

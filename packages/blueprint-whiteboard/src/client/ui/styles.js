@@ -213,6 +213,11 @@ input:focus { border-color: var(--accent); }
 .outline-item .kind { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-3); letter-spacing: .04em; display: block; }
 .outline-item .excerpt { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .outline-item[aria-current="true"] { background: var(--accent-soft); border-radius: var(--radius-sm); }
+/* Virtualised panel lists (virtual-list.js): uniform one-line rows between two spacers. */
+.panel-list > li { flex: none; }
+.panel-list > li.virtual-spacer { padding: 0; border: 0; }
+.activity-item .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-list > li[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .muted { color: var(--text-3); font-size: 13px; }
 
 /* Dialogs, menus, toasts */

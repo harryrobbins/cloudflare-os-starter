@@ -6,7 +6,8 @@
   "scripts": {
     "build:gadget": "node scripts/build.mjs",
     "pack:gadget": "node scripts/build.mjs && node scripts/pack-gadget.mjs",
-    "test:run": "vitest run && vitest run --config vitest.workers.config.ts"
+    "test:run": "vitest run && vitest run --config vitest.workers.config.ts",
+    "benchmark": "node scripts/benchmark.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",

@@ -10,7 +10,14 @@
 //
 // Rendering is incremental: objects patch per id on store changes, pan and zoom only change the
 // camera transform, and all per-frame work (camera, gestures, overlay, presence) is batched into
-// one requestAnimationFrame. window.__wbRenderStats counts object renders and full rebuilds.
+// one requestAnimationFrame. window.__wbRenderStats counts object renders and full rebuilds, and
+// `rendered`, the object elements currently in the DOM.
+//
+// Viewport culling (./culling.js): on boards of culling.MIN_OBJECTS or more, only objects near the
+// viewport, pinned objects (selection, hover, text editing, the local gesture, collaborators'
+// transforms) and the connectors and endpoints they need have elements. The plan is refreshed in
+// the animation frame that applies a camera change (before paint, so nothing flashes at the
+// edges), on store changes, and when a pin changes. The store's model is never culled.
 //
 // "wb-contextmenu" detail (see ../ui-contract.js) also carries `pointerType` ("mouse", "pen",
 // "touch" or "keyboard") and, for the keyboard, `rect`: the selection's client rect to anchor the
@@ -34,6 +41,7 @@ import { guideElements, endpointHandleElements } from "./guide-layer.js";
 import { resolveIcon, iconDefaults, getIcon } from "../../../shared/icons/registry.js";
 import { keyAction, panStep, directionWord, SHORTCUTS_HINT } from "./keymap.js";
 import { ObjectLayer, svgEl } from "./layers.js";
+import { Culler, connectorsOf } from "./culling.js";
 import { PresenceLayer } from "./presence-layer.js";
 import { TextEditor, textPatch } from "./text-editor.js";
 import {
@@ -220,7 +228,44 @@ export function createCanvas(store, options = {}) {
   const layer = new ObjectLayer(framesGroup, othersGroup, stats, (id) => {
     const ov = overrides.get(id);
     return ov && ov.mode === "replace" ? resolve(id) : undefined;
-  });
+  }, (ids) => connectorsOf(spatial, ids));
+
+  // Viewport culling. options.cull (test/benchmark extension): Culler options, e.g. {minObjects: 0}.
+  const cullOptions = /** @type {any} */ (options).cull ?? {};
+  const culler = new Culler({ ...cullOptions, enabled: !exportMode && cullOptions.enabled !== false });
+  /** Ids a collaborator is transforming, as last pinned. */
+  let remotePinKey = "";
+  function remoteTransformIds() {
+    /** @type {string[]} */
+    const ids = [];
+    for (const peer of store.getState().peers.values()) for (const t of peer.transforms ?? []) ids.push(t.id);
+    return ids;
+  }
+  /** Objects that keep an element wherever they are. */
+  function* pins() {
+    yield* selection;
+    if (overlay.hoverId) yield overlay.hoverId;
+    if (editor?.id) yield editor.id;
+    yield* overrides.keys();
+    yield* remoteTransformIds();
+  }
+  function cullViewport() {
+    return size.w && size.h && cameraReady ? viewportOf(camera, size.w, size.h) : null;
+  }
+  function planCulling() {
+    return culler.plan({ index: spatial, objects: objects(), viewport: cullViewport(), pins: pins() });
+  }
+  /** Re-plans culling and adds/removes elements to match. @returns {Set<string>} ids just added */
+  function updateCulling() {
+    dirty.cull = false;
+    const all = objects();
+    const { added } = layer.sync(planCulling(), all, resolve, sorted());
+    for (const id of added) {
+      const ov = overrides.get(id);
+      if (ov?.mode === "translate") layer.translate(id, ov.geom.x - all[id].x, ov.geom.y - all[id].y);
+    }
+    return added;
+  }
 
   /** @param {CanvasEvents & Record<string, any>} event */
   function emit(event) {
@@ -232,7 +277,7 @@ export function createCanvas(store, options = {}) {
   // ------------------------------------------------------------------------------------------
   // Frame scheduling
   // ------------------------------------------------------------------------------------------
-  const dirty = { camera: false, gesture: false, selection: false, overlay: false, presence: false, hover: false };
+  const dirty = { camera: false, gesture: false, selection: false, overlay: false, presence: false, hover: false, cull: false };
   let presenceAnimating = false;
   let rafId = 0;
 
@@ -253,9 +298,13 @@ export function createCanvas(store, options = {}) {
       if (t >= 1) cameraAnim = null;
       dirty.camera = true;
     }
+    // Culling before anything draws: the camera this frame applies, and pins that just changed.
+    if (dirty.cull || (dirty.camera && culler.stale(cullViewport()))) updateCulling();
     if (dirty.gesture) {
       dirty.gesture = false;
       gesture?.frame();
+      // Objects the gesture moves (e.g. a frame's children) keep an element while it runs.
+      if (overrides.size) for (const id of overrides.keys()) if (!layer.elements.has(id)) { updateCulling(); break; }
     }
     if (dirty.camera) {
       dirty.camera = false;
@@ -489,6 +538,7 @@ export function createCanvas(store, options = {}) {
     if (next.length === selection.length && next.every((id, i) => id === selection[i])) return;
     selection = next;
     schedule("selection");
+    schedule("cull");
     if (!exportMode) store.setPresence({ selection: [...selection] });
     emit({ kind: "selection" });
     if (announce) announceSelection();
@@ -524,6 +574,7 @@ export function createCanvas(store, options = {}) {
     },
     onClose() {
       layer.setEditing(null);
+      schedule("cull");
       store.setPresence({ editingId: null });
       schedule("overlay");
       emit({ kind: "editing" });
@@ -543,6 +594,7 @@ export function createCanvas(store, options = {}) {
     if (selection.length !== 1 || selection[0] !== id) setSelectionInternal([id]);
     if (!cameraReady) measure();
     layer.setEditing(id);
+    if (!layer.elements.has(id)) updateCulling();
     if (!editor.open(id)) {
       layer.setEditing(null);
       return;
@@ -620,7 +672,7 @@ export function createCanvas(store, options = {}) {
     setOverlay(patch) {
       if ("marquee" in patch) { overlay.marquee = patch.marquee ?? null; schedule("overlay"); }
       if ("guides" in patch && (patch.guides?.length || overlay.guides.length)) { overlay.guides = patch.guides ?? []; schedule("overlay"); }
-      if ("hoverId" in patch && patch.hoverId !== overlay.hoverId) { overlay.hoverId = patch.hoverId ?? null; schedule("selection"); }
+      if ("hoverId" in patch && patch.hoverId !== overlay.hoverId) { overlay.hoverId = patch.hoverId ?? null; schedule("selection"); schedule("cull"); }
     },
     toolStyle, finishCreate, editText,
     contextMenu: dispatchContextMenu,
@@ -987,6 +1039,8 @@ export function createCanvas(store, options = {}) {
   // ------------------------------------------------------------------------------------------
   function rebuildAll() {
     sortedCache = null;
+    culler.reset();
+    layer.wanted = planCulling();
     layer.rebuild(objects(), resolve);
     const kept = validIds(objects(), selection);
     if (kept.length !== selection.length) setSelectionInternal(kept);
@@ -1018,7 +1072,9 @@ export function createCanvas(store, options = {}) {
         const ids = change.objects;
         if (!ids) { rebuildAll(); break; }
         sortedCache = null;
-        const touched = layer.patch(ids, state.board.objects, resolve);
+        const added = updateCulling();
+        const touched = layer.patch(ids, state.board.objects, resolve, added);
+        for (const id of added) touched.add(id);
         // Re-apply in-progress move offsets to elements that were just re-rendered.
         for (const id of touched) {
           const ov = overrides.get(id);
@@ -1038,11 +1094,14 @@ export function createCanvas(store, options = {}) {
       case "structure":
         setBackground(state.board.background);
         break;
-      case "presence":
+      case "presence": {
+        const key = remoteTransformIds().join(",");
+        if (key !== remotePinKey) { remotePinKey = key; schedule("cull"); }
         presence?.invalidate(change.peers ?? null);
         schedule("presence");
         if (following && (!change.peers || change.peers.includes(following))) followStep();
         break;
+      }
       case "flash":
         layer.flash(change.objects ?? []);
         break;
@@ -1086,6 +1145,8 @@ export function createCanvas(store, options = {}) {
     const state = store.getState();
     background = state.board.background === "grid" || state.board.background === "plain" ? state.board.background : "dots";
     spatial.reset(state.board.objects);
+    // Unmeasured: only pins get elements; the first camera frame plans the viewport.
+    layer.wanted = planCulling();
     layer.rebuild(state.board.objects, resolve);
   }
 
@@ -1255,7 +1316,7 @@ export function createCanvas(store, options = {}) {
       moveCamera(fitRect(u, size.w, size.h, { padding }), { animate });
       return true;
     },
-    focusObjects(ids) {
+    focusObjects(ids, opts) {
       if (!cameraReady) measure();
       const rects = [];
       for (const id of ids) {
@@ -1265,7 +1326,7 @@ export function createCanvas(store, options = {}) {
       }
       const u = unionRects(rects);
       if (!u) return;
-      moveCamera(revealRect(camera, u, size.w, size.h, 60), { animate: true });
+      moveCamera(revealRect(camera, u, size.w, size.h, 60), { animate: opts?.animate !== false });
     },
     align(mode) {
       const updates = alignUpdates(objects(), selection, mode);

@@ -3,6 +3,9 @@
 // same virtual nodes the server serialises for the SVG export) into its own wrapper <g>, kept in a
 // Map by id so a change patches only that object (plus connectors attached to it). The wrapper's
 // transform is free for in-progress moves, so dragging never re-renders the dragged objects.
+//
+// Culling (./culling.js): `wanted` limits which objects have an element at all (null: every object).
+// Objects outside it keep no DOM; sync() adds and removes elements when the wanted set changes.
 
 import { objectNode, SVG_NS } from "../../../shared/render.js";
 import { sortedObjects } from "../../../shared/protocol.js";
@@ -33,7 +36,7 @@ export function buildNode(node) {
   return el;
 }
 
-/** @typedef {{objectRenders: number, fullRenders: number}} RenderStats */
+/** @typedef {{objectRenders: number, fullRenders: number, rendered?: number}} RenderStats */
 
 export class ObjectLayer {
   /**
@@ -42,9 +45,12 @@ export class ObjectLayer {
    * @param {RenderStats} stats
    * @param {(id: string) => WhiteboardObject|undefined} [drawOverride]  geometry to draw instead of
    *   the committed object (an in-progress resize or rotate); connectors always use `resolve`
+   * @param {(ids: Iterable<string>) => Set<string>} [allConnectorsOf]  connectors attached to ids,
+   *   rendered or not (the spatial index's map); defaults to the rendered ones only
    */
-  constructor(framesGroup, othersGroup, stats, drawOverride = () => undefined) {
+  constructor(framesGroup, othersGroup, stats, drawOverride = () => undefined, allConnectorsOf) {
     this.drawOverride = drawOverride;
+    this.allConnectorsOf = allConnectorsOf;
     this.framesGroup = framesGroup;
     this.othersGroup = othersGroup;
     this.stats = stats;
@@ -58,6 +64,41 @@ export class ObjectLayer {
     this.attached = new Map();
     /** Ids whose text is hidden because the inline editor covers it. @type {string|null} */
     this.editingId = null;
+    /** Ids allowed an element (viewport culling); null: every object. @type {Set<string>|null} */
+    this.wanted = null;
+  }
+
+  /** @param {string} id */
+  isWanted(id) {
+    return !this.wanted || this.wanted.has(id);
+  }
+
+  /**
+   * Applies a new wanted set (null: every object): removes elements no longer wanted, renders the
+   * newly wanted ones and restores stacking order when anything was added.
+   * @param {Set<string>|null} wanted @param {Record<string, WhiteboardObject>} objects @param {Resolve} resolve
+   * @param {WhiteboardObject[]} [sorted]  objects in stacking order, when the caller has it cached
+   * @returns {{added: Set<string>, removed: number}}
+   */
+  sync(wanted, objects, resolve, sorted) {
+    this.wanted = wanted;
+    /** @type {Set<string>} */
+    const added = new Set();
+    let removed = 0;
+    for (const id of [...this.elements.keys()]) {
+      if (!Object.hasOwn(objects, id) || !this.isWanted(id)) { this.remove(id); removed++; }
+    }
+    const candidates = wanted ?? Object.keys(objects);
+    for (const id of candidates) {
+      if (this.elements.has(id) || !Object.hasOwn(objects, id)) continue;
+      const o = objects[id];
+      const el = this.render(o, resolve);
+      (o.type === "frame" ? this.framesGroup : this.othersGroup).appendChild(el);
+      added.add(id);
+    }
+    if (added.size) this.reorder(objects, sorted);
+    this.stats.rendered = this.elements.size;
+    return { added, removed };
   }
 
   /**
@@ -73,17 +114,21 @@ export class ObjectLayer {
     this.ends.clear();
     this.attached.clear();
     for (const o of sortedObjects(objects)) {
+      if (!this.isWanted(o.id)) continue;
       const el = this.render(o, resolve);
       (o.type === "frame" ? this.framesGroup : this.othersGroup).appendChild(el);
     }
+    this.stats.rendered = this.elements.size;
   }
 
   /**
-   * Patches changed ids (created, updated or deleted) and the connectors attached to them.
+   * Patches changed ids (created, updated or deleted) and the connectors attached to them. Ids
+   * that are not wanted lose their element; `skip` names ids already rendered fresh (by sync).
    * @param {Iterable<string>} ids @param {Record<string, WhiteboardObject>} objects @param {Resolve} resolve
+   * @param {Set<string>} [skip]
    * @returns {Set<string>} ids rendered or removed
    */
-  patch(ids, objects, resolve) {
+  patch(ids, objects, resolve, skip) {
     /** @type {Set<string>} */
     const touched = new Set();
     let reorder = false;
@@ -93,10 +138,11 @@ export class ObjectLayer {
     }
     for (const id of touched) {
       const o = Object.hasOwn(objects, id) ? objects[id] : undefined;
-      if (!o) {
+      if (!o || !this.isWanted(id)) {
         this.remove(id);
         continue;
       }
+      if (skip?.has(id)) continue;
       const existed = this.elements.has(id);
       if (!existed || this.orderKeys.get(id) !== orderKey(o)) reorder = true;
       const el = this.render(o, resolve);
@@ -104,6 +150,7 @@ export class ObjectLayer {
     }
     // A connector added now may attach to objects patched earlier in this loop; nothing to do.
     if (reorder) this.reorder(objects);
+    this.stats.rendered = this.elements.size;
     return touched;
   }
 
@@ -166,11 +213,12 @@ export class ObjectLayer {
   }
 
   /**
-   * Connectors attached to any of `ids`.
+   * Connectors attached to any of `ids` (with culling, including connectors without an element).
    * @param {Iterable<string>} ids
    * @returns {Set<string>}
    */
   connectorsOf(ids) {
+    if (this.allConnectorsOf) return this.allConnectorsOf(ids);
     /** @type {Set<string>} */
     const out = new Set();
     for (const id of ids) for (const c of this.attached.get(id) ?? []) out.add(c);
@@ -180,9 +228,9 @@ export class ObjectLayer {
   /**
    * Brings DOM order in line with stacking order, moving only misplaced nodes.
    * @param {Record<string, WhiteboardObject>} objects
+   * @param {WhiteboardObject[]} [sorted]  `objects` in stacking order, when the caller has it cached
    */
-  reorder(objects) {
-    const sorted = sortedObjects(objects);
+  reorder(objects, sorted = sortedObjects(objects)) {
     for (const [group, list] of /** @type {const} */ ([
       [this.framesGroup, sorted.filter((o) => o.type === "frame")],
       [this.othersGroup, sorted.filter((o) => o.type !== "frame")],
