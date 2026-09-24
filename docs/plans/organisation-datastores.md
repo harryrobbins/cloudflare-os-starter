@@ -550,6 +550,13 @@ Worker versions from the second deploy:
   `records.outbox.tick {published: 0, pending: 0, dead: 0}` in 850 ms, with no exceptions. That run
   proves the publisher role reaches Neon through Hyperdrive.
 
+### Fix after the first signed-in attempt
+
+The first real **Connect** failed with "Confirmation must come from this site." The Worker sent
+`Referrer-Policy: no-referrer`, under which browsers send `Origin: null` on the page's own form POST,
+so the Origin check refused it. Fixed in `f4cd4b5` (the policy is now `same-origin`, with a regression
+test in `connect-guard.test.ts`) and redeployed: `cfos-records` is now `1558678a-7273-457a-a29a-c92a4a186d20`.
+
 ### Signed-in checks still to do (Harry; Access blocks automated sign-in)
 
 1. **Connections → Organisation records → Connect.** A tab opens and asks you to confirm as Harry
