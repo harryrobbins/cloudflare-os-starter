@@ -520,7 +520,8 @@ describe("whiteboard on the local platform", { concurrency: false }, () => {
     const aliceBoard = await w.settledBoard(alice.frame, 60_000);
     timings.T7_seed_alice_settled_ms = Date.now() - t0;
     assert.equal(Object.keys(aliceBoard.objects).length, 500);
-    await until(async () => (await bob.frame.locator(SEL.anyObject).count()) >= 500, { timeout: 60_000, interval: 200, message: "bob draws 500" });
+    // Bob's model holds all 500; the canvas culls to the viewport (+ overscan) above 300 objects.
+    await until(async () => (await inPane(bob.frame, (store) => Object.keys(store.getState().board.objects).length)) >= 500, { timeout: 60_000, interval: 200, message: "bob has 500" });
     timings.T7_seed_bob_rendered_ms = Date.now() - t0;
 
     await inPane(bob.frame, (_, canvas) => canvas.zoomToFit());
@@ -604,7 +605,7 @@ describe("whiteboard on the local platform", { concurrency: false }, () => {
     await alice.page.bringToFront();
     const formats = await p.listExportFormats(alice.page);
     timings.T9_formats = formats;
-    assert.deepEqual(formats, ["SVG image", "HTML", "PDF"]);
+    assert.deepEqual(formats, ["SVG image", "HTML", "PDF", "Whiteboard backup (JSON)"]);
 
     let t0 = Date.now();
     const svg = await p.downloadExport(alice.page, /^SVG image$/);
