@@ -10,7 +10,7 @@
 //   rect/ellipse 15%
 //   text        5%, half of them long (up to ~1,500 characters)
 //   pen strokes 10%, 40 to 200 points each
-//   connectors  the rest (~15%), between nearby shapes, some labelled and elbow-routed
+//   connectors  the rest (~15%), between shapes near each other, some labelled and elbow-routed
 // Objects spread over a square area of roughly 260 world units per object side, so a 1000x800
 // viewport at zoom 1 sees a few dozen of them.
 //
@@ -126,8 +126,11 @@ export function fixtureOps(n, { seed = 1 } = {}) {
     shapes.push({ op: "create", object });
   }
 
-  // Connectors between shapes that are near each other in creation order (not pens).
-  const endpoints = shapes.filter((s) => s.object.type !== "pen").map((s) => s.object.id);
+  // Connectors between shapes that are near each other on the board (not pens): endpoints in
+  // reading order by 1,000-unit bands, then a neighbour a few places along.
+  const band = (/** @type {any} */ o) => Math.floor(o.y / 1000) * 1e7 + (Math.floor(o.y / 1000) % 2 ? -o.x : o.x);
+  const endpoints = shapes.filter((s) => s.object.type !== "pen").map((s) => s.object)
+    .sort((a, b) => band(a) - band(b)).map((o) => o.id);
   for (let c = 0; c < connectorTarget && endpoints.length > 1; c++) {
     const a = Math.floor(rng() * endpoints.length);
     const b = (a + 1 + Math.floor(rng() * 5)) % endpoints.length;

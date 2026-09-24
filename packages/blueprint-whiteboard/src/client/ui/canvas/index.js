@@ -228,7 +228,8 @@ export function createCanvas(store, options = {}) {
   }, (ids) => connectorsOf(spatial, ids));
 
   // Viewport culling. options.cull (test/benchmark extension): Culler options, e.g. {minObjects: 0}.
-  const culler = new Culler({ ...(/** @type {any} */ (options).cull ?? {}), enabled: !exportMode });
+  const cullOptions = /** @type {any} */ (options).cull ?? {};
+  const culler = new Culler({ ...cullOptions, enabled: !exportMode && cullOptions.enabled !== false });
   /** Ids a collaborator is transforming, as last pinned. */
   let remotePinKey = "";
   function remoteTransformIds() {
