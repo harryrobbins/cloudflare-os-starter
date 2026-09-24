@@ -16,7 +16,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
-import { measureSize, presenceMetrics } from "../test/performance/measure.js";
+import { measureSize, presenceMetrics, connectorMetrics } from "../test/performance/measure.js";
 import { SIZES } from "../test/performance/fixtures.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -44,6 +44,8 @@ for (const n of sizes) {
   process.stderr.write(`measuring ${n} objects...\n`);
   report.sizes[n] = await measureSize(n, { timings: true });
 }
+process.stderr.write("routing a connector-heavy board (2,000 shapes, 1,000 elbow connectors)...\n");
+report.connectors = await connectorMetrics({ timings: true });
 process.stderr.write(`simulating presence for ${viewers.join(", ")} viewers...\n`);
 report.presence = await presenceMetrics(viewers);
 report.durationMs = Date.now() - started;
@@ -91,6 +93,18 @@ function markdown(r) {
     row("Pan step ms (fake DOM), culled / unculled", (s) => `${fmt(s.canvas.culled.pan.msPerStep)} / ${fmt(s.canvas.unculled.pan.msPerStep)}`),
     row("Pan: max groups / elements created per step (culled)", (s) => `${s.canvas.culled.pan.maxGroups} / ${fmt(s.canvas.culled.pan.elementsCreatedPerStep)}`),
     row("Object renders for a remote 1-object update", (s) => `${s.canvas.culled.remoteUpdateRenders}`),
+    "",
+    "## Connector routing (2,000 shapes, 1,000 elbow connectors)",
+    "",
+    "| Measure | Value |",
+    "| --- | --- |",
+    `| Routes around obstacles / simple elbows (fast path) | ${r.connectors.build.avoided} / ${r.connectors.build.fastPaths} |`,
+    `| A* searches / budget fallbacks | ${r.connectors.build.searches} / ${r.connectors.build.fallbacks} |`,
+    `| A* states expanded per search (mean / max; budget ${r.connectors.build.expandedBudget}) | ${fmt(r.connectors.build.expandedPerSearch)} / ${r.connectors.build.maxExpandedPerSearch} |`,
+    `| Index build with every route ms (per search) | ${fmt(r.connectors.build.indexBuildMs)} (${fmt(r.connectors.build.msPerSearch)}) |`,
+    `| Single-object move: connectors re-indexed (mean / max) | ${fmt(r.connectors.moves.connectorsReindexedPerMove)} / ${r.connectors.moves.maxConnectorsReindexed} |`,
+    `| Single-object move: routes recomputed (mean / max) | ${fmt(r.connectors.moves.routesRecomputedPerMove)} / ${r.connectors.moves.maxRoutesRecomputed} |`,
+    `| Single-object move: index update ms | ${fmt(r.connectors.moves.msPerMove)} |`,
     "",
     "## Presence (hub simulation, per second after joining)",
     "",

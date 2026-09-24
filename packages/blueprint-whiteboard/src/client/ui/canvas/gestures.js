@@ -18,6 +18,8 @@ import {
 import { resizeBox, rotationToward, MIN_RESIZE } from "./handles.js";
 import { snapMove, snapResize } from "../../model/alignment.js";
 import { svgEl } from "./layers.js";
+import { sideNear, SIDE_PIN_PX, SIDE_PIN_TOUCH_PX } from "./route-edit.js";
+import { routePathD } from "../../../shared/connectors.js";
 
 /** @typedef {import("../../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("../../../shared/protocol.js").ObjectType} ObjectType */
@@ -74,6 +76,8 @@ import { svgEl } from "./layers.js";
  * @property {(rect: Rect) => WhiteboardObject[]} [objectsNear]  marquee candidates in stacking order
  *   (index-backed); defaults to sorted()
  * @property {(message: string) => void} [announce]
+ * @property {import("../../../shared/connectors.js").RouteEnv} [routeEnv]  obstacles for elbow routes
+ * @property {Map<string, import("./route-edit.js").RouteEditFields>} [routeOverrides]  route edits in progress
  */
 /** @typedef {import("../../model/alignment.js").Guide} Guide */
 /** @typedef {import("../../model/alignment.js").SnapOptions} SnapOptions */
@@ -104,7 +108,7 @@ function snapping(ctx, q) {
 
 /** @param {GestureContext} ctx @param {{x: number, y: number}} p @param {(o: WhiteboardObject) => boolean} [accept] */
 function objectAt(ctx, p, accept) {
-  return ctx.objectAt ? ctx.objectAt(p, accept) : topObjectAt(ctx.sorted(), p, ctx.camera().zoom, ctx.resolve, accept);
+  return ctx.objectAt ? ctx.objectAt(p, accept) : topObjectAt(ctx.sorted(), p, ctx.camera().zoom, ctx.resolve, accept, ctx.routeEnv);
 }
 
 /**
@@ -391,7 +395,7 @@ export function marqueeGesture(ctx, p) {
     frame() {
       if (!started) return;
       const rect = rectFromPoints(p, last);
-      const ids = objectsInRect(ctx.objectsNear ? ctx.objectsNear(rect) : ctx.sorted(), rect, ctx.resolve);
+      const ids = objectsInRect(ctx.objectsNear ? ctx.objectsNear(rect) : ctx.sorted(), rect, ctx.resolve, ctx.routeEnv);
       ctx.setSelection([...new Set([...base, ...ids])]);
       ctx.setOverlay({ marquee: rect });
     },
@@ -526,11 +530,15 @@ export function penGesture(ctx, p) {
  */
 export function connectGesture(ctx, p, from) {
   const line = svgEl("path", { class: "wb-preview-line" });
+  const dots = /** @type {SVGGElement} */ (svgEl("g", { class: "wb-side-dots" }));
   ctx.preview.appendChild(line);
+  ctx.preview.appendChild(dots);
   let last = p;
+  // Starting on a side's anchor pins that side (see sideNear); elsewhere it stays automatic.
+  const fromSide = pinnedSideAt(ctx, from, p);
   /** @param {PointerSample} q */
   const targetAt = (q) => objectAt(ctx, q, (o) => o.type !== "connector" && o.id !== from.id);
-  const clear = () => { line.remove(); ctx.setOverlay({ hoverId: null }); };
+  const clear = () => { line.remove(); dots.remove(); ctx.setOverlay({ hoverId: null }); };
   return {
     kind: "connecting",
     move(q) { last = q; ctx.schedule("gesture"); },
@@ -539,17 +547,24 @@ export function connectGesture(ctx, p, from) {
       if (!f) return;
       const target = targetAt(last);
       ctx.setOverlay({ hoverId: target?.id ?? null });
-      const pts = target
-        ? connectorRoute({}, f, target).points
-        : [anchor(f, facingSide(f, last)).point, { x: last.x, y: last.y }];
-      line.setAttribute("d", pts.map((pt, i) => `${i ? "L" : "M"}${round2(pt.x)} ${round2(pt.y)}`).join(""));
+      const toSide = target ? pinnedSideAt(ctx, target, last) : null;
+      sideDots(ctx, dots, target ?? null, toSide);
+      if (target) {
+        line.setAttribute("d", routePathD(connectorRoute({ fromSide: fromSide ?? "auto", toSide: toSide ?? "auto" }, f, target, ctx.routeEnv)));
+      } else {
+        const pts = [anchor(f, fromSide ?? facingSide(f, last)).point, { x: last.x, y: last.y }];
+        line.setAttribute("d", pts.map((pt, i) => `${i ? "L" : "M"}${round2(pt.x)} ${round2(pt.y)}`).join(""));
+      }
     },
     up(q) {
       const target = targetAt(q);
+      const toSide = target ? pinnedSideAt(ctx, target, q) : null;
       clear();
       if (!target || !ctx.objects()[from.id]) return;
       /** @type {Partial<WhiteboardObject> & {type: ObjectType}} */
       const obj = { type: "connector", from: from.id, to: target.id };
+      if (fromSide) obj.fromSide = fromSide;
+      if (toSide) obj.toSide = toSide;
       const style = ctx.toolStyle("connector");
       if (Object.keys(style).length) obj.style = /** @type {Style} */ (style);
       const [id] = ctx.store.createObjects([obj]);
@@ -569,7 +584,9 @@ export function connectGesture(ctx, p, from) {
  */
 export function endpointGesture(ctx, p, connId, end) {
   const line = svgEl("path", { class: "wb-preview-line" });
+  const dots = /** @type {SVGGElement} */ (svgEl("g", { class: "wb-side-dots" }));
   ctx.preview.appendChild(line);
+  ctx.preview.appendChild(dots);
   let started = false;
   let last = p;
   /** @param {PointerSample} q */
@@ -579,7 +596,19 @@ export function endpointGesture(ctx, p, connId, end) {
     const t = objectAt(ctx, q, (o) => o.type !== "connector");
     return t && validEndpoint(conn, end, t) ? t : null;
   };
-  const clear = () => { line.remove(); ctx.setOverlay({ hoverId: null }); };
+  const clear = () => { line.remove(); dots.remove(); ctx.setOverlay({ hoverId: null }); };
+  const sideKey = end === "from" ? "fromSide" : "toSide";
+  /**
+   * The connector as it would be after dropping on `target` at `q`: the dropped end's side pinned
+   * when dropped near one, else automatic; route edits (which assumed the old end) cleared.
+   * @param {WhiteboardObject} conn @param {WhiteboardObject} target @param {{x: number, y: number}} q
+   */
+  const retargeted = (conn, target, q) => {
+    /** @type {any} */
+    const next = { ...conn, [sideKey]: pinnedSideAt(ctx, target, q) ?? "auto" };
+    if (conn[end] !== target.id) delete next.segments;
+    return next;
+  };
   return {
     kind: "connecting",
     move(q) {
@@ -596,29 +625,67 @@ export function endpointGesture(ctx, p, connId, end) {
       if (!conn || !other) { line.setAttribute("d", ""); return; }
       const target = targetAt(last);
       ctx.setOverlay({ hoverId: target?.id ?? null });
-      let pts;
+      sideDots(ctx, dots, target, target ? pinnedSideAt(ctx, target, last) : null);
       if (target) {
-        const route = end === "from" ? connectorRoute(conn, target, other) : connectorRoute(conn, other, target);
-        pts = route.points;
+        const c = retargeted(conn, target, last);
+        const route = end === "from" ? connectorRoute(c, target, other, ctx.routeEnv) : connectorRoute(c, other, target, ctx.routeEnv);
+        line.setAttribute("d", routePathD(route));
       } else {
         const fixed = anchor(other, facingSide(other, last)).point;
-        pts = end === "from" ? [{ x: last.x, y: last.y }, fixed] : [fixed, { x: last.x, y: last.y }];
+        const pts = end === "from" ? [{ x: last.x, y: last.y }, fixed] : [fixed, { x: last.x, y: last.y }];
+        line.setAttribute("d", pts.map((pt, i) => `${i ? "L" : "M"}${round2(pt.x)} ${round2(pt.y)}`).join(""));
       }
-      line.setAttribute("d", pts.map((pt, i) => `${i ? "L" : "M"}${round2(pt.x)} ${round2(pt.y)}`).join(""));
     },
     up(q) {
       clear();
       if (!started) return;
       const conn = ctx.objects()[connId];
       if (!conn) return;
-      const update = reconnectUpdate(conn, end, targetAt(q));
-      if (!update) {
+      const target = targetAt(q);
+      const update = reconnectUpdate(conn, end, target);
+      const side = target && validEndpoint(conn, end, target) ? pinnedSideAt(ctx, target, q) ?? "auto" : null;
+      /** @type {Record<string, any>|null} */
+      let patch = update ? { ...update.patch } : null;
+      // Dropping on the same end again may still pin (or unpin) its side.
+      if (side && side !== (conn[sideKey] ?? "auto")) (patch ??= {})[sideKey] = side;
+      if (patch && update && conn.segments?.length) patch.segments = [];
+      if (!patch) {
         ctx.announce?.("Connector not changed");
         return;
       }
-      ctx.store.updateObjects([update]);
-      ctx.announce?.(end === "from" ? "Connector start moved" : "Connector end moved");
+      ctx.store.updateObjects([{ id: connId, patch }]);
+      ctx.announce?.(update ? (end === "from" ? "Connector start moved" : "Connector end moved") : `Connector ${end === "from" ? "start" : "end"} side ${side}`);
     },
     cancel: clear,
   };
+}
+
+/**
+ * The side of `o` a pointer at `q` pins (within SIDE_PIN_PX screen pixels of the side's anchor),
+ * or null for an automatic side.
+ * @param {GestureContext} ctx @param {WhiteboardObject} o @param {PointerSample} q
+ */
+function pinnedSideAt(ctx, o, q) {
+  const g = ctx.resolve(o.id) ?? o;
+  const px = q.pointerType === "touch" ? SIDE_PIN_TOUCH_PX : SIDE_PIN_PX;
+  return sideNear(g, q, px / ctx.camera().zoom);
+}
+
+/**
+ * Draws the four side anchors of the connector target (the pinned one highlighted), or clears them.
+ * @param {GestureContext} ctx @param {SVGGElement} group @param {WhiteboardObject|null} target
+ * @param {string|null} pinned
+ */
+function sideDots(ctx, group, target, pinned) {
+  while (group.firstChild) group.removeChild(group.firstChild);
+  if (!target) return;
+  const g = ctx.resolve(target.id) ?? target;
+  const r = 4 / ctx.camera().zoom;
+  for (const side of /** @type {const} */ (["top", "right", "bottom", "left"])) {
+    const a = anchor(g, side).point;
+    group.appendChild(svgEl("circle", {
+      class: "wb-side-dot" + (side === pinned ? " wb-side-dot-active" : ""), "data-side": side,
+      cx: round2(a.x), cy: round2(a.y), r: round2(side === pinned ? r * 1.6 : r),
+    }));
+  }
 }

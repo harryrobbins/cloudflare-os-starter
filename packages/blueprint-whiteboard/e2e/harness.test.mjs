@@ -1137,3 +1137,185 @@ describe("whiteboard harness", { concurrency: false }, () => {
     });
   });
 });
+
+// Connector routes (src/shared/connectors.js, src/client/ui/canvas/route-edit.js): curves, route
+// handles and their ghosts, keyboard route editing, reset, and elbows around obstacles.
+describe("connector routes", { concurrency: false }, () => {
+  /** Page-coordinate centre of an element in a pane. @param {import("playwright").Locator} loc */
+  async function centreOf(loc) {
+    const b = await loc.boundingBox();
+    if (!b) throw new Error("not visible");
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  }
+
+  test("curved connector: drawn as an SVG cubic in both panes and the export, selectable on the curve", async () => {
+    await withHarness({ names: ["Alice", "Bob"] }, async ({ page, frames }) => {
+      const { A, B } = frames;
+      await alignCameras(frames);
+      const [s1, s2] = await h.createObjects(page, [
+        { type: "rect", x: 200, y: 200, w: 160, h: 100, text: "One" },
+        { type: "rect", x: 700, y: 420, w: 160, h: 100, text: "Two" },
+      ]);
+      const [c] = await h.createObjects(page, [{ type: "connector", from: s1, to: s2, routing: "curved" }]);
+      await waitObject(page, frames, c);
+      for (const f of [A, B]) {
+        const d = await f.locator(`${SEL.object(c)} path[data-hit]`).getAttribute("d");
+        assert.match(d, /^M[\d.-]+ [\d.-]+C/, "a cubic path");
+      }
+      // Click on the curve at half its length (not on the straight chord).
+      const at = await A.locator(`${SEL.object(c)} path[data-hit]`).evaluate((p) => {
+        const path = /** @type {SVGPathElement} */ (p);
+        const q = path.getPointAtLength(path.getTotalLength() / 2);
+        const m = path.getScreenCTM();
+        return { x: q.x * m.a + q.y * m.c + m.e, y: q.x * m.b + q.y * m.d + m.f };
+      });
+      const pane = await page.locator('iframe[data-pane="A"]').boundingBox();
+      await page.mouse.click(pane.x + at.x, pane.y + at.y);
+      await h.until(async () => (await h.inPane(A, (_, canvas) => canvas.getSelection()))[0] === c, { message: "curve selected" });
+      await A.locator(".wb-route-handle[data-kind='curve']").waitFor({ timeout: 3000 });
+      await A.locator(`${SEL.styleBar} [data-routing="curved"][aria-pressed="true"]`).waitFor();
+      const svg = await page.evaluate(() => window.harness.rpc("exportSvg"));
+      assert.match(svg, new RegExp(`data-id="${c}"[^>]*><path d="M[\\d.-]+ [\\d.-]+C`), "the export draws the same curve");
+      await page.screenshot({ path: `${SHOTS}/routes-curved.png` });
+    });
+  });
+
+  test("dragging an elbow's middle segment: B sees the ghost route, then the committed edit", async () => {
+    await withHarness({ names: ["Alice", "Bob"] }, async ({ page, frames }) => {
+      const { A, B } = frames;
+      await alignCameras(frames);
+      const [s1, s2] = await h.createObjects(page, [
+        { type: "rect", x: 200, y: 200, w: 160, h: 100 },
+        { type: "rect", x: 800, y: 450, w: 160, h: 100 },
+      ]);
+      const [c] = await h.createObjects(page, [{ type: "connector", from: s1, to: s2, routing: "elbow", fromSide: "right", toSide: "left" }]);
+      await waitObject(page, frames, c);
+      await h.inPane(A, (_, canvas, id) => canvas.setSelection([id]), c);
+      const handle = A.locator(".wb-route-handle[data-kind='segment'][data-axis='x']").first();
+      await handle.waitFor({ timeout: 3000 });
+      const from = await centreOf(handle);
+      await h.dragBy(page, from, 90, 40, {
+        steps: 12, stepDelay: 25,
+        hold: async () => {
+          await B.locator(SEL.ghost(c)).first().waitFor({ timeout: 3000 });
+          assert.equal((await h.serverBoard(page)).objects[c].segments, undefined, "no commit before release");
+          await page.screenshot({ path: `${SHOTS}/routes-ghost.png` });
+        },
+      });
+      const after = await h.until(async () => (await h.serverBoard(page)).objects[c].segments?.length && (await h.serverBoard(page)).objects[c],
+        { message: "segments committed" });
+      assert.equal(after.segments.length, 1);
+      assert.ok(Math.abs(after.segments[0] - 90) <= 8, `moved about 90 across itself: ${after.segments}`);
+      assert.deepEqual([after.fromSide, after.toSide], ["right", "left"]);
+      await B.locator(SEL.anyGhost).waitFor({ state: "detached", timeout: 3000 });
+      await h.until(async () => JSON.stringify((await paneObject(B, c))?.segments) === JSON.stringify(after.segments), { message: "B has the edit" });
+      // One change, one undo.
+      await A.locator(SEL.undo).click();
+      await h.until(async () => !(await h.serverBoard(page)).objects[c].segments?.length, { message: "undone" });
+    });
+  });
+
+  test("keyboard route editing: E, Tab, arrow keys, Delete resets and Escape finishes, with announcements", async () => {
+    await withHarness({ panes: 1 }, async ({ page, frames: { A } }) => {
+      await h.setCamera(A);
+      const [s1, s2] = await h.createObjects(page, [
+        { type: "rect", x: 200, y: 200, w: 160, h: 100 },
+        { type: "rect", x: 800, y: 450, w: 160, h: 100 },
+      ]);
+      const [c] = await h.createObjects(page, [{ type: "connector", from: s1, to: s2, routing: "elbow", fromSide: "right", toSide: "left" }]);
+      await A.locator(SEL.object(c)).waitFor();
+      await h.inPane(A, (_, canvas, id) => { canvas.setSelection([id]); canvas.element.focus(); }, c);
+      await page.keyboard.press("e");
+      await h.until(async () => /Editing the route/.test(await h.liveText(A)), { message: "route editing announced" });
+      // Tab to the vertical (x) segment.
+      for (let i = 0; i < 4; i++) {
+        const { index } = await h.inPane(A, (_, canvas) => canvas.getRouteEdit());
+        const active = A.locator(`.wb-route-handle-active[data-route="${index}"]`);
+        await active.waitFor({ timeout: 3000 });
+        if (await active.getAttribute("data-axis") === "x") break;
+        await page.keyboard.press("Tab");
+      }
+      assert.equal(await A.locator(".wb-route-handle-active").getAttribute("data-axis"), "x");
+      assert.match(await h.focusedClass(A), /wb-canvas/, "Tab stays on the canvas while editing a route");
+      await page.keyboard.press("Shift+ArrowRight");
+      await page.keyboard.press("ArrowRight");
+      const moved = await h.until(async () => (await h.serverBoard(page)).objects[c].segments?.[0] === 11 && (await h.serverBoard(page)).objects[c],
+        { message: "segment moved by 11" });
+      assert.deepEqual(moved.segments, [11]);
+      await page.keyboard.press("Delete");
+      await h.until(async () => {
+        const o = (await h.serverBoard(page)).objects[c];
+        return o && !o.segments?.length && o.fromSide === "auto" && o.toSide === "auto";
+      }, { message: "route reset (the connector is not deleted)" });
+      await page.keyboard.press("Escape");
+      assert.equal(await h.inPane(A, (_, canvas) => canvas.getRouteEdit()), null);
+      assert.deepEqual(await h.inPane(A, (_, canvas) => canvas.getSelection()), [c], "still selected");
+      // The help lists the route keys.
+      await page.keyboard.press("?");
+      await A.locator(SEL.helpDialog).waitFor();
+      assert.match(await A.locator(SEL.helpDialog).innerText(), /Editing a route/i);
+    });
+  });
+
+  test("reset route from the style bar; Curved from the style bar; Edit route button", async () => {
+    await withHarness({ panes: 1 }, async ({ page, frames: { A } }) => {
+      await h.setCamera(A);
+      const [s1, s2] = await h.createObjects(page, [
+        { type: "rect", x: 200, y: 200, w: 160, h: 100 },
+        { type: "rect", x: 800, y: 450, w: 160, h: 100 },
+      ]);
+      const [c] = await h.createObjects(page, [{ type: "connector", from: s1, to: s2, routing: "elbow", segments: [60], fromSide: "right", toSide: "left" }]);
+      await A.locator(SEL.object(c)).waitFor();
+      await h.inPane(A, (_, canvas, id) => canvas.setSelection([id]), c);
+      const reset = A.locator(`${SEL.styleBar} .route-reset-btn`);
+      await reset.waitFor();
+      assert.equal(await reset.getAttribute("aria-label"), "Reset route");
+      await reset.click();
+      await h.until(async () => {
+        const o = (await h.serverBoard(page)).objects[c];
+        return !o.segments?.length && o.fromSide === "auto";
+      }, { message: "route reset" });
+      await A.locator(`${SEL.styleBar} .route-reset-btn`).waitFor({ state: "detached" });
+      await A.locator(`${SEL.styleBar} [data-routing="curved"]`).click();
+      await h.until(async () => (await h.serverBoard(page)).objects[c].routing === "curved", { message: "curved" });
+      await A.locator(`${SEL.styleBar} .route-edit-btn`).click();
+      assert.deepEqual(await h.inPane(A, (_, canvas) => canvas.getRouteEdit()), { id: c, index: 0 });
+      assert.match(await h.focusedClass(A), /wb-canvas/, "focus moves to the canvas");
+      await page.keyboard.press("Shift+ArrowUp");
+      await h.until(async () => (await h.serverBoard(page)).objects[c].curve, { message: "curve handle moved from the keyboard" });
+    });
+  });
+
+  test("an automatic elbow routes around an object in the way, in the pane and the export alike", async () => {
+    await withHarness({ panes: 1 }, async ({ page, frames: { A } }) => {
+      await h.setCamera(A);
+      const [s1, s2, block] = await h.createObjects(page, [
+        { type: "rect", x: 100, y: 300, w: 120, h: 100 },
+        { type: "rect", x: 800, y: 300, w: 120, h: 100 },
+        { type: "sticky", x: 420, y: 260, w: 180, h: 180, text: "In the way" },
+      ]);
+      const [c] = await h.createObjects(page, [{ type: "connector", from: s1, to: s2, routing: "elbow" }]);
+      await A.locator(SEL.object(c)).waitFor();
+      const d = await A.locator(`${SEL.object(c)} path[data-hit]`).getAttribute("d");
+      const pts = [...d.matchAll(/[ML](-?[\d.]+) (-?[\d.]+)/g)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) }));
+      assert.ok(pts.length > 2, "bends");
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        assert.ok(a.x === b.x || a.y === b.y, "orthogonal");
+        const crosses = Math.max(Math.min(a.x, b.x), 420) < Math.min(Math.max(a.x, b.x), 600) &&
+          Math.max(Math.min(a.y, b.y), 260) < Math.min(Math.max(a.y, b.y), 440);
+        assert.ok(!crosses, `segment ${JSON.stringify([a, b])} avoids the sticky`);
+      }
+      const svg = await page.evaluate(() => window.harness.rpc("exportSvg"));
+      assert.ok(svg.includes(`d="${d}"`), "the export routes the same way");
+      // Move the sticky out of the way: the connector straightens (it is re-routed, not the sticky's connector).
+      const o = (await h.serverBoard(page)).objects[block];
+      await page.evaluate(({ id, v }) => window.harness.apply({ by: "Agent", objectOps: [{ op: "update", id, baseVersion: v, patch: { y: 1200 } }] }), { id: block, v: o.version });
+      await h.until(async () => {
+        const d2 = await A.locator(`${SEL.object(c)} path[data-hit]`).getAttribute("d");
+        return [...d2.matchAll(/[ML]/g)].length <= 4;
+      }, { message: "straight again once the sticky moved away" });
+      await page.screenshot({ path: `${SHOTS}/routes-obstacle.png` });
+    });
+  });
+});

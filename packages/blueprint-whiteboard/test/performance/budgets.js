@@ -31,6 +31,22 @@ export const BUDGETS = Object.freeze({
      */
     offscreenExtraGroups: 0,
   },
+  /**
+   * Connector-heavy board (fixtures.js connectorFixture: 2,000 shapes, 1,000 elbow connectors,
+   * measure.js connectorMetrics). Algorithmic proxies of obstacle-avoiding routing.
+   */
+  connectors: {
+    /** A* states expanded per search, on average, while indexing every route. */
+    expandedPerSearch: 150,
+    /** Searches that hit the node budget and fell back to the simple elbow, as a share of routes. */
+    fallbackShare: 0.01,
+    /** Connectors re-indexed per single-object move (attached ones plus re-routed ones). */
+    reindexedPerMove: 11,
+    /** Routes actually recomputed (memo misses) per single-object move. */
+    recomputedPerMove: 11,
+    /** Most routes recomputed by one single-object move. */
+    maxRecomputedPerMove: 25,
+  },
   presence: {
     /** 50 viewers, 20% moving their pointer: hub deliveries and estimated bytes per second. */
     active50: { deliveriesPerSecond: 500, bytesPerSecond: 2_000_000 },

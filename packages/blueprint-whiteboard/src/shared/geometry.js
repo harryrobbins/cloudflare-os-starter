@@ -6,6 +6,7 @@
 
 import { iconTextBox } from "./icons/registry.js";
 import { graphemes, isExtender, isRegionalIndicator } from "./graphemes.js";
+import { connectorRoute, routeBounds } from "./connectors.js";
 
 /** @typedef {import("./protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("./protocol.js").Side} Side */
@@ -231,59 +232,9 @@ export function facingSide(o, toward) {
   return dy >= 0 ? "bottom" : "top";
 }
 
-/**
- * The route of a connector between two object boxes (use ghost geometry while dragging).
- * Returns world points, first at `from`, last at `to`, plus the sides actually used.
- * @param {{fromSide?: Side, toSide?: Side, routing?: "straight"|"elbow"}} conn
- * @param {{x: number, y: number, w: number, h: number, rot?: number}} from
- * @param {{x: number, y: number, w: number, h: number, rot?: number}} to
- * @returns {{points: Point[], fromSide: "top"|"right"|"bottom"|"left", toSide: "top"|"right"|"bottom"|"left"}}
- */
-export function connectorRoute(conn, from, to) {
-  const fromSide = !conn.fromSide || conn.fromSide === "auto" ? facingSide(from, center(to)) : conn.fromSide;
-  const toSide = !conn.toSide || conn.toSide === "auto" ? facingSide(to, center(from)) : conn.toSide;
-  const a = anchor(from, fromSide), b = anchor(to, toSide);
-  if (conn.routing !== "elbow") return { points: [a.point, b.point], fromSide, toSide };
-  return { points: elbowPoints(a, b), fromSide, toSide };
-}
-
-/**
- * Orthogonal route between two anchors: leave each anchor along its normal by a stub, then join
- * with at most two bends. Normals of rotated objects are snapped to the nearest axis.
- * @param {{point: Point, normal: Point}} a
- * @param {{point: Point, normal: Point}} b
- * @returns {Point[]}
- */
-export function elbowPoints(a, b) {
-  const STUB = 24;
-  const snap = (/** @type {Point} */ n) =>
-    Math.abs(n.x) >= Math.abs(n.y) ? { x: Math.sign(n.x) || 1, y: 0 } : { x: 0, y: Math.sign(n.y) || 1 };
-  const na = snap(a.normal), nb = snap(b.normal);
-  const p0 = a.point, p3 = b.point;
-  const p1 = { x: p0.x + na.x * STUB, y: p0.y + na.y * STUB };
-  const p2 = { x: p3.x + nb.x * STUB, y: p3.y + nb.y * STUB };
-  /** @type {Point[]} */
-  let mid;
-  const aHorizontal = na.x !== 0, bHorizontal = nb.x !== 0;
-  if (aHorizontal && bHorizontal) {
-    const mx = (p1.x + p2.x) / 2;
-    mid = [{ x: mx, y: p1.y }, { x: mx, y: p2.y }];
-  } else if (!aHorizontal && !bHorizontal) {
-    const my = (p1.y + p2.y) / 2;
-    mid = [{ x: p1.x, y: my }, { x: p2.x, y: my }];
-  } else if (aHorizontal) {
-    mid = [{ x: p2.x, y: p1.y }];
-  } else {
-    mid = [{ x: p1.x, y: p2.y }];
-  }
-  /** @type {Point[]} */
-  const out = [];
-  for (const p of [p0, p1, ...mid, p2, p3]) {
-    const last = out[out.length - 1];
-    if (!last || Math.abs(last.x - p.x) > 0.01 || Math.abs(last.y - p.y) > 0.01) out.push({ x: p.x, y: p.y });
-  }
-  return out;
-}
+// connectorRoute, elbowPoints and the rest of connector routing live in ./connectors.js (curves,
+// editable elbows, obstacle avoidance, automatic sides); re-exported here for existing imports.
+export { connectorRoute, elbowPoints } from "./connectors.js";
 
 /**
  * The point halfway along a polyline, for connector labels.
@@ -307,37 +258,40 @@ export function polylineMidpoint(points) {
 }
 
 /**
- * Axis-aligned bounds of a connector, from its route.
+ * Axis-aligned bounds of a connector, from its route (exact for curves).
  * @param {WhiteboardObject} conn
  * @param {Record<string, WhiteboardObject>} objects
+ * @param {import("./connectors.js").RouteEnv} [env]  obstacles for automatic elbow routes
  * @returns {Rect|null} null when an endpoint is missing
  */
-export function connectorBounds(conn, objects) {
+export function connectorBounds(conn, objects, env) {
   const from = conn.from ? objects[conn.from] : undefined;
   const to = conn.to ? objects[conn.to] : undefined;
   if (!from || !to) return null;
-  return pointsBounds(connectorRoute(conn, from, to).points);
+  return routeBounds(connectorRoute(conn, from, to, env));
 }
 
 /**
  * World bounds of any object; connectors from their endpoints (null when an endpoint is missing).
  * @param {WhiteboardObject} o
  * @param {Record<string, WhiteboardObject>} objects
+ * @param {import("./connectors.js").RouteEnv} [env]
  * @returns {Rect|null}
  */
-export function objectBounds(o, objects) {
-  return o.type === "connector" ? connectorBounds(o, objects) : rotatedBounds(o);
+export function objectBounds(o, objects, env) {
+  return o.type === "connector" ? connectorBounds(o, objects, env) : rotatedBounds(o);
 }
 
 /**
  * Bounds of all objects (or null for an empty board).
  * @param {Record<string, WhiteboardObject>} objects
+ * @param {import("./connectors.js").RouteEnv} [env]
  */
-export function boardBounds(objects) {
+export function boardBounds(objects, env) {
   /** @type {Rect[]} */
   const rects = [];
   for (const o of Object.values(objects)) {
-    const r = objectBounds(o, objects);
+    const r = objectBounds(o, objects, env);
     if (r) rects.push(r);
   }
   return unionRects(rects);

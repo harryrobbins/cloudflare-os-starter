@@ -52,7 +52,8 @@ describe("render", () => {
     const moved = { ...ellipse, x: 1000 };
     const node = objectNode(conn, (id) => (id === oid(2) ? moved : sticky));
     expect(serialize(node)).not.toBe(serialize(objectNode(conn, (id) => (id === oid(2) ? ellipse : sticky))));
-    expect(serialize(node)).toContain("M200 100L1070");
+    // Automatic sides: the (rotated) ellipse's left side, the shortest pair that crosses neither box.
+    expect(serialize(node)).toContain("M200 100L1013.4 10");
     expect(objectNode(conn, () => undefined)).toBeNull();
   });
 

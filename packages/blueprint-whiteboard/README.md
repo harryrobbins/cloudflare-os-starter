@@ -65,6 +65,8 @@ Bundle growth: `dist/client.js` 564 KB → 633 KB (149 KB → 167 KB gzipped), `
 | Icon packs | `core.1`, `tabler.1` (Tabler Icons 3.48.0) | `scripts/icon-packs/published.json` |
 | Minimum host | any Cloudflare OS host that runs revision 5; no viewer-session or replaceable-connection API needed yet | — |
 
+Connector routes (curved routing, `segments`, `curve`) are additive fields, like the `icon` type: no stored schema or backup format change; older connectors simply lack the fields and draw as before (except that automatic sides and elbow routes around obstacles are recomputed by the newer code). Presence transforms carry route edits additively; an older client ignores them. Routing lives in `src/shared/connectors.js` (A* in `orthogonal.js`, Bézier maths in `bezier.js`).
+
 **A new revision only changes what new whiteboards get.** Existing whiteboards keep the code they were created from. The `schemaVersion` in `meta` plus the `migrate` hook in `src/core/whiteboard.js` are how newer code upgrades older data.
 
 **Never change `blueprintId`** (`format.whiteboard`).

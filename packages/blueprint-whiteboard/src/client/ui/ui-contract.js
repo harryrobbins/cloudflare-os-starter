@@ -27,12 +27,12 @@
 
 /**
  * @typedef {object} CanvasEvents
- * @property {"tool"|"camera"|"selection"|"editing"|"follow"|"command"} kind
+ * @property {"tool"|"camera"|"selection"|"editing"|"follow"|"command"|"routeEdit"} kind
  *   tool: the active tool changed. camera: pan or zoom (fired at most once per animation frame).
  *   selection: the selected ids changed. editing: inline text editing started or stopped.
  *   follow: following stopped or started (the user panning stops it).
  *   command: a shortcut that belongs to the shell (keymap.js ShellCommand) was pressed on the
- *   canvas or in the inline text editor; carries {command}.
+ *   canvas or in the inline text editor; carries {command}. routeEdit: keyboard route editing started or stopped.
  *   The "tool" event also carries {tool, locked}.
  *
  * The canvas element also dispatches a bubbling CustomEvent "wb-contextmenu" with detail
@@ -84,6 +84,15 @@
  * @property {(connectorId: string, end: "from"|"to", targetId: string) => boolean} reconnect
  *   moves one end of a connector to another non-connector object (never the other end); the rest
  *   of the connector is kept. False when nothing changed or the target is not valid
+ * @property {(id?: string) => boolean} editRoute
+ *   keyboard route editing of an elbow or curved connector (default: the one selected connector):
+ *   focuses the canvas; Tab picks a route handle, arrow keys move it, Delete resets, Enter or
+ *   Escape finishes. False when the connector has no route to edit (straight)
+ * @property {() => {id: string, index: number}|null} getRouteEdit  the connector and handle being
+ *   edited from the keyboard, or null
+ * @property {(ids?: string[]) => number} resetRoute
+ *   clears route edits (segments, curve handle) and pinned sides of the connectors among `ids`
+ *   (default: the selection) in ONE update; returns how many changed
  * @property {() => import("../model/spatial-index.js").SpatialQuery} getSpatialIndex
  *   read-only spatial queries over every object's effective world bounds (culling, minimap)
  * @property {(ids: string[], opts?: {padding?: number, animate?: boolean}) => boolean} fitObjects

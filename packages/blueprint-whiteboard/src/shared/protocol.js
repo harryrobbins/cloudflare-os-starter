@@ -73,7 +73,12 @@ import { truncateText } from "./graphemes.js";
  * @property {string} [to]         connector only: id of an existing non-connector object, != from
  * @property {Side} [fromSide]     connector only
  * @property {Side} [toSide]       connector only
- * @property {"straight"|"elbow"} [routing]  connector only
+ * @property {"straight"|"elbow"|"curved"} [routing]  connector only
+ * @property {number[]} [segments] connector only: the user's elbow route edits, at most
+ *   LIMITS.routeSegments offsets (see src/shared/connectors.js "Elbow segments"); absent or []
+ *   means the automatic route. Older connectors do not have the field.
+ * @property {[number, number]|null} [curve]  connector only: the user's curve handle [u, v]
+ *   relative to the anchors (see src/shared/connectors.js); absent or null means the default curve
  * @property {string} [packId]     icon only: the icon pack, "<name>.<version>" (see
  *   src/shared/icons/registry.js); with iconId it names compiled geometry, never markup
  * @property {string} [iconId]     icon only: the icon within its pack
@@ -265,6 +270,11 @@ import { truncateText } from "./graphemes.js";
  * @property {number} w
  * @property {number} h
  * @property {number} rot
+ * @property {number[]} [segments]  connector route edit in progress (see WhiteboardObject.segments)
+ * @property {[number, number]|null} [curve]  connector curve handle in progress
+ * @property {"straight"|"elbow"|"curved"} [routing]  connector routing of the edit in progress
+ * @property {Side} [fromSide]  connector sides of the edit in progress
+ * @property {Side} [toSide]
  */
 
 /**
@@ -380,6 +390,10 @@ export const LIMITS = Object.freeze({
   presenceSelection: 200,
   presenceTransforms: 100,
   presenceStrokePoints: 1000,
+  /** Stored elbow segment offsets of one connector (`segments`). */
+  routeSegments: 16,
+  /** Largest |u| or |v| of a connector's curve handle (`curve`). */
+  curveHandle: 8,
 });
 
 /** Client heartbeat interval; also the longest a remote cursor can sit without an update. */
@@ -411,7 +425,7 @@ export const EDITABLE_FIELDS = Object.freeze({
   text: ["x", "y", "w", "h", "rot", "z", "frameId", "text", "style"],
   frame: ["x", "y", "w", "h", "z", "text", "style"],
   pen: ["x", "y", "w", "h", "z", "frameId", "points", "style"],
-  connector: ["z", "text", "style", "from", "to", "fromSide", "toSide", "routing"],
+  connector: ["z", "text", "style", "from", "to", "fromSide", "toSide", "routing", "segments", "curve"],
   icon: ["x", "y", "w", "h", "rot", "z", "frameId", "text", "style", "packId", "iconId"],
   code: ["x", "y", "w", "h", "z", "frameId", "text", "style", "language", "theme", "lineNumbers", "wrap", "filename"],
 });
@@ -665,6 +679,39 @@ export function cleanPoints(v) {
 }
 
 /**
+ * A connector's elbow route edits (`segments`): finite offsets, at most LIMITS.routeSegments,
+ * each clamped to +-LIMITS.coord and rounded to 2 decimals. null clears (returns []); anything
+ * else invalid returns null (dropped).
+ * @param {unknown} v
+ * @returns {number[]|null}
+ */
+export function cleanSegments(v) {
+  if (v === null) return [];
+  if (!Array.isArray(v) || v.length > LIMITS.routeSegments) return null;
+  const out = [];
+  for (const x of v) {
+    const c = cleanNumber(x, -LIMITS.coord, LIMITS.coord);
+    if (c === null) return null;
+    out.push(c);
+  }
+  return out;
+}
+
+/**
+ * A connector's curve handle (`curve`): [u, v], each finite, clamped to +-LIMITS.curveHandle and
+ * rounded to 4 decimals; null clears. Undefined when invalid (dropped).
+ * @param {unknown} v
+ * @returns {[number, number]|null|undefined}
+ */
+export function cleanCurve(v) {
+  if (v === null) return null;
+  if (!Array.isArray(v) || v.length !== 2) return undefined;
+  const u = cleanNumber(v[0], -LIMITS.curveHandle, LIMITS.curveHandle, 4);
+  const w = cleanNumber(v[1], -LIMITS.curveHandle, LIMITS.curveHandle, 4);
+  return u === null || w === null ? undefined : [u, w];
+}
+
+/**
  * Picks and cleans the fields of an update patch that `type` allows. Values that are invalid are
  * dropped (not clamped to a default), except numbers, which are clamped. Reference fields (frameId,
  * from, to) are only checked for shape here; existence is the board's job. `style` is a cleaned
@@ -700,7 +747,9 @@ export function cleanObjectPatch(raw, type) {
       case "fromSide": case "toSide":
         if (typeof v === "string" && /** @type {readonly string[]} */ (SIDES).includes(v)) out[key] = v;
         break;
-      case "routing": if (v === "straight" || v === "elbow") out.routing = v; break;
+      case "routing": if (v === "straight" || v === "elbow" || v === "curved") out.routing = v; break;
+      case "segments": { const segs = cleanSegments(v); if (segs) out.segments = segs; break; }
+      case "curve": { const c = cleanCurve(v); if (c !== undefined) out.curve = c; break; }
       case "packId": if (typeof v === "string" && PACK_ID_RE.test(v)) out.packId = v; break;
       case "iconId": if (typeof v === "string" && ICON_ID_RE.test(v)) out.iconId = v; break;
       case "language": { const l = resolveLanguage(v); if (l) out.language = l; break; }
@@ -747,6 +796,9 @@ export function normalizeNewObject(raw) {
     obj.fromSide = patch.fromSide ?? "auto";
     obj.toSide = patch.toSide ?? "auto";
     obj.routing = patch.routing ?? d.routing ?? "straight";
+    // Route edits are stored only when present (older connectors have neither field).
+    if (patch.segments?.length) obj.segments = patch.segments;
+    if (patch.curve) obj.curve = patch.curve;
   }
   if (type === "icon") {
     obj.packId = patch.packId ?? "";
@@ -888,7 +940,15 @@ export function cleanPresence(raw, clientId, previous) {
       if (!isObject(t) || !isId(t.id)) continue;
       const x = cleanCoord(t.x), y = cleanCoord(t.y), w = cleanSize(t.w), h = cleanSize(t.h);
       if (x === null || y === null || w === null || h === null) continue;
-      transforms.push({ id: t.id, x, y, w, h, rot: cleanRotation(t.rot) ?? 0 });
+      /** @type {PresenceTransform} */
+      const tr = { id: t.id, x, y, w, h, rot: cleanRotation(t.rot) ?? 0 };
+      // A connector route being edited (additive; older clients ignore these).
+      if ("segments" in t) { const segs = cleanSegments(t.segments); if (segs) tr.segments = segs; }
+      if ("curve" in t) { const c = cleanCurve(t.curve); if (c !== undefined) tr.curve = c; }
+      if (t.routing === "straight" || t.routing === "elbow" || t.routing === "curved") tr.routing = t.routing;
+      if (typeof t.fromSide === "string" && /** @type {readonly string[]} */ (SIDES).includes(t.fromSide)) tr.fromSide = t.fromSide;
+      if (typeof t.toSide === "string" && /** @type {readonly string[]} */ (SIDES).includes(t.toSide)) tr.toSide = t.toSide;
+      transforms.push(tr);
     }
   }
 

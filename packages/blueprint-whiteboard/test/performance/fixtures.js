@@ -196,3 +196,59 @@ export function simpleObjects(count, { x0 = 0, y0 = 0, gap = 260, start = 0 } = 
   }
   return out;
 }
+
+/**
+ * A connector-heavy board as plain client objects (no core round trip): `shapes` sticky notes,
+ * rectangles, text and icons on a jittered grid 260 units apart (so the gaps between them are
+ * narrow channels), and `connectors` elbow connectors, each from a shape to one 1 to 3 grid cells
+ * away, so most have other shapes in the way and route around them. Deterministic per seed.
+ * @param {number} [shapes] @param {number} [connectors] @param {{seed?: number}} [opts]
+ * @returns {{objects: Record<string, any>, side: number, shapeIds: string[], connectorIds: string[]}}
+ */
+export function connectorFixture(shapes = 2000, connectors = 1000, { seed = 1 } = {}) {
+  const rng = prng(seed * 104729 + shapes + connectors);
+  const GAP = 260;
+  const cols = Math.ceil(Math.sqrt(shapes));
+  /** @type {Record<string, any>} */
+  const objects = {};
+  const style = (/** @type {Record<string, any>} */ s) => ({
+    fill: "#ffffff", stroke: "#1f2937", strokeWidth: 2, textColor: "#1f2937", fontSize: 18, align: "center", arrowStart: "none", arrowEnd: "none", ...s,
+  });
+  const icons = allIcons();
+  /** @type {string[]} */
+  const shapeIds = [];
+  let z = 0;
+  for (let i = 0; i < shapes; i++) {
+    const id = fixtureId(0x300000 + i);
+    const r = rng();
+    const type = r < 0.55 ? "sticky" : r < 0.8 ? "rect" : r < 0.9 ? "text" : "icon";
+    const w = type === "icon" ? 96 : 120 + Math.round(rng() * 80), h = type === "icon" ? 96 : 80 + Math.round(rng() * 100);
+    const x = (i % cols) * GAP + Math.round(rng() * (GAP - 40 - w)), y = Math.floor(i / cols) * GAP + Math.round(rng() * (GAP - 40 - h));
+    /** @type {any} */
+    const o = {
+      id, type, x, y, w, h, rot: 0, z: "a" + (z++).toString(36).padStart(4, "0"), frameId: null, text: "",
+      style: type === "sticky" ? style({ fill: "#fde68a", stroke: "none", strokeWidth: 0 }) : style({}),
+      version: 1, createdAt: 0, updatedAt: 0, createdBy: "t",
+    };
+    if (type === "icon") { const icon = icons[Math.floor(rng() * icons.length)]; o.packId = icon.pack.id; o.iconId = icon.id; }
+    objects[id] = o;
+    shapeIds.push(id);
+  }
+  /** @type {string[]} */
+  const connectorIds = [];
+  for (let c = 0; c < connectors; c++) {
+    const a = Math.floor(rng() * shapes);
+    const dc = 1 + Math.floor(rng() * 3), dr = Math.floor(rng() * 3) - 1;
+    const col = (a % cols) + dc, row = Math.floor(a / cols) + dr;
+    const b = row * cols + col;
+    if (col >= cols || row < 0 || b >= shapes || b === a) { c--; continue; }
+    const id = fixtureId(0x400000 + c);
+    objects[id] = {
+      id, type: "connector", x: 0, y: 0, w: 1, h: 1, rot: 0, z: "a" + (z++).toString(36).padStart(4, "0"), frameId: null, text: "",
+      style: style({ fill: "none", fontSize: 14, arrowEnd: "arrow" }), from: shapeIds[a], to: shapeIds[b],
+      fromSide: "auto", toSide: "auto", routing: "elbow", version: 1, createdAt: 0, updatedAt: 0, createdBy: "t",
+    };
+    connectorIds.push(id);
+  }
+  return { objects, side: cols * GAP, shapeIds, connectorIds };
+}

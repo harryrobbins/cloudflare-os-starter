@@ -9,6 +9,7 @@ import { getIcon, iconPaths, iconPlacement, iconTextBox, DEFAULT_ICON_STROKE, DE
 import { codeLayout, fitColumns, CODE_FONT_FAMILY, CODE_CHAR_EM } from "./code/layout.js";
 import { codeTheme } from "./code/theme.js";
 import { truncateText } from "./graphemes.js";
+import { routePathD, routeEndDirections, routeMidpoint, createRouteEnv } from "./connectors.js";
 
 /** @typedef {import("./protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("./protocol.js").BoardSnapshot} BoardSnapshot */
@@ -235,30 +236,36 @@ function arrowHead(from, tip, width, color) {
 }
 
 /**
- * Nodes for a connector, or null when an endpoint cannot be resolved.
+ * Nodes for a connector, or null when an endpoint cannot be resolved. Curved connectors draw an
+ * SVG cubic ("C") and their arrowheads follow the end tangents; labels sit at the halfway point by
+ * length (src/shared/connectors.js).
  * @param {WhiteboardObject} o
  * @param {Resolve} resolve
+ * @param {import("./connectors.js").RouteEnv} [env]  obstacles for automatic elbow routes
  * @returns {VNode|null}
  */
-function connectorNode(o, resolve) {
+function connectorNode(o, resolve, env) {
   const from = o.from ? resolve(o.from) : undefined;
   const to = o.to ? resolve(o.to) : undefined;
   if (!from || !to) return null;
-  const { points } = connectorRoute(o, from, to);
+  const route = connectorRoute(o, from, to, env);
+  const { points } = route;
   const s = o.style;
   const color = s.stroke === "none" ? "#1f2937" : s.stroke;
   const width = Math.max(0.5, s.strokeWidth || 2);
-  const d = points.map((p, i) => `${i ? "L" : "M"}${fmt(p.x)} ${fmt(p.y)}`).join("");
+  const d = routePathD(route);
+  const dirs = routeEndDirections(route);
+  const tipEnd = points[points.length - 1], tipStart = points[0];
   /** @type {VNode[]} */
   const children = [
     // A wide transparent path makes thin connectors easy to hit.
     h("path", { d, fill: "none", stroke: "transparent", "stroke-width": Math.max(12, width + 10), "data-hit": "1" }),
     h("path", { d, fill: "none", stroke: color, "stroke-width": width, "stroke-linejoin": "round" }),
   ];
-  if (s.arrowEnd === "arrow" && points.length >= 2) children.push(arrowHead(points[points.length - 2], points[points.length - 1], width, color));
-  if (s.arrowStart === "arrow" && points.length >= 2) children.push(arrowHead(points[1], points[0], width, color));
+  if (s.arrowEnd === "arrow" && points.length >= 2) children.push(arrowHead({ x: tipEnd.x - dirs.end.x, y: tipEnd.y - dirs.end.y }, tipEnd, width, color));
+  if (s.arrowStart === "arrow" && points.length >= 2) children.push(arrowHead({ x: tipStart.x + dirs.start.x, y: tipStart.y + dirs.start.y }, tipStart, width, color));
   if (o.text) {
-    const mid = polylineMidpoint(points);
+    const mid = routeMidpoint(route);
     const fontSize = s.fontSize;
     const w = textWidth(o.text, fontSize) + fontSize;
     const hgt = fontSize * 1.5;
@@ -280,10 +287,11 @@ function connectorNode(o, resolve) {
  * Rotation is a transform on the group, about the box centre.
  * @param {WhiteboardObject} o
  * @param {Resolve} resolve  used for connector endpoints
+ * @param {import("./connectors.js").RouteEnv} [env]  obstacles for automatic elbow connectors
  * @returns {VNode|null}
  */
-export function objectNode(o, resolve) {
-  if (o.type === "connector") return connectorNode(o, resolve);
+export function objectNode(o, resolve, env) {
+  if (o.type === "connector") return connectorNode(o, resolve, env);
   const children = shapeNodes(o);
   const text = textNode(o);
   if (text) children.push(text);
@@ -342,7 +350,9 @@ export function boardToSvg(board, { padding = 40, frameId = null } = {}) {
       if (o.type === "connector" && o.from && o.to && objects[o.from] && objects[o.to]) objects[o.id] = o;
     }
   }
-  const bounds = boardBounds(objects) ?? { x: 0, y: 0, w: 800, h: 600 };
+  // Elbow connectors route around the whole board's objects, as on the canvas (a frame export too).
+  const env = createRouteEnv(all, { memo: true });
+  const bounds = boardBounds(objects, env) ?? { x: 0, y: 0, w: 800, h: 600 };
   // Frame names sit above the frame; leave room for them.
   const top = Math.min(bounds.y, ...Object.values(objects).filter((o) => o.type === "frame").map((f) => f.y - f.style.fontSize * 1.25 - 4));
   const box = { x: bounds.x - padding, y: top - padding, w: bounds.w + 2 * padding, h: bounds.y + bounds.h - top + 2 * padding };
@@ -362,7 +372,7 @@ export function boardToSvg(board, { padding = 40, frameId = null } = {}) {
       shown = { ...o, text: kept ? kept + "…" : "" };
     }
     budget = Math.max(0, budget - text.length);
-    const node = objectNode(shown, resolve);
+    const node = objectNode(shown, resolve, env);
     if (node) children.push(node);
   }
   const root = h("svg", {

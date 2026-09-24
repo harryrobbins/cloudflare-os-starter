@@ -67,6 +67,7 @@ export const TEXT_STICKY = Object.freeze({ size: 200, gap: 40 });
  * @property {number[]} [points]
  * @property {string} [from] @property {string} [to]
  * @property {string} [fromSide] @property {string} [toSide] @property {string} [routing]
+ * @property {number[]} [segments] @property {[number, number]|null} [curve]
  * @property {string} [packId] @property {string} [iconId]
  * @property {string} [language] @property {"light"|"dark"} [theme] @property {boolean} [lineNumbers]
  * @property {boolean} [wrap] @property {string} [filename]
@@ -114,6 +115,9 @@ export function toPortable(list, all) {
     if (o.type === "connector") {
       p.from = o.from; p.to = o.to;
       p.fromSide = o.fromSide; p.toSide = o.toSide; p.routing = o.routing;
+      // Route edits, only when present (older connectors have neither).
+      if (o.segments?.length) p.segments = [...o.segments];
+      if (o.curve) p.curve = [o.curve[0], o.curve[1]];
     }
     out.push(p);
   }
@@ -291,6 +295,7 @@ export function parseBackup(input) {
     const norm = /** @type {Record<string, any>|null} */ (normalizeNewObject({
       id: PLACEHOLDER_ID, type: o.type, x: o.x, y: o.y, w: o.w, h: o.h, rot: o.rot, text: o.text,
       style: o.style, points: o.points, fromSide: o.fromSide, toSide: o.toSide, routing: o.routing,
+      segments: o.segments, curve: o.curve,
       packId: o.packId, iconId: o.iconId,
       language: o.language, theme: o.theme, lineNumbers: o.lineNumbers, wrap: o.wrap, filename: o.filename,
     }));

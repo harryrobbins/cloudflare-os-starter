@@ -43,8 +43,9 @@ export class ObjectLayer {
    * @param {SVGGElement} framesGroup  frames render below everything
    * @param {SVGGElement} othersGroup
    * @param {RenderStats} stats
-   * @param {(id: string) => WhiteboardObject|undefined} [drawOverride]  geometry to draw instead of
-   *   the committed object (an in-progress resize or rotate); connectors always use `resolve`
+   * @param {(id: string) => WhiteboardObject|undefined} [drawOverride]  what to draw instead of
+   *   the committed object (an in-progress resize or rotate, or a connector route edit); connector
+   *   endpoints always come from `resolve`
    * @param {(ids: Iterable<string>) => Set<string>} [allConnectorsOf]  connectors attached to ids,
    *   rendered or not (the spatial index's map); defaults to the rendered ones only
    */
@@ -66,6 +67,8 @@ export class ObjectLayer {
     this.editingId = null;
     /** Ids allowed an element (viewport culling); null: every object. @type {Set<string>|null} */
     this.wanted = null;
+    /** Obstacles for automatic elbow connectors (the canvas sets it). @type {import("../../../shared/connectors.js").RouteEnv|undefined} */
+    this.routeEnv = undefined;
   }
 
   /** @param {string} id */
@@ -177,8 +180,8 @@ export class ObjectLayer {
       if (this.editingId === o.id) el.classList.add("wb-editing");
     }
     this.stats.objectRenders++;
-    const drawn = o.type === "connector" ? o : this.drawOverride(o.id) ?? o;
-    const node = objectNode(drawn, resolve);
+    const drawn = this.drawOverride(o.id) ?? o;
+    const node = objectNode(drawn, resolve, this.routeEnv);
     if (node) el.replaceChildren(buildNode(node));
     else el.replaceChildren();
     this.orderKeys.set(o.id, orderKey(o));

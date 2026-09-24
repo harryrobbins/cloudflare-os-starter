@@ -78,6 +78,8 @@ export function presenceBytes(ev) {
   let n = 640; // type, at, clientId, name (UTF-8), colour, cursor, viewport, editingId, keys
   n += ev.selection.length * 18;
   n += ev.transforms.length * 110;
+  // Connector route edits in progress (at most LIMITS.routeSegments offsets and a curve handle).
+  for (const t of ev.transforms) if (t.segments || t.curve || t.routing) n += 80 + (t.segments?.length ?? 0) * 12;
   if (ev.stroke) n += 80 + ev.stroke.points.length * 12;
   return n;
 }

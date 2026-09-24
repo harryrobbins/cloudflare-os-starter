@@ -460,5 +460,31 @@
       "warmupEvents": 55720
     }
   ],
-  "durationMs": 11478
+  "durationMs": 11478,
+  "connectors": {
+    "generatedAt": "2026-09-24T02:12:09.413Z",
+    "note": "feat/wb-connectors: obstacle-avoiding elbow routing (connectorFixture 2,000 shapes + 1,000 elbow connectors)",
+    "build": {
+      "connectors": 1000,
+      "routesComputed": 1000,
+      "fastPaths": 120,
+      "searches": 880,
+      "avoided": 880,
+      "fallbacks": 0,
+      "expandedPerSearch": 92.267,
+      "maxExpandedPerSearch": 623,
+      "expandedBudget": 3000,
+      "indexBuildMs": 146.734,
+      "msPerSearch": 0.167
+    },
+    "moves": {
+      "count": 60,
+      "connectorsReindexedPerMove": 7.217,
+      "maxConnectorsReindexed": 14,
+      "routesRecomputedPerMove": 7.217,
+      "maxRoutesRecomputed": 14,
+      "searchesTotal": 1279,
+      "msPerMove": 0.822
+    }
+  }
 }

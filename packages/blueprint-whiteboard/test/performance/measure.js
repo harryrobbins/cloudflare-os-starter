@@ -3,7 +3,9 @@
 // and the benchmark (scripts/benchmark.mjs: the same plus wall-clock timings). Every result is a
 // number or a count: no ids, text, names or coordinates from the board.
 
-import { buildFixture, prng } from "./fixtures.js";
+import { buildFixture, prng, connectorFixture } from "./fixtures.js";
+import { CONNECTOR_STATS, resetConnectorStats } from "../../src/shared/connectors.js";
+import { ROUTE_STATS, resetRouteStats, MAX_EXPANDED } from "../../src/shared/orthogonal.js";
 import { canvasRig } from "./canvas-rig.js";
 import { simulatePresence } from "./presence-sim.js";
 import { createWhiteboard } from "../../src/core/whiteboard.js";
@@ -113,8 +115,10 @@ export async function queryMetrics(objects, index, side, { timings = false, poin
   const sorted = sortedObjects(objects);
   const zoom = 1;
   const pad = HIT_TOLERANCE_PX / zoom;
-  const hitIndexed = (/** @type {{x: number, y: number}} */ p) => topObjectAt(stackOrder(objects, index.queryPoint(p, pad)), p, zoom, resolve);
-  const hitBrute = (/** @type {{x: number, y: number}} */ p) => topObjectAt(sorted, p, zoom, resolve);
+  // Connector routes come from the index's route env and memo, as on the canvas.
+  const env = index.routeEnv(resolve);
+  const hitIndexed = (/** @type {{x: number, y: number}} */ p) => topObjectAt(stackOrder(objects, index.queryPoint(p, pad)), p, zoom, resolve, undefined, env);
+  const hitBrute = (/** @type {{x: number, y: number}} */ p) => topObjectAt(sorted, p, zoom, resolve, undefined, env);
   let mismatches = 0;
   const s0 = index.stats.scanned, q0 = index.stats.queries;
   for (const p of pts) if (hitIndexed(p)?.id !== hitBrute(p)?.id) mismatches++;
@@ -223,4 +227,64 @@ export async function measureSize(n, opts = {}) {
     result.ops = await opMetrics(fx.board, fx.snapshot);
   }
   return result;
+}
+
+/**
+ * Connector routing on a connector-heavy board (connectorFixture: 2,000 shapes and 1,000 elbow
+ * connectors): the work of indexing every route (A* searches, states expanded per search, fast
+ * paths that needed no search, budget fallbacks), then `moves` single-object moves of random
+ * shapes by a small offset, one at a time, each followed by index.update: how many connectors are
+ * re-indexed and how many routes are actually recomputed (memo misses) per move.
+ * @param {{shapes?: number, connectors?: number, moves?: number, timings?: boolean, verify?: boolean}} [opts]
+ */
+export async function connectorMetrics({ shapes = 2000, connectors = 1000, moves = 60, timings = false, verify = false } = {}) {
+  const fx = connectorFixture(shapes, connectors);
+  const objects = fx.objects;
+  resetConnectorStats();
+  resetRouteStats();
+  const index = new SpatialIndex();
+  const t0 = performance.now();
+  index.reset(objects);
+  const buildMs = performance.now() - t0;
+  const build = {
+    connectors: fx.connectorIds.length,
+    routesComputed: CONNECTOR_STATS.obstacleRoutes,
+    fastPaths: CONNECTOR_STATS.fastPaths,
+    searches: ROUTE_STATS.searches,
+    avoided: fx.connectorIds.filter((id) => index.routeMemo.get(id)?.route.avoided).length,
+    fallbacks: CONNECTOR_STATS.fallbacks,
+    expandedPerSearch: r3(ROUTE_STATS.expanded / Math.max(1, ROUTE_STATS.searches)),
+    maxExpandedPerSearch: ROUTE_STATS.maxExpanded,
+    expandedBudget: MAX_EXPANDED,
+  };
+  const rng = prng(7);
+  let reindexed = 0, recomputed = 0, maxReindexed = 0, maxRecomputed = 0, moveMs = 0;
+  for (let i = 0; i < moves; i++) {
+    const id = fx.shapeIds[Math.floor(rng() * fx.shapeIds.length)];
+    const o = objects[id];
+    objects[id] = { ...o, x: o.x + (i % 2 ? -30 : 30), y: o.y + 20 };
+    const before = CONNECTOR_STATS.obstacleRoutes, s0 = index.stats.connectorIndexes;
+    const t = performance.now();
+    index.update([id], objects);
+    moveMs += performance.now() - t;
+    const re = index.stats.connectorIndexes - s0, rc = CONNECTOR_STATS.obstacleRoutes - before;
+    reindexed += re; recomputed += rc;
+    maxReindexed = Math.max(maxReindexed, re); maxRecomputed = Math.max(maxRecomputed, rc);
+  }
+  const out = /** @type {Record<string, any>} */ ({
+    build,
+    moves: {
+      count: moves,
+      connectorsReindexedPerMove: r3(reindexed / moves), maxConnectorsReindexed: maxReindexed,
+      routesRecomputedPerMove: r3(recomputed / moves), maxRoutesRecomputed: maxRecomputed,
+      searchesTotal: ROUTE_STATS.searches,
+    },
+  });
+  if (verify) out.consistent = index.verify();
+  if (timings) {
+    out.build.indexBuildMs = r3(buildMs);
+    out.moves.msPerMove = r3(moveMs / moves);
+    out.build.msPerSearch = r3(buildMs / Math.max(1, build.searches));
+  }
+  return out;
 }
