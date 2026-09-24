@@ -32,7 +32,7 @@
  *   selection: the selected ids changed. editing: inline text editing started or stopped.
  *   follow: following stopped or started (the user panning stops it).
  *   command: a shortcut that belongs to the shell (keymap.js ShellCommand) was pressed on the
- *   canvas; carries {command}.
+ *   canvas or in the inline text editor; carries {command}.
  *   The "tool" event also carries {tool, locked}.
  *
  * The canvas element also dispatches a bubbling CustomEvent "wb-contextmenu" with detail
@@ -61,6 +61,16 @@
  *   adds an icon or stencil (src/shared/icons/registry.js) at its default size, centred on the view
  *   centre or on the client point `at` (a drop), selects it and returns its id; null when unknown
  * @property {(id: string) => void} editText         starts inline text editing of an object
+ * @property {() => {id: string, type: ObjectType}|null} getTextEdit  the object whose text is being
+ *   edited inline, or null. The edit stays open while focus is inside an element marked
+ *   `data-wb-keeps-editor` (the icon picker), so a picked character can go in at the caret
+ * @property {() => void} finishTextEdit            commits and closes an open inline edit
+ * @property {() => boolean} focusTextEdit          moves focus back into an open inline edit (false: none)
+ * @property {(text: string, opts?: {at?: {clientX: number, clientY: number}, fontSize?: number}) => {mode: "caret"|"object", id: string}|null} insertText
+ *   inserts `text` (an emoji or symbol) at the caret of the open inline edit ("caret"; null when
+ *   the field is full), or, with no edit open or with `at` (a drop), adds a text object holding it
+ *   (font size 64 unless given, centred, box fitted to the glyph) at the view centre or `at`,
+ *   selects it and returns its id ("object")
  * @property {(clientId: string|null) => void} follow  follow a peer's viewport, or stop
  * @property {() => string|null} getFollowing
  * @property {(ids: string[]) => void} duplicate     copies of the objects offset by 20 units, selected
