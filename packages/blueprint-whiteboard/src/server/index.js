@@ -50,6 +50,11 @@ export class Gadget extends DurableObject {
     return this.#board.getFrame(frame);
   }
 
+  /** @param {any} [args] {query?, packId?, category?, limit?} or a query string */
+  findIcons(args) {
+    return this.#board.findIcons(args);
+  }
+
   /** @param {any} [args] {frame?} */
   exportSvg(args) {
     return this.#board.exportSvg(args);
@@ -115,6 +120,12 @@ export class Gadget extends DurableObject {
   async connectObjects(args) {
     const { connector, errors } = await this.#board.connect(args);
     return { connector, errors };
+  }
+
+  /** @param {any} args {icons, frame?, at?, columns?, gap?, by?} */
+  async addIcons(args) {
+    const { created, errors } = await this.#board.addIcons(args);
+    return { created, errors };
   }
 
   // --- Live updates and presence -------------------------------------------------------------

@@ -10,6 +10,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",
+    "@tabler/icons": "3.48.0",
     "esbuild": "0.28.1",
     "playwright": "1.61.0",
     "vitest": "catalog:",

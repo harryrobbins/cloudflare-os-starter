@@ -45,6 +45,7 @@ import {
 import { isValidOrderKey, keyBetween } from "../shared/order.js";
 import { boardToSvg } from "../shared/render.js";
 import { boardBounds, rectsIntersect, objectBounds, rotatedBounds, unionRects } from "../shared/geometry.js";
+import { getIcon, getPack, iconDefaults, iconSummary, resolveIcon, searchIcons, sizeFor } from "../shared/icons/registry.js";
 
 /** @typedef {import("../shared/protocol.js").BoardMeta} BoardMeta */
 /** @typedef {import("../shared/protocol.js").BoardSnapshot} BoardSnapshot */
@@ -62,14 +63,14 @@ export const ANONYMOUS = "Anonymous";
 const RECORD_MAX_BYTES = 16 * 1024;
 const MIB = 1024 * 1024;
 /** Fields compared to decide whether an update changed an object (and inverted by undo). */
-const FIELDS = /** @type {const} */ (["x", "y", "w", "h", "rot", "z", "frameId", "text", "style", "points", "from", "to", "fromSide", "toSide", "routing"]);
+const FIELDS = /** @type {const} */ (["x", "y", "w", "h", "rot", "z", "frameId", "text", "style", "points", "from", "to", "fromSide", "toSide", "routing", "packId", "iconId"]);
 /** An update touching only these is a move: never refused for size, summarised as "Moved". */
 const MOVE_FIELDS = new Set(["x", "y", "frameId"]);
 /** Fields the convenience methods pass through from caller input. */
 const FRIENDLY_FIELDS = ["id", "type", ...FIELDS];
 const NOUNS = /** @type {Record<string, string>} */ ({
   sticky: "sticky note", rect: "rectangle", ellipse: "ellipse", text: "text label", frame: "frame",
-  pen: "pen stroke", connector: "connector",
+  pen: "pen stroke", connector: "connector", icon: "icon",
 });
 const FILL_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame"]);
 /** Default placement spacing for the convenience methods. */
@@ -86,6 +87,24 @@ const withArticle = (type) => {
   const noun = NOUNS[type] ?? "object";
   return (/^[aeiou]/.test(noun) ? "an " : "a ") + noun;
 };
+
+/**
+ * An object as a noun with its article, for history summaries: icons are named by their label
+ * ("a database shape", "a user icon").
+ * @param {WhiteboardObject} o
+ */
+const objectNoun = (o) => {
+  const icon = o.type === "icon" ? getIcon(o.packId, o.iconId) : null;
+  if (!icon) return withArticle(o.type);
+  const noun = `${icon.label.charAt(0).toLowerCase()}${icon.label.slice(1)} ${icon.kind === "stencil" ? "shape" : "icon"}`;
+  // "a user icon", "a USB icon", "an umbrella icon"
+  const an = /^[aeiou]/.test(noun) && !/^(?:u[bcdfgjklmnpqrstvwxz][aeiou]|uni|usb|one)/.test(noun);
+  return (an ? "an " : "a ") + noun;
+};
+
+/** Upper bound of findIcons results. */
+const FIND_ICONS_MAX = 100;
+const unknownIconMessage = "Unknown icon: packId and iconId must name an icon from findIcons()";
 
 /** @param {number} index @param {OpError["code"]} code @param {string} message @returns {OpError} */
 const opError = (index, code, message) => ({ index, code, message });
@@ -580,15 +599,25 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       if (!isObject(raw)) return void errors.push(opError(i, "invalid_op", "create needs an object"));
       if (!isId(raw.id)) return void errors.push(opError(i, "invalid_id", "object.id must look like o_1a2b3c4d5e6f"));
       if (!isObjectType(raw.type)) {
-        return void errors.push(opError(i, "invalid_op", "object.type must be sticky, rect, ellipse, text, frame, pen or connector"));
+        return void errors.push(opError(i, "invalid_op", "object.type must be sticky, rect, ellipse, text, frame, pen, connector or icon"));
       }
       const id = /** @type {string} */ (raw.id);
       if (w.objects.has(id)) return void errors.push(opError(i, "exists", `Object ${id} already exists`));
       if (touched.has(id)) {
         return void errors.push(opError(i, "exists", `Object ${id} was deleted earlier in this request and cannot be recreated in it`));
       }
-      const obj = /** @type {any} */ (normalizeNewObject(raw));
+      let source = raw;
+      /** @type {ReturnType<typeof getIcon>} */
+      let icon = null;
+      if (raw.type === "icon") {
+        icon = getIcon(raw.packId, raw.iconId);
+        if (!icon) return void errors.push(opError(i, "invalid_ref", unknownIconMessage));
+        const d = iconDefaults(icon);
+        source = { ...d, ...raw, style: { ...d.style, ...(isObject(raw.style) ? raw.style : {}) } };
+      }
+      const obj = /** @type {any} */ (normalizeNewObject(source));
       if (!obj) return void errors.push(opError(i, "invalid_op", "Invalid object"));
+      if (icon && !icon.textBox) obj.text = "";
       if (!isValidOrderKey(obj.z)) obj.z = "";
       if (obj.frameId !== null && !isFrame(obj.frameId)) {
         if (!force && w.objects.has(obj.frameId)) return void errors.push(opError(i, "invalid_ref", notAFrame(obj.frameId)));
@@ -648,6 +677,11 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       if (current.type === "connector" && ("from" in patch || "to" in patch)) {
         const problem = connectorProblem(next.from, next.to);
         if (problem) return void errors.push(opError(i, "invalid_ref", problem));
+      }
+      if (current.type === "icon") {
+        const icon = getIcon(next.packId, next.iconId);
+        if (!icon && ("packId" in patch || "iconId" in patch)) return void errors.push(opError(i, "invalid_ref", unknownIconMessage));
+        if (icon && !icon.textBox) next.text = "";
       }
       if (FIELDS.every((f) => fieldEqual(f, current, next))) return;
       if (next.frameId && next.frameId !== current.frameId && (w.members.get(next.frameId) ?? 0) >= L.objectsPerFrame) {
@@ -755,13 +789,13 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
     // ---- History entry ----
     /** @type {string[]} */
     const parts = [];
-    if (created.length) parts.push(created.length === 1 ? `Added ${withArticle(created[0].type)}` : `Added ${created.length} objects`);
+    if (created.length) parts.push(created.length === 1 ? `Added ${objectNoun(created[0])}` : `Added ${created.length} objects`);
     if (updated.length) {
       const moved = updated.every(([b, a]) => FIELDS.every((f) => MOVE_FIELDS.has(f) || fieldEqual(f, b, a)));
       const verb = moved ? "Moved" : "Edited";
-      parts.push(updated.length === 1 ? `${verb} ${withArticle(updated[0][1].type)}` : `${verb} ${updated.length} objects`);
+      parts.push(updated.length === 1 ? `${verb} ${objectNoun(updated[0][1])}` : `${verb} ${updated.length} objects`);
     }
-    if (deleted.length) parts.push(deleted.length === 1 ? `Deleted ${withArticle(deleted[0].type)}` : `Deleted ${deleted.length} objects`);
+    if (deleted.length) parts.push(deleted.length === 1 ? `Deleted ${objectNoun(deleted[0])}` : `Deleted ${deleted.length} objects`);
     if (titleChanged) parts.push("Renamed the whiteboard");
     if (backgroundChanged) parts.push("Changed the background");
     if (!parts.length) parts.push("Changed the whiteboard");
@@ -856,9 +890,10 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
    * Turns friendly fields (color names, frame names) into raw object fields. Returns null after
    * recording an error, so the item is skipped.
    * @param {State} s @param {string} type @param {any} fields @param {number} index @param {OpError[]} errors
+   * @param {unknown} [packId] for icons: the pack, when `fields` does not name it (an update)
    * @returns {Record<string, any>|null}
    */
-  function friendly(s, type, fields, index, errors) {
+  function friendly(s, type, fields, index, errors, packId) {
     /** @type {Record<string, any>} */
     const out = {};
     if (!isObject(fields)) return out;
@@ -869,7 +904,9 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
         errors.push(opError(index, "invalid_op", `Unknown colour ${String(fields.color).slice(0, 40)}; use ${Object.keys(COLORS).join(", ")} or "#rrggbb"`));
         return null;
       }
-      out.style = { ...(isObject(fields.style) ? fields.style : {}), [FILL_TYPES.has(type) ? "fill" : "stroke"]: hex };
+      // An icon's colour is its line colour, except for stencils (diagram shapes), which fill like shapes.
+      const fills = FILL_TYPES.has(type) || (type === "icon" && getPack(fields.packId ?? packId)?.kind === "stencil");
+      out.style = { ...(isObject(fields.style) ? fields.style : {}), [fills ? "fill" : "stroke"]: hex };
     }
     if (Object.hasOwn(fields, "frame") && fields.frame !== undefined) {
       if (fields.frame === null) out.frameId = null;
@@ -1165,7 +1202,7 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
         if (!isObject(u)) return void errors.push(opError(i, "invalid_op", "Each update must be {id, fields}"));
         const o = typeof u.id === "string" ? s.objects.get(u.id) : undefined;
         if (!o) return void errors.push(opError(i, "unknown_object", `No object ${String(u.id).slice(0, 40)}`));
-        const patch = friendly(s, o.type, u.fields, i, errors);
+        const patch = friendly(s, o.type, u.fields, i, errors, o.packId);
         if (!patch) return;
         delete patch.id;
         delete patch.type;
@@ -1319,6 +1356,88 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       };
       const { result, event } = await applyMapped(a, [{ op: "create", object }], [0], errors);
       return { connector: result.upserts.find((o) => o.id === id) ?? null, errors: result.errors, event };
+    }),
+
+    /**
+     * Searches the icon and stencil packs. Needs no board state, so it is not queued.
+     * @param {any} [args] {query?, packId?, category?, limit?} or a query string
+     * @returns {import("../shared/icons/registry.js").IconSummary[]} best first
+     */
+    findIcons(args) {
+      const a = typeof args === "string" ? { query: args } : isObject(args) ? args : {};
+      const limit = typeof a.limit === "number" && Number.isFinite(a.limit) ? Math.max(1, Math.min(FIND_ICONS_MAX, Math.trunc(a.limit))) : 20;
+      return searchIcons(a.query, { packId: a.packId, category: a.category, limit }).map(iconSummary);
+    },
+
+    /**
+     * @param {any} args {icons: (string|{icon?, packId?, iconId?, x?, y?, w?, h?, size?, rot?, text?, color?, style?, frame?, id?})[],
+     *   frame?, at?, columns?, gap?, by?, senderId?}
+     * @returns {Promise<{created: WhiteboardObject[], errors: OpError[], event: BoardEvent|null}>}
+     */
+    addIcons: (args) => enqueue(async () => {
+      const s = await load();
+      const a = isObject(args) ? args : {};
+      /** @type {OpError[]} */
+      const errors = [];
+      const over = tooMany(a.icons, "icons");
+      if (over) return { created: [], errors: [over], event: null };
+      if (!Array.isArray(a.icons)) errors.push(opError(-1, "invalid_op", "icons must be an array"));
+      /** @type {string|null} */
+      let frameId = null;
+      if (a.frame !== undefined && a.frame !== null) {
+        frameId = resolveFrame(s, a.frame);
+        if (!frameId) {
+          errors.push(opError(-1, "invalid_ref", `No frame ${String(a.frame).slice(0, 80)}`));
+          return { created: [], errors, event: null };
+        }
+      }
+      /** @type {{index: number, fields: Record<string, any>, w: number, h: number, placed: boolean}[]} */
+      const items = [];
+      (Array.isArray(a.icons) ? a.icons : []).forEach((/** @type {any} */ item, /** @type {number} */ i) => {
+        const raw = typeof item === "string" ? { icon: item } : item;
+        if (!isObject(raw)) return void errors.push(opError(i, "invalid_op", "Each icon must be a string or an object"));
+        const icon = resolveIcon(raw.icon !== undefined ? raw.icon : raw);
+        if (!icon) {
+          const name = String(raw.icon ?? raw.iconId ?? "").slice(0, 80);
+          return void errors.push(opError(i, "invalid_ref", `Unknown icon ${name}; look one up with findIcons()`));
+        }
+        const fields = friendly(s, "icon", { ...raw, packId: icon.packId, iconId: icon.id }, i, errors);
+        if (!fields) return;
+        const d = iconDefaults(icon);
+        const size = cleanSize(raw.size);
+        const sized = size === null ? d : sizeFor(icon, size);
+        const w = cleanSize(fields.w) ?? sized.w, h = cleanSize(fields.h) ?? sized.h;
+        const placed = cleanCoord(fields.x) !== null && cleanCoord(fields.y) !== null;
+        items.push({ index: i, fields: { ...fields, type: "icon", w, h }, w, h, placed });
+      });
+      const grid = items.filter((it) => !it.placed);
+      const columns = columnsOf(a.columns, grid.length);
+      const gap = gapOf(a.gap);
+      let cellW = 1, cellH = 1;
+      for (const it of grid) { cellW = Math.max(cellW, it.w); cellH = Math.max(cellH, it.h); }
+      const frame = frameId ? s.objects.get(frameId) : undefined;
+      const origin = fitGrid(
+        cleanAt(a.at) ?? (frame ? { x: frame.x + PLACE_GAP, y: frame.y + PLACE_GAP } : besideContent(s)),
+        grid.length, columns, cellW, cellH, gap,
+      );
+      grid.forEach((it, k) => {
+        // Centred in its cell, so icons of different aspect ratios line up.
+        it.fields.x = origin.x + (k % columns) * (cellW + gap) + (cellW - it.w) / 2;
+        it.fields.y = origin.y + Math.floor(k / columns) * (cellH + gap) + (cellH - it.h) / 2;
+      });
+      const objectOps = items.map((it) => ({
+        op: "create",
+        object: {
+          ...it.fields, id: isId(it.fields.id) ? it.fields.id : newId("object"),
+          ...(frameId && !Object.hasOwn(it.fields, "frameId") ? { frameId } : {}),
+        },
+      }));
+      const { result, event } = await applyMapped(a, objectOps, items.map((it) => it.index), errors);
+      const byId = new Map(result.upserts.map((o) => [o.id, o]));
+      return {
+        created: objectOps.map((o) => byId.get(o.object.id)).filter((o) => o !== undefined),
+        errors: result.errors, event,
+      };
     }),
 
     /**
