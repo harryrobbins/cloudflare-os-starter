@@ -1,8 +1,9 @@
 # Plan: omni-search, a deployment-wide hybrid index
 
 Written 2026-09-20 against the pinned submodule (fork branch `starter-openrouter`, gitlink 90f0591 plus
-the `gadgetViewer` commit) and branch `chat`. Status: **planning, not started**. Depends on
-[chat.md](chat.md) landing.
+the `gadgetViewer` commit) and branch `chat`. Status: **built 2026-09-24 on `feat/omni-search`**; see
+[Implementation status](#implementation-status) for what shipped, what changed from this plan, and
+what is deferred.
 
 Goal: one place to ask "where are the docs about project X?" and get an answer ranked by meaning as
 well as by words — across team chat first, then the Context Library, connected services, and finally
@@ -380,3 +381,56 @@ concurrency is the first thing to measure, exactly as chat's plan says of its ow
 - One `search` block in `deployment.jsonc` (`{enabled, index, embedModel, rerank}`) or per-source
   sub-blocks? Either way the Vectorize index cannot be provisioned by Wrangler, so `--check` must verify
   it exists before deploying.
+
+## Implementation status
+
+Built 2026-09-24 on branch `feat/omni-search` (package `packages/gatekeeper-search`).
+
+### Shipped
+
+| Plan item | Where |
+| --- | --- |
+| `cfos-search` Worker, `SearchIndex` DO, FTS5 + Vectorize hybrid, RRF, ACL pre- and post-filter | `src/search-index.ts`, `src/do/`, `src/dense.ts` |
+| `EMBED` queue + DLQ; Vectorize deletes from a DO alarm | `src/queue.ts`, `src/search-index.ts` |
+| `SearchService` (`ingest`, `denseRecall`), source fixed by binding props | `src/service.ts` |
+| Chat push (durable outbox, migration 4), resumable backfill, dense fusion in chat search | `packages/gatekeeper-chat/src/do/search-sync.ts`, `src/do/search.ts` |
+| `/gatekeeper/search/` SPA: omni box, chips, facets, preview, admin stats | `app/` |
+| `SearchSession` + catalog + `/find` | `src/vendor/` |
+| Context Library, public collections only | `src/feeds/` (cron `*/15`) |
+| Bundled Docs/Sheets/Slides push | `scripts/patch-format-search.mjs`, revisions 801/801/701 |
+| Deploy wiring, `--check` resource verification, `pnpm search:provision` | `scripts/deploy.ts`, `scripts/search-resources.ts` |
+
+### Decisions taken while building
+
+- **Spike 5 resolved as route 1, no fork.** A foreign Worker can bind cfos-context's `GatekeeperVendor`
+  with the Workshop's `{sharingDomain}`, mint one account, persist the account and class stubs
+  (`allow_irrevocable_stub_storage`), run the singleton as a facet in its own DO and read. The minted
+  account sees every public collection in the domain and no private one. The feed reads through the
+  account's management API (`startAppUi({isAdmin:false})`) because only that exposes `source` and
+  per-document `lastUpdated`. **Trust note:** the Context vendor trusts the caller's `isAdmin`
+  (`gatekeeper-context/src/library-gatekeeper.ts:185-191`), so binding it into cfos-search extends
+  write trust over public collections to this Worker; only the feed touches the binding, always with
+  `isAdmin: false`. `search.contextFeed: false` removes the binding.
+- **Gadget pushes are partitioned per workspace, not per account.** The singleton facet mints a random
+  partition id on first use; documents live under `account:<partition>`. One person's shared workspace
+  therefore cannot expose what gadgets in their other workspaces indexed. `put`/`remove` are
+  auto-approvable `search.index` actions, not observations, because they change state.
+- **No `BlueprintBinding` for bundled formats.** Declared bindings are mandatory, so every new Doc
+  would demand a connection. The patched `server.js` is inert until `SEARCH` is wired with
+  `setGadgetBinding` or from Connections.
+- **`documents.body` is stored** so `open()` returns the real text rather than overlap-stitched chunks.
+- **Dense similarity floor 0.5** (`DENSE_MIN_SCORE`), because Vectorize always returns its nearest
+  `topK`; tune on the real corpus.
+- **Per-person search rate limit** 60/min (429). There is no per-source ingest rate limit yet.
+
+### Deferred
+
+- **GitHub (or any) connection** — needs an OAuth app registered for search; not started.
+- **Identity fork patch and the claim flow** — the agent and any `providesUi` page stay public-only.
+- **Command-palette fork patch** — not started.
+- **Phase 0 measurements** (spikes 1–4, 6) — to be taken from the production corpus rather than a
+  synthetic one; the index records `embed_revision`, so a model or dimension change is a new index plus
+  a backfill.
+- **Index cleanup for deleted gadgets** — the Overseer never tells gadget code about a deletion, so
+  those entries stay until a search-side sweep exists.
+
