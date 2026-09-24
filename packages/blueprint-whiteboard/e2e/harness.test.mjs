@@ -440,6 +440,37 @@ describe("whiteboard harness", { concurrency: false }, () => {
     });
   });
 
+  test("stale stub with an unsaved edit: recovery screen instead of a reload, with count and data download", async () => {
+    await withHarness({}, async ({ page, frames }) => {
+      const { B } = frames;
+      const [first] = await h.createObjects(page, [{ type: "sticky", x: 300, y: 250, text: "Before stale" }]);
+      await waitObject(page, frames, first);
+      await page.evaluate(() => window.harness.restart({ staleStub: true }));
+      // An edit B makes on its now-dead stub: never acknowledged.
+      await h.inPane(B, (store, _c, id) => store.updateObjects([{ id, patch: { text: "Unsaved" } }]), first);
+      const screen = B.locator('#wb-connection-overlay[data-state="recovery"]');
+      await screen.waitFor({ timeout: 25_000 });
+      assert.equal(await screen.getAttribute("data-count"), "1");
+      assert.match(await screen.locator("#wb-recovery-count").textContent(), /1 unsaved change has not been saved/);
+      assert.equal(await B.locator(SEL.conn).getAttribute("data-state"), "recovery-required");
+      assert.equal(await screen.getByRole("alertdialog").count(), 1);
+      // It holds: no self-reload while the change is unacknowledged.
+      await page.waitForTimeout(3000);
+      assert.equal(await page.evaluate(() => window.harness.paneLoads("B")), 1);
+      // The data-only copy is offered as text (downloads may be blocked by the platform sandbox).
+      await screen.getByRole("button", { name: "Show as text" }).click();
+      const data = JSON.parse(await screen.locator("textarea").inputValue());
+      assert.equal(data.format, "whiteboard-recovery");
+      assert.deepEqual(data.pending.map((p) => [p.kind, p.id, p.patch?.text]), [["update", first, "Unsaved"]]);
+      assert.equal(data.board.objects[first].text, "Before stale");
+      assert.ok(!(await page.evaluate(() => [...document.querySelectorAll("iframe")].map((f) => f.contentWindow?.name ?? "").join("")))
+        .includes("Unsaved"), "the recovery payload never goes into window.name");
+      await screen.getByRole("button", { name: "Reload and lose them" }).click();
+      await h.until(() => page.evaluate(() => window.harness.paneLoads("B") >= 2), { timeout: 10_000, message: "B reloaded on request" });
+      await h.waitLive(B);
+    });
+  });
+
   test("text editing round trip: A types into a new sticky, B sees the text", async () => {
     await withHarness({ names: ["Alice", "Bob"] }, async ({ page, frames }) => {
       const { A, B } = frames;

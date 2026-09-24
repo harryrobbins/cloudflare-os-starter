@@ -14,7 +14,11 @@ import { createPeople } from "./people.js";
 import { createMinimap } from "./minimap.js";
 import { createOutline } from "./outline.js";
 import { createActivity } from "./activity.js";
+import { createIconPicker } from "./icon-picker.js";
 import { showToast, ensureToastHost, closeMenu } from "./dialogs.js";
+import { ConnectionAnnouncer, statusText } from "../sync/connection.js";
+import { keyAction } from "./canvas/keymap.js";
+import { mountShare, SHARE_CSS } from "./share.js";
 
 /** @typedef {import("../store-contract.js").Store} Store */
 /** @typedef {import("../store-contract.js").ClientState} ClientState */
@@ -38,6 +42,10 @@ import { showToast, ensureToastHost, closeMenu } from "./dialogs.js";
  * @property {(type: import("../../shared/protocol.js").ObjectType) => Partial<import("../../shared/protocol.js").Style>} toolStyle
  *   colours new objects of `type` get: the last fill / line / text colour chosen for that type
  * @property {(types: Set<string>, colours: Partial<import("../../shared/protocol.js").Style>) => void} rememberStyle
+ * @property {(objs: import("../../shared/protocol.js").WhiteboardObject[]) => {label: string, onSelect: () => void, danger?: boolean, className?: string}[]} [contextItems]
+ *   extra context-menu items (copy, cut, paste, links, present) from ./share.js
+ * @property {boolean} [iconPickerOpen]
+ * @property {() => void} [toggleIconPicker]  opens or closes the icon and shape picker (I)
  */
 
 /** Gap between announcements of other people's changes. */
@@ -47,7 +55,7 @@ const OWN_HISTORY_WINDOW_MS = 15000;
 
 export function injectStyles() {
   if (document.getElementById("wb-styles")) return;
-  document.head.appendChild(h("style", { id: "wb-styles" }, SHELL_CSS + "\n" + (CANVAS_CSS ?? "")));
+  document.head.appendChild(h("style", { id: "wb-styles" }, SHELL_CSS + "\n" + (CANVAS_CSS ?? "") + "\n" + SHARE_CSS));
 }
 
 /**
@@ -144,7 +152,7 @@ export function mountApp(root, store) {
     },
   };
 
-  // ---- top left: title, connection, pending
+  // ---- top left: title, connection and save status
   const title = inlineEditable({
     className: "board-title",
     label: "Whiteboard title",
@@ -152,10 +160,12 @@ export function mountApp(root, store) {
     getValue: () => uiStore.getState().board.title || DEFAULT_TITLE,
     onSave: (value) => uiStore.setStructure({ title: value }),
   });
-  const conn = h("span", { class: "conn", role: "status", dataset: { state: "connecting" } },
-    h("span", { class: "conn-dot", "aria-hidden": "true" }), h("span", { class: "conn-text" }, "Connecting…"));
-  const pending = h("span", { class: "pending", hidden: true, "aria-hidden": "true" }, "Saving…");
-  const topbar = h("div", { class: "wb-float wb-topbar" }, h("h1", { style: { margin: "0", font: "inherit", display: "flex", minWidth: "0" } }, title.el), conn, pending);
+  // Not a live region: it changes on every save. Meaningful transitions are announced instead.
+  const conn = h("span", { class: "conn", dataset: { state: "connecting" } },
+    h("span", { class: "conn-dot", "aria-hidden": "true" }), h("span", { class: "conn-text", "aria-hidden": "true" }, "Connecting…"),
+    h("span", { class: "conn-detail sr-only" }, "Connecting to the whiteboard."));
+  const connAnnouncer = new ConnectionAnnouncer(announce);
+  const topbar = h("div", { class: "wb-float wb-topbar" }, h("h1", { style: { margin: "0", font: "inherit", display: "flex", minWidth: "0" } }, title.el), conn);
 
   const toolbar = createToolbar(app);
   const styleBar = createStyleBar(app);
@@ -164,11 +174,24 @@ export function mountApp(root, store) {
   const minimap = createMinimap(app);
   const outline = createOutline(app);
   const activity = createActivity(app);
+  const iconPicker = createIconPicker(app);
+  app.toggleIconPicker = () => iconPicker.toggle();
 
   // The style bar follows the canvas in DOM (and Tab) order: selecting on the canvas, then Tab,
   // reaches the selection's actions first.
   appEl.append(canvasHost, styleBar.el, topbar, toolbar.el, toolbar.history, people.el, people.chip, minimap.el, minimap.zoom);
   root.replaceChildren(appEl);
+
+  // Clipboard, backup, templates, help, onboarding, deep links, presentation (./share.js).
+  const share = mountShare(app, { topbar });
+  app.contextItems = share.contextItems;
+  /** @param {string} command a keymap.js ShellCommand */
+  const runCommand = (command) => {
+    if (command === "addMenu") toolbar.openAddMenu();
+    else if (command === "outline") outline.toggle();
+    else if (command === "icons") iconPicker.toggle();
+    else share.command(command);
+  };
 
   // ---- canvas events
   canvas.on((event) => {
@@ -190,6 +213,9 @@ export function mountApp(root, store) {
       case "follow":
         people.render(uiStore.getState());
         break;
+      case "command":
+        runCommand(/** @type {any} */ (event).command);
+        break;
     }
   });
   // Long-press on touch (and right-click) opens the selection's actions as a menu.
@@ -205,13 +231,11 @@ export function mountApp(root, store) {
     if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
     const t = /** @type {HTMLElement|null} */ (e.target);
     if (t && (t.closest("input, textarea, select, [contenteditable=''], [contenteditable='true']") || t.closest(".modal-scrim"))) return;
-    if (e.shiftKey && (e.key === "O" || e.key === "o")) {
-      e.preventDefault();
-      outline.toggle();
-    } else if (!e.shiftKey && (e.key === "a" || e.key === "A") && !t?.closest(".menu")) {
-      e.preventDefault();
-      toolbar.openAddMenu();
-    }
+    // The shell's commands come from the same table as the canvas's keys (keymap.js).
+    const action = keyAction(e);
+    if (action?.type !== "command" || t?.closest(".menu")) return;
+    e.preventDefault();
+    runCommand(action.command);
   });
 
   // ---- store changes
@@ -254,15 +278,16 @@ export function mountApp(root, store) {
   /** @param {ClientState} state */
   function renderHeader(state) {
     title.refresh();
-    const s = state.connection;
-    if (conn.dataset.state !== s) {
-      conn.dataset.state = s;
-      /** @type {HTMLElement} */ (conn.querySelector(".conn-text")).textContent =
-        s === "live" ? "Live" : s === "reconnecting" ? "Reconnecting…" : "Connecting…";
-    }
-    const n = state.pending;
-    pending.hidden = !n;
-    pending.dataset.count = String(n);
+    const status = statusText(state);
+    conn.dataset.state = state.connection;
+    conn.dataset.count = String(state.pendingCount);
+    conn.classList.toggle("conn-warn", status.warn);
+    const text = /** @type {HTMLElement} */ (conn.querySelector(".conn-text"));
+    if (text.textContent !== status.label) text.textContent = status.label;
+    const detail = /** @type {HTMLElement} */ (conn.querySelector(".conn-detail"));
+    if (detail.textContent !== status.detail) detail.textContent = status.detail;
+    if (conn.title !== status.detail) conn.title = status.detail;
+    connAnnouncer.update(state);
     const t = state.board.title || DEFAULT_TITLE;
     if (document.title !== t) document.title = t;
   }
@@ -328,6 +353,7 @@ export function mountApp(root, store) {
       lastErrorShown = state.lastError;
     }
     if (!state.lastError) lastErrorShown = null;
+    share.onChange(state, change);
   }
 
   const initial = uiStore.getState();
@@ -336,6 +362,7 @@ export function mountApp(root, store) {
   people.render(initial);
   minimap.renderZoom();
   minimap.invalidate();
+  share.render();
   const unsubscribe = uiStore.subscribe(onChange);
 
   // Leave presence promptly when the iframe goes away.

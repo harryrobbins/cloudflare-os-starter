@@ -1,7 +1,13 @@
 // @ts-check
 // The client sync engine: subscription and re-subscription, the optimistic pending-op queue,
-// acknowledgement and conflict handling, local undo/redo, and presence. Implements Store from
-// src/client/store-contract.js. Pure state logic lives in src/client/model/.
+// acknowledgement and conflict handling, local undo/redo, and the connection/save status. Implements
+// Store from src/client/store-contract.js. Pure state logic lives in src/client/model/, the status
+// state machine in ./connection.js and the presence send policy in ./presence.js.
+//
+// Replaceable target: the RPC stub (`gadget`) can be swapped with replaceTarget(). The queue, its
+// request ids and the undo stacks survive; the store re-subscribes on the new target, reconciles
+// from its snapshot and replays only unacknowledged requests, verbatim, so the server's requestId
+// records make each apply at most once.
 //
 // What the UI can rely on in `state.board`:
 //   - `state.board` and `state.board.objects` are long-lived objects mutated in place (the same
@@ -15,9 +21,11 @@
 // to them + pending ops naming them); only snapshots (initial load, re-subscribe) are O(board).
 
 import {
-  BACKGROUNDS, LIMITS, PRESENCE_HEARTBEAT_MS, PRESENCE_SEND_MS, PRESENCE_STALE_MS,
+  BACKGROUNDS, LIMITS, PRESENCE_HEARTBEAT_MS, PRESENCE_STALE_MS,
   cleanLine, cleanObjectPatch, compareObjects, isId, newId, normalizeNewObject,
 } from "../../shared/protocol.js";
+import { RECOVERY_FORMAT, RECOVERY_VERSION, SLOW_SAVE_MS, deriveState, riskOfLoss } from "./connection.js";
+import { createPresenceSession } from "./presence.js";
 import { isValidOrderKey, keysBetween } from "../../shared/order.js";
 import { mergeOps, refsOf, wireOp } from "../model/ops.js";
 import { rebasePatch, shiftPatch } from "../model/rebase.js";
@@ -74,19 +82,10 @@ export const SUBSCRIBE_HANG_MS = 45000;
 export const PRESENCE_CONFIRM_MS = 2000;
 /** Peers are checked for staleness this often. */
 export const PEER_EXPIRY_CHECK_MS = 1000;
-/**
- * An updatePresence call not settled after this long counts as one presence failure (heartbeats
- * keep skipping while it is outstanding); so does a rejected call.
- */
-export const PRESENCE_TIMEOUT_MS = 10000;
-/** Presence failures in a row (timeouts or rejections) after which the store re-subscribes. */
-export const PRESENCE_FAILURES_TO_RESUBSCRIBE = 3;
-/** After a rejected updatePresence, the next one is sent this soon rather than at the next heartbeat. */
-export const PRESENCE_RETRY_MS = 500;
+export { PRESENCE_FAILURES_TO_RESUBSCRIBE, PRESENCE_RETRY_MS, PRESENCE_TIMEOUT_MS } from "./presence.js";
 /** Request ids are `${secret}:${seq}` (see nextRequestId), at most this long, of [A-Za-z0-9:_-]. */
 export const REQUEST_ID_MAX = 64;
 
-const PRESENCE_KEYS = /** @type {const} */ (["cursor", "viewport", "selection", "transforms", "stroke", "editingId"]);
 
 function randomClientId() {
   const bytes = new Uint8Array(8);
@@ -110,7 +109,9 @@ function defaultTimers() {
  * @returns {Promise<Store>}
  */
 export async function createStore(options) {
-  const { gadget, RpcTarget } = options;
+  const { RpcTarget } = options;
+  /** The RPC target; replaceTarget() swaps it. */
+  let gadget = options.gadget;
   const timers = /** @type {any} */ (options.timers ?? defaultTimers());
 
   /** @type {Viewer} */
@@ -193,16 +194,15 @@ export async function createStore(options) {
   let gapTarget = 0;
   let disposed = false;
 
-  /** @type {Omit<PresenceState, "clientId"|"name"|"color">} */
-  const presence = { cursor: null, viewport: null, selection: [], transforms: [], stroke: null, editingId: null };
-  let lastPresenceSent = -Infinity;
-  /** @type {any} */
-  let presenceTimer = null;
-  /** @type {{token: number, timer: any}|null} the one updatePresence call awaiting its result */
-  let presenceInflight = null;
-  let presenceDirty = false;
-  let presenceToken = 0;
-  let presenceFailuresInRow = 0;
+  // Connection status. `link` is the transport (see ./connection.js); `recoveryRequired` is set when
+  // the automatic recovery budget runs out and cleared when the link is live again.
+  /** @type {import("./connection.js").LinkState} */
+  let link = "connecting";
+  let recoveryRequired = false;
+  /** server undo calls (outside the queue) awaiting their result */
+  let directPending = 0;
+  /** @type {any} re-derives riskOfLoss once the oldest pending change has waited SLOW_SAVE_MS */
+  let riskTimer = null;
   /**
    * Peers known before the current (re-)subscribe, not yet confirmed by a join or update from it.
    * The hub's first presence delivery to a new subscription carries a join for everyone present,
@@ -234,6 +234,10 @@ export async function createStore(options) {
     peers: new Map(),
     connection: "connecting",
     pending: 0,
+    pendingCount: 0,
+    oldestPendingAt: null,
+    lastAcknowledgedRevision: 0,
+    riskOfLoss: false,
     canUndo: false,
     canRedo: false,
     history: [],
@@ -289,12 +293,44 @@ export async function createStore(options) {
     state.pending = queue.length;
     if (changed.length || pendingChanged || opts.forceObjects) emit({ kind: "objects", objects: changed });
     if (structureChanged) emit({ kind: "structure" });
+    syncStatus();
   }
 
-  /** @param {ClientState["connection"]} connection */
-  function setConnection(connection) {
-    if (state.connection === connection) return;
+  /** @param {import("./connection.js").LinkState} next */
+  function setLink(next) {
+    link = next;
+    if (next === "live") recoveryRequired = false;
+    syncStatus();
+  }
+
+  /**
+   * Re-derives the status fields (see ./connection.js) and emits "connection" when the state or
+   * riskOfLoss changed. Call after anything that changes the queue, the link or the recovery flag.
+   */
+  function syncStatus() {
+    if (disposed) return;
+    const now = timers.now();
+    const pendingCount = queue.length;
+    const oldestPendingAt = pendingCount ? (queue[0].queuedAt ?? now) : null;
+    const connection = deriveState({ link, pendingCount, busy: directPending > 0, recoveryRequired });
+    const risk = riskOfLoss({ state: connection, pendingCount, oldestPendingAt, now });
+    state.pending = pendingCount;
+    state.pendingCount = pendingCount;
+    state.oldestPendingAt = oldestPendingAt;
+    state.lastAcknowledgedRevision = lastRevision;
+    if (riskTimer && (!pendingCount || risk)) {
+      timers.clearTimeout(riskTimer);
+      riskTimer = null;
+    }
+    if (pendingCount && !risk && !riskTimer && oldestPendingAt !== null) {
+      riskTimer = timers.setTimeout(() => {
+        riskTimer = null;
+        syncStatus();
+      }, Math.max(0, oldestPendingAt + SLOW_SAVE_MS - now));
+    }
+    if (connection === state.connection && risk === state.riskOfLoss) return;
     state.connection = connection;
+    state.riskOfLoss = risk;
     emit({ kind: "connection" });
   }
 
@@ -357,7 +393,9 @@ export async function createStore(options) {
   /** @param {BoardSnapshot} snapshot */
   function installSnapshot(snapshot) {
     const { session: _session, ...board } = /** @type {BoardSnapshot & {session?: string}} */ (snapshot ?? {});
+    const before = model.board.objects;
     model = createServerModel(board);
+    pinBases(before);
     for (const id in model.board.objects) everSeen.add(id);
     lastRevision = model.board.revision;
     ackedRevisions.clear();
@@ -365,6 +403,28 @@ export async function createStore(options) {
     syncBoard();
     state.pending = queue.length;
     emit({ kind: "snapshot", objects: changed });
+    syncStatus();
+  }
+
+  /**
+   * Reconciling after a (re-)subscribe: an unsent update was made against the state this client
+   * had seen, not against the new snapshot. When the object changed meanwhile, the update is sent
+   * against the version it was made on, so the server reports a conflict and the usual rules apply
+   * (geometry deltas re-applied, their text and style kept with a flash) instead of the update
+   * silently overwriting the other change. Objects with a request of ours in flight or awaiting
+   * replay are skipped: their new version may be our own change.
+   * @param {Record<string, WhiteboardObject>} before  the objects of the previous server model
+   */
+  function pinBases(before) {
+    for (const op of queue) {
+      if (op.kind !== "update" || op.inflight || op.replayed || op.pinnedBase) continue;
+      const old = before[op.id];
+      const now = model.board.objects[op.id];
+      if (!old || !now || old.version === now.version) continue;
+      if ((opsById.get(op.id) ?? []).some((o) => o.inflight || o.replayed)) continue;
+      op.baseObject = old;
+      op.pinnedBase = true;
+    }
   }
 
   /**
@@ -485,11 +545,12 @@ export async function createStore(options) {
       if (typeof issued === "string" && issued) session = issued;
       clientIdRenames = 0;
       subscribeFailuresInRow = 0;
-      presenceFailuresInRow = 0;
+      presence.resetFailures();
       if (unrecoverableTimer) {
         timers.clearTimeout(unrecoverableTimer);
         unrecoverableTimer = null;
       }
+      unrecoverableFired = false; // the next outage gets its own budget and callback
       nonLiveMs = 0;
       nonLiveSince = null;
       subscribeSentAt = null;
@@ -500,11 +561,11 @@ export async function createStore(options) {
       installSnapshot(snapshot);
       for (const event of events) applyEvent(event);
       if (unconfirmedPeers?.gen === gen) unconfirmedPeers.deadline = timers.now() + PRESENCE_CONFIRM_MS;
-      setConnection("live");
+      setLink("live");
       onFirstLive?.();
       onFirstLive = null;
       pump();
-      sendPresence();
+      presence.flush();
     } catch (err) {
       if (disposed || gen !== generation) return;
       subscribeSettled();
@@ -528,7 +589,7 @@ export async function createStore(options) {
    * not counted; that call instead gets SUBSCRIBE_HANG_MS before it counts as hung.
    */
   function watchUnrecoverable() {
-    if (!options.onUnrecoverable || unrecoverableFired || unrecoverableTimer || disposed) return;
+    if (unrecoverableFired || unrecoverableTimer || disposed) return;
     if (nonLiveSince === null && subscribeSentAt === null) nonLiveSince = timers.now();
     armUnrecoverable();
   }
@@ -548,7 +609,7 @@ export async function createStore(options) {
     }
     unrecoverableTimer = timers.setTimeout(() => {
       unrecoverableTimer = null;
-      if (!disposed && state.connection !== "live") armUnrecoverable();
+      if (!disposed && link !== "live") armUnrecoverable();
     }, wait);
   }
 
@@ -566,16 +627,21 @@ export async function createStore(options) {
     if (unrecoverableTimer) armUnrecoverable();
   }
 
-  /** Tells the owner, once, that this connection is not coming back. Retries continue. */
+  /**
+   * The automatic recovery budget is spent: the state becomes recovery-required and the owner is
+   * told, once per outage. Retries continue; a later success returns to live.
+   */
   function giveUp() {
-    if (unrecoverableFired || disposed || !options.onUnrecoverable) return;
+    if (unrecoverableFired || disposed) return;
     unrecoverableFired = true;
     if (unrecoverableTimer) {
       timers.clearTimeout(unrecoverableTimer);
       unrecoverableTimer = null;
     }
+    recoveryRequired = true;
+    syncStatus();
     try {
-      options.onUnrecoverable();
+      options.onUnrecoverable?.();
     } catch (err) {
       console.error("whiteboard onUnrecoverable failed", err);
     }
@@ -596,7 +662,7 @@ export async function createStore(options) {
       timers.clearTimeout(gapTimer);
       gapTimer = null;
     }
-    setConnection("reconnecting");
+    setLink("reconnecting");
     watchUnrecoverable();
     scheduleSubscribe();
   }
@@ -646,7 +712,7 @@ export async function createStore(options) {
         return target;
       }
       /** @type {PendingOp} */
-      const op = { ...body, seq: ++seq, inflight: false, retries: 0, replayed: false };
+      const op = { ...body, seq: ++seq, inflight: false, retries: 0, replayed: false, queuedAt: timers.now() };
       queue.push(op);
       structureOps.push(op);
       return op;
@@ -669,7 +735,7 @@ export async function createStore(options) {
       }
     }
     /** @type {PendingOp} */
-    const op = /** @type {PendingOp} */ ({ ...body, seq: ++seq, inflight: false, retries: 0, replayed: false });
+    const op = /** @type {PendingOp} */ ({ ...body, seq: ++seq, inflight: false, retries: 0, replayed: false, queuedAt: timers.now() });
     queue.push(op);
     if (list) list.push(op);
     else opsById.set(body.id, [op]);
@@ -752,7 +818,7 @@ export async function createStore(options) {
   }
 
   function pump() {
-    if (disposed || inflight || state.connection !== "live" || !generationReady) return;
+    if (disposed || inflight || link !== "live" || !generationReady) return;
     if (replay) {
       // The outcome of this exact request is unknown; settle it before sending anything new.
       send(replay);
@@ -810,7 +876,8 @@ export async function createStore(options) {
         structure = { ...op.structure };
         continue;
       }
-      const base = op.kind === "create" ? null : server[op.id] ?? null;
+      const base = op.kind === "create" ? null : (op.pinnedBase ? op.baseObject : server[op.id]) ?? null;
+      op.pinnedBase = false;
       op.baseObject = base;
       refs.set(op, objectOps.length);
       objectOps.push(wireOp(op, base?.version ?? 0));
@@ -1025,6 +1092,7 @@ export async function createStore(options) {
           for (const later of opsById.get(op.id) ?? []) {
             if (later !== op && later.seq > op.seq && later.kind === "update" && !later.inflight && !later.replayed) {
               later.patch = shiftPatch(later.patch, decision.shifts);
+              later.pinnedBase = false; // now rebased onto theirs: sent against the current version
             }
           }
         }
@@ -1137,6 +1205,7 @@ export async function createStore(options) {
     const pendingChanged = state.pending !== queue.length;
     state.pending = queue.length;
     if (touched.size || pendingChanged) emit({ kind: "objects", objects: [...touched] });
+    syncStatus();
     const entry = [...inverse, ...inverseConnectors];
     for (const op of deletes) op.undoEntry = entry;
     pump();
@@ -1233,6 +1302,7 @@ export async function createStore(options) {
       for (const id of unconfirmedPeers.ids) if (state.peers.delete(id)) changed.add(id);
       unconfirmedPeers = null;
     }
+    presence.setPeerCount(state.peers.size);
     if (changed.size) emit({ kind: "presence", peers: [...changed] });
   }
 
@@ -1250,114 +1320,110 @@ export async function createStore(options) {
         removed.push(id);
       }
     }
+    presence.setPeerCount(state.peers.size);
     if (removed.length) emit({ kind: "presence", peers: removed });
   }
 
   /**
-   * Sends the current presence. At most one updatePresence is in flight per client (a gadget
-   * serves inbound calls one at a time, so unawaited 30 Hz sends queue up for seconds on the real
-   * platform): while one is in flight the presence is only marked dirty, and the latest state is
-   * sent once it settles, still at most one send per PRESENCE_SEND_MS.
-   */
-  function sendPresence() {
-    if (presenceTimer) {
-      timers.clearTimeout(presenceTimer);
-      presenceTimer = null;
-    }
-    if (disposed || state.connection !== "live") return;
-    if (presenceInflight) {
-      presenceDirty = true;
-      return;
-    }
-    presenceDirty = false;
-    lastPresenceSent = timers.now();
-    const gen = generation;
-    const token = ++presenceToken;
-    const payload = { ...clientInfo(), ...presence };
-    const timer = timers.setTimeout(() => presenceTimedOut(token, gen), PRESENCE_TIMEOUT_MS);
-    presenceInflight = { token, timer };
-    Promise.resolve()
-      .then(() => gadget.updatePresence(payload))
-      .then(
-        (/** @type {{known: boolean, revision: number}} */ res) => settlePresence(token, gen, res, false),
-        () => settlePresence(token, gen, null, true),
-      );
-  }
-
-  /**
-   * An updatePresence call has been outstanding for another PRESENCE_TIMEOUT_MS. A slow server
-   * is not a dead one: the call stays outstanding (so heartbeats keep skipping rather than queueing
-   * more calls behind it) until it settles or PRESENCE_FAILURES_TO_RESUBSCRIBE timeouts in a row,
-   * when it is abandoned and the store re-subscribes.
-   * @param {number} token
-   * @param {number} gen
-   */
-  function presenceTimedOut(token, gen) {
-    if (!presenceInflight || presenceInflight.token !== token || disposed) return;
-    if (gen === generation && state.connection === "live" && presenceFailuresInRow + 1 < PRESENCE_FAILURES_TO_RESUBSCRIBE) {
-      presenceFailuresInRow++;
-      presenceInflight.timer = timers.setTimeout(() => presenceTimedOut(token, gen), PRESENCE_TIMEOUT_MS);
-      return;
-    }
-    settlePresence(token, gen, null, true);
-  }
-
-  /**
-   * @param {number} token
+   * The settled result of an updatePresence call on generation `gen`. Returns true when healthy.
    * @param {number} gen
    * @param {{known: boolean, revision: number}|null} res
-   * @param {boolean} failed  rejected or not settled within PRESENCE_TIMEOUT_MS
-   */
-  function settlePresence(token, gen, res, failed) {
-    if (!presenceInflight || presenceInflight.token !== token) return; // late, after a timeout
-    timers.clearTimeout(presenceInflight.timer);
-    presenceInflight = null;
-    if (disposed) return;
-    if (failed) {
-      if (gen === generation && state.connection === "live" && ++presenceFailuresInRow >= PRESENCE_FAILURES_TO_RESUBSCRIBE) {
-        presenceFailuresInRow = 0;
-        resubscribe();
-      } else if (gen === generation && !presenceTimer) {
-        presenceTimer = timers.setTimeout(sendPresence, PRESENCE_RETRY_MS);
-      }
-    } else {
-      onPresenceResult(gen, /** @type {any} */ (res));
-    }
-    if (presenceDirty) {
-      presenceDirty = false;
-      schedulePresence();
-    }
-  }
-
-  /**
-   * @param {number} gen
-   * @param {{known: boolean, revision: number}} res
    */
   function onPresenceResult(gen, res) {
-    if (disposed || gen !== generation || state.connection !== "live") return;
+    if (disposed || gen !== generation || link !== "live") return false;
     if (!res || res.known === false) {
       resubscribe();
-      return;
+      return false;
     }
-    presenceFailuresInRow = 0;
     failures = 0;
     if (typeof res.revision === "number" && res.revision > lastRevision && !inflight) {
       gapTarget = Math.max(gapTarget, res.revision);
       if (!gapTimer) {
         gapTimer = timers.setTimeout(() => {
           gapTimer = null;
-          if (disposed || state.connection !== "live") return;
+          if (disposed || link !== "live") return;
           if (lastRevision < gapTarget && !inflight) resubscribe();
         }, GAP_GRACE_MS);
       }
     }
+    return true;
   }
 
-  function schedulePresence() {
-    if (disposed) return;
-    const wait = lastPresenceSent + PRESENCE_SEND_MS - timers.now();
-    if (wait <= 0) sendPresence();
-    else if (!presenceTimer) presenceTimer = timers.setTimeout(sendPresence, wait);
+  const presence = createPresenceSession({
+    timers,
+    call: (payload) => gadget.updatePresence(payload),
+    identity: clientInfo,
+    canSend: () => !disposed && link === "live",
+    generation: () => generation,
+    onResult: onPresenceResult,
+    onDead: () => resubscribe(),
+    opBusy: () => inflight !== null,
+  });
+
+  // -----------------------------------------------------------------------------------------
+  // Replaceable target and recovery data
+  // -----------------------------------------------------------------------------------------
+
+  /**
+   * Swaps the RPC target without touching the queue or the undo stacks, then re-subscribes on it at
+   * once. A request in flight on the old target has an unknown outcome: it is kept for a verbatim
+   * replay (same requestId and base versions) ahead of anything new, so the server applies it at
+   * most once. That is not counted as a send failure, and the new target gets a fresh recovery budget.
+   * @param {any} next
+   */
+  function replaceTarget(next) {
+    gadget = next;
+    if (inflight) {
+      const { timer, token: _token, ...batch } = inflight;
+      timers.clearTimeout(timer);
+      inflight = null;
+      // Still marked in flight: nothing may merge into an op whose request will be re-sent as is.
+      for (const op of batch.ops) op.replayed = true;
+      replay = batch;
+    }
+    presence.abandon();
+    for (const t of [retryTimer, gapTimer, unrecoverableTimer]) if (t) timers.clearTimeout(t);
+    retryTimer = gapTimer = unrecoverableTimer = null;
+    unrecoverableFired = false;
+    subscribeFailuresInRow = 0;
+    failures = 0;
+    nonLiveMs = 0;
+    nonLiveSince = null;
+    subscribeSentAt = null;
+    resubscribing = true;
+    generationReady = false;
+    setLink(link === "connecting" ? "connecting" : "reconnecting");
+    watchUnrecoverable();
+    failures++; // the immediate attempt below counts as the first; later ones back off
+    void attemptSubscribe();
+  }
+
+  /**
+   * A data-only copy of what a reload could lose: the last acknowledged server state and the
+   * pending changes. Never includes request ids (they carry this store's secret) or the session.
+   * @returns {import("../store-contract.js").RecoveryData}
+   */
+  function recoveryData() {
+    return /** @type {any} */ (structuredClone({
+      format: RECOVERY_FORMAT,
+      version: RECOVERY_VERSION,
+      savedAt: new Date(timers.now()).toISOString(),
+      lastAcknowledgedRevision: lastRevision,
+      board: model.board,
+      pending: queue.map((op) => {
+        /** @type {Record<string, any>} */
+        const out = { kind: op.kind, queuedAt: op.queuedAt ?? null, sent: Boolean(op.inflight || op.replayed) };
+        if (op.kind === "structure") {
+          out.structure = op.structure;
+          return out;
+        }
+        out.id = op.id;
+        if (op.kind === "create") out.object = op.object;
+        else out.baseVersion = (op.baseObject ?? model.board.objects[op.id])?.version ?? null;
+        if (op.kind === "update") out.patch = op.patch;
+        return out;
+      }),
+    }));
   }
 
   // -----------------------------------------------------------------------------------------
@@ -1374,7 +1440,7 @@ export async function createStore(options) {
   failures = 0;
 
   heartbeat = timers.setInterval(() => {
-    if (!presenceInflight) sendPresence(); // a call still in flight already proves liveness
+    presence.heartbeat(); // skipped while a call is in flight or one was sent recently
   }, PRESENCE_HEARTBEAT_MS);
   expiryTimer = timers.setInterval(expirePeers, PEER_EXPIRY_CHECK_MS);
 
@@ -1489,10 +1555,18 @@ export async function createStore(options) {
     },
 
     async undoHistory(historyId) {
+      directPending++;
+      syncStatus();
       /** @type {OperationResult} */
-      const result = await gadget.undo({
-        senderId: clientId, by: viewer.name, historyId, requestId: nextRequestId(),
-      });
+      let result;
+      try {
+        result = await gadget.undo({
+          senderId: clientId, by: viewer.name, historyId, requestId: nextRequestId(),
+        });
+      } finally {
+        directPending--;
+        syncStatus();
+      }
       if (disposed || !result) return;
       if (result.duplicate !== true) {
         const res = applyServerUpdate(result, result.revision);
@@ -1506,37 +1580,45 @@ export async function createStore(options) {
     },
 
     setPresence(p) {
-      if (disposed || !p || typeof p !== "object") return;
-      let any = false;
-      for (const key of PRESENCE_KEYS) {
-        if (Object.hasOwn(p, key) && /** @type {any} */ (p)[key] !== undefined) {
-          /** @type {any} */ (presence)[key] = /** @type {any} */ (p)[key];
-          any = true;
-        }
-      }
-      if (any) schedulePresence();
+      if (disposed) return;
+      presence.set(p);
     },
 
     flushPresence() {
-      sendPresence();
+      presence.flush();
+    },
+
+    setVisibility(visible) {
+      if (disposed) return;
+      presence.setVisible(visible);
     },
 
     setViewer(name, color) {
       viewer.name = cleanLine(name, LIMITS.displayName);
       if (color) viewer.color = color;
       emit({ kind: "viewer" });
-      schedulePresence();
+      presence.identityChanged();
+    },
+
+    replaceTarget(next) {
+      if (disposed || !next) return;
+      replaceTarget(next);
+    },
+
+    getRecoveryData() {
+      return recoveryData();
     },
 
     dispose() {
       if (disposed) return;
       disposed = true;
-      for (const t of [retryTimer, gapTimer, presenceTimer, unrecoverableTimer, inflight?.timer, presenceInflight?.timer]) {
+      for (const t of [retryTimer, gapTimer, unrecoverableTimer, riskTimer, inflight?.timer]) {
         if (t) timers.clearTimeout(t);
       }
+      presence.dispose();
       if (heartbeat) timers.clearInterval(heartbeat);
       if (expiryTimer) timers.clearInterval(expiryTimer);
-      heartbeat = expiryTimer = retryTimer = gapTimer = presenceTimer = unrecoverableTimer = null;
+      heartbeat = expiryTimer = retryTimer = gapTimer = unrecoverableTimer = riskTimer = null;
       listeners.clear();
       Promise.resolve()
         .then(() => gadget.leavePresence(clientId, session ?? undefined))

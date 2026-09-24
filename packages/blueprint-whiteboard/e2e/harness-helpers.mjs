@@ -45,6 +45,16 @@ export const SEL = {
   canvasHost: ".wb-canvas-host",
   liveRegion: ".live-region",
   toast: ".toast",
+  /** sharing and discoverability (src/client/ui/share.js and friends) */
+  boardMenu: ".wb-topbar .wb-board-menu",
+  boardMenuItem: (/** @type {string} */ name) => `.menu .board-${name}`,
+  onboarding: ".wb-onboarding",
+  helpDialog: ".wb-help",
+  templateButton: (/** @type {string} */ id) => `.wb-template[data-template="${id}"]`,
+  presentBar: ".wb-present-bar:not([hidden])",
+  presentStatus: ".wb-present-status",
+  backupDialog: ".wb-backup",
+  importDialog: ".wb-import",
 };
 
 /**

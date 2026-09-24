@@ -31,13 +31,14 @@ import {
 } from "./camera.js";
 import {
   topObjectAt, boundsOf, connectorPoints, validIds, expandMoveIds, moveUpdates, buildDuplicates,
-  frameAtPoint, TEXT_EDITABLE, EDIT_ON_CREATE, round2, resizeUpdates, rotateUpdates,
+  frameAtPoint, canEditText, EDIT_ON_CREATE, round2, resizeUpdates, rotateUpdates,
   HIT_TOLERANCE_PX, stackOrder, snapTargets, alignUpdates, distributeUpdates, reconnectUpdate,
 } from "./model.js";
 import { handleForPress, visibleHandles, cursorForHandle, endpointForPress, endpointHandlePositions, endpointRadius } from "./handles.js";
 import { SpatialIndex, applyStoreChange } from "../../model/spatial-index.js";
 import { SNAP_PX } from "../../model/alignment.js";
 import { guideElements, endpointHandleElements } from "./guide-layer.js";
+import { resolveIcon, iconDefaults, getIcon } from "../../../shared/icons/registry.js";
 import { keyAction, panStep, directionWord, SHORTCUTS_HINT } from "./keymap.js";
 import { ObjectLayer, svgEl } from "./layers.js";
 import { Culler, connectorsOf } from "./culling.js";
@@ -175,6 +176,8 @@ export function createCanvas(store, options = {}) {
   let lastClick = null;
   /** @type {{sx: number, sy: number, pointerType: string}|null} */
   let hoverPoint = null;
+  /** World position of the pointer while it is over the canvas (paste goes there). @type {{x: number, y: number}|null} */
+  let pointerWorld = null;
   /** The last pointer type pressed on the canvas: sizes handle hit areas. */
   let lastPointerType = "mouse";
   let lastPointerDownAt = -Infinity;
@@ -585,7 +588,7 @@ export function createCanvas(store, options = {}) {
   function editText(id) {
     if (!editor) return;
     const o = objects()[id];
-    if (!o || !TEXT_EDITABLE.includes(o.type)) return;
+    if (!o || !canEditText(o)) return;
     cancelGesture();
     if (editor.isOpen && editor.id === id) return;
     if (selection.length !== 1 || selection[0] !== id) setSelectionInternal([id]);
@@ -832,6 +835,7 @@ export function createCanvas(store, options = {}) {
     }
     const p = sample(e);
     if (!exportMode && p.sx >= 0 && p.sy >= 0 && p.sx <= size.w && p.sy <= size.h) {
+      pointerWorld = { x: p.x, y: p.y };
       store.setPresence({ cursor: { x: round2(p.x), y: round2(p.y) } });
     }
     if (ignoredPointers.has(e.pointerId)) return;
@@ -870,6 +874,7 @@ export function createCanvas(store, options = {}) {
 
   function onPointerLeave() {
     hoverPoint = null;
+    pointerWorld = null;
     if (!gesture && !exportMode) store.setPresence({ cursor: null });
   }
 
@@ -1012,6 +1017,7 @@ export function createCanvas(store, options = {}) {
       case "zoomOut": api.zoomBy(1 / ZOOM_STEP); break;
       case "fit": api.zoomToFit(); break;
       case "zoomReset": api.zoomBy(1 / camera.zoom); break;
+      case "command": emit({ kind: "command", command: action.command }); break;
     }
   }
 
@@ -1245,6 +1251,41 @@ export function createCanvas(store, options = {}) {
       if (EDIT_ON_CREATE.includes(type)) editText(id);
       return id;
     },
+    addIcon(ref, at) {
+      const icon = resolveIcon(ref);
+      if (!icon || exportMode) return null;
+      if (!cameraReady) measure();
+      const d = iconDefaults(icon);
+      let c = screenToWorld(camera, { x: size.w / 2, y: size.h / 2 });
+      if (at && Number.isFinite(at.clientX) && Number.isFinite(at.clientY)) {
+        c = screenToWorld(camera, toLocal({ x: at.clientX, y: at.clientY }));
+      }
+      let x = round2(c.x - d.w / 2), y = round2(c.y - d.h / 2);
+      if (!at) {
+        // Nudge down-right while the spot is taken, like addAtCenter.
+        const taken = (/** @type {number} */ px, /** @type {number} */ py) =>
+          Object.values(objects()).some((o) => o.type === "icon" && Math.abs(o.x - px) < 1 && Math.abs(o.y - py) < 1);
+        for (let i = 0; i < 20 && taken(x, y); i++) { x += 20; y += 20; }
+      }
+      // Remembered colours: the line colour for every icon, fill and text colour only for shapes.
+      const remembered = toolStyle("icon");
+      /** @type {Record<string, any>} */
+      const style = { ...d.style };
+      if (remembered.stroke && remembered.stroke !== "none") style.stroke = remembered.stroke;
+      if (icon.kind === "stencil") {
+        if (remembered.fill) style.fill = remembered.fill;
+        if (remembered.textColor) style.textColor = remembered.textColor;
+      }
+      /** @type {any} */
+      const obj = {
+        type: "icon", packId: icon.packId, iconId: icon.id, x, y, w: d.w, h: d.h, style,
+        frameId: frameAtPoint(objects(), center({ x, y, w: d.w, h: d.h })),
+      };
+      const [id] = store.createObjects([obj]);
+      if (!id) return null;
+      setSelectionInternal([id], { announce: true });
+      return id;
+    },
     editText,
     follow(clientId) {
       if (clientId === following) return;
@@ -1260,6 +1301,20 @@ export function createCanvas(store, options = {}) {
       if (!creates.length) return;
       store.createObjects(creates);
       setSelectionInternal(newIds, { announce: true });
+    },
+    getPointer: () => (pointerWorld ? { ...pointerWorld } : null),
+    fitObjects(ids, { padding = 40, animate = true } = {}) {
+      if (!cameraReady) measure();
+      const rects = [];
+      for (const id of ids) {
+        const o = resolve(id);
+        const b = o && boundsOf(o, resolve);
+        if (b) rects.push(b);
+      }
+      const u = unionRects(rects);
+      if (!u) return false;
+      moveCamera(fitRect(u, size.w, size.h, { padding }), { animate });
+      return true;
     },
     focusObjects(ids, opts) {
       if (!cameraReady) measure();
@@ -1336,6 +1391,10 @@ function reducedMotion() {
 function describe(o) {
   const names = { sticky: "sticky note", rect: "rectangle", ellipse: "ellipse", text: "text", frame: "frame", pen: "drawing", connector: "connector" };
   const label = o.text ? `: ${o.text.slice(0, 40)}` : "";
+  if (o.type === "icon") {
+    const icon = getIcon(o.packId, o.iconId);
+    return `${icon ? icon.label.toLowerCase() + (icon.kind === "stencil" ? " shape" : " icon") : "icon"}${label}`;
+  }
   return `${names[o.type] ?? o.type}${label}`;
 }
 

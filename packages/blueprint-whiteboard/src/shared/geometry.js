@@ -4,6 +4,8 @@
 // wrapping and camera fitting. No DOM, no measurement: the same input gives the same output on the
 // server and in every browser, which is what keeps an SVG export identical to the board.
 
+import { iconTextBox } from "./icons/registry.js";
+
 /** @typedef {import("./protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("./protocol.js").Side} Side */
 /** @typedef {{x: number, y: number}} Point */
@@ -483,7 +485,7 @@ export function wrapText(text, maxWidth, fontSize, maxLines = Infinity) {
  * Where an object's text goes: the inner box (world, unrotated) and wrapped lines that fit it.
  * Sticky, rect, ellipse: centred vertically in the padded box (ellipses use the inscribed
  * rectangle). Text objects: top-aligned, no padding. Frames: their name sits above the frame
- * (one line). Connectors: see connector labels in render.js. Stickies and shapes lay out only the
+ * (one line). Icons: centred in their icon's text box (the whole box when it has none). Connectors: see connector labels in render.js. Stickies and shapes lay out only the
  * lines that fit the box, text objects at most MAX_TEXT_LINES.
  * @param {WhiteboardObject} o
  * @returns {{x: number, y: number, w: number, h: number, lines: string[], lineHeight: number,
@@ -497,6 +499,10 @@ export function textLayout(o) {
     box = { x: o.x, y: o.y - lineHeight - 4, w: o.w, h: lineHeight };
   } else if (o.type === "text") {
     box = { x: o.x, y: o.y, w: o.w, h: o.h };
+  } else if (o.type === "icon") {
+    const inner = iconTextBox(o) ?? o;
+    const pad = fontSize * TEXT_PAD_EM;
+    box = { x: inner.x + pad, y: inner.y + pad, w: Math.max(1, inner.w - 2 * pad), h: Math.max(1, inner.h - 2 * pad) };
   } else {
     const inset = o.type === "ellipse" ? (1 - Math.SQRT1_2) / 2 : 0;
     const pad = fontSize * TEXT_PAD_EM;
