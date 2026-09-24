@@ -305,6 +305,40 @@ describe("the outbox", () => {
   });
 });
 
+describe("refusals never lose a membership change", () => {
+  it("splits a refused batch so the membership change queued beside a bad row still arrives", async () => {
+    const { workspace, alice, bob } = await setup("sync-split");
+    const channelId = await channel(alice, "private", unique("club"), ["bob"]);
+    await flush(workspace);
+    const marker = unique("badrow");
+    // Twice: once for the combined batch, once for the message on its own.
+    await control.failIngest(marker, 2, 0, "search: invalid input: label too long");
+    await post(alice, channelId, `a message carrying ${marker}`);
+    await bob.send("POST", apiPath("leaveChannel", { channelId }));
+    await flush(workspace);
+
+    const scope = `chat:${channelId}`;
+    const principals = (await batches(scope)).flatMap((batch) => batch.principals ?? []);
+    expect(principals.filter((change) => change.scope === scope).at(-1)).toEqual({ scope, replace: ["alice"] });
+    expect(await outboxRows(workspace)).toEqual([]);
+    expect((await workspace.searchStatus()).dropped).toBeGreaterThanOrEqual(1);
+  });
+
+  it("closes a non-public channel search refuses on its own, rather than keeping old members", async () => {
+    const { workspace, alice } = await setup("sync-close");
+    const marker = unique("refusedname");
+    // Every batch naming the channel is refused; the fail-closed batch names only its scope id.
+    await control.failIngest(marker, 50, 0, "search: invalid input: label too long");
+    const channelId = await channel(alice, "private", marker, ["bob"]);
+    await flush(workspace);
+
+    const scope = `chat:${channelId}`;
+    const principals = (await batches(scope)).flatMap((batch) => batch.principals ?? []);
+    expect(principals.filter((change) => change.scope === scope).at(-1)).toEqual({ scope, replace: [] });
+    expect(await outboxRows(workspace)).toEqual([]);
+  });
+});
+
 describe("backfill", () => {
   it("starts on the first request with SEARCH bound", async () => {
     const workspace = freshWorkspace("sync-first-run");

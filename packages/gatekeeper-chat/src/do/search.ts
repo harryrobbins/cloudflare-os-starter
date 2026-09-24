@@ -86,9 +86,13 @@ export async function search(
   }
 
   const started = Date.now();
-  const fused = await fusedQuery(ctx, query, visible, limit, offset);
+  const fused = await fusedQuery(ctx, query, visible, limit, offset, () =>
+    visibleChannelIds(ctx, user.id),
+  );
   const dense = fused === null ? "off" : "ok";
-  const rows = fused ?? runQuery(ctx, query, visible, limit + 1, offset);
+  // Membership re-read after the await (fusedQuery may have waited on dense recall), so a fallback
+  // never answers from the snapshot taken before it.
+  const rows = fused ?? runQuery(ctx, query, visibleChannelIds(ctx, user.id), limit + 1, offset);
   if (!rows.ok) return rows;
   const page = rows.value.slice(0, limit);
 
@@ -436,6 +440,7 @@ async function fusedQuery(
   visible: readonly string[],
   limit: number,
   offset: number,
+  recheckVisible: () => readonly string[],
 ): Promise<Outcome<readonly SearchRow[]> | null> {
   if (ctx.env.SEARCH === undefined) return null;
   // A qualifier-only query has nothing to embed.
@@ -443,12 +448,17 @@ async function fusedQuery(
   const channelIds = searchableChannels(query, visible);
   if (channelIds.length === 0) return null;
 
-  // Started before the (synchronous) lexical query so the two overlap.
-  const densePromise = denseCandidates(ctx, query.text, channelIds);
-  const lexical = runQuery(ctx, query, visible, Math.max(FUSION_CANDIDATES, offset + limit + 1), 0);
-  const denseHits = await densePromise;
-  if (!lexical.ok) return lexical;
+  const denseHits = await denseCandidates(ctx, query.text, channelIds);
   if (denseHits === null) return null;
+
+  // Everything below runs after the await, against the caller's membership as it is *now*: the
+  // object may have handled a leave or a delete while dense recall was in flight, and a result
+  // computed from the earlier snapshot would show that channel's messages for one more page.
+  const current = recheckVisible();
+  const channelsNow = searchableChannels(query, current);
+  if (channelsNow.length === 0) return allow([]);
+  const lexical = runQuery(ctx, query, current, Math.max(FUSION_CANDIDATES, offset + limit + 1), 0);
+  if (!lexical.ok) return lexical;
 
   const head = lexical.value.slice(0, FUSION_CANDIDATES);
   const tail = lexical.value.slice(FUSION_CANDIDATES);
@@ -466,7 +476,7 @@ async function fusedQuery(
   const unvouched = [...denseRank.keys()].filter((id) => !lexicalRank.has(id));
   const denseOnly = new Map<string, SearchRow>();
   if (unvouched.length > 0) {
-    const { where, params } = filterFor(query, channelIds);
+    const { where, params } = filterFor(query, channelsNow);
     for (const row of ctx.sql
       .exec<MessageRow>(
         `SELECT m.* FROM messages m

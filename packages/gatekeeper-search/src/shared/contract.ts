@@ -63,10 +63,16 @@ export const INGEST_LIMITS = {
   /** `IngestDocument.id`, in UTF-8 bytes. Vector ids are hashed, so this is ours, not Vectorize's. */
   maxIdBytes: 512,
   maxTitleChars: 500,
+  /** `ScopeDeclaration.label`, in characters. A longer label is truncated, not refused. */
+  maxLabelChars: 200,
   /** `IngestDocument.body`, in characters. A longer body is truncated, not refused. */
   maxBodyChars: 256 * 1024,
-  /** Principal changes per `ingest()` call, across all scopes. */
+  /**
+   * Principal changes per `ingest()` call, across all scopes. A batch changing a single scope may
+   * exceed it (up to `maxPrincipalsPerScope`), so one large private channel is never refused.
+   */
   maxPrincipalChanges: 2000,
+  maxPrincipalsPerScope: 50_000,
 } as const;
 
 /**

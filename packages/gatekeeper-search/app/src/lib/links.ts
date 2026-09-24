@@ -11,7 +11,9 @@ export function linkTarget(url: string | null | undefined): LinkTarget | null {
   if (url === null || url === undefined) return null;
   const trimmed = url.trim();
   if (trimmed.length === 0) return null;
-  if (trimmed.startsWith("/") && !trimmed.startsWith("//") && !trimmed.startsWith("/\\")) {
+  // Browsers read `/\host` and `/<TAB>/host` as protocol-relative, so neither is ever a link.
+  if (/[\\\s\u0000-\u001f\u007f]/u.test(trimmed)) return null;
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//")) {
     return { href: trimmed, external: false };
   }
   try {

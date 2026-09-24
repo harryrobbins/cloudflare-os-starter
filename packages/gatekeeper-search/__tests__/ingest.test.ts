@@ -76,7 +76,10 @@ describe("validation and source prefixes", () => {
     )).toMatch(/bytes/);
     expect(await failure(
       index.ingest("chat", {
-        principals: [{ scope: "chat:p", add: Array.from({ length: INGEST_LIMITS.maxPrincipalChanges + 1 }, (_, i) => `u${i}`) }],
+        principals: [
+          { scope: "chat:p", add: Array.from({ length: INGEST_LIMITS.maxPrincipalChanges }, (_, i) => `u${i}`) },
+          { scope: "chat:q", add: ["one-too-many"] },
+        ],
       }),
     )).toMatch(/principal/);
     // One good document and one bad one: the good one must not have been written.
@@ -84,6 +87,34 @@ describe("validation and source prefixes", () => {
       index.ingest("chat", { upserts: [chatDoc("good", "fine"), chatDoc("bad", "x", { url: "javascript:alert(1)" })] }),
     )).toMatch(/url/);
     expect((await index.stats()).documents).toBe(0);
+  });
+
+  it("accepts one scope's whole member list beyond the per-batch principal limit", async () => {
+    const { index } = freshIndex("big-scope");
+    const members = Array.from({ length: INGEST_LIMITS.maxPrincipalChanges + 500 }, (_, i) => `u${i}`);
+    await index.ingest("chat", {
+      scopes: [{ scope: "chat:big", label: "#big", vis: "scoped" }],
+      principals: [{ scope: "chat:big", replace: members }],
+    });
+    const rows = await sql<{ n: number }>(index, `SELECT COUNT(*) AS n FROM principals WHERE scope = 'chat:big'`);
+    expect(rows[0]!.n).toBe(members.length);
+  });
+
+  it("truncates an over-long scope label rather than refusing the batch it arrives in", async () => {
+    const { index } = freshIndex("long-label");
+    await index.ingest("chat", {
+      scopes: [{ scope: "chat:g", label: "N".repeat(INGEST_LIMITS.maxLabelChars + 300), vis: "scoped" }],
+      principals: [{ scope: "chat:g", replace: ["u-alice"] }],
+    });
+    const rows = await sql<{ label: string }>(index, `SELECT label FROM scopes WHERE scope = 'chat:g'`);
+    expect(rows[0]!.label.length).toBe(INGEST_LIMITS.maxLabelChars);
+  });
+
+  it("refuses urls a browser would read as protocol-relative", async () => {
+    const { index } = freshIndex("url-hardening");
+    for (const url of ["/\\evil.example/x", "/\t/evil.example/x", "/a b"]) {
+      expect(await failure(index.ingest("chat", { upserts: [chatDoc("m1", "x", { url })] }))).toMatch(/url/);
+    }
   });
 
   it("truncates an over-long body rather than refusing it", async () => {

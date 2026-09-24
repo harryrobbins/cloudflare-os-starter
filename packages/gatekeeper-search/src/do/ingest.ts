@@ -30,7 +30,7 @@ const SOURCE_PATTERN = /^[a-z][a-z0-9_-]{0,31}$/u;
 const MAX_KIND_CHARS = 64;
 const MAX_FACET_CHARS = 256;
 const MAX_URL_CHARS = 2048;
-const MAX_LABEL_CHARS = 200;
+const MAX_LABEL_CHARS = INGEST_LIMITS.maxLabelChars;
 const MAX_PRINCIPAL_CHARS = 256;
 const MAX_SCOPE_BYTES = 512;
 const MAX_DROP_SCOPES = 100;
@@ -112,6 +112,11 @@ function checkUrl(value: unknown, where: string): string | null {
   }
   // Origin-relative (but not protocol-relative) or absolute http(s): the SPA renders it as a link, so
   // `javascript:` and friends must never get in.
+  // Backslashes and whitespace/control characters are refused outright: browsers read `/\x` and
+  // `/<TAB>/x` as protocol-relative.
+  if (/[\\\s\u0000-\u001f\u007f]/u.test(value)) {
+    throw inputError(`${where}: url must not contain backslashes, whitespace or control characters.`);
+  }
   if (value.startsWith("/") && !value.startsWith("//")) return value;
   try {
     const url = new URL(value);
@@ -181,10 +186,12 @@ function prepareDeclaration(source: string, decl: ScopeDeclaration, index: numbe
   const where = `scopes[${index}]`;
   if (decl === null || typeof decl !== "object") throw inputError(`${where}: must be an object.`);
   const scope = checkScope(source, decl.scope, where);
-  if (typeof decl.label !== "string" || decl.label.length > MAX_LABEL_CHARS) {
-    throw inputError(`${where}: label must be a string of at most ${MAX_LABEL_CHARS} characters.`);
-  }
-  return { scope, label: stripControl(decl.label).trim(), vis: checkVis(decl.vis, scope, where) };
+  if (typeof decl.label !== "string") throw inputError(`${where}: label must be a string.`);
+  // Truncated, never refused: a refused batch can carry membership changes with it, and a source
+  // that drops it would leave a removed member able to search the scope.
+  const label = stripControl(decl.label).trim();
+  const bounded = label.length > MAX_LABEL_CHARS ? `${label.slice(0, MAX_LABEL_CHARS - 1)}…` : label;
+  return { scope, label: bounded, vis: checkVis(decl.vis, scope, where) };
 }
 
 function principalList(value: unknown, field: string, where: string): string[] | undefined {
@@ -248,8 +255,11 @@ export async function ingest(ctx: Ctx, sourceRaw: string, batch: IngestBatch): P
     (sum, change) => sum + (change.replace?.length ?? 0) + (change.add?.length ?? 0) + (change.remove?.length ?? 0),
     0,
   );
-  if (principalCount > INGEST_LIMITS.maxPrincipalChanges) {
-    throw inputError(`at most ${INGEST_LIMITS.maxPrincipalChanges} principal changes per batch.`);
+  // One scope's member list is accepted whole up to its own cap, so a large private channel is
+  // never refused (and so never left with its old, wider membership).
+  const limit = changesIn.length === 1 ? INGEST_LIMITS.maxPrincipalsPerScope : INGEST_LIMITS.maxPrincipalChanges;
+  if (principalCount > limit) {
+    throw inputError(`at most ${limit} principal changes per batch.`);
   }
 
   const now = ctx.now();

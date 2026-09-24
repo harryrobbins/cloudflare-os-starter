@@ -15,6 +15,7 @@ describe("linkTarget", () => {
     expect(linkTarget("javascript:alert(1)")).toBeNull();
     expect(linkTarget("data:text/html,hi")).toBeNull();
     expect(linkTarget("//evil.example/")).toBeNull();
+    expect(linkTarget("/\t/evil.example/")).toBeNull();
     expect(linkTarget("/\\evil.example/")).toBeNull();
     expect(linkTarget("")).toBeNull();
     expect(linkTarget(null)).toBeNull();

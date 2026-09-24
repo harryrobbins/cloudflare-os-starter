@@ -297,7 +297,7 @@ function truncate(text: string, max: number): string {
  * The next batch, or null when the outbox is empty. Channel references go first, so a scope is
  * declared no later than the messages in it.
  */
-function buildBatch(ctx: Ctx): Built | null {
+function buildBatch(ctx: Ctx, single = false): Built | null {
   const taken: OutboxRow[] = [];
   const scopes: ScopeDeclaration[] = [];
   const principals: PrincipalChange[] = [];
@@ -318,7 +318,7 @@ function buildBatch(ctx: Ctx): Built | null {
   const channelRows = ctx.sql
     .exec<OutboxRow>(
       `SELECT * FROM search_outbox WHERE kind = 'channel' ORDER BY queued_at, ref LIMIT ?`,
-      MAX_CHANNELS_PER_BATCH,
+      single ? 1 : MAX_CHANNELS_PER_BATCH,
     )
     .toArray();
   for (const outbox of channelRows) {
@@ -332,7 +332,7 @@ function buildBatch(ctx: Ctx): Built | null {
     const members = info.vis === "scoped" ? memberIds(ctx, outbox.ref) : null;
     // A channel bigger than the whole budget still goes, alone, rather than blocking the outbox.
     if (members !== null && members.length > principalBudget && taken.length > 0) break;
-    scopes.push({ scope, label: truncate(info.label, INGEST_LIMITS.maxTitleChars), vis: info.vis });
+    scopes.push({ scope, label: truncate(info.label, INGEST_LIMITS.maxLabelChars), vis: info.vis });
     if (members !== null) {
       principals.push({ scope, replace: members });
       principalBudget -= members.length;
@@ -343,7 +343,8 @@ function buildBatch(ctx: Ctx): Built | null {
   const messageRows = ctx.sql
     .exec<OutboxRow>(
       `SELECT * FROM search_outbox WHERE kind = 'message' ORDER BY queued_at, ref LIMIT ?`,
-      INGEST_LIMITS.maxDocumentsPerBatch,
+      // In single-row mode a channel row, if one was taken, goes alone.
+      single ? (taken.length > 0 ? 0 : 1) : INGEST_LIMITS.maxDocumentsPerBatch,
     )
     .toArray();
   if (messageRows.length > 0) {
@@ -420,6 +421,26 @@ function buildBatch(ctx: Ctx): Built | null {
   return { batch, taken, documents: upserts.length + deletes.length };
 }
 
+/**
+ * For a refused single-row batch that changed a scope's members: replaces every such member list with
+ * an empty one. True when there was nothing to close or closing succeeded; false to retry later.
+ */
+async function failClosed(service: NonNullable<Ctx["env"]["SEARCH"]>, batch: IngestBatch): Promise<boolean> {
+  const scopes = (batch.principals ?? []).map((change) => change.scope);
+  if (scopes.length === 0) return true;
+  try {
+    await withTimeout(
+      service.ingest({ principals: scopes.map((scope) => ({ scope, replace: [] })) }),
+      INGEST_TIMEOUT_MS,
+      "search ingest (fail closed)",
+    );
+    logEvent("chat.search.scope_closed", { scopes: scopes.length });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Clears exactly the rows pushed: a reference queued again mid-flight has a newer generation. */
 function clearTaken(ctx: Ctx, taken: readonly OutboxRow[]): void {
   ctx.storage.transactionSync(() => {
@@ -461,10 +482,15 @@ export async function runSearchOutbox(ctx: Ctx): Promise<Timestamp | null> {
   const due = loadSync(ctx).next_attempt_at;
   if (due !== null && due > ctx.now()) return due;
 
+  // After a refused batch, its rows are retried one per call, so one bad row cannot take the
+  // membership changes queued beside it down with it.
+  let singleRows = 0;
   for (let run = 0; run < MAX_BATCHES_PER_RUN; run++) {
-    backfillStep(ctx);
-    const built = buildBatch(ctx);
+    if (singleRows === 0) backfillStep(ctx);
+    const single = singleRows > 0;
+    const built = buildBatch(ctx, single);
     if (built === null) break;
+    if (single) singleRows--;
 
     const started = Date.now();
     try {
@@ -473,7 +499,30 @@ export async function runSearchOutbox(ctx: Ctx): Promise<Timestamp | null> {
       const message = errorText(error);
       const now = ctx.now();
       if (message.startsWith(INPUT_ERROR_PREFIX)) {
-        // Refused as malformed: retrying the same rows would fail the same way forever.
+        if (built.taken.length > 1) {
+          // Nothing is cleared: the same rows go again, one at a time, to find the bad one.
+          singleRows = built.taken.length;
+          logEvent("chat.search.ingest_refused_split", { rows: built.taken.length });
+          continue;
+        }
+        // One row, refused on its own. A membership change must never be lost -- the scope would
+        // keep its old, wider member list -- so a refused non-public channel is closed instead: an
+        // empty member list hides it from everyone until its next successful push.
+        const closed = await failClosed(service, built.batch);
+        if (!closed) {
+          const sync = loadSync(ctx);
+          const attempts = sync.attempts + 1;
+          const next = now + searchBackoff(attempts);
+          ctx.sql.exec(
+            `UPDATE search_sync SET attempts = ?, next_attempt_at = ?, last_error = ?, last_error_at = ? WHERE id = 1`,
+            attempts,
+            next,
+            message,
+            now,
+          );
+          return next;
+        }
+        // Refused as malformed: retrying the same row would fail the same way forever.
         clearTaken(ctx, built.taken);
         ctx.sql.exec(
           `UPDATE search_sync SET dropped = dropped + ?, last_error = ?, last_error_at = ? WHERE id = 1`,

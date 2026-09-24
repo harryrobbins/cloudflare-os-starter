@@ -25,6 +25,8 @@ export const INGEST_LIMITS = {
   maxDocumentsPerBatch: 100,
   maxIdBytes: 512,
   maxTitleChars: 500,
+  /** Scope labels; search truncates longer ones, chat truncates first so nothing depends on that. */
+  maxLabelChars: 200,
   /** A longer body is truncated by search, not refused. */
   maxBodyChars: 256 * 1024,
   /** Principal changes per `ingest()` call, across all scopes. */
