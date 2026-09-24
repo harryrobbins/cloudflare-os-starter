@@ -98,7 +98,8 @@ const recordsPaths = [
   "workers.records.name",
   "records.hyperdriveId",
   "records.publisherHyperdriveId",
-  "records.apiAccessAudience",
+  // Not records.apiAccessAudience: null is valid there (machine API off), and validateRecords
+  // rejects a missing value or an unfilled placeholder by its format.
 ];
 
 const jevPaths = [
@@ -629,16 +630,21 @@ function validateRecords(config: DeploymentConfig): void {
       "configurations: one connects as the runtime application role (records_app), the other as the " +
       "outbox publisher role (records_publisher), and neither role may act as the other.");
   }
-  if (!accessAudiencePattern.test(records.apiAccessAudience)) {
-    throw new Error(
-      "records.apiAccessAudience must be an Access application AUD tag (64 hexadecimal characters): " +
-      "the path-specific Access application protecting /gatekeeper/records/v1/*.");
-  }
-  if (records.apiAccessAudience.toLowerCase() === config.access.audience.toLowerCase()) {
-    throw new Error(
-      "records.apiAccessAudience is the same as access.audience. The machine API needs its own " +
-      "path-specific Access application (service tokens) for /gatekeeper/records/v1/*, separate " +
-      "from the one people sign in through.");
+  // null switches the machine API off: with no audience configured, every /v1 request fails the
+  // Access check, while the Data page and gadget connections work as usual.
+  if (records.apiAccessAudience !== null) {
+    if (typeof records.apiAccessAudience !== "string" || !accessAudiencePattern.test(records.apiAccessAudience)) {
+      throw new Error(
+        "records.apiAccessAudience must be an Access application AUD tag (64 hexadecimal characters), " +
+        "or null to switch the machine API off: the path-specific Access application protecting " +
+        "/gatekeeper/records/v1/*.");
+    }
+    if (records.apiAccessAudience.toLowerCase() === config.access.audience.toLowerCase()) {
+      throw new Error(
+        "records.apiAccessAudience is the same as access.audience. The machine API needs its own " +
+        "path-specific Access application (service tokens) for /gatekeeper/records/v1/*, separate " +
+        "from the one people sign in through.");
+    }
   }
   const queues = recordsQueues(config);
   for (const [key, name] of [["changesQueue", queues.changes], ["deadLetterQueue", queues.deadLetter]]) {
@@ -957,7 +963,8 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
       CF_ACCESS_ISS: config.access.issuer.replace(/\/$/, ""),
       CF_ACCESS_AUD: config.access.audience,
       // The machine API's own, path-specific Access application (service tokens).
-      RECORDS_API_ACCESS_AUD: config.records.apiAccessAudience,
+      // Empty when the machine API is switched off (null): every /v1 request is then refused.
+      RECORDS_API_ACCESS_AUD: config.records.apiAccessAudience ?? "",
       PUBLIC_BASE_URL: origin,
     };
     // Both Hyperdrive configurations must have query caching DISABLED (checked by the operator, not

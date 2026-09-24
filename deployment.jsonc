@@ -238,12 +238,14 @@
   //      credentials live in the Hyperdrive configurations.
   // Plan: docs/plans/organisation-datastores.md
   "records": {
-    "enabled": false,
+    "enabled": true,
     // Hyperdrive configuration IDs (32 hex characters), distinct, both with caching disabled.
-    "hyperdriveId": "<RECORDS_APP_HYPERDRIVE_ID>",
-    "publisherHyperdriveId": "<RECORDS_PUBLISHER_HYPERDRIVE_ID>",
-    // AUD tag of the path-specific Access application for /gatekeeper/records/v1/*.
-    "apiAccessAudience": "<RECORDS_API_ACCESS_AUD>"
+    // Neon project jolly-silence-27253955 (aws-eu-west-2), direct endpoint; created 2026-09-24.
+    "hyperdriveId": "7107e8c4ca8848f5a19b1279089ec753",
+    "publisherHyperdriveId": "2e004047e7de47b094801a57ad34fb23",
+    // AUD tag of the path-specific Access application for /gatekeeper/records/v1/*, or null to
+    // keep the machine API switched off (every /v1 request refused) until that application exists.
+    "apiAccessAudience": null
     // Optional queue names; absent uses the defaults above. To set them, add a comma above and
     // uncomment:
     // "changesQueue": "cfos-records-changes",
