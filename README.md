@@ -23,7 +23,8 @@
 
 1. Install the dependencies and run `pnpm exec wrangler login`.
 2. Fill in `deployment.jsonc`: account ID, Worker names, hostname, Access audience, admin emails.
-3. Run `pnpm check`, then `pnpm deploy`.
+3. Run `pnpm release` after approving the production mutation; it validates and deploys without
+   rebuilding the local artifacts between those phases.
 4. Open `/admin` and set the site name, logo, and accent color; branding needs no redeploy.
 
 [Deploy](#deploy) and [Customization](#customization) expand each step. Everything else on this page is optional reading.
@@ -86,10 +87,31 @@ The hostname belongs to the router, the only Worker here with a public route. Wr
 
 ### 3. Validate and deploy
 
+For production, approve the deployment inventory described below and run the single-pass release:
+
+```sh
+pnpm release
+```
+
+It runs the full uncached test and build path, dry-runs every generated Worker with up to four local
+processes, then deploys Workers serially in dependency order with the router last. The command prints
+per-stage timings. Unlike the older `pnpm check && pnpm deploy` sequence, it does not repeat the
+repository's pre-build steps between validation and deployment.
+
+For validation without changing Cloudflare, use:
+
 ```sh
 pnpm check
-pnpm deploy
 ```
+
+On repeat local or CI validation runs, `pnpm check:cached` allows each Vite+ task's declared cache
+policy instead of forcing every task cold. It remains validation-only and cannot deploy. Production
+`pnpm release` and standalone `pnpm deploy` always build uncached.
+
+Vite Task stores reusable results under `node_modules/.vite/task-cache` in each workspace. A CI
+pipeline may restore both that directory and `cloudflare-os/node_modules/.vite/task-cache` after
+dependency installation, then save them only after a successful `pnpm check:cached`. Keep pnpm's
+store cache separately; do not cache generated `wrangler.prod.jsonc` files or credentials.
 
 With resource values left as `null`, Wrangler creates the three KV namespaces and R2 bucket automatically and reconnects them on later deploys. Set explicit IDs or a bucket name when the deployment must reuse existing resources.
 

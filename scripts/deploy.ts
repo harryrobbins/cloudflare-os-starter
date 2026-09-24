@@ -1,6 +1,6 @@
 import { existsSync, readdirSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, resolve } from "node:path";
 import { parse, printParseErrorCode, type ParseError } from "jsonc-parser";
@@ -21,6 +21,10 @@ import type {
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // One deployment per checkout; use separate worktrees for concurrent deploys.
 const generatedName = "wrangler.prod.jsonc";
+// Local builds and dry-runs are independent across packages. Four matches Vite+'s own default and
+// avoids the memory spikes an unbounded Promise.all causes in this workspace. Live deploys remain
+// deliberately serial: their order is part of the deployment's partial-failure safety model.
+const localConcurrency = 4;
 const packageDirs = {
   router: "cloudflare-os/packages/router",
   workshop: "cloudflare-os/packages/workshop-backend",
@@ -1077,14 +1081,17 @@ function requireNoLocalConnectionStrings(configs: GeneratedConfigs): void {
 // `--no-cache` goes before the task name. Everything after it is `[ADDITIONAL_ARGS]`, forwarded to
 // the task's own command -- `vp run -F x build --no-cache` reaches `tsc` as an unknown option.
 
-/** `vp run --no-cache <task>` for a package in the submodule's workspace. */
-function submoduleBuild(pkg: string, task = "build"): string[] {
-  return ["--dir", "cloudflare-os", "exec", "vp", "run", "-F", pkg, "--no-cache", task];
+/** A Vite+ task in the submodule; production forces it cold, cached checks respect task policy. */
+function submoduleBuild(pkg: string, task = "build", useCache = false): string[] {
+  return [
+    "--dir", "cloudflare-os", "exec", "vp", "run", "-F", pkg,
+    ...(useCache ? [] : ["--no-cache"]), task,
+  ];
 }
 
-/** `vp run --no-cache <task>` for a package in this repository's own workspace. */
-function ownBuild(pkg: string, task = "build"): string[] {
-  return ["exec", "vp", "run", "-F", pkg, "--no-cache", task];
+/** A Vite+ task in this workspace; production forces it cold, cached checks respect task policy. */
+function ownBuild(pkg: string, task = "build", useCache = false): string[] {
+  return ["exec", "vp", "run", "-F", pkg, ...(useCache ? [] : ["--no-cache"]), task];
 }
 
 /** `pnpm run <script>` in one submodule package. For plain scripts that spawn no `vp` task. */
@@ -1104,73 +1111,99 @@ function submoduleExec(pkg: string, ...command: string[]): string[] {
  * submodule targets have no `build` *script* at all any more -- they have a Vite+ *task*, which
  * `pnpm --filter` cannot see -- and `vp run` runs scripts and tasks alike, so one form covers both.
  *
- * `--no-cache` on every one. A cache hit is only as good as its fingerprint, which is cheap to get
- * wrong on a build you can re-run and expensive on a deploy you cannot; it is upstream's rule for
- * the same reason (cloudflare-os/scripts/deploy-scripts.test.ts). It also restores the full ambient
- * environment, which is the belt to `workshop-frontend`'s `env: ['VITE_*']` braces: under a *cached*
- * `vp` run only declared patterns survive, and an undeclared variable is dropped from the command
- * and from the fingerprint both.
+ * Production uses `--no-cache` on every Vite+ command. A cache hit is only as good as its
+ * fingerprint, which is cheap to get wrong on a build you can re-run and expensive on a deploy you
+ * cannot; it is upstream's rule for the same reason
+ * (cloudflare-os/scripts/deploy-scripts.test.ts). Validation-only `check:cached` omits the override
+ * and respects each task's own cache policy, including explicit `cache: false` declarations.
  *
  * The ordering matters at the end: the frontend has to build before the router deploy picks up
  * `../workshop-frontend/dist` as its assets.
  */
-export function buildCommands(config: DeploymentConfig): BuildCommand[] {
+export function buildCommandBatches(
+  config: DeploymentConfig,
+  useCache = false,
+): BuildCommand[][] {
   return [
-    // `gatekeeper-context`'s `build` is a package.json script: `typecheck:app`, then a nested
-    // `vp run --cache build:app`, then `tsc`. The outer `--no-cache` does not reach a nested
-    // invocation carrying its own flag -- measured: the configurator app replayed from cache. So
-    // the script is not run at all; its three parts are, with the app rebuilt from source the way
-    // upstream's own `deploy` script does. A cached `vp` run also never starts on hosts whose
-    // kernel refuses Vite+'s seccomp-based file tracking (WSL2, at the time of writing).
-    { args: submoduleBuild("@gadgets/gatekeeper-context", "build:app") },
-    { args: submoduleScript("@gadgets/gatekeeper-context", "typecheck:app") },
-    { args: submoduleExec("@gadgets/gatekeeper-context", "tsc") },
-    // The Scheduler's `build` is the same three-part script, so it gets the same treatment.
-    { args: submoduleBuild("@gadgets/gatekeeper-scheduler", "build:app") },
-    { args: submoduleScript("@gadgets/gatekeeper-scheduler", "typecheck:app") },
-    { args: submoduleExec("@gadgets/gatekeeper-scheduler", "tsc") },
-    { args: ownBuild("gatekeeper-procgen") },
-    { args: ownBuild("custom-gatekeeper") },
-    ...(config.runtime?.enabled ? [{ args: ownBuild("gatekeeper-runtime") }] : []),
-    // Chat's `build` is the Vite build of its SPA into `app/dist`, which its `assets` binding
-    // uploads. The Worker half needs no step here: the package's wrangler.jsonc declares the
-    // capnweb-validate build as a `build.command`, so wrangler runs it at deploy time, exactly as the
-    // custom Gatekeeper's does.
-    ...(config.chat?.enabled ? [{ args: ownBuild("gatekeeper-chat") }] : []),
-    ...(config.webSearch?.enabled ? [{ args: ownBuild("gatekeeper-websearch") }] : []),
-    // Records: its Data management SPA is inlined into src/generated/ by build-app.mjs (a one-shot
-    // Vite build, no watch), which the Worker imports -- so it runs first. Then the package's `build`
-    // task, a `tsc` type-check. The Worker bundle itself is the capnweb-validate `build.command` in
-    // its wrangler.jsonc, which wrangler runs at deploy time.
-    ...(config.records?.enabled ? [
-      { args: ["--filter", "gatekeeper-records", "exec", "node", "build-app.mjs"] },
-      { args: ownBuild("gatekeeper-records") },
-    ] : []),
-    ...(config.jev?.enabled ? [{ args: ownBuild("gatekeeper-jev") }] : []),
-    ...(config.errorReporting.enabled ? [{ args: ownBuild("error-reporter") }] : []),
-    // Access mode is a build-time constant in the frontend bundle (`src/useAuth.ts`), so it is set
-    // here rather than inherited: a bundle built under a different value is wrong, not just stale.
-    // `VITE_CHAT_DOCK` is the same kind of thing for the chat dock (the fork's `ChatDock.tsx`): a flag
-    // tied to this deployment's wiring rather than a runtime probe of `/gatekeeper/chat`, so a chat
-    // Worker that is briefly down shows an unavailable state instead of making the dock vanish. Off
-    // when chat is not deployed, and the dock, its triggers and its route drop out of the bundle.
-    {
-      args: submoduleBuild("@gadgets/workshop-frontend"),
-      env: {
-        VITE_CF_ACCESS_MODE: "true",
-        ...(config.chat?.enabled ? { VITE_CHAT_DOCK: "true" } : {}),
+    [
+      // `gatekeeper-context`'s `build` is a package.json script: `typecheck:app`, then a nested
+      // `vp run --cache build:app`, then `tsc`. The outer `--no-cache` does not reach a nested
+      // invocation carrying its own flag -- measured: the configurator app replayed from cache. So
+      // the script is not run at all; its three parts are, with the app rebuilt from source the way
+      // upstream's own `deploy` script does. A cached `vp` run also never starts on hosts whose
+      // kernel refuses Vite+'s seccomp-based file tracking (WSL2, at the time of writing).
+      { args: submoduleBuild("@gadgets/gatekeeper-context", "build:app", useCache) },
+      // The Scheduler's `build` is the same three-part script, so it gets the same treatment.
+      { args: submoduleBuild("@gadgets/gatekeeper-scheduler", "build:app", useCache) },
+      { args: ownBuild("gatekeeper-procgen", "build", useCache) },
+      { args: ownBuild("custom-gatekeeper", "build", useCache) },
+      ...(config.runtime?.enabled
+        ? [{ args: ownBuild("gatekeeper-runtime", "build", useCache) }]
+        : []),
+      // Chat's `build` is the Vite build of its SPA into `app/dist`, which its `assets` binding
+      // uploads. The Worker half needs no step here: the package's wrangler.jsonc declares the
+      // capnweb-validate build as a `build.command`, so wrangler runs it at deploy time, exactly as
+      // the custom Gatekeeper's does.
+      ...(config.chat?.enabled
+        ? [{ args: ownBuild("gatekeeper-chat", "build", useCache) }]
+        : []),
+      ...(config.webSearch?.enabled
+        ? [{ args: ownBuild("gatekeeper-websearch", "build", useCache) }]
+        : []),
+      // Records: its Data management SPA is inlined into src/generated/ by build-app.mjs (a one-shot
+      // Vite build, no watch), which the Worker imports -- so it runs first. Then the package's
+      // `build` task, a `tsc` type-check. The Worker bundle itself is the capnweb-validate
+      // `build.command` in its wrangler.jsonc, which wrangler runs at deploy time.
+      ...(config.records?.enabled ? [
+        { args: ["--filter", "gatekeeper-records", "exec", "node", "build-app.mjs"] },
+      ] : []),
+      ...(config.jev?.enabled
+        ? [{ args: ownBuild("gatekeeper-jev", "build", useCache) }]
+        : []),
+      ...(config.errorReporting.enabled
+        ? [{ args: ownBuild("error-reporter", "build", useCache) }]
+        : []),
+      // Access mode is a build-time constant in the frontend bundle (`src/useAuth.ts`), so it is
+      // set here rather than inherited: a bundle built under a different value is wrong, not just
+      // stale. `VITE_CHAT_DOCK` is the same kind of thing for the chat dock.
+      {
+        args: submoduleBuild("@gadgets/workshop-frontend", "build", useCache),
+        env: {
+          VITE_CF_ACCESS_MODE: "true",
+          ...(config.chat?.enabled ? { VITE_CHAT_DOCK: "true" } : {}),
+        },
       },
-    },
-    { args: submoduleBuild("@gadgets/router") },
-    // The backend inlines its bundled format blueprints at build time. Absolute, because upstream
-    // resolves a relative FORMAT_BLUEPRINTS_DIR against its own package, not this repository.
-    {
-      args: submoduleBuild("@gadgets/workshop-backend"),
-      ...(config.formatBlueprintsDir && {
-        env: { FORMAT_BLUEPRINTS_DIR: formatBlueprintsPath(config.formatBlueprintsDir) },
-      }),
-    },
+      // The backend inlines its bundled format blueprints at build time. Absolute, because upstream
+      // resolves a relative FORMAT_BLUEPRINTS_DIR against its own package, not this repository.
+      {
+        args: submoduleBuild("@gadgets/workshop-backend", "build", useCache),
+        ...(config.formatBlueprintsDir && {
+          env: { FORMAT_BLUEPRINTS_DIR: formatBlueprintsPath(config.formatBlueprintsDir) },
+        }),
+      },
+    ],
+    [
+      // These depend on generated app output from the first batch. The router's TypeScript build
+      // follows the frontend build so the invariant is visible in both the code and its tests,
+      // even though Wrangler only reads the frontend assets later during the router upload.
+      { args: submoduleScript("@gadgets/gatekeeper-context", "typecheck:app") },
+      { args: submoduleScript("@gadgets/gatekeeper-scheduler", "typecheck:app") },
+      ...(config.records?.enabled
+        ? [{ args: ownBuild("gatekeeper-records", "build", useCache) }]
+        : []),
+      { args: submoduleBuild("@gadgets/router", "build", useCache) },
+    ],
+    [
+      // The Worker type-checks consume the generated configurator modules from the first batch.
+      { args: submoduleExec("@gadgets/gatekeeper-context", "tsc") },
+      { args: submoduleExec("@gadgets/gatekeeper-scheduler", "tsc") },
+    ],
   ];
+}
+
+/** Flat compatibility view used by configuration tests and tooling. */
+export function buildCommands(config: DeploymentConfig, useCache = false): BuildCommand[] {
+  return buildCommandBatches(config, useCache).flat();
 }
 
 /**
@@ -1321,27 +1354,37 @@ async function readDeployment(path: string): Promise<DeploymentConfig> {
   }
 }
 
-function runCommand(
+async function runCommand(
   command: string,
   argv: string[],
   cwd: string,
   env: NodeJS.ProcessEnv,
   label: string,
-): void {
-  const result = spawnSync(command, argv, { cwd, env, stdio: "inherit" });
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
-    const where = relative(root, cwd) || ".";
-    throw new Error(`${where}: ${label} failed. Its output is above.`);
-  }
+): Promise<void> {
+  await new Promise<void>((resolvePromise, reject) => {
+    const child = spawn(command, argv, { cwd, env, stdio: "inherit" });
+    child.once("error", reject);
+    child.once("close", (status) => {
+      if (status === 0) {
+        resolvePromise();
+        return;
+      }
+      const where = relative(root, cwd) || ".";
+      reject(new Error(`${where}: ${label} failed. Its output is above.`));
+    });
+  });
 }
 
 // Spawned through pnpmCommand rather than as a bare "pnpm": on Windows the pnpm on PATH is a `.cmd`
 // shim Node refuses to spawn without a shell, and `shell: true` would re-split argv and break any
 // checkout path containing a space.
-function run(args: string[], cwd = root, env: NodeJS.ProcessEnv = process.env): void {
+async function run(
+  args: string[],
+  cwd = root,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<void> {
   const [command, argv] = pnpmCommand(args, env);
-  runCommand(command, argv, cwd, env, `pnpm ${args.join(" ")}`);
+  await runCommand(command, argv, cwd, env, `pnpm ${args.join(" ")}`);
 }
 
 /**
@@ -1349,14 +1392,20 @@ function run(args: string[], cwd = root, env: NodeJS.ProcessEnv = process.env): 
  * `.bin` shim can be found. That saves the ~0.33s `pnpm exec` costs per call and sidesteps the
  * Windows `.cmd` shim entirely; when it cannot be resolved, the pnpm path is still there.
  */
-function deployWorker(dir: string, extraArgs: string[]): void {
+async function deployWorker(dir: string, extraArgs: string[]): Promise<void> {
   const cwd = join(root, dir);
   const args = ["deploy", "--config", generatedName, ...extraArgs];
   const entry = resolveBinEntry(cwd, "wrangler");
   if (entry) {
-    runCommand(process.execPath, [entry, ...args], cwd, process.env, `wrangler ${args.join(" ")}`);
+    await runCommand(
+      process.execPath,
+      [entry, ...args],
+      cwd,
+      process.env,
+      `wrangler ${args.join(" ")}`,
+    );
   } else {
-    run(["exec", "wrangler", ...args], cwd);
+    await run(["exec", "wrangler", ...args], cwd);
   }
 }
 
@@ -1366,10 +1415,75 @@ function requireSubmodule(): void {
   }
 }
 
-function build(config: DeploymentConfig): void {
-  for (const { args, env } of buildCommands(config)) {
-    run(args, root, env ? { ...process.env, ...env } : process.env);
+export async function runWithConcurrency<T>(
+  values: readonly T[],
+  concurrency: number,
+  callback: (value: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  let firstError: unknown;
+  const workers = Array.from(
+    { length: Math.min(concurrency, values.length) },
+    async () => {
+      while (firstError === undefined) {
+        const index = next++;
+        if (index >= values.length) return;
+        try {
+          await callback(values[index]!);
+        } catch (error) {
+          firstError ??= error;
+        }
+      }
+    },
+  );
+  await Promise.all(workers);
+  if (firstError !== undefined) throw firstError;
+}
+
+async function deployWorkers(
+  config: DeploymentConfig,
+  extraArgs: string[],
+  concurrency: number,
+): Promise<void> {
+  await runWithConcurrency(deployOrder(config), concurrency, async (name) => {
+    await deployWorker(packageDirs[name], extraArgs);
+  });
+}
+
+interface Timing {
+  label: string;
+  milliseconds: number;
+  status: "passed" | "failed";
+}
+
+async function timed<T>(timings: Timing[], label: string, callback: () => Promise<T>): Promise<T> {
+  const started = performance.now();
+  console.warn(`\n==> ${label}`);
+  try {
+    const result = await callback();
+    const milliseconds = performance.now() - started;
+    timings.push({ label, milliseconds, status: "passed" });
+    console.warn(`<== ${label} (${(milliseconds / 1_000).toFixed(1)}s)`);
+    return result;
+  } catch (error) {
+    const milliseconds = performance.now() - started;
+    timings.push({ label, milliseconds, status: "failed" });
+    console.warn(`<== ${label} failed (${(milliseconds / 1_000).toFixed(1)}s)`);
+    throw error;
   }
+}
+
+function reportTimings(timings: Timing[], started: number): void {
+  if (!timings.length) return;
+  console.warn("\nDeployment pipeline timings:");
+  for (const timing of timings) {
+    console.warn(
+      `  ${timing.status === "passed" ? "ok" : "failed"}  ` +
+      `${(timing.milliseconds / 1_000).toFixed(1).padStart(7)}s  ${timing.label}`,
+    );
+  }
+  const total = ((performance.now() - started) / 1_000).toFixed(1).padStart(7);
+  console.warn(`  total ${total}s`);
 }
 
 // Said once, up front, rather than discovered when the first chat throws.
@@ -1404,6 +1518,16 @@ function reportAiGateway(config: DeploymentConfig): void {
 }
 
 async function main(): Promise<void> {
+  const started = performance.now();
+  const timings: Timing[] = [];
+  const check = process.argv.includes("--check");
+  const release = process.argv.includes("--release");
+  const useCache = process.argv.includes("--use-cache");
+  if (check && release) throw new Error("Choose either --check or --release, not both.");
+  if (useCache && !check) {
+    throw new Error("--use-cache is validation-only and requires --check.");
+  }
+
   requireSubmodule();
   const config = await readDeployment(join(root, "deployment.jsonc"));
   requireFormatBlueprints(config);
@@ -1435,16 +1559,33 @@ async function main(): Promise<void> {
         generatedPaths[name as keyof typeof generatedPaths],
         JSON.stringify(generatedConfig, null, 2) + "\n");
     }
-    const check = process.argv.includes("--check");
-    if (check) run(["test"]);
-    build(config);
-    const deployArgs = check ? ["--dry-run"] : [];
-    if (!check) requireChatAssets(config);
-    for (const name of deployOrder(config)) {
-      deployWorker(packageDirs[name], deployArgs);
+    if (check || release) {
+      await timed(timings, useCache ? "tests (task cache enabled)" : "tests", async () => {
+        await run([useCache ? "test:cached" : "test"]);
+      });
+    }
+    const batches = buildCommandBatches(config, useCache);
+    for (const [index, batch] of batches.entries()) {
+      await timed(timings, `build batch ${index + 1}/${batches.length}`, async () => {
+        await runWithConcurrency(batch, localConcurrency, async ({ args, env }) => {
+          await run(args, root, env ? { ...process.env, ...env } : process.env);
+        });
+      });
+    }
+    if (check || release) {
+      await timed(timings, `Wrangler dry-runs (up to ${localConcurrency} concurrent)`, async () => {
+        await deployWorkers(config, ["--dry-run"], localConcurrency);
+      });
+    }
+    if (!check) {
+      requireChatAssets(config);
+      await timed(timings, "production deploy (serial, router last)", async () => {
+        await deployWorkers(config, [], 1);
+      });
     }
   } finally {
     await Promise.all(Object.values(generatedPaths).map((path) => rm(path, { force: true })));
+    reportTimings(timings, started);
   }
 }
 

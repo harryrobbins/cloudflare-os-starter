@@ -3,10 +3,11 @@ import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import test from "node:test";
+import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import { parse, type ParseError } from "jsonc-parser";
 import {
-  aiGatewayPlan, buildCommands, deployOrder, formatBlueprintsPath, generateConfigs, recordsQueues,
-  validateConfig,
+  aiGatewayPlan, buildCommandBatches, buildCommands, deployOrder, formatBlueprintsPath,
+  generateConfigs, recordsQueues, runWithConcurrency, validateConfig,
 } from "./deploy.ts";
 import type {
   BaseConfigs,
@@ -847,6 +848,49 @@ test("never lets a deploy replay a cached build artifact", () => {
     assert.ok(args.indexOf("--no-cache") < args.indexOf("run") + 4,
       `--no-cache must precede the task name, not follow it: ${command}`);
   }
+});
+
+test("allows task-defined caches only on the validation-only cached path", () => {
+  const fresh = buildCommands(validConfig);
+  const cached = buildCommands(validConfig, true);
+  assert.equal(cached.length, fresh.length);
+  for (const { args } of cached) {
+    if (!args.includes("vp") || !args.includes("run")) continue;
+    assert.equal(args.includes("--no-cache"), false, args.join(" "));
+    assert.equal(args.includes("--cache"), false,
+      `cached checks must respect per-task cache:false rather than forcing caching: ${args.join(" ")}`);
+  }
+});
+
+test("keeps generated build inputs in earlier parallel batches than their consumers", () => {
+  const batches = buildCommandBatches(validConfig);
+  const batchOf = (needle: string, finalArgument?: string) => batches.findIndex((batch) =>
+    batch.some(({ args }) => args.includes(needle) &&
+      (finalArgument === undefined || args.at(-1) === finalArgument)));
+
+  assert.ok(batchOf("@gadgets/gatekeeper-context", "build:app") <
+    batchOf("@gadgets/gatekeeper-context", "typecheck:app"));
+  assert.ok(batchOf("@gadgets/gatekeeper-context", "typecheck:app") <
+    batchOf("@gadgets/gatekeeper-context", "tsc"));
+  assert.ok(batchOf("@gadgets/gatekeeper-scheduler", "build:app") <
+    batchOf("@gadgets/gatekeeper-scheduler", "typecheck:app"));
+  assert.ok(batchOf("@gadgets/workshop-frontend") < batchOf("@gadgets/router"));
+});
+
+test("caps local concurrency without dropping queued work", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolvePromise) => { release = resolvePromise; });
+  const started: number[] = [];
+  const work = runWithConcurrency([1, 2, 3, 4], 2, async (value) => {
+    started.push(value);
+    await gate;
+  });
+
+  await yieldToEventLoop();
+  assert.deepEqual(started, [1, 2]);
+  release();
+  await work;
+  assert.deepEqual(started, [1, 2, 3, 4]);
 });
 
 test("rebuilds the Context configurator app rather than replaying it", () => {
