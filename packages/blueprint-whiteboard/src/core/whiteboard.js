@@ -46,6 +46,7 @@ import { isValidOrderKey, keyBetween } from "../shared/order.js";
 import { boardToSvg } from "../shared/render.js";
 import { boardBounds, rectsIntersect, objectBounds, rotatedBounds, unionRects } from "../shared/geometry.js";
 import { getIcon, getPack, iconDefaults, iconSummary, resolveIcon, searchIcons, sizeFor } from "../shared/icons/registry.js";
+import { createRouteEnv } from "../shared/connectors.js";
 
 /** @typedef {import("../shared/protocol.js").BoardMeta} BoardMeta */
 /** @typedef {import("../shared/protocol.js").BoardSnapshot} BoardSnapshot */
@@ -64,10 +65,17 @@ const RECORD_MAX_BYTES = 16 * 1024;
 const MIB = 1024 * 1024;
 /** Fields compared to decide whether an update changed an object (and inverted by undo). */
 const FIELDS = /** @type {const} */ (["x", "y", "w", "h", "rot", "z", "frameId", "text", "style", "points", "from", "to", "fromSide", "toSide", "routing", "packId", "iconId"]);
+/**
+ * Connector route edits (src/shared/connectors.js): additive fields that older connectors lack, so
+ * a missing one reads as its default ([] and null) when compared and when undo restores it.
+ */
+const ROUTE_DEFAULTS = /** @type {Record<string, unknown>} */ ({ segments: [], curve: null });
+/** Every field compared and inverted: FIELDS plus the route edits. */
+const ALL_FIELDS = [...FIELDS, ...Object.keys(ROUTE_DEFAULTS)];
 /** An update touching only these is a move: never refused for size, summarised as "Moved". */
 const MOVE_FIELDS = new Set(["x", "y", "frameId"]);
 /** Fields the convenience methods pass through from caller input. */
-const FRIENDLY_FIELDS = ["id", "type", ...FIELDS];
+const FRIENDLY_FIELDS = ["id", "type", ...ALL_FIELDS];
 const NOUNS = /** @type {Record<string, string>} */ ({
   sticky: "sticky note", rect: "rectangle", ellipse: "ellipse", text: "text label", frame: "frame",
   pen: "pen stroke", connector: "connector", icon: "icon",
@@ -130,7 +138,11 @@ function emptyResult(revision, errors = [], conflicts = []) {
  * @param {string} field @param {any} a @param {any} b
  */
 function fieldEqual(field, a, b) {
-  const x = a[field], y = b[field];
+  let x = a[field], y = b[field];
+  if (Object.hasOwn(ROUTE_DEFAULTS, field)) {
+    x ??= ROUTE_DEFAULTS[field];
+    y ??= ROUTE_DEFAULTS[field];
+  }
   if (x === y) return true;
   if (field === "style" && isObject(x) && isObject(y)) {
     const keys = new Set([...Object.keys(x), ...Object.keys(y)]);
@@ -683,7 +695,7 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
         if (!icon && ("packId" in patch || "iconId" in patch)) return void errors.push(opError(i, "invalid_ref", unknownIconMessage));
         if (icon && !icon.textBox) next.text = "";
       }
-      if (FIELDS.every((f) => fieldEqual(f, current, next))) return;
+      if (ALL_FIELDS.every((f) => fieldEqual(f, current, next))) return;
       if (next.frameId && next.frameId !== current.frameId && (w.members.get(next.frameId) ?? 0) >= L.objectsPerFrame) {
         return void errors.push(opError(i, "limit", `A frame may hold at most ${L.objectsPerFrame} objects; add a new frame`));
       }
@@ -777,7 +789,11 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
         updated.push([before, after]);
         /** @type {Record<string, unknown>} */
         const patch = {};
-        for (const f of FIELDS) if (!fieldEqual(f, before, after)) patch[f] = /** @type {any} */ (before)[f];
+        for (const f of ALL_FIELDS) {
+          if (fieldEqual(f, before, after)) continue;
+          const was = /** @type {any} */ (before)[f];
+          patch[f] = was === undefined && Object.hasOwn(ROUTE_DEFAULTS, f) ? ROUTE_DEFAULTS[f] : was;
+        }
         if (Object.keys(patch).length) inverseUpdates.push({ op: "update", id, patch });
       }
     }
@@ -791,7 +807,7 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
     const parts = [];
     if (created.length) parts.push(created.length === 1 ? `Added ${objectNoun(created[0])}` : `Added ${created.length} objects`);
     if (updated.length) {
-      const moved = updated.every(([b, a]) => FIELDS.every((f) => MOVE_FIELDS.has(f) || fieldEqual(f, b, a)));
+      const moved = updated.every(([b, a]) => ALL_FIELDS.every((f) => MOVE_FIELDS.has(f) || fieldEqual(f, b, a)));
       const verb = moved ? "Moved" : "Edited";
       parts.push(updated.length === 1 ? `${verb} ${objectNoun(updated[0][1])}` : `${verb} ${updated.length} objects`);
     }
@@ -1080,13 +1096,14 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       const w = isObject(f.within) ? f.within : null;
       const within = w && [w.x, w.y, w.w, w.h].every((v) => typeof v === "number" && Number.isFinite(v)) ? w : null;
       const all = within ? Object.fromEntries(s.objects) : {};
+      const routes = within ? createRouteEnv(all) : undefined;
       const found = [...s.objects.values()].filter((o) => {
         if (types && !types.has(o.type)) return false;
         if (text && !o.text.toLowerCase().includes(text)) return false;
         // frameId names an existing frame, so a member's raw frameId is its effective one.
         if (frameId !== undefined && o.frameId !== frameId) return false;
         if (within) {
-          const b = objectBounds(o, all);
+          const b = objectBounds(o, all, routes);
           if (!b || !rectsIntersect(b, within)) return false;
         }
         return true;
@@ -1337,7 +1354,8 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
     }),
 
     /**
-     * @param {any} args {from, to, label?, routing?, arrow?: "end"|"both"|"none", color?, by?, senderId?}
+     * @param {any} args {from, to, label?, routing?: "straight"|"elbow"|"curved", fromSide?, toSide?,
+     *   arrow?: "end"|"both"|"none", color?, by?, senderId?}
      * @returns {Promise<{connector: WhiteboardObject|null, errors: OpError[], event: BoardEvent|null}>}
      */
     connect: (args) => enqueue(async () => {
@@ -1351,7 +1369,9 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       const id = newId("object");
       const object = {
         id, type: "connector", from: a.from, to: a.to, text: typeof a.label === "string" ? a.label : "",
-        routing: a.routing === "elbow" ? "elbow" : "straight",
+        routing: a.routing === "elbow" || a.routing === "curved" ? a.routing : "straight",
+        ...(typeof a.fromSide === "string" ? { fromSide: a.fromSide } : {}),
+        ...(typeof a.toSide === "string" ? { toSide: a.toSide } : {}),
         style: { ...(fields.style ?? {}), arrowStart: arrow === "both" ? "arrow" : "none", arrowEnd: arrow === "none" ? "none" : "arrow" },
       };
       const { result, event } = await applyMapped(a, [{ op: "create", object }], [0], errors);

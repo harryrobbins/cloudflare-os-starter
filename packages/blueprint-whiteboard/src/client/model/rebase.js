@@ -4,8 +4,8 @@
 //   geometry (x, y, w, h, rot) changed by them: my delta (mine - base) is re-applied on top of
 //     theirs (sizes clamped, rotation mod 360)
 //   z, frameId: mine is kept
-//   text, style keys, points, from, to, fromSide, toSide, routing changed by them: mine is dropped,
-//     theirs kept, and the object flashes
+//   text, style keys, points, from, to, fromSide, toSide, routing, segments, curve changed by them:
+//     mine is dropped, theirs kept, and the object flashes
 //   fields only I changed: kept as they are
 //   a field already equal to theirs is dropped (nothing to write)
 //

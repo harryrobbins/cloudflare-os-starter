@@ -10,12 +10,13 @@
 
 import {
   center, rotatedBounds, pointInObjectBox, distanceToPolyline, penWorldPoints, connectorRoute,
-  pointsBounds, rectsIntersect, rectContains, rectContainsPoint, textLayout, textWidth, textObjectHeight,
+  rectsIntersect, rectContains, rectContainsPoint, textLayout, textWidth, textObjectHeight,
 } from "../../../shared/geometry.js";
 import { effectiveFrameId, compareObjects, TYPE_DEFAULTS, LIMITS, ROTATABLE } from "../../../shared/protocol.js";
 import { sizedBox, rotatedBy } from "./handles.js";
 import { alignDeltas, distributeDeltas } from "../../model/alignment.js";
 import { iconTextBox } from "../../../shared/icons/registry.js";
+import { routeBounds, routeDistance } from "../../../shared/connectors.js";
 
 /** @typedef {import("../../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("../../../shared/protocol.js").ObjectType} ObjectType */
@@ -23,6 +24,8 @@ import { iconTextBox } from "../../../shared/icons/registry.js";
 /** @typedef {{x: number, y: number}} Point */
 /** @typedef {{x: number, y: number, w: number, h: number}} Rect */
 /** @typedef {(id: string) => WhiteboardObject|undefined} Resolve */
+/** @typedef {import("../../../shared/connectors.js").RouteEnv} RouteEnv */
+/** @typedef {import("../../../shared/connectors.js").Route} Route */
 
 /** Screen pixels within which a click still hits a thin line or a frame border. */
 export const HIT_TOLERANCE_PX = 6;
@@ -46,14 +49,23 @@ export function canEditText(o) {
 }
 
 /**
- * Flat world points of a connector's route, or null when an endpoint is missing.
- * @param {WhiteboardObject} conn @param {Resolve} resolve
+ * A connector's route (src/shared/connectors.js), or null when an endpoint is missing.
+ * @param {WhiteboardObject} conn @param {Resolve} resolve @param {RouteEnv} [env]
+ * @returns {Route|null}
  */
-export function connectorPoints(conn, resolve) {
+export function connectorRouteOf(conn, resolve, env) {
   const from = conn.from ? resolve(conn.from) : undefined;
   const to = conn.to ? resolve(conn.to) : undefined;
   if (!from || !to) return null;
-  return connectorRoute(conn, from, to).points;
+  return connectorRoute(conn, from, to, env);
+}
+
+/**
+ * World points of a connector's route (a curve's flattening), or null when an endpoint is missing.
+ * @param {WhiteboardObject} conn @param {Resolve} resolve @param {RouteEnv} [env]
+ */
+export function connectorPoints(conn, resolve, env) {
+  return connectorRouteOf(conn, resolve, env)?.points ?? null;
 }
 
 /**
@@ -68,17 +80,21 @@ export function frameTitleRect(f, zoom) {
 }
 
 /**
- * True when world point `p` hits object `o` at `zoom`.
+ * True when world point `p` hits object `o` at `zoom`. Connectors: distance to the route (exact for
+ * curves: see closestOnCubic), within the screen tolerance or the stroke width.
  * @param {WhiteboardObject} o @param {Point} p @param {number} zoom @param {Resolve} resolve
+ * @param {RouteEnv} [env]  obstacles for automatic elbow connectors
  */
-export function hitObject(o, p, zoom, resolve) {
+export function hitObject(o, p, zoom, resolve, env) {
   const tol = HIT_TOLERANCE_PX / zoom;
   switch (o.type) {
     case "connector": {
-      const pts = connectorPoints(o, resolve);
-      if (!pts) return false;
-      const flat = pts.flatMap((q) => [q.x, q.y]);
-      return distanceToPolyline(p, flat) <= Math.max(tol, o.style.strokeWidth);
+      const route = connectorRouteOf(o, resolve, env);
+      if (!route) return false;
+      const reach = Math.max(tol, o.style.strokeWidth);
+      const b = routeBounds(route);
+      if (!rectContainsPoint({ x: b.x - reach, y: b.y - reach, w: b.w + 2 * reach, h: b.h + 2 * reach }, p)) return false;
+      return routeDistance(p, route) <= reach;
     }
     case "pen": {
       const bounds = { x: o.x - tol, y: o.y - tol, w: o.w + 2 * tol, h: o.h + 2 * tol };
@@ -101,26 +117,27 @@ export function hitObject(o, p, zoom, resolve) {
  * @param {WhiteboardObject[]} sorted  stacking order, bottom first
  * @param {Point} p @param {number} zoom @param {Resolve} resolve
  * @param {(o: WhiteboardObject) => boolean} [accept]
+ * @param {RouteEnv} [env]
  * @returns {WhiteboardObject|null}
  */
-export function topObjectAt(sorted, p, zoom, resolve, accept) {
+export function topObjectAt(sorted, p, zoom, resolve, accept, env) {
   for (let i = sorted.length - 1; i >= 0; i--) {
     const o = sorted[i];
     if (accept && !accept(o)) continue;
-    if (hitObject(o, p, zoom, resolve)) return o;
+    if (hitObject(o, p, zoom, resolve, env)) return o;
   }
   return null;
 }
 
 /**
  * World bounds of an object using `resolve` for connector endpoints (null when unresolvable).
- * @param {WhiteboardObject} o @param {Resolve} resolve
+ * @param {WhiteboardObject} o @param {Resolve} resolve @param {RouteEnv} [env]
  * @returns {Rect|null}
  */
-export function boundsOf(o, resolve) {
+export function boundsOf(o, resolve, env) {
   if (o.type === "connector") {
-    const pts = connectorPoints(o, resolve);
-    return pts ? pointsBounds(pts) : null;
+    const route = connectorRouteOf(o, resolve, env);
+    return route ? routeBounds(route) : null;
   }
   return rotatedBounds(o);
 }
@@ -128,12 +145,13 @@ export function boundsOf(o, resolve) {
 /**
  * Ids selected by a marquee (see the rule at the top of this file).
  * @param {Iterable<WhiteboardObject>} objects @param {Rect} rect @param {Resolve} resolve
+ * @param {RouteEnv} [env]
  * @returns {string[]}
  */
-export function objectsInRect(objects, rect, resolve) {
+export function objectsInRect(objects, rect, resolve, env) {
   const out = [];
   for (const o of objects) {
-    const b = boundsOf(o, resolve);
+    const b = boundsOf(o, resolve, env);
     if (!b) continue;
     if (o.type === "frame" ? rectContains(rect, b) : rectsIntersect(rect, b)) out.push(o.id);
   }
@@ -320,6 +338,8 @@ export function buildDuplicates(objects, ids, newId, offset = DUPLICATE_OFFSET) 
         id: idMap.get(o.id), type: "connector", text: o.text, style: { ...o.style },
         from, to, fromSide: o.fromSide, toSide: o.toSide, routing: o.routing,
       };
+      if (o.segments?.length) c.segments = [...o.segments];
+      if (o.curve) c.curve = [o.curve[0], o.curve[1]];
       creates.push(c);
     } else {
       /** @type {any} */
