@@ -14,6 +14,7 @@ import {
 } from "../../../shared/geometry.js";
 import { effectiveFrameId, compareObjects, TYPE_DEFAULTS, LIMITS, ROTATABLE } from "../../../shared/protocol.js";
 import { sizedBox, rotatedBy } from "./handles.js";
+import { alignDeltas, distributeDeltas } from "../../model/alignment.js";
 
 /** @typedef {import("../../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("../../../shared/protocol.js").ObjectType} ObjectType */
@@ -387,4 +388,143 @@ export function validIds(objects, ids) {
  */
 export function frameInteriorClick(frame, p, zoom) {
   return rectContainsPoint(frame, p) && !hitObject(frame, p, zoom, () => undefined);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Align, distribute and snap candidates (geometry in ../../model/alignment.js)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The units Align and Distribute move: each selected non-connector object whose frame is not also
+ * selected, with its rotated bounds. A selected frame is one unit and brings its members along,
+ * exactly as a move does (see expandMoveIds).
+ * @param {Record<string, WhiteboardObject>} objects @param {Iterable<string>} ids
+ * @returns {Array<{id: string, rect: Rect}>}
+ */
+export function arrangeUnits(objects, ids) {
+  const chosen = new Set();
+  for (const id of ids) {
+    const o = objects[id];
+    if (o && o.type !== "connector") chosen.add(id);
+  }
+  const out = [];
+  for (const id of chosen) {
+    const o = objects[id];
+    const f = o.type === "frame" ? null : effectiveFrameId(o, objects);
+    if (f && chosen.has(f)) continue;
+    out.push({ id, rect: rotatedBounds(o) });
+  }
+  return out;
+}
+
+/**
+ * One updateObjects batch applying per-unit offsets (frames bring their members), with frame
+ * membership recomputed for the new positions.
+ * @param {Record<string, WhiteboardObject>} objects
+ * @param {Map<string, {dx: number, dy: number}>} deltas  unit id -> offset
+ * @returns {Array<{id: string, patch: ObjectPatch}>}
+ */
+export function offsetUpdates(objects, deltas) {
+  /** @type {Map<string, {dx: number, dy: number}>} */
+  const moves = new Map();
+  for (const [id, d] of deltas) {
+    const dx = round2(d.dx), dy = round2(d.dy);
+    if (!dx && !dy) continue;
+    for (const m of expandMoveIds(objects, [id])) if (!moves.has(m)) moves.set(m, { dx, dy });
+  }
+  /** @type {Resolve} */
+  const geom = (id) => {
+    const o = objects[id];
+    const d = moves.get(id);
+    return o && d ? { ...o, x: o.x + d.dx, y: o.y + d.dy } : o;
+  };
+  const out = [];
+  for (const [id, { dx, dy }] of moves) {
+    const o = objects[id];
+    if (!o || o.type === "connector") continue;
+    const g = { x: round2(o.x + dx), y: round2(o.y + dy), w: o.w, h: o.h };
+    /** @type {ObjectPatch} */
+    const patch = {};
+    if (g.x !== o.x) patch.x = g.x;
+    if (g.y !== o.y) patch.y = g.y;
+    if (!Object.keys(patch).length) continue;
+    withFrameMembership(objects, o, g, patch, geom);
+    out.push({ id, patch });
+  }
+  return out;
+}
+
+/**
+ * One updateObjects batch aligning the selection (see alignDeltas).
+ * @param {Record<string, WhiteboardObject>} objects @param {Iterable<string>} ids
+ * @param {import("../../model/alignment.js").AlignMode} mode
+ */
+export function alignUpdates(objects, ids, mode) {
+  return offsetUpdates(objects, alignDeltas(arrangeUnits(objects, ids), mode));
+}
+
+/**
+ * One updateObjects batch distributing the selection (see distributeDeltas).
+ * @param {Record<string, WhiteboardObject>} objects @param {Iterable<string>} ids
+ * @param {"horizontal"|"vertical"} axis
+ */
+export function distributeUpdates(objects, ids, axis) {
+  return offsetUpdates(objects, distributeDeltas(arrangeUnits(objects, ids), axis));
+}
+
+/**
+ * Rects of the objects a moving set can snap to: non-connector objects among `candidateIds`
+ * (typically an index query around the view) that are not moving. Frames count by their box.
+ * @param {Record<string, WhiteboardObject>} objects @param {Iterable<string>} candidateIds
+ * @param {Set<string>} moving
+ * @returns {Rect[]}
+ */
+export function snapTargets(objects, candidateIds, moving) {
+  const out = [];
+  for (const id of candidateIds) {
+    if (moving.has(id)) continue;
+    const o = objects[id];
+    if (!o || o.type === "connector") continue;
+    out.push(rotatedBounds(o));
+  }
+  return out;
+}
+
+/**
+ * The index-backed replacement for a full scan: objects of `ids` in stacking order (bottom first).
+ * @param {Record<string, WhiteboardObject>} objects @param {Iterable<string>} ids
+ * @returns {WhiteboardObject[]}
+ */
+export function stackOrder(objects, ids) {
+  const out = [];
+  for (const id of new Set(ids)) {
+    const o = Object.hasOwn(objects, id) ? objects[id] : undefined;
+    if (o) out.push(o);
+  }
+  return out.sort(compareObjects);
+}
+
+/**
+ * Whether `target` may become endpoint `end` of connector `conn`: an existing non-connector object
+ * that is not the other endpoint (no self-links). The current endpoint itself is valid (a no-op).
+ * @param {WhiteboardObject} conn @param {"from"|"to"} end @param {WhiteboardObject|undefined|null} target
+ */
+export function validEndpoint(conn, end, target) {
+  if (!target || target.type === "connector" || target.id === conn.id) return false;
+  const other = end === "from" ? conn.to : conn.from;
+  return target.id !== other;
+}
+
+/**
+ * The update that reconnects one end of a connector, or null when nothing changes or the target
+ * is not valid. Only that endpoint changes: the other end, label, routing, sides, style and
+ * stacking are kept. The server stays authoritative (invalid_ref if the target is gone).
+ * @param {WhiteboardObject} conn @param {"from"|"to"} end @param {WhiteboardObject|undefined|null} target
+ * @returns {{id: string, patch: ObjectPatch}|null}
+ */
+export function reconnectUpdate(conn, end, target) {
+  if (!conn || conn.type !== "connector" || !validEndpoint(conn, end, target)) return null;
+  const t = /** @type {WhiteboardObject} */ (target);
+  if (conn[end] === t.id) return null;
+  return { id: conn.id, patch: { [end]: t.id } };
 }
