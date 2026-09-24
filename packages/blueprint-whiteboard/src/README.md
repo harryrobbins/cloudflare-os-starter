@@ -24,7 +24,13 @@ Everyone with the whiteboard open is shown at the top right. When you first open
 - **Objects list** (list button or `Shift+O`): every object with its text, filterable. **Show** pans to an object, **Select** selects it and moves focus to the style bar, so the whole board can be used with a keyboard and screen reader. The Objects and Activity panels sit beside the board rather than blocking it: `Tab` moves in and out of them, and `Escape` or the close button closes them. Changes by others are announced to screen readers.
 - **Keyboard**: with the canvas focused, `A` opens the Add menu, `Shift+O` the Objects list, `Delete` removes the selection, `Ctrl+D` duplicates, `Ctrl+A` selects all, `]` and `[` bring to front and send to back, `+` and `-` zoom, `Shift+0` resets to 100%, and `Escape` cancels a gesture or clears the selection. Arrow keys move the selection (or pan with nothing selected), `Alt`+arrow keys resize it, and `,` and `.` rotate it. Right-click an object for its actions as a menu; the context-menu key or `Shift+F10` opens the same menu for the current selection, next to it. The same actions are in the style bar. After loading or deleting, focus stays on the canvas.
 - **Phones and tablets**: drag with one finger to select and move, or to draw with the Pen tool. Two fingers pan and pinch to zoom. Press and hold an object for its actions menu: it opens beside your finger, and lifting the finger does not choose anything; tap an item to run it. Buttons in the style bar, menus and the colour dialog are at least 44 pixels on phones.
-- **Export**: the gadget's HTML and PDF export draws the board fitted to the page, without the toolbars. `exportSvg()` (below) returns the same drawing as an SVG file.
+- **Getting started**: an empty whiteboard shows three ways to begin: **Add a sticky note**, **Paste text** (one sticky note per line) and **Choose a template** (Brainstorm, Retrospective, Journey map or Architecture sketch). A template is added in the middle of your view as one change, so Undo removes it. The same are in the board menu (the **⋯** button next to the title) and in the right-click menu on empty canvas.
+- **Copy, cut and paste**: `Ctrl+C`, `Ctrl+X` and `Ctrl+V` (`⌘` on a Mac), or **Copy** and **Cut** in the selection's actions menu. Copying a frame copies what is in it; a connector comes along only when both its ends do. Pasted objects are new copies placed at the pointer (or the middle of the view); pasting again steps them down and right. You can paste into another whiteboard. Text copied from elsewhere becomes one sticky note per line (at most 200), and a table copied from a spreadsheet keeps its rows and columns. Formatting, pictures and web page markup on the clipboard are ignored. The whiteboard runs in a protected frame that cannot read the clipboard by itself, so the menus' **Paste** pastes what you last copied on this whiteboard, and **Paste text as sticky notes…** gives you a box to paste into.
+- **Keyboard shortcuts**: press `?` (or **Keyboard shortcuts** in the board menu) for the full list.
+- **Links to a frame or object**: select one object and choose **Copy link to frame** (or **to object**) in its actions menu. Opening the link shows that frame, or selects and shows that object; a link to something since deleted is ignored. Links carry only the object's id, never its content. Add `&present=1` to a frame link to start presenting there. (Links work where the host page keeps the `#frame=…` part of its address; if copying is blocked, the link is shown for you to copy.)
+- **Present**: `Shift+P`, **Present frames** in the board menu, or **Present from this frame** on a selected frame. The toolbars disappear and the view fits one frame at a time, in their stacking order. Move with the arrow keys, `Page Up` / `Page Down`, `Space`, `Home` and `End`, or the buttons at the bottom; `Escape` or **Exit** stops. Only your own view moves: others can follow you by clicking your avatar if they want to. With reduced motion, the view jumps instead of gliding.
+- **Backup**: **Download board backup** in the board menu saves the title, background and objects as a JSON file (no history, names, cursors or other people's details). The protected frame may block downloads; the dialog then lets you copy the backup as text, and the gadget's **Export** menu offers **Whiteboard backup (JSON)** as a file. **Import backup…** reads such a file (or its pasted text), shows what it holds and anything wrong with it, and adds the objects beside what is already on the board as new copies; nothing is replaced. Tick the box to also take the backup's title and background.
+- **Export**: the gadget's HTML and PDF export draws the board fitted to the page, without the toolbars. `exportSvg()` (below) returns the same drawing as an SVG file, and the **Whiteboard backup (JSON)** export returns `exportData()`.
 
 - **Connection**: if the gadget's code is changed while the whiteboard is open, it reloads itself to reconnect (your colour is kept). Changes that had not reached the server when the connection dropped are lost, so check your last edit. If it has to reload more than 3 times in a minute it stops and asks you to reload the page.
 
@@ -84,6 +90,20 @@ await env.Whiteboard.connectObjects({ from: "o_1a2b3c4d5e6f", to: "o_6f5e4d3c2b1
 // -> { connector, errors }; routing "straight" (default) or "elbow"; arrow "end" (default), "both" or "none"
 
 const svg = await env.Whiteboard.exportSvg({ frame: "Themes" }); // whole board when frame is omitted
+```
+
+```js
+// Backup: title, background and objects as data (no history, attribution, versions or order keys)
+const backup = await env.Whiteboard.exportData();
+// -> {format: "cloudflare-os-whiteboard", version: 1, exportedAt, title, background, objects: [...]}
+
+// Import a backup (the object or its JSON text) as new objects: fresh ids, references remapped
+await env.Whiteboard.importData({
+  data: backup,
+  at: { x: 0, y: 2000 },  // optional top-left; default: as saved on an empty board, else right of existing content
+  structure: true,        // optional: also take the backup's title and background
+  by: "Assistant",
+}); // -> {created, ids, counts, skipped, problems, errors, revision} or {error}
 ```
 
 `arrangeGrid`, `moveObjects`, `updateObjects` and `deleteObjects` return an `OperationResult`. In `updateObjects`, `fields` is a patch (see "Object fields"); `color` is a shortcut that sets `style.fill` for stickies, shapes, text and frames, and `style.stroke` for pens and connectors.
@@ -161,6 +181,10 @@ const svg = await env.Whiteboard.exportSvg({ frame: "Themes" }); // whole board 
 | Live subscribers | 200 |
 
 Longer text is truncated and out-of-range numbers are clamped rather than rejected. Stored size is measured conservatively, as an upper bound of both the JSON and the binary form storage writes: each number counts at least 9 bytes (plus 4 per array element), text 1 byte per character, or 2 when it has characters beyond Latin-1, or its UTF-8 JSON size when that is more. A pen stroke at the point cap measures about 52 KiB. The history is kept within 100 KiB and 200 entries in the same measure; a change whose undo information would exceed 16 KiB (such as deleting a long pen stroke) is recorded but cannot be undone with `undo`.
+
+### Backup format
+
+`exportData()`, the JSON backup export, the in-app backup and the clipboard (as `application/vnd.cloudflare-os-whiteboard+json;version=1`) share one data-only format: `{format: "cloudflare-os-whiteboard", version: 1, objects, origin?, title?, background?, exportedAt?}`. `objects` lists objects bottom to top (frames first) with `id, type, x, y, w, h, rot, text, style`, plus `frameId`, `points` or the connector fields; an `id` is only a reference inside the document. Nothing else is read: versions, timestamps, `createdBy` and `z` are ignored, every value goes through the same checks as an ordinary create, a connector is kept only when both ends are in the document, and a `frameId` only when its frame is. At most 5,000 objects and 16 MB of text. The format version is separate from the stored `schemaVersion`; older versions are upgraded on read (version 0 is a `getBoard()` result). `importData()` creates in requests of at most 1,000 objects; errors report the object's position in the document as `index`.
 
 ### Storage layout
 

@@ -466,6 +466,7 @@ export function createStyleBar(app) {
       items.push({ label: "Zoom to fit", className: "ctx-fit", onSelect: () => canvas.zoomToFit() });
       items.push({ label: "Objects list", className: "ctx-outline", onSelect: () => app.toggleOutline() });
     }
+    items.push(...(app.contextItems?.(objs) ?? []));
     openMenu({ x: at.x, y: at.y, returnFocus: canvas.element, avoid: at.rect ?? null, pointerType: at.pointerType },
       items, { label: objs.length ? "Selection actions" : "Board actions" });
   }
