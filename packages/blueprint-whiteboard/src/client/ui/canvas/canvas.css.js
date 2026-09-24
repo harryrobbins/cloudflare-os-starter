@@ -41,6 +41,8 @@ export const CANVAS_CSS = `
 .wb-canvas .wb-handle { fill: #ffffff; stroke: var(--wb-accent, #2563eb); stroke-width: 1.5; }
 .wb-canvas .wb-rotate-stem { stroke: var(--wb-accent, #2563eb); stroke-width: 1; }
 .wb-canvas .wb-group-box { fill: none; stroke: var(--wb-accent, #2563eb); stroke-width: 1; stroke-dasharray: 5 4; }
+.wb-canvas .wb-guide { stroke: #db2777; stroke-width: 1; shape-rendering: crispEdges; pointer-events: none; }
+.wb-canvas .wb-endpoint-handle { fill: var(--wb-accent, #2563eb); stroke: #ffffff; stroke-width: 2; }
 .wb-canvas .wb-marquee { fill: rgba(37, 99, 235, 0.08); stroke: var(--wb-accent, #2563eb); stroke-width: 1; }
 .wb-canvas .wb-ghost { opacity: 0.45; }
 .wb-canvas .wb-peer-outline { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; }

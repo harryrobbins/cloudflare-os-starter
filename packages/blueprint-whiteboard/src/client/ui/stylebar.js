@@ -4,7 +4,7 @@
 // group and a Size group (the keyboard alternatives to dragging, resizing and rotating), and Connect
 // for two selected objects (the alternative to dragging a connector). Every change applies to all
 // applicable selected objects in ONE store call. Also the long-press / right-click / context-menu
-// key menu.
+// key menu. Align / Distribute and Reconnect start / end come from ./arrange.js.
 //
 // Keyboard: the bar sits right after the canvas in DOM order, is one Tab stop with arrow keys
 // between its buttons (the width and height fields keep their own Tab stops), and Escape returns
@@ -14,6 +14,7 @@ import { COLORS, INK, ROTATABLE } from "../../shared/protocol.js";
 import { h, icon, rovingFocus } from "./dom.js";
 import { openMenu } from "./dialogs.js";
 import { expandMoveIds, moveUpdates, resizeUpdates, rotateUpdates } from "./canvas/index.js";
+import { createArrange } from "./arrange.js";
 
 /** @typedef {import("./app.js").App} App */
 /** @typedef {import("../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
@@ -77,6 +78,7 @@ export function createStyleBar(app) {
   /** @type {HTMLElement|null} */
   let popover = null;
   let renderKey = "";
+  const arrange = createArrange(app);
 
   /** @returns {WhiteboardObject[]} */
   function selected() {
@@ -386,6 +388,7 @@ export function createStyleBar(app) {
         ] : null,
       ));
     }
+    groups.push(...arrange.groups(objs, btn));
     groups.push(h("div", { class: "style-group arrange-group", role: "group", "aria-label": "Arrange" },
       canConnect(objs)
         ? btn("connect", { class: "btn small connect-btn", title: "Connect the two selected objects", onclick: connect }, icon("connector", 16), "Connect")
@@ -456,6 +459,7 @@ export function createStyleBar(app) {
     if (objs.length) {
       if (objs.length === 1 && TEXT_TYPES.has(objs[0].type)) items.push({ label: "Edit text", className: "ctx-edit", onSelect: editText });
       if (canConnect(objs)) items.push({ label: "Connect", className: "ctx-connect", onSelect: connect });
+      items.push(...arrange.menuItems(objs, { x: at.x, y: at.y, returnFocus: canvas.element, avoid: at.rect ?? null, pointerType: at.pointerType }));
       items.push({ label: "Style…", className: "ctx-style", onSelect: () => focusFirst() });
       items.push({ label: "Duplicate", className: "ctx-duplicate", onSelect: duplicate });
       items.push({ label: "Bring to front", className: "ctx-front", onSelect: () => reorder("front") });

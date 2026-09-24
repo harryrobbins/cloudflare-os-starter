@@ -60,6 +60,16 @@
  * @property {() => string|null} getFollowing
  * @property {(ids: string[]) => void} duplicate     copies of the objects offset by 20 units, selected
  * @property {(ids: string[]) => void} focusObjects  pans (and zooms out if needed) so the objects are visible
+ * @property {(mode: "left"|"center"|"right"|"top"|"middle"|"bottom") => number} align
+ *   aligns the selection (2+ movable units; a selected frame brings its members) in ONE update, so
+ *   one undo reverses it; returns how many objects moved
+ * @property {(axis: "horizontal"|"vertical") => number} distribute
+ *   spaces the selection (3+ units) evenly, first and last fixed; one update; returns objects moved
+ * @property {(connectorId: string, end: "from"|"to", targetId: string) => boolean} reconnect
+ *   moves one end of a connector to another non-connector object (never the other end); the rest
+ *   of the connector is kept. False when nothing changed or the target is not valid
+ * @property {() => import("../model/spatial-index.js").SpatialQuery} getSpatialIndex
+ *   read-only spatial queries over every object's effective world bounds (culling, minimap)
  * @property {(listener: (event: CanvasEvents) => void) => () => void} on
  * @property {() => void} destroy
  */

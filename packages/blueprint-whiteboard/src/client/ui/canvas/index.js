@@ -25,20 +25,24 @@ import {
 import {
   topObjectAt, boundsOf, connectorPoints, validIds, expandMoveIds, moveUpdates, buildDuplicates,
   frameAtPoint, TEXT_EDITABLE, EDIT_ON_CREATE, round2, resizeUpdates, rotateUpdates,
+  HIT_TOLERANCE_PX, stackOrder, snapTargets, alignUpdates, distributeUpdates, reconnectUpdate,
 } from "./model.js";
-import { handleForPress, visibleHandles, cursorForHandle } from "./handles.js";
+import { handleForPress, visibleHandles, cursorForHandle, endpointForPress, endpointHandlePositions, endpointRadius } from "./handles.js";
+import { SpatialIndex, applyStoreChange } from "../../model/spatial-index.js";
+import { SNAP_PX } from "../../model/alignment.js";
+import { guideElements, endpointHandleElements } from "./guide-layer.js";
 import { keyAction, panStep, directionWord, SHORTCUTS_HINT } from "./keymap.js";
 import { ObjectLayer, svgEl } from "./layers.js";
 import { PresenceLayer } from "./presence-layer.js";
 import { TextEditor, textPatch } from "./text-editor.js";
 import {
   panGesture, pinchGesture, objectPressGesture, handleGesture, marqueeGesture, createGesture,
-  penGesture, connectGesture,
+  penGesture, connectGesture, endpointGesture,
 } from "./gestures.js";
 
 export { CANVAS_CSS } from "./canvas.css.js";
 export { SHORTCUTS_HINT } from "./keymap.js";
-export { expandMoveIds, moveUpdates, resizeUpdates, rotateUpdates } from "./model.js";
+export { expandMoveIds, moveUpdates, resizeUpdates, rotateUpdates, arrangeUnits } from "./model.js";
 
 /** @typedef {import("../ui-contract.js").CanvasController} CanvasController */
 /** @typedef {import("../ui-contract.js").CanvasOptions} CanvasOptions */
@@ -157,8 +161,8 @@ export function createCanvas(store, options = {}) {
   const overrides = new Map();
   /** @type {WhiteboardObject[]|null} */
   let sortedCache = null;
-  /** @type {{marquee: {x: number, y: number, w: number, h: number}|null, hoverId: string|null}} */
-  const overlay = { marquee: null, hoverId: null };
+  /** @type {{marquee: {x: number, y: number, w: number, h: number}|null, hoverId: string|null, guides: import("../../model/alignment.js").Guide[]}} */
+  const overlay = { marquee: null, hoverId: null, guides: [] };
   /** @type {{id: string, time: number, sx: number, sy: number}|null} */
   let lastClick = null;
   /** @type {{sx: number, sy: number, pointerType: string}|null} */
@@ -184,6 +188,31 @@ export function createCanvas(store, options = {}) {
     return ov ? { ...o, ...ov.geom } : o;
   };
   const sorted = () => sortedCache ??= sortedObjects(objects());
+
+  // Spatial index of effective bounds (../../model/spatial-index.js), updated from store changes
+  // before anything else reads it. Hit tests and marquees ask it for candidates instead of scanning
+  // the board; objects with an in-progress override (a drag) are always candidates too.
+  const spatial = new SpatialIndex({
+    debug: !!(/** @type {any} */ (options).debugSpatialIndex || /** @type {any} */ (globalThis).__wbSpatialDebug === true),
+  });
+  /** @param {string[]} ids */
+  function withOverridden(ids) {
+    if (!overrides.size) return ids;
+    const keys = [...overrides.keys()];
+    return [...ids, ...keys, ...layer.connectorsOf(keys)];
+  }
+  /**
+   * Topmost object at world point `p` (index-backed topObjectAt).
+   * @param {{x: number, y: number}} p @param {(o: WhiteboardObject) => boolean} [accept]
+   */
+  function hitAt(p, accept) {
+    const near = withOverridden(spatial.queryPoint(p, HIT_TOLERANCE_PX / camera.zoom));
+    return topObjectAt(stackOrder(objects(), near), p, camera.zoom, resolve, accept);
+  }
+  /** Objects whose bounds may meet `rect`, in stacking order. @param {{x: number, y: number, w: number, h: number}} rect */
+  function objectsNear(rect) {
+    return stackOrder(objects(), withOverridden(spatial.query(rect)));
+  }
 
   const layer = new ObjectLayer(framesGroup, othersGroup, stats, (id) => {
     const ov = overrides.get(id);
@@ -370,8 +399,11 @@ export function createCanvas(store, options = {}) {
     /** @type {SVGElement[]} */
     const children = [];
     const editing = !!editor?.isOpen;
-    const busy = gesture && (gesture.kind === "dragging" || gesture.kind === "marquee");
-    if (selection.length === 1 && !editing && !busy) {
+    const busy = gesture && (gesture.kind === "dragging" || gesture.kind === "marquee" || gesture.kind === "connecting");
+    const single = selection.length === 1 ? resolve(selection[0]) : undefined;
+    if (single?.type === "connector") {
+      if (!editing && !busy) children.push(...endpointHandleElements(endpointHandlePositions(connectorPoints(single, resolve), camera)));
+    } else if (selection.length === 1 && !editing && !busy) {
       const o = resolve(selection[0]);
       if (o) {
         const handles = visibleHandles(o, camera, handleRadius(lastPointerType));
@@ -410,6 +442,7 @@ export function createCanvas(store, options = {}) {
       const a = worldToScreen(camera, m), b = worldToScreen(camera, { x: m.x + m.w, y: m.y + m.h });
       children.push(svgEl("rect", { class: "wb-marquee", x: r1(a.x), y: r1(a.y), width: r1(b.x - a.x), height: r1(b.y - a.y) }));
     }
+    if (overlay.guides.length) children.push(...guideElements(overlay.guides, camera));
     overlayGroup.replaceChildren(...children);
   }
 
@@ -418,8 +451,13 @@ export function createCanvas(store, options = {}) {
     if (selection.length !== 1 || editor?.isOpen) return null;
     const o = resolve(selection[0]);
     if (!o) return null;
+    if (o.type === "connector") {
+      const radius = endpointRadius(handleRadius(s.pointerType), s.pointerType);
+      const end = endpointForPress(connectorPoints(o, resolve), camera, { x: s.sx, y: s.sy }, radius);
+      return end ? { id: o.id, name: end, rot: 0, endpoint: /** @type {const} */ (true) } : null;
+    }
     const name = handleForPress(o, camera, { x: s.sx, y: s.sy }, handleRadius(s.pointerType));
-    return name ? { id: o.id, name, rot: o.rot || 0 } : null;
+    return name ? { id: o.id, name, rot: o.rot || 0, endpoint: /** @type {const} */ (false) } : null;
   }
 
   function updateHoverCursor() {
@@ -429,10 +467,10 @@ export function createCanvas(store, options = {}) {
     }
     const hd = handleUnder(hoverPoint);
     let cursor = "";
-    if (hd) cursor = cursorForHandle(hd.name, hd.rot);
+    if (hd) cursor = hd.endpoint ? "crosshair" : cursorForHandle(/** @type {any} */ (hd.name), hd.rot);
     else {
       const w = screenToWorld(camera, { x: hoverPoint.sx, y: hoverPoint.sy });
-      if (topObjectAt(sorted(), w, camera.zoom, resolve)) cursor = "move";
+      if (hitAt(w)) cursor = "move";
     }
     if (element.style.cursor !== cursor) element.style.cursor = cursor;
   }
@@ -578,6 +616,7 @@ export function createCanvas(store, options = {}) {
     setCameraByUser: (cam) => moveCamera(cam),
     setOverlay(patch) {
       if ("marquee" in patch) { overlay.marquee = patch.marquee ?? null; schedule("overlay"); }
+      if ("guides" in patch && (patch.guides?.length || overlay.guides.length)) { overlay.guides = patch.guides ?? []; schedule("overlay"); }
       if ("hoverId" in patch && patch.hoverId !== overlay.hoverId) { overlay.hoverId = patch.hoverId ?? null; schedule("selection"); }
     },
     toolStyle, finishCreate, editText,
@@ -593,6 +632,19 @@ export function createCanvas(store, options = {}) {
       return false;
     },
     announceSelection,
+    // Snapping: SNAP_PX screen pixels at any zoom; the grid too when the board shows one.
+    snapOptions: () => ({
+      threshold: SNAP_PX / camera.zoom,
+      grid: background === "grid" ? gridSpacing(camera.zoom) / camera.zoom : 0,
+    }),
+    snapTargets(moving) {
+      const v = viewportOf(camera, size.w || 1, size.h || 1);
+      const around = { x: v.x - v.w / 2, y: v.y - v.h / 2, w: v.w * 2, h: v.h * 2 };
+      return snapTargets(objects(), spatial.query(around), moving);
+    },
+    objectAt: hitAt,
+    objectsNear,
+    announce: (message) => options.announce?.(message),
   };
 
   function cancelGesture() {
@@ -610,7 +662,7 @@ export function createCanvas(store, options = {}) {
     const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
     const w = screenToWorld(camera, { x: sx, y: sy });
     return {
-      sx, sy, x: w.x, y: w.y, shift: e.shiftKey, clientX: e.clientX, clientY: e.clientY,
+      sx, sy, x: w.x, y: w.y, shift: e.shiftKey, alt: e.altKey, clientX: e.clientX, clientY: e.clientY,
       pointerType: "pointerType" in e ? e.pointerType || "mouse" : "mouse", time: performance.now(),
     };
   }
@@ -691,12 +743,12 @@ export function createCanvas(store, options = {}) {
       gesture = panGesture(ctx, p);
       return;
     }
-    const zoom = camera.zoom;
     switch (tool) {
       case "select": {
         const hd = handleUnder(p);
-        if (hd) { gesture = handleGesture(ctx, p, hd.id, hd.name); break; }
-        const hit = topObjectAt(sorted(), p, zoom, resolve);
+        if (hd?.endpoint) { gesture = endpointGesture(ctx, p, hd.id, /** @type {"from"|"to"} */ (hd.name)); break; }
+        if (hd) { gesture = handleGesture(ctx, p, hd.id, /** @type {any} */ (hd.name)); break; }
+        const hit = hitAt(p);
         if (hit) { gesture = objectPressGesture(ctx, p, hit); break; }
         gesture = p.pointerType === "touch" ? panGesture(ctx, p, { tapClearsSelection: true }) : marqueeGesture(ctx, p);
         break;
@@ -705,7 +757,7 @@ export function createCanvas(store, options = {}) {
         gesture = penGesture(ctx, p);
         break;
       case "connector": {
-        const hit = topObjectAt(sorted(), p, zoom, resolve, (o) => o.type !== "connector");
+        const hit = hitAt(p, (o) => o.type !== "connector");
         gesture = hit ? connectGesture(ctx, p, hit) : p.pointerType === "touch" ? panGesture(ctx, p) : null;
         break;
       }
@@ -813,7 +865,7 @@ export function createCanvas(store, options = {}) {
       return;
     }
     const p = sample(e);
-    const hit = topObjectAt(sorted(), p, camera.zoom, resolve);
+    const hit = hitAt(p);
     if (hit && !selection.includes(hit.id)) setSelectionInternal([hit.id], { announce: true });
     dispatchContextMenu(e.clientX, e.clientY, hit ? selection : [], /** @type {any} */ (e).pointerType || "mouse");
   }
@@ -826,6 +878,11 @@ export function createCanvas(store, options = {}) {
     if (destroyed) return;
     const target = /** @type {HTMLElement} */ (e.target);
     if (target !== element && target.closest?.("input, textarea, select, [contenteditable]")) return;
+    // Alt held during a drag or resize bypasses snapping; pressing it alone does nothing else.
+    if (e.key === "Alt") {
+      if (gesture?.setAlt) { e.preventDefault(); gesture.setAlt(true); }
+      return;
+    }
     if (e.key === " " && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
       if (!spaceDown) {
@@ -909,6 +966,7 @@ export function createCanvas(store, options = {}) {
   /** @param {KeyboardEvent} e */
   function onKeyUp(e) {
     if (e.key === " ") releaseSpace();
+    if (e.key === "Alt" && gesture?.setAlt) { e.preventDefault(); gesture.setAlt(false); }
   }
 
   function releaseSpace() {
@@ -937,6 +995,7 @@ export function createCanvas(store, options = {}) {
    */
   function onStoreChange(state, change) {
     if (destroyed) return;
+    applyStoreChange(spatial, state, change);
     switch (change.kind) {
       case "snapshot": {
         setBackground(state.board.background);
@@ -1020,6 +1079,7 @@ export function createCanvas(store, options = {}) {
   {
     const state = store.getState();
     background = state.board.background === "grid" || state.board.background === "plain" ? state.board.background : "dots";
+    spatial.reset(state.board.objects);
     layer.rebuild(state.board.objects, resolve);
   }
 
@@ -1152,6 +1212,26 @@ export function createCanvas(store, options = {}) {
       if (!u) return;
       moveCamera(revealRect(camera, u, size.w, size.h, 60), { animate: true });
     },
+    align(mode) {
+      const updates = alignUpdates(objects(), selection, mode);
+      if (updates.length) store.updateObjects(updates);
+      return updates.length;
+    },
+    distribute(axis) {
+      const updates = distributeUpdates(objects(), selection, axis);
+      if (updates.length) store.updateObjects(updates);
+      return updates.length;
+    },
+    reconnect(connectorId, end, targetId) {
+      const all = objects();
+      const conn = Object.hasOwn(all, connectorId) ? all[connectorId] : undefined;
+      const target = Object.hasOwn(all, targetId) ? all[targetId] : undefined;
+      const update = conn && (end === "from" || end === "to") ? reconnectUpdate(conn, end, target) : null;
+      if (!update) return false;
+      store.updateObjects([update]);
+      return true;
+    },
+    getSpatialIndex: () => spatial,
     on(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

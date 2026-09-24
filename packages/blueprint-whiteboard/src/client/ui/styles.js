@@ -221,6 +221,9 @@ input:focus { border-color: var(--accent); }
 .modal p { margin: 0; color: var(--text-2); }
 .modal input[type="text"], .modal input:not([type]) { width: 100%; padding: 8px 10px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.object-picker .picker-list { max-height: min(50vh, 360px); padding: 0; border: 1px solid var(--border); border-radius: 8px; }
+.object-picker .picker-option { cursor: pointer; padding: 8px 10px; overflow-wrap: anywhere; }
+.object-picker .picker-option.active { background: var(--accent-soft, rgba(37, 99, 235, .12)); outline: 2px solid var(--accent, #2563eb); outline-offset: -2px; }
 .menu {
   position: fixed; z-index: 40; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
   box-shadow: var(--shadow-2); padding: 4px; min-width: 180px; display: flex; flex-direction: column;
@@ -271,6 +274,7 @@ input:focus { border-color: var(--accent); }
   .swatch-pop .swatch { width: 44px; height: 44px; }
   .modal .swatch { width: 44px; height: 44px; }
   .modal-actions .btn { min-height: 44px; }
+  .object-picker .picker-option { min-height: 44px; }
   .follow-chip { top: 50px; }
   .wb-panel { width: 100vw; }
 }

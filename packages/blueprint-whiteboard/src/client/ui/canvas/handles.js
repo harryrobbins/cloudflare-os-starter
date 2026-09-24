@@ -221,3 +221,44 @@ export function cursorForHandle(handle, rot) {
 function round2(v) {
   return Math.round(v * 100) / 100 + 0;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Connector endpoint handles
+// ---------------------------------------------------------------------------------------------
+
+/** @typedef {"from"|"to"} EndpointHandle */
+
+/** Smallest endpoint-handle hit radius on touch (screen px): a 44 px target. */
+export const ENDPOINT_TOUCH_RADIUS = 22;
+
+/**
+ * Hit radius of connector endpoint handles for a pointer type: the resize-handle radius, but never
+ * under ENDPOINT_TOUCH_RADIUS on touch.
+ * @param {number} radius @param {string} pointerType
+ */
+export function endpointRadius(radius, pointerType) {
+  return pointerType === "touch" ? Math.max(radius, ENDPOINT_TOUCH_RADIUS) : radius;
+}
+
+/**
+ * Screen positions of a connector's two endpoint handles: the first and last points of its route
+ * (world points, e.g. from connectorPoints). Empty when the route is unknown.
+ * @param {Point[]|null} route @param {{x: number, y: number, zoom: number}} cam
+ * @returns {Array<{name: EndpointHandle, x: number, y: number}>}
+ */
+export function endpointHandlePositions(route, cam) {
+  if (!route || route.length < 2) return [];
+  return [
+    { name: "from", ...worldToScreen(cam, route[0]) },
+    { name: "to", ...worldToScreen(cam, route[route.length - 1]) },
+  ];
+}
+
+/**
+ * The endpoint handle a press at screen point `s` grabs, or null (nearest within `radius`).
+ * @param {Point[]|null} route @param {{x: number, y: number, zoom: number}} cam @param {Point} s @param {number} radius
+ * @returns {EndpointHandle|null}
+ */
+export function endpointForPress(route, cam, s, radius) {
+  return /** @type {EndpointHandle|null} */ (handleAt(endpointHandlePositions(route, cam), s, radius));
+}
