@@ -43,6 +43,14 @@ export const CANVAS_CSS = `
 .wb-canvas .wb-group-box { fill: none; stroke: var(--wb-accent, #2563eb); stroke-width: 1; stroke-dasharray: 5 4; }
 .wb-canvas .wb-guide { stroke: #db2777; stroke-width: 1; shape-rendering: crispEdges; pointer-events: none; }
 .wb-canvas .wb-endpoint-handle { fill: var(--wb-accent, #2563eb); stroke: #ffffff; stroke-width: 2; }
+.wb-canvas .wb-route-handle { fill: #ffffff; stroke: var(--wb-accent, #2563eb); stroke-width: 2; }
+.wb-canvas .wb-route-handle-active { fill: var(--wb-accent, #2563eb); stroke: #ffffff; stroke-width: 2; outline: none; }
+.wb-canvas .wb-side-dot { fill: #ffffff; stroke: var(--wb-accent, #2563eb); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.wb-canvas .wb-side-dot-active { fill: var(--wb-accent, #2563eb); }
+@media (forced-colors: active) {
+  .wb-canvas .wb-route-handle, .wb-canvas .wb-side-dot { fill: Canvas; stroke: Highlight; }
+  .wb-canvas .wb-route-handle-active, .wb-canvas .wb-side-dot-active { fill: Highlight; stroke: CanvasText; }
+}
 .wb-canvas .wb-marquee { fill: rgba(37, 99, 235, 0.08); stroke: var(--wb-accent, #2563eb); stroke-width: 1; }
 .wb-canvas .wb-ghost { opacity: 0.45; }
 .wb-canvas .wb-peer-outline { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; }

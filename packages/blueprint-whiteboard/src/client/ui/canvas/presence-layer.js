@@ -2,8 +2,10 @@
 // Collaborators' ephemeral state, drawn in a separate overlay <svg> that never touches committed
 // objects: cursors with name labels (constant screen size, eased toward the latest position),
 // translucent ghosts of objects being dragged, resized or rotated (with attached connectors
-// following the ghosts), selection outlines in the peer's colour, strokes being drawn and an
-// "is editing" badge. Rendering is driven by the canvas's animation-frame loop.
+// following the ghosts) and of connector routes being edited (a transform on a connector carries
+// its in-progress segments, curve handle, routing and sides), selection outlines in the peer's
+// colour, strokes being drawn and an "is editing" badge. Rendering is driven by the canvas's
+// animation-frame loop.
 
 import { objectNode } from "../../../shared/render.js";
 import { corners, strokePathD, textWidth, rotatedBounds } from "../../../shared/geometry.js";
@@ -33,7 +35,8 @@ const EASE_MS = 50;
 export class PresenceLayer {
   /**
    * @param {SVGSVGElement} svg  the overlay
-   * @param {{getState: Store["getState"], connectorsOf: (ids: Iterable<string>) => Set<string>}} deps
+   * @param {{getState: Store["getState"], connectorsOf: (ids: Iterable<string>) => Set<string>,
+   *   routeEnv?: (resolve: (id: string) => WhiteboardObject|undefined, ghostIds: string[]) => import("../../../shared/connectors.js").RouteEnv}} deps
    */
   constructor(svg, deps) {
     this.svg = svg;
@@ -120,9 +123,21 @@ export class PresenceLayer {
       const o = Object.hasOwn(objects, id) ? objects[id] : undefined;
       const t = tmap.get(id);
       if (!o || !t) return o;
+      if (o.type === "connector") {
+        // A route edit in progress: only the route fields change.
+        /** @type {any} */
+        const c = { ...o };
+        if (t.routing) c.routing = t.routing;
+        if (t.segments) c.segments = t.segments;
+        if (t.curve !== undefined) c.curve = t.curve;
+        if (t.fromSide) c.fromSide = t.fromSide;
+        if (t.toSide) c.toSide = t.toSide;
+        return c;
+      }
       const rotates = /** @type {readonly string[]} */ (ROTATABLE).includes(o.type);
       return { ...o, x: t.x, y: t.y, w: t.w, h: t.h, rot: rotates ? t.rot : 0 };
     };
+    const env = this.deps.routeEnv?.(resolve, [...tmap.keys()]);
     /** @type {SVGElement[]} */
     const children = [];
     if (tmap.size) {
@@ -130,12 +145,12 @@ export class PresenceLayer {
       const ghostIds = [...tmap.keys()].filter((id) => Object.hasOwn(objects, id));
       for (const id of this.deps.connectorsOf(ghostIds)) {
         const c = objects[id];
-        const node = c && objectNode(c, resolve);
+        const node = c && objectNode(c, resolve, env);
         if (node) ghosts.appendChild(buildNode(node));
       }
       for (const id of ghostIds) {
         const g = resolve(id);
-        const node = g && objectNode(g, resolve);
+        const node = g && objectNode(g, resolve, env);
         if (node) ghosts.appendChild(buildNode(node));
       }
       children.push(ghosts);
@@ -144,7 +159,7 @@ export class PresenceLayer {
       const o = resolve(id);
       if (!o) continue;
       if (o.type === "connector") {
-        const pts = connectorPoints(o, resolve);
+        const pts = connectorPoints(o, resolve, env);
         if (pts) children.push(svgEl("polyline", {
           class: "wb-peer-outline", points: pts.map((p) => `${r2(p.x)},${r2(p.y)}`).join(" "), stroke: peer.color,
         }));

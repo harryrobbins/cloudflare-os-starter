@@ -12,11 +12,14 @@
  *   | {type: "zoomIn"} | {type: "zoomOut"} | {type: "fit"} | {type: "zoomReset"}
  *   | {type: "resize", dw: number, dh: number} | {type: "rotate", deg: number} | {type: "contextMenu"}
  *   | {type: "command", command: ShellCommand}
- *   | {type: "present", step: "next"|"previous"|"first"|"last"|"exit"}} KeyAction
+ *   | {type: "present", step: "next"|"previous"|"first"|"last"|"exit"}
+ *   | {type: "editRoute"} | {type: "routeHandle", step: 1|-1} | {type: "routeMove", dx: number, dy: number}
+ *   | {type: "routeReset"} | {type: "routeDone"}} KeyAction
  *
  * "nudge" moves the selection by (dx, dy) world units; with nothing selected the canvas pans the
  * view instead (see panStep). "command" actions belong to the app shell: the canvas passes them on
  * as a "command" event. "present" actions apply only while presenting (scope "presentation").
+ * "route*" actions apply only while editing a connector's route (scope "route", after "editRoute").
  */
 
 /** @typedef {"addMenu"|"outline"|"icons"|"help"|"present"} ShellCommand */
@@ -40,7 +43,7 @@
  * @property {string[]} keys  display form, alternatives
  * @property {KeyMatch[]} [match]
  * @property {KeyAction|((e: KeyEventLike) => KeyAction)} [action]
- * @property {"canvas"|"presentation"} [scope]  default "canvas"
+ * @property {"canvas"|"presentation"|"route"} [scope]  default "canvas"
  */
 
 /** @typedef {{key: string, code?: string, ctrlKey?: boolean, metaKey?: boolean, shiftKey?: boolean, altKey?: boolean}} KeyEventLike */
@@ -119,6 +122,8 @@ export const COMMANDS = Object.freeze([
   { id: "back", group: SELECT, label: "Send to back", keys: ["["], match: [{ key: "[" }], action: { type: "back" } },
   { id: "context-menu", group: SELECT, label: "Actions menu for the selection", keys: ["Context menu key", "Shift+F10"],
     match: [{ key: "ContextMenu", alt: undefined }, { key: "F10", shift: true }], action: { type: "contextMenu" } },
+  { id: "edit-route", group: SELECT, label: "Edit the selected elbow or curved connector's route with the keyboard", keys: ["E"],
+    match: [{ key: "e", shift: false }], action: { type: "editRoute" } },
 
   // View
   { id: "zoom-in", group: "View", label: "Zoom in", keys: ["+"], match: [{ key: "+" }, { key: "=" }, { key: "+", mod: true }, { key: "=", mod: true }], action: { type: "zoomIn" } },
@@ -139,6 +144,20 @@ export const COMMANDS = Object.freeze([
   { id: "present-first", group: "Presenting", scope: "presentation", label: "First frame", keys: ["Home"], match: [{ key: "Home" }], action: { type: "present", step: "first" } },
   { id: "present-last", group: "Presenting", scope: "presentation", label: "Last frame", keys: ["End"], match: [{ key: "End" }], action: { type: "present", step: "last" } },
   { id: "present-exit", group: "Presenting", scope: "presentation", label: "Stop presenting", keys: ["Escape"], match: [{ key: "Escape" }], action: { type: "present", step: "exit" } },
+
+  // While editing a connector's route (after E)
+  { id: "routehandle", group: "Editing a route", scope: "route", label: "Next or previous route handle", keys: ["Tab", "Shift+Tab"],
+    match: [{ key: "Tab", shift: false }], action: { type: "routeHandle", step: 1 } },
+  { ...variant("routehandle-previous", { key: "Tab", shift: true }, { type: "routeHandle", step: -1 }), scope: "route" },
+  { id: "routemove", group: "Editing a route", scope: "route", label: "Move the handle by 1 (Shift: 10); a segment moves across itself", keys: ["Arrow keys", "Shift+Arrow keys"] },
+  { ...variant("routemove-left", { key: "ArrowLeft", shift: undefined }, (e) => ({ type: "routeMove", dx: e.shiftKey ? -10 : -1, dy: 0 })), scope: "route" },
+  { ...variant("routemove-right", { key: "ArrowRight", shift: undefined }, (e) => ({ type: "routeMove", dx: e.shiftKey ? 10 : 1, dy: 0 })), scope: "route" },
+  { ...variant("routemove-up", { key: "ArrowUp", shift: undefined }, (e) => ({ type: "routeMove", dx: 0, dy: e.shiftKey ? -10 : -1 })), scope: "route" },
+  { ...variant("routemove-down", { key: "ArrowDown", shift: undefined }, (e) => ({ type: "routeMove", dx: 0, dy: e.shiftKey ? 10 : 1 })), scope: "route" },
+  { id: "routereset", group: "Editing a route", scope: "route", label: "Reset the route (automatic route and sides)", keys: ["Delete", "Backspace"],
+    match: [{ key: "Delete" }, { key: "Backspace" }], action: { type: "routeReset" } },
+  { id: "routedone", group: "Editing a route", scope: "route", label: "Finish editing the route", keys: ["Enter", "Escape"],
+    match: [{ key: "Enter" }, { key: "Escape" }], action: { type: "routeDone" } },
 ]);
 
 /** Shown to screen readers (aria-describedby) and usable as a help text by the shell. */
@@ -148,6 +167,7 @@ export const SHORTCUTS_HINT =
   "I opens icons and shapes. " +
   "Arrow keys move the selection (Shift for 10), or pan the view when nothing is selected. " +
   "Alt+Arrow keys resize the selection by 1 (Shift for 10); comma and period rotate it by 15 degrees. " +
+  "E edits a selected elbow or curved connector's route: Tab picks a handle, arrow keys move it. " +
   "Enter edits text, Delete removes, Ctrl+D duplicates, Ctrl+A selects all, ] brings to front, " +
   "[ sends to back, Ctrl+Z undoes, Ctrl+Shift+Z redoes. The context menu key or Shift+F10 opens the " +
   "selection's actions. Plus and minus zoom, Shift+1 zooms to fit, Shift+0 resets to 100%. " +
@@ -167,7 +187,7 @@ function matches(e, key, m) {
 /**
  * The action of a key event, from COMMANDS, or null.
  * @param {KeyEventLike} e
- * @param {"canvas"|"presentation"} [scope]
+ * @param {"canvas"|"presentation"|"route"} [scope]
  * @returns {KeyAction|null}
  */
 export function keyAction(e, scope = "canvas") {

@@ -64,7 +64,7 @@ describe("one shortcuts table for keys and help", () => {
     const rows = helpRows(false);
     const edit = rows.find((g) => g.group === "Edit");
     expect(edit.rows.find((r) => r.label === "Paste objects, or one sticky note per line of text").keys).toEqual(["Ctrl+V"]);
-    expect(rows.map((g) => g.group)).toEqual(["Tools", "Edit", "Select and arrange", "View", "Presenting"]);
+    expect(rows.map((g) => g.group)).toEqual(["Tools", "Edit", "Select and arrange", "View", "Presenting", "Editing a route"]);
   });
 });
 

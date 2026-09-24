@@ -16,6 +16,7 @@ import { openMenu } from "./dialogs.js";
 import { expandMoveIds, moveUpdates, resizeUpdates, rotateUpdates } from "./canvas/index.js";
 import { createArrange } from "./arrange.js";
 import { canEditText } from "./canvas/model.js";
+import { canResetRoute, hasRouteHandles } from "./canvas/route-edit.js";
 
 /** @typedef {import("./app.js").App} App */
 /** @typedef {import("../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
@@ -48,6 +49,8 @@ export function canConnect(objs) {
   return objs.length === 2 && objs.every((o) => o.type !== "connector") && objs[0].id !== objs[1].id;
 }
 const WIDTHS = [1, 2, 4, 8];
+/** Connector routing buttons (the "Route" choice). */
+const ROUTING_LABELS = Object.freeze({ straight: "Straight line", elbow: "Elbow line", curved: "Curved line" });
 const FONT_SIZES = [{ label: "S", size: 14 }, { label: "M", size: 20 }, { label: "L", size: 32 }, { label: "XL", size: 48 }];
 
 const COLOR_NAMES = new Map(Object.entries(COLORS).map(([name, hex]) => [hex, name[0].toUpperCase() + name.slice(1)]));
@@ -350,9 +353,9 @@ export function createStyleBar(app) {
       const end = common(conns, (o) => o.style.arrowEnd);
       const isConn = (/** @type {WhiteboardObject} */ o) => o.type === "connector";
       groups.push(h("div", { class: "style-group connector-group", role: "group", "aria-label": "Connector" },
-        /** @type {const} */ (["straight", "elbow"]).map((r) => btn("routing-" + r, {
-          class: "btn small icon-only routing-btn", "aria-pressed": String(routing === r), "aria-label": r === "straight" ? "Straight line" : "Elbow line",
-          title: r === "straight" ? "Straight line" : "Elbow line", dataset: { routing: r },
+        /** @type {const} */ (["straight", "elbow", "curved"]).map((r) => btn("routing-" + r, {
+          class: "btn small icon-only routing-btn", "aria-pressed": String(routing === r), "aria-label": ROUTING_LABELS[r],
+          title: ROUTING_LABELS[r], dataset: { routing: r },
           onclick: () => update(isConn, () => ({ routing: r })),
         }, icon(r, 16))),
         btn("arrow-start", {
@@ -363,6 +366,19 @@ export function createStyleBar(app) {
           class: "btn small icon-only arrow-end-btn", "aria-pressed": String(end === "arrow"), "aria-label": "Arrow at end", title: "Arrow at end",
           onclick: () => update(isConn, () => ({ style: { arrowEnd: end === "arrow" ? "none" : "arrow" } })),
         }, icon("arrowEnd", 16)),
+        // Route editing (route-edit.js): the keyboard path for dragging route handles, and a reset.
+        conns.length === 1 && hasRouteHandles(conns[0])
+          ? btn("route-edit", {
+            class: "btn small icon-only route-edit-btn", "aria-label": "Edit route with the keyboard", title: "Edit route (E): Tab picks a handle, arrow keys move it",
+            onclick: () => canvas.editRoute?.(conns[0].id),
+          }, icon("routeEdit", 16))
+          : null,
+        conns.some(canResetRoute)
+          ? btn("route-reset", {
+            class: "btn small icon-only route-reset-btn", "aria-label": "Reset route", title: "Reset route: automatic path and sides",
+            onclick: () => { const n = canvas.resetRoute?.(conns.map((o) => o.id)) ?? 0; if (n) app.announce?.(n === 1 ? "Route reset" : `${n} routes reset`); },
+          }, icon("routeReset", 16))
+          : null,
       ));
     }
     if (objs.some(MOVABLE)) {
@@ -462,6 +478,8 @@ export function createStyleBar(app) {
     if (objs.length) {
       if (objs.length === 1 && canEditText(objs[0])) items.push({ label: "Edit text", className: "ctx-edit", onSelect: editText });
       if (canConnect(objs)) items.push({ label: "Connect", className: "ctx-connect", onSelect: connect });
+      if (objs.length === 1 && hasRouteHandles(objs[0])) items.push({ label: "Edit route", className: "ctx-route-edit", onSelect: () => { canvas.editRoute?.(objs[0].id); } });
+      if (objs.some(canResetRoute)) items.push({ label: "Reset route", className: "ctx-route-reset", onSelect: () => { canvas.resetRoute?.(objs.map((o) => o.id)); } });
       items.push(...arrange.menuItems(objs, { x: at.x, y: at.y, returnFocus: canvas.element, avoid: at.rect ?? null, pointerType: at.pointerType }));
       items.push({ label: "Style…", className: "ctx-style", onSelect: () => focusFirst() });
       items.push({ label: "Duplicate", className: "ctx-duplicate", onSelect: duplicate });

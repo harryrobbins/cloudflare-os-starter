@@ -203,7 +203,9 @@ describe("SpatialIndex", () => {
       }
       expect(index.verify()).toEqual({ missing: [], extra: [], stale: [] });
     }
-  });
+    // Elbow connectors route around obstacles, so the brute-force side re-routes every one of them
+    // for each check: slow on purpose, and it verifies the index's route-region tracking.
+  }, 120_000);
 
   it("index-backed hit tests and marquees agree with full scans", () => {
     const rng = mulberry32(11);

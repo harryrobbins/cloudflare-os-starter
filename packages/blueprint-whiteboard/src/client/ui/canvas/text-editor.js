@@ -6,11 +6,12 @@
 // repositions the editor but never replaces what the user is typing.
 
 import {
-  textLayout, textObjectHeight, polylineMidpoint, textWidth, center, LINE_HEIGHT,
+  textLayout, textObjectHeight, textWidth, center, LINE_HEIGHT,
 } from "../../../shared/geometry.js";
 import { FONT_FAMILY } from "../../../shared/render.js";
 import { cleanLine, cleanText, LIMITS } from "../../../shared/protocol.js";
-import { connectorPoints, canEditText } from "./model.js";
+import { connectorRouteOf, canEditText } from "./model.js";
+import { routeMidpoint } from "../../../shared/connectors.js";
 
 /** @typedef {import("../../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("../../../shared/protocol.js").ObjectPatch} ObjectPatch */
@@ -32,16 +33,17 @@ import { connectorPoints, canEditText } from "./model.js";
 
 /**
  * @param {WhiteboardObject} o @param {(id: string) => WhiteboardObject|undefined} resolve
+ * @param {import("../../../shared/connectors.js").RouteEnv} [env]
  * @returns {EditorBox|null}
  */
-export function editorBox(o, resolve) {
+export function editorBox(o, resolve, env) {
   if (!canEditText(o)) return null;
   const fontSize = o.style.fontSize;
   const lineHeight = fontSize * LINE_HEIGHT;
   if (o.type === "connector") {
-    const pts = connectorPoints(o, resolve);
-    if (!pts) return null;
-    const mid = polylineMidpoint(pts);
+    const route = connectorRouteOf(o, resolve, env);
+    if (!route) return null;
+    const mid = routeMidpoint(route);
     const w = Math.max(fontSize * 8, textWidth(o.text || "", fontSize) + fontSize * 2);
     return {
       x: mid.x - w / 2, y: mid.y - lineHeight / 2, w, h: lineHeight, cx: mid.x, cy: mid.y, rot: 0, fontSize,
@@ -92,6 +94,7 @@ export function textPatch(o, value) {
  * @property {HTMLElement} host
  * @property {(id: string) => WhiteboardObject|undefined} getObject   committed object
  * @property {(id: string) => WhiteboardObject|undefined} resolve
+ * @property {import("../../../shared/connectors.js").RouteEnv} [routeEnv]
  * @property {() => Camera} getCamera
  * @property {(id: string, value: string) => void} onCommit
  * @property {(id: string) => void} onClose
@@ -120,7 +123,7 @@ export class TextEditor {
     if (this.id) this.commit();
     const o = this.deps.getObject(id);
     if (!o) return false;
-    const box = editorBox(o, this.deps.resolve);
+    const box = editorBox(o, this.deps.resolve, this.deps.routeEnv);
     if (!box) return false;
     const ta = document.createElement("textarea");
     ta.className = "wb-editor" + (box.chrome === "label" ? " wb-editor-label" : box.chrome === "frame" ? " wb-editor-frame" : "");
@@ -165,7 +168,7 @@ export class TextEditor {
     if (!this.id) return;
     const o = this.deps.getObject(this.id);
     if (!o) { this.close(); return; }
-    const box = editorBox(o, this.deps.resolve);
+    const box = editorBox(o, this.deps.resolve, this.deps.routeEnv);
     if (!box) { this.close(); return; }
     this.box = box;
     this.position();

@@ -37,7 +37,7 @@ import {
 import { handleForPress, visibleHandles, cursorForHandle, endpointForPress, endpointHandlePositions, endpointRadius } from "./handles.js";
 import { SpatialIndex, applyStoreChange } from "../../model/spatial-index.js";
 import { SNAP_PX } from "../../model/alignment.js";
-import { guideElements, endpointHandleElements } from "./guide-layer.js";
+import { guideElements, endpointHandleElements, routeHandleElements } from "./guide-layer.js";
 import { resolveIcon, iconDefaults, getIcon } from "../../../shared/icons/registry.js";
 import { keyAction, panStep, directionWord, SHORTCUTS_HINT } from "./keymap.js";
 import { ObjectLayer, svgEl } from "./layers.js";
@@ -48,6 +48,10 @@ import {
   panGesture, pinchGesture, objectPressGesture, handleGesture, marqueeGesture, createGesture,
   penGesture, connectGesture, endpointGesture,
 } from "./gestures.js";
+import {
+  connectorHandles, routeHandleAt, routeHandleRadius, routeHandleGesture, routePatch, resetRoutePatch,
+  keyboardEdit, describeHandle, hasRouteHandles,
+} from "./route-edit.js";
 
 export { CANVAS_CSS } from "./canvas.css.js";
 export { SHORTCUTS_HINT } from "./keymap.js";
@@ -168,6 +172,10 @@ export function createCanvas(store, options = {}) {
   let canvasActive = false;
   /** @type {Map<string, Override>} */
   const overrides = new Map();
+  /** Connector route edits in progress (route-edit.js), drawn instead of the committed route. @type {Map<string, import("./route-edit.js").RouteEditFields>} */
+  const routeOverrides = new Map();
+  /** Keyboard route editing (E): the connector and the handle picked with Tab. @type {{id: string, index: number}|null} */
+  let routeEdit = null;
   /** @type {WhiteboardObject[]|null} */
   let sortedCache = null;
   /** @type {{marquee: {x: number, y: number, w: number, h: number}|null, hoverId: string|null, guides: import("../../model/alignment.js").Guide[]}} */
@@ -195,6 +203,8 @@ export function createCanvas(store, options = {}) {
     const all = objects();
     const o = Object.hasOwn(all, id) ? all[id] : undefined;
     if (!o) return undefined;
+    const route = routeOverrides.get(id);
+    if (route) return /** @type {WhiteboardObject} */ ({ ...o, ...route });
     const ov = overrides.get(id);
     return ov ? { ...o, ...ov.geom } : o;
   };
@@ -206,6 +216,10 @@ export function createCanvas(store, options = {}) {
   const spatial = new SpatialIndex({
     debug: !!(/** @type {any} */ (options).debugSpatialIndex || /** @type {any} */ (globalThis).__wbSpatialDebug === true),
   });
+  // Obstacles for automatic elbow connectors (src/shared/connectors.js): committed objects from the
+  // index, looked up through `resolve` (so an object being dragged counts where it is drawn), with
+  // the index's route memo, so drawing reuses the route the index computed.
+  const routeEnv = spatial.routeEnv(resolve, () => overrides.keys());
   /** @param {string[]} ids */
   function withOverridden(ids) {
     if (!overrides.size) return ids;
@@ -218,7 +232,7 @@ export function createCanvas(store, options = {}) {
    */
   function hitAt(p, accept) {
     const near = withOverridden(spatial.queryPoint(p, HIT_TOLERANCE_PX / camera.zoom));
-    return topObjectAt(stackOrder(objects(), near), p, camera.zoom, resolve, accept);
+    return topObjectAt(stackOrder(objects(), near), p, camera.zoom, resolve, accept, routeEnv);
   }
   /** Objects whose bounds may meet `rect`, in stacking order. @param {{x: number, y: number, w: number, h: number}} rect */
   function objectsNear(rect) {
@@ -226,9 +240,11 @@ export function createCanvas(store, options = {}) {
   }
 
   const layer = new ObjectLayer(framesGroup, othersGroup, stats, (id) => {
+    if (routeOverrides.has(id)) return resolve(id);
     const ov = overrides.get(id);
     return ov && ov.mode === "replace" ? resolve(id) : undefined;
   }, (ids) => connectorsOf(spatial, ids));
+  layer.routeEnv = routeEnv;
 
   // Viewport culling. options.cull (test/benchmark extension): Culler options, e.g. {minObjects: 0}.
   const cullOptions = /** @type {any} */ (options).cull ?? {};
@@ -389,7 +405,7 @@ export function createCanvas(store, options = {}) {
 
   function contentBounds() {
     const all = objects();
-    const b = boardBounds(all);
+    const b = boardBounds(all, routeEnv);
     if (!b) return null;
     // Leave room for frame names above frames.
     let top = b.y;
@@ -441,7 +457,7 @@ export function createCanvas(store, options = {}) {
   /** @param {WhiteboardObject} o @param {string} cls */
   function outlineFor(o, cls) {
     if (o.type === "connector") {
-      const pts = connectorPoints(o, resolve) ?? [];
+      const pts = connectorPoints(o, resolve, routeEnv) ?? [];
       return svgEl("polyline", { class: cls, points: pts.map((p) => `${round2(p.x)},${round2(p.y)}`).join(" ") });
     }
     return svgEl("polygon", { class: cls, points: corners(o).map((p) => `${round2(p.x)},${round2(p.y)}`).join(" ") });
@@ -454,7 +470,12 @@ export function createCanvas(store, options = {}) {
     const busy = gesture && (gesture.kind === "dragging" || gesture.kind === "marquee" || gesture.kind === "connecting");
     const single = selection.length === 1 ? resolve(selection[0]) : undefined;
     if (single?.type === "connector") {
-      if (!editing && !busy) children.push(...endpointHandleElements(endpointHandlePositions(connectorPoints(single, resolve), camera)));
+      if (!editing && !busy) {
+        const h = connectorHandles(single, resolve, routeEnv, camera.zoom);
+        const active = routeEdit && routeEdit.id === single.id ? routeEdit.index : -1;
+        if (h) children.push(...routeHandleElements(h.handles, camera, active));
+        children.push(...endpointHandleElements(endpointHandlePositions(connectorPoints(single, resolve, routeEnv), camera)));
+      }
     } else if (selection.length === 1 && !editing && !busy) {
       const o = resolve(selection[0]);
       if (o) {
@@ -480,7 +501,7 @@ export function createCanvas(store, options = {}) {
       const rects = [];
       for (const id of selection) {
         const o = resolve(id);
-        const b = o && boundsOf(o, resolve);
+        const b = o && boundsOf(o, resolve, routeEnv);
         if (b) rects.push(b);
       }
       const u = unionRects(rects);
@@ -505,8 +526,14 @@ export function createCanvas(store, options = {}) {
     if (!o) return null;
     if (o.type === "connector") {
       const radius = endpointRadius(handleRadius(s.pointerType), s.pointerType);
-      const end = endpointForPress(connectorPoints(o, resolve), camera, { x: s.sx, y: s.sy }, radius);
-      return end ? { id: o.id, name: end, rot: 0, endpoint: /** @type {const} */ (true) } : null;
+      const end = endpointForPress(connectorPoints(o, resolve, routeEnv), camera, { x: s.sx, y: s.sy }, radius);
+      if (end) return { id: o.id, name: end, rot: 0, endpoint: /** @type {const} */ (true) };
+      const h = connectorHandles(o, resolve, routeEnv, camera.zoom);
+      const index = h ? routeHandleAt(h.handles, camera, { x: s.sx, y: s.sy }, routeHandleRadius(s.pointerType)) : null;
+      if (h && index !== null) {
+        return { id: o.id, name: "route", rot: 0, endpoint: /** @type {const} */ (false), route: index, axis: h.handles[index].axis };
+      }
+      return null;
     }
     const name = handleForPress(o, camera, { x: s.sx, y: s.sy }, handleRadius(s.pointerType));
     return name ? { id: o.id, name, rot: o.rot || 0, endpoint: /** @type {const} */ (false) } : null;
@@ -519,7 +546,8 @@ export function createCanvas(store, options = {}) {
     }
     const hd = handleUnder(hoverPoint);
     let cursor = "";
-    if (hd) cursor = hd.endpoint ? "crosshair" : cursorForHandle(/** @type {any} */ (hd.name), hd.rot);
+    if (hd?.name === "route") cursor = hd.axis === "x" ? "ew-resize" : hd.axis === "y" ? "ns-resize" : "move";
+    else if (hd) cursor = hd.endpoint ? "crosshair" : cursorForHandle(/** @type {any} */ (hd.name), hd.rot);
     else {
       const w = screenToWorld(camera, { x: hoverPoint.sx, y: hoverPoint.sy });
       if (hitAt(w)) cursor = "move";
@@ -537,6 +565,7 @@ export function createCanvas(store, options = {}) {
     const next = validIds(objects(), ids);
     if (next.length === selection.length && next.every((id, i) => id === selection[i])) return;
     selection = next;
+    if (routeEdit && (selection.length !== 1 || selection[0] !== routeEdit.id)) exitRouteEdit(false);
     schedule("selection");
     schedule("cull");
     if (!exportMode) store.setPresence({ selection: [...selection] });
@@ -561,6 +590,7 @@ export function createCanvas(store, options = {}) {
     host: element,
     getObject: (id) => objects()[id],
     resolve,
+    routeEnv,
     getCamera: () => camera,
     onCommit(id, value) {
       const o = objects()[id];
@@ -610,6 +640,7 @@ export function createCanvas(store, options = {}) {
   const presence = presenceSvg ? new PresenceLayer(presenceSvg, {
     getState: () => store.getState(),
     connectorsOf: (ids) => layer.connectorsOf(ids),
+    routeEnv: (res, ghostIds) => spatial.routeEnv(res, () => ghostIds),
   }) : null;
 
   function stopFollowing() {
@@ -700,6 +731,8 @@ export function createCanvas(store, options = {}) {
     objectAt: hitAt,
     objectsNear,
     announce: (message) => options.announce?.(message),
+    routeEnv,
+    routeOverrides,
   };
 
   function cancelGesture() {
@@ -743,7 +776,7 @@ export function createCanvas(store, options = {}) {
     const rects = [];
     for (const id of selection) {
       const o = resolve(id);
-      const b = o && boundsOf(o, resolve);
+      const b = o && boundsOf(o, resolve, routeEnv);
       if (b) rects.push(b);
     }
     const u = unionRects(rects);
@@ -802,6 +835,11 @@ export function createCanvas(store, options = {}) {
       case "select": {
         const hd = handleUnder(p);
         if (hd?.endpoint) { gesture = endpointGesture(ctx, p, hd.id, /** @type {"from"|"to"} */ (hd.name)); break; }
+        if (hd?.name === "route" && hd.route !== undefined) {
+          exitRouteEdit(false);
+          gesture = routeHandleGesture(/** @type {any} */ (ctx), p, hd.id, hd.route);
+          break;
+        }
         if (hd) { gesture = handleGesture(ctx, p, hd.id, /** @type {any} */ (hd.name)); break; }
         const hit = hitAt(p);
         if (hit) { gesture = objectPressGesture(ctx, p, hit); break; }
@@ -949,6 +987,14 @@ export function createCanvas(store, options = {}) {
       }
       return;
     }
+    if (routeEdit && !gesture) {
+      const routeAction = keyAction(e, "route");
+      if (routeAction) {
+        e.preventDefault();
+        routeKey(routeAction);
+        return;
+      }
+    }
     const action = keyAction(e);
     if (!action) return;
     e.preventDefault();
@@ -1009,6 +1055,9 @@ export function createCanvas(store, options = {}) {
       case "edit":
         if (selection.length === 1) editText(selection[0]);
         break;
+      case "editRoute":
+        if (!gesture && selection.length === 1) enterRouteEdit(selection[0]);
+        break;
       case "front": case "back":
         if (selection.length && !gesture) store.reorder([...selection], action.type);
         break;
@@ -1035,6 +1084,106 @@ export function createCanvas(store, options = {}) {
   }
 
   // ------------------------------------------------------------------------------------------
+  // Keyboard route editing (E, then Tab / arrows / Delete / Enter): see route-edit.js
+  // ------------------------------------------------------------------------------------------
+  /** The selected connector's handles now, or null. @param {string} id */
+  function handlesOf(id) {
+    const o = objects()[id];
+    return o ? connectorHandles(o, resolve, routeEnv, camera.zoom) : null;
+  }
+
+  /**
+   * Starts keyboard route editing of connector `id` (selecting it). False when it has no route to
+   * edit (not an elbow or curved connector).
+   * @param {string} id
+   */
+  function enterRouteEdit(id) {
+    const o = objects()[id];
+    if (!o || o.type !== "connector") return false;
+    if (!hasRouteHandles(o)) {
+      options.announce?.("A straight connector has no route to edit. Choose Elbow or Curved first.");
+      return false;
+    }
+    if (editor?.isOpen) editor.commit();
+    cancelGesture();
+    if (selection.length !== 1 || selection[0] !== id) setSelectionInternal([id]);
+    if (!cameraReady) measure();
+    const h = handlesOf(id);
+    const n = h?.handles.length ?? 0;
+    routeEdit = { id, index: 0 };
+    schedule("overlay");
+    emit({ kind: "routeEdit" });
+    const first = n && h ? ` ${describeHandle(h.handles[0], 0, n)}.` : "";
+    options.announce?.(`Editing the route: ${n} ${n === 1 ? "handle" : "handles"}.${first} Tab moves between handles, arrow keys move one, Delete resets the route, Enter or Escape finishes.`);
+    return true;
+  }
+
+  /** @param {boolean} announce */
+  function exitRouteEdit(announce) {
+    if (!routeEdit) return;
+    routeEdit = null;
+    schedule("overlay");
+    emit({ kind: "routeEdit" });
+    if (announce) options.announce?.("Finished editing the route");
+  }
+
+  /** @param {import("./keymap.js").KeyAction} action */
+  function routeKey(action) {
+    if (!routeEdit) return;
+    const id = routeEdit.id;
+    const conn = objects()[id];
+    const h = handlesOf(id);
+    if (!conn || !h) { exitRouteEdit(true); return; }
+    const n = h.handles.length;
+    switch (action.type) {
+      case "routeHandle": {
+        if (!n) return;
+        routeEdit.index = mod(routeEdit.index + action.step, n);
+        schedule("overlay");
+        options.announce?.(describeHandle(h.handles[routeEdit.index], routeEdit.index, n));
+        break;
+      }
+      case "routeMove": {
+        const hd = h.handles[Math.min(routeEdit.index, n - 1)];
+        const from = conn.from ? resolve(conn.from) : undefined, to = conn.to ? resolve(conn.to) : undefined;
+        if (!hd || !from || !to) return;
+        const edit = keyboardEdit(conn, from, to, h.route, hd, action.dx, action.dy);
+        const patch = edit ? routePatch(conn, edit) : null;
+        if (!patch) {
+          if (hd.kind === "segment") announceLater(hd.axis === "x" ? "This segment moves left and right" : "This segment moves up and down");
+          return;
+        }
+        store.updateObjects([{ id, patch }]);
+        // Keep the handle picked: the same segment index, or the nearest one after bends change.
+        const after = handlesOf(id);
+        if (after?.handles.length) {
+          const target = { x: hd.point.x + action.dx, y: hd.point.y + action.dy };
+          let best = 0, bestD = Infinity;
+          after.handles.forEach((k, i) => {
+            const d = Math.hypot(k.point.x - target.x, k.point.y - target.y) + (k.axis === hd.axis ? 0 : 1e6);
+            if (d < bestD) { best = i; bestD = d; }
+          });
+          routeEdit.index = best;
+          announceLater(describeHandle(after.handles[best], best, after.handles.length));
+        }
+        schedule("overlay");
+        break;
+      }
+      case "routeReset": {
+        const patch = resetRoutePatch(conn);
+        if (patch) store.updateObjects([{ id, patch }]);
+        routeEdit.index = 0;
+        schedule("overlay");
+        options.announce?.(patch ? "Route reset to automatic" : "The route is already automatic");
+        break;
+      }
+      case "routeDone":
+        exitRouteEdit(true);
+        break;
+    }
+  }
+
+  // ------------------------------------------------------------------------------------------
   // Store changes
   // ------------------------------------------------------------------------------------------
   function rebuildAll() {
@@ -1055,7 +1204,7 @@ export function createCanvas(store, options = {}) {
    */
   function onStoreChange(state, change) {
     if (destroyed) return;
-    applyStoreChange(spatial, state, change);
+    const rerouted = applyStoreChange(spatial, state, change);
     switch (change.kind) {
       case "snapshot": {
         setBackground(state.board.background);
@@ -1069,8 +1218,10 @@ export function createCanvas(store, options = {}) {
         break;
       }
       case "objects": {
-        const ids = change.objects;
-        if (!ids) { rebuildAll(); break; }
+        const changed = change.objects;
+        if (!changed) { rebuildAll(); break; }
+        // Also redraw automatic elbows re-routed around a changed object (the index found them).
+        const ids = rerouted ? [...new Set([...changed, ...rerouted])] : changed;
         sortedCache = null;
         const added = updateCulling();
         const touched = layer.patch(ids, state.board.objects, resolve, added);
@@ -1086,6 +1237,8 @@ export function createCanvas(store, options = {}) {
         if (kept.length !== selection.length) setSelectionInternal(kept);
         else if (ids.some((id) => selection.includes(id)) || selection.some((id) => layer.connectorsOf([id]).size)) schedule("selection");
         if (editor?.isOpen) editor.sync();
+        if (routeEdit && !hasRouteHandles(state.board.objects[routeEdit.id])) exitRouteEdit(true);
+        else if (routeEdit && ids.includes(routeEdit.id)) schedule("overlay");
         presence?.invalidateObjects(touched);
         schedule("presence");
         if (exportMode) updateExportViewBox();
@@ -1308,7 +1461,7 @@ export function createCanvas(store, options = {}) {
       const rects = [];
       for (const id of ids) {
         const o = resolve(id);
-        const b = o && boundsOf(o, resolve);
+        const b = o && boundsOf(o, resolve, routeEnv);
         if (b) rects.push(b);
       }
       const u = unionRects(rects);
@@ -1321,7 +1474,7 @@ export function createCanvas(store, options = {}) {
       const rects = [];
       for (const id of ids) {
         const o = resolve(id);
-        const b = o && boundsOf(o, resolve);
+        const b = o && boundsOf(o, resolve, routeEnv);
         if (b) rects.push(b);
       }
       const u = unionRects(rects);
@@ -1348,6 +1501,24 @@ export function createCanvas(store, options = {}) {
       return true;
     },
     getSpatialIndex: () => spatial,
+    editRoute(id) {
+      const target = id ?? (selection.length === 1 ? selection[0] : null);
+      if (!target) return false;
+      if (document.activeElement !== element) element.focus({ preventScroll: true });
+      canvasActive = true;
+      return enterRouteEdit(target);
+    },
+    getRouteEdit: () => (routeEdit ? { ...routeEdit } : null),
+    resetRoute(ids) {
+      const all = objects();
+      const updates = [];
+      for (const id of validIds(all, ids ?? selection)) {
+        const patch = resetRoutePatch(all[id]);
+        if (patch) updates.push({ id, patch });
+      }
+      if (updates.length) store.updateObjects(updates);
+      return updates.length;
+    },
     on(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
