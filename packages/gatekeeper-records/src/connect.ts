@@ -18,6 +18,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { GatekeeperConnectCallback, GatekeeperUser } from "@gadgets/workshop-shared/gatekeeper";
 
+import { checkConnectRequest, CONNECT_PAGE_HEADERS } from "./connect-guard.js";
 import { userEmail, verifyAccessAssertion } from "./http/access.js";
 import { normaliseEmail, WORKSHOP_ISSUER } from "./domain/registry.js";
 import type { RecordsService } from "./domain/service.js";
@@ -88,16 +89,7 @@ function page(title: string, body: string, status = 200): Response {
       `<title>${escapeHtml(title)}</title><style>body{font:15px/1.5 system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem;color:#172033}` +
       `button{font:inherit;padding:.6rem 1.2rem;border-radius:.4rem;border:1px solid #1d4ed8;background:#1d4ed8;color:#fff;cursor:pointer}` +
       `.muted{color:#526079}</style></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`,
-    {
-      status,
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-        "cache-control": "no-store",
-        "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'",
-        "referrer-policy": "no-referrer",
-        "x-frame-options": "DENY",
-      },
-    },
+    { status, headers: { ...CONNECT_PAGE_HEADERS } },
   );
 }
 
@@ -109,15 +101,11 @@ export async function handleConnect(request: Request, env: Cloudflare.Env, expor
     return page("Link not valid", "<p>This connection link is incomplete. Start again from Connections in the Workshop.</p>", 400);
   }
 
-  const fetchSite = request.headers.get("sec-fetch-site");
-  if (fetchSite !== "same-origin") {
+  const guard = checkConnectRequest(request);
+  if (!guard.ok) {
+    if (guard.reason === "method") return new Response(null, { status: 405, headers: { allow: "GET, POST" } });
+    if (guard.reason === "origin") return page("Not allowed", "<p>Confirmation must come from this site.</p>", 403);
     return page("Start from the Workshop", "<p>For your safety, connect Organisation records from <strong>Connections</strong> in the Workshop, not from a link someone sent you.</p>", 403);
-  }
-  if (request.method === "POST") {
-    const origin = request.headers.get("origin");
-    if (!origin || origin !== url.origin) return page("Not allowed", "<p>Confirmation must come from this site.</p>", 403);
-  } else if (request.method !== "GET") {
-    return new Response(null, { status: 405, headers: { allow: "GET, POST" } });
   }
 
   const claims = await verifyAccessAssertion(request, { issuer: env.CF_ACCESS_ISS, audience: env.CF_ACCESS_AUD });

@@ -23,7 +23,9 @@ export { RecordsGatekeeper } from "./vendor/gatekeeper.js";
 export { RecordsVerifier } from "./vendor/verifier.js";
 export { GatekeeperVendor } from "./vendor/vendor.js";
 
-const SECURITY_HEADERS = { "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" };
+// same-origin, not no-referrer: under no-referrer a same-site form POST carries `Origin: null`,
+// which the connect page's Origin check must refuse (see connect-guard.ts).
+const SECURITY_HEADERS = { "x-content-type-options": "nosniff", "referrer-policy": "same-origin" };
 
 export default class RecordsWorker extends WorkerEntrypoint<Cloudflare.Env> {
   override async fetch(request: Request): Promise<Response> {
