@@ -55,6 +55,9 @@
  * @property {(type: ObjectType) => string|null}  addAtCenter
  *   Keyboard and button path for creating: adds a default-sized object of `type` at the view centre
  *   (not "pen" or "connector"), selects it, starts text editing for sticky/text, returns its id.
+ * @property {(ref: string|{packId?: string, iconId: string}, at?: {clientX: number, clientY: number}) => string|null} addIcon
+ *   adds an icon or stencil (src/shared/icons/registry.js) at its default size, centred on the view
+ *   centre or on the client point `at` (a drop), selects it and returns its id; null when unknown
  * @property {(id: string) => void} editText         starts inline text editing of an object
  * @property {(clientId: string|null) => void} follow  follow a peer's viewport, or stop
  * @property {() => string|null} getFollowing

@@ -24,8 +24,9 @@ import {
 } from "./camera.js";
 import {
   topObjectAt, boundsOf, connectorPoints, validIds, expandMoveIds, moveUpdates, buildDuplicates,
-  frameAtPoint, TEXT_EDITABLE, EDIT_ON_CREATE, round2, resizeUpdates, rotateUpdates,
+  frameAtPoint, EDIT_ON_CREATE, round2, resizeUpdates, rotateUpdates, canEditText,
 } from "./model.js";
+import { resolveIcon, iconDefaults, getIcon } from "../../../shared/icons/registry.js";
 import { handleForPress, visibleHandles, cursorForHandle } from "./handles.js";
 import { keyAction, panStep, directionWord, SHORTCUTS_HINT } from "./keymap.js";
 import { ObjectLayer, svgEl } from "./layers.js";
@@ -496,7 +497,7 @@ export function createCanvas(store, options = {}) {
   function editText(id) {
     if (!editor) return;
     const o = objects()[id];
-    if (!o || !TEXT_EDITABLE.includes(o.type)) return;
+    if (!o || !canEditText(o)) return;
     cancelGesture();
     if (editor.isOpen && editor.id === id) return;
     if (selection.length !== 1 || selection[0] !== id) setSelectionInternal([id]);
@@ -1124,6 +1125,41 @@ export function createCanvas(store, options = {}) {
       if (EDIT_ON_CREATE.includes(type)) editText(id);
       return id;
     },
+    addIcon(ref, at) {
+      const icon = resolveIcon(ref);
+      if (!icon || exportMode) return null;
+      if (!cameraReady) measure();
+      const d = iconDefaults(icon);
+      let c = screenToWorld(camera, { x: size.w / 2, y: size.h / 2 });
+      if (at && Number.isFinite(at.clientX) && Number.isFinite(at.clientY)) {
+        c = screenToWorld(camera, toLocal({ x: at.clientX, y: at.clientY }));
+      }
+      let x = round2(c.x - d.w / 2), y = round2(c.y - d.h / 2);
+      if (!at) {
+        // Nudge down-right while the spot is taken, like addAtCenter.
+        const taken = (/** @type {number} */ px, /** @type {number} */ py) =>
+          Object.values(objects()).some((o) => o.type === "icon" && Math.abs(o.x - px) < 1 && Math.abs(o.y - py) < 1);
+        for (let i = 0; i < 20 && taken(x, y); i++) { x += 20; y += 20; }
+      }
+      // Remembered colours: the line colour for every icon, fill and text colour only for shapes.
+      const remembered = toolStyle("icon");
+      /** @type {Record<string, any>} */
+      const style = { ...d.style };
+      if (remembered.stroke && remembered.stroke !== "none") style.stroke = remembered.stroke;
+      if (icon.kind === "stencil") {
+        if (remembered.fill) style.fill = remembered.fill;
+        if (remembered.textColor) style.textColor = remembered.textColor;
+      }
+      /** @type {any} */
+      const obj = {
+        type: "icon", packId: icon.packId, iconId: icon.id, x, y, w: d.w, h: d.h, style,
+        frameId: frameAtPoint(objects(), center({ x, y, w: d.w, h: d.h })),
+      };
+      const [id] = store.createObjects([obj]);
+      if (!id) return null;
+      setSelectionInternal([id], { announce: true });
+      return id;
+    },
     editText,
     follow(clientId) {
       if (clientId === following) return;
@@ -1195,6 +1231,10 @@ function reducedMotion() {
 function describe(o) {
   const names = { sticky: "sticky note", rect: "rectangle", ellipse: "ellipse", text: "text", frame: "frame", pen: "drawing", connector: "connector" };
   const label = o.text ? `: ${o.text.slice(0, 40)}` : "";
+  if (o.type === "icon") {
+    const icon = getIcon(o.packId, o.iconId);
+    return `${icon ? icon.label.toLowerCase() + (icon.kind === "stencil" ? " shape" : " icon") : "icon"}${label}`;
+  }
   return `${names[o.type] ?? o.type}${label}`;
 }
 

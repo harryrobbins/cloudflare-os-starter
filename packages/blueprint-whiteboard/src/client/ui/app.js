@@ -14,6 +14,7 @@ import { createPeople } from "./people.js";
 import { createMinimap } from "./minimap.js";
 import { createOutline } from "./outline.js";
 import { createActivity } from "./activity.js";
+import { createIconPicker } from "./icon-picker.js";
 import { showToast, ensureToastHost, closeMenu } from "./dialogs.js";
 
 /** @typedef {import("../store-contract.js").Store} Store */
@@ -38,6 +39,8 @@ import { showToast, ensureToastHost, closeMenu } from "./dialogs.js";
  * @property {(type: import("../../shared/protocol.js").ObjectType) => Partial<import("../../shared/protocol.js").Style>} toolStyle
  *   colours new objects of `type` get: the last fill / line / text colour chosen for that type
  * @property {(types: Set<string>, colours: Partial<import("../../shared/protocol.js").Style>) => void} rememberStyle
+ * @property {boolean} [iconPickerOpen]
+ * @property {() => void} [toggleIconPicker]  opens or closes the icon and shape picker (I)
  */
 
 /** Gap between announcements of other people's changes. */
@@ -164,6 +167,8 @@ export function mountApp(root, store) {
   const minimap = createMinimap(app);
   const outline = createOutline(app);
   const activity = createActivity(app);
+  const iconPicker = createIconPicker(app);
+  app.toggleIconPicker = () => iconPicker.toggle();
 
   // The style bar follows the canvas in DOM (and Tab) order: selecting on the canvas, then Tab,
   // reaches the selection's actions first.

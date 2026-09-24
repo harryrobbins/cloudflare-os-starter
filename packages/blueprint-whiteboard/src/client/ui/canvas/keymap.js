@@ -29,6 +29,7 @@ export const TOOL_KEYS = Object.freeze({
 export const SHORTCUTS_HINT =
   "Whiteboard canvas. Tools: V select, H hand, N sticky note, R rectangle, O ellipse, T text, F frame, " +
   "C connector, P pen. A opens the Add menu, Shift+O the Objects list. " +
+  "I opens icons and shapes. " +
   "Arrow keys move the selection (Shift for 10), or pan the view when nothing is selected. " +
   "Alt+Arrow keys resize the selection by 1 (Shift for 10); comma and period rotate it by 15 degrees. " +
   "Enter edits text, Delete removes, Ctrl+D duplicates, Ctrl+A selects all, ] brings to front, " +

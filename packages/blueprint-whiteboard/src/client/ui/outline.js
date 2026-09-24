@@ -9,6 +9,7 @@
 import { sortedObjects } from "../../shared/protocol.js";
 import { h, icon } from "./dom.js";
 import { typeLabel } from "./stylebar.js";
+import { getIcon } from "../../shared/icons/registry.js";
 
 /** @typedef {import("./app.js").App} App */
 /** @typedef {import("../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
@@ -26,6 +27,11 @@ export function describeObject(o, objects) {
     const to = o.to ? objects[o.to] : null;
     const name = (/** @type {WhiteboardObject|null} */ x) => (x ? excerpt(x.text) || typeLabel(x.type).toLowerCase() : "?");
     return `${o.text ? excerpt(o.text) + ": " : ""}from ${name(from)} to ${name(to)}`;
+  }
+  if (o.type === "icon") {
+    // Named by its icon, so a list of icons reads "Database", "User: Customer", ...
+    const name = getIcon(o.packId, o.iconId)?.label ?? "unknown icon";
+    return o.text ? `${name}: ${excerpt(o.text)}` : name;
   }
   return excerpt(o.text) || (o.type === "pen" ? "freehand stroke" : "no text");
 }
@@ -93,7 +99,8 @@ export function createOutline(app) {
     const objects = state.board.objects;
     const selection = new Set(canvas.getSelection());
     const all = sortedObjects(objects).reverse(); // top of the stack first
-    const rows = all.filter((o) => !q || typeLabel(o.type).toLowerCase().includes(q) || String(o.text || "").toLowerCase().includes(q));
+    const rows = all.filter((o) => !q || typeLabel(o.type).toLowerCase().includes(q) || String(o.text || "").toLowerCase().includes(q) ||
+      (o.type === "icon" && describeObject(o, objects).toLowerCase().includes(q)));
     const shown = rows.slice(0, MAX_ROWS);
     const k = q + "#" + shown.map((o) => `${o.id}:${o.version}:${selection.has(o.id) ? 1 : 0}`).join(",") + "#" + rows.length;
     if (k === key) return;
