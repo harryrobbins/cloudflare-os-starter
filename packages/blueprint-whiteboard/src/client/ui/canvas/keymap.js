@@ -19,7 +19,7 @@
  * as a "command" event. "present" actions apply only while presenting (scope "presentation").
  */
 
-/** @typedef {"addMenu"|"outline"|"help"|"present"} ShellCommand */
+/** @typedef {"addMenu"|"outline"|"icons"|"help"|"present"} ShellCommand */
 
 /**
  * How a key event matches: `key` (one-character keys compared lower-cased) or `code`. `mod` (Ctrl
@@ -128,6 +128,7 @@ export const COMMANDS = Object.freeze([
   { id: "pan", group: "View", label: "Pan the view", keys: ["Space+drag", "Shift+scroll"] },
   { id: "outline", group: "View", label: "Objects list", keys: ["Shift+O"], match: [{ key: "o", shift: true }], action: { type: "command", command: "outline" } },
   { id: "present", group: "View", label: "Present the frames one at a time", keys: ["Shift+P"], match: [{ key: "p", shift: true }], action: { type: "command", command: "present" } },
+  { id: "icons", group: "Tools", label: "Icons and shapes", keys: ["I"], match: [{ key: "i", shift: false }], action: { type: "command", command: "icons" } },
   { id: "help", group: "View", label: "Show these keyboard shortcuts", keys: ["?"], match: [{ key: "?" }], action: { type: "command", command: "help" } },
 
   // While presenting
@@ -144,6 +145,7 @@ export const COMMANDS = Object.freeze([
 export const SHORTCUTS_HINT =
   "Whiteboard canvas. Tools: V select, H hand, N sticky note, R rectangle, O ellipse, T text, F frame, " +
   "C connector, P pen. A opens the Add menu, Shift+O the Objects list. " +
+  "I opens icons and shapes. " +
   "Arrow keys move the selection (Shift for 10), or pan the view when nothing is selected. " +
   "Alt+Arrow keys resize the selection by 1 (Shift for 10); comma and period rotate it by 15 degrees. " +
   "Enter edits text, Delete removes, Ctrl+D duplicates, Ctrl+A selects all, ] brings to front, " +

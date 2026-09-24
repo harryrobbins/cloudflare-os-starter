@@ -10,6 +10,7 @@ Everyone with the whiteboard open is shown at the top right. When you first open
 
 - **Tools** (left toolbar; a bottom bar on phones, where Add, Objects and Activity come first): Select (`V`), Hand to pan (`H`), Sticky note (`N`), Rectangle (`R`), Ellipse (`O`), Text (`T`), Frame (`F`), Connector (`C`) and Pen (`P`). Click on the canvas to create an object at its default size, or drag to size it. After one object the tool returns to Select (the Pen stays on for more strokes); double-click a tool button to keep it on until you pick another. New objects use the fill, line and text colours you last chose for that kind of object. A text label left empty is removed when you finish editing. The toolbar is one `Tab` stop: use the arrow keys to move between its buttons. When it does not fit, a shadow at its edge shows that it scrolls.
 - **Add without dragging**: the **+** button (or `A`) opens a menu that adds a sticky note, rectangle, ellipse, text or frame in the middle of the view. Sticky notes and text open for typing straight away.
+- **Icons and shapes**: **Icons and shapes…** in the Add menu (or `I`) opens a panel of diagram shapes (flowchart and architecture: decision, start/end, document, database, cloud, queue, server, user and more) and a set of general icons (people, devices, files, actions, data, network, cloud and infrastructure, security, communication). Search by name or meaning ("db", "person"), or pick a category; your recently used icons are listed first. Click an icon, or press `Enter` on it, to add it in the middle of the view, or drag it onto the board to place it. In the panel, `↓` moves from the search field to the results, the arrow keys move between icons and `Escape` closes it. Shapes take a fill colour and hold text (double-click or `Enter` to type); icons keep their proportions and take the line colour, and a fill colour draws a tile behind them. Icons are part of the gadget, so they work offline and never load anything from the internet.
 - **Select and move**: click an object to select it, Shift-click to add to the selection, or drag a box around several on empty canvas (a frame is picked only when the box encloses all of it). Drag to move; use the handles to resize and rotate. When an object is small on screen (zoomed far out), only its corner handles show, or none, and dragging anywhere on it moves it. Arrow keys move the selection by 1 (Shift: 10), and the style bar's **Move** buttons move it by 10.
 - **Snapping and guides**: while you drag or resize, the selection snaps to the left, centre and right edges and the top, middle and bottom of nearby objects (a rotated object by the box around it), and a pink guide shows the line it snapped to. It never snaps to the objects being moved (such as a frame's members). On a board with the **grid** background it also snaps to the grid. The snap distance is the same on screen at every zoom. Hold `Alt` (`Option` on a Mac) while dragging to place freely; keyboard moves are always exact.
 - **Align and distribute**: with two or more objects selected, the style bar's align buttons line up their left edges, horizontal centres, right edges, top edges, vertical middles or bottom edges; with three or more, **Distribute horizontally** and **Distribute vertically** space them evenly (the outermost two stay put). The same commands are under **Align or distribute…** in the actions menu (right-click, or the context-menu key / `Shift+F10`). A selected frame moves as one with its members. Each command is one change, so one undo reverses it.
@@ -24,7 +25,7 @@ Everyone with the whiteboard open is shown at the top right. When you first open
 - **Live collaboration**: you see other people's cursors with their names, a see-through ghost of anything they are dragging, and pen strokes as they are drawn. Their changes appear when they let go. If two people move the same object at once, both moves are kept. If two people change the same text or colour at once, the first saved change wins and the object flashes for the other person.
 - **Undo**: `Ctrl+Z` / `Ctrl+Shift+Z` (`⌘` on a Mac) or the buttons at the bottom left undo and redo your own recent changes. The **Activity** panel lists recent changes by everyone and can undo them, including your changes from before a reload.
 - **Objects list** (list button or `Shift+O`): every object with its text, filterable. **Show** pans to an object, **Select** selects it and moves focus to the style bar, so the whole board can be used with a keyboard and screen reader. The Objects and Activity panels sit beside the board rather than blocking it: `Tab` moves in and out of them, and `Escape` or the close button closes them. Changes by others are announced to screen readers.
-- **Keyboard**: with the canvas focused, `A` opens the Add menu, `Shift+O` the Objects list, `Delete` removes the selection, `Ctrl+D` duplicates, `Ctrl+A` selects all, `]` and `[` bring to front and send to back, `+` and `-` zoom, `Shift+0` resets to 100%, and `Escape` cancels a gesture or clears the selection. Arrow keys move the selection (or pan with nothing selected), `Alt`+arrow keys resize it, and `,` and `.` rotate it. Right-click an object for its actions as a menu; the context-menu key or `Shift+F10` opens the same menu for the current selection, next to it. The same actions are in the style bar. After loading or deleting, focus stays on the canvas.
+- **Keyboard**: with the canvas focused, `A` opens the Add menu, `I` icons and shapes, `Shift+O` the Objects list, `Delete` removes the selection, `Ctrl+D` duplicates, `Ctrl+A` selects all, `]` and `[` bring to front and send to back, `+` and `-` zoom, `Shift+0` resets to 100%, and `Escape` cancels a gesture or clears the selection. Arrow keys move the selection (or pan with nothing selected), `Alt`+arrow keys resize it, and `,` and `.` rotate it. Right-click an object for its actions as a menu; the context-menu key or `Shift+F10` opens the same menu for the current selection, next to it. The same actions are in the style bar. After loading or deleting, focus stays on the canvas.
 - **Phones and tablets**: drag with one finger to select and move, or to draw with the Pen tool. Two fingers pan and pinch to zoom. Press and hold an object for its actions menu: it opens beside your finger, and lifting the finger does not choose anything; tap an item to run it. Buttons in the style bar, menus and the colour dialog are at least 44 pixels on phones.
 - **Getting started**: an empty whiteboard shows three ways to begin: **Add a sticky note**, **Paste text** (one sticky note per line) and **Choose a template** (Brainstorm, Retrospective, Journey map or Architecture sketch). A template is added in the middle of your view as one change, so Undo removes it. The same are in the board menu (the **⋯** button next to the title) and in the right-click menu on empty canvas.
 - **Copy, cut and paste**: `Ctrl+C`, `Ctrl+X` and `Ctrl+V` (`⌘` on a Mac), or **Copy** and **Cut** in the selection's actions menu. Copying a frame copies what is in it; a connector comes along only when both its ends do. Pasted objects are new copies placed at the pointer (or the middle of the view); pasting again steps them down and right. You can paste into another whiteboard. Text copied from elsewhere becomes one sticky note per line (at most 200), and a table copied from a spreadsheet keeps its rows and columns. Formatting, pictures and web page markup on the clipboard are ignored. The whiteboard runs in a protected frame that cannot read the clipboard by itself, so the menus' **Paste** pastes what you last copied on this whiteboard, and **Paste text as sticky notes…** gives you a box to paste into.
@@ -90,6 +91,22 @@ await env.Whiteboard.addFrame({ name: "Themes", contains: stickies.map((s) => s.
 // with `contains` and no geometry, the frame is sized around those objects; -> { frame, result }
 
 await env.Whiteboard.connectObjects({ from: "o_1a2b3c4d5e6f", to: "o_6f5e4d3c2b1a", label: "blocks", routing: "elbow", by: "Assistant" });
+
+// Icons and diagram shapes: look up stable ids first, then add by id (never markup or SVG).
+const hits = await env.Whiteboard.findIcons({ query: "database", packId: "core.1", limit: 5 });
+// -> [{packId, iconId, label, category, categoryLabel, tags, kind, aspect, text}], best first;
+//    also findIcons("cloud"). limit 1..100 (default 20); omit query to list a pack or category.
+await env.Whiteboard.addIcons({
+  by: "Assistant",
+  icons: [
+    "core.1/decision",                                   // "packId/iconId", or a bare iconId
+    { icon: "tabler.1/server", size: 64, color: "blue" }, // size: the longer side, keeping proportions
+    { packId: "core.1", iconId: "database", x: 0, y: 400, text: "Orders" },
+  ],
+  frame: "Architecture",   // optional: inside this frame (id or name) and members of it
+  at: { x: 0, y: 0 },      // optional top-left of the grid for icons without x and y
+  columns: 4, gap: 40,     // optional, as for addStickies
+}); // -> { created: WhiteboardObject[], errors: OpError[] }
 // -> { connector, errors }; routing "straight" (default) or "elbow"; arrow "end" (default), "both" or "none"
 
 const svg = await env.Whiteboard.exportSvg({ frame: "Themes" }); // whole board when frame is omitted
@@ -109,7 +126,9 @@ await env.Whiteboard.importData({
 }); // -> {created, ids, counts, skipped, problems, errors, revision} or {error}
 ```
 
-`arrangeGrid`, `moveObjects`, `updateObjects` and `deleteObjects` return an `OperationResult`. In `updateObjects`, `fields` is a patch (see "Object fields"); `color` is a shortcut that sets `style.fill` for stickies, shapes, text and frames, and `style.stroke` for pens and connectors.
+`arrangeGrid`, `moveObjects`, `updateObjects` and `deleteObjects` return an `OperationResult`. In `updateObjects`, `fields` is a patch (see "Object fields"); `color` is a shortcut that sets `style.fill` for stickies, shapes, text, frames and diagram shapes (`kind: "stencil"`), and `style.stroke` for pens, connectors and icons (`kind: "glyph"`).
+
+**Icon packs**: `core.1` "Diagram shapes" (`kind: "stencil"`; categories `flowchart` and `architecture`) and `tabler.1`, a subset of [Tabler Icons](https://github.com/tabler/tabler-icons) 3.48.0 (`kind: "glyph"`; categories `people`, `devices`, `files`, `actions`, `data`, `network`, `infrastructure`, `security`, `communication`). A published `packId`/`iconId` pair always draws the same icon; a changed design would ship as a new pack version (`tabler.2`) alongside the old one. `addIcons` takes each icon's default size and style (stencils at their own size with a white fill; glyphs 96 on the longer side); `w`, `h`, `rot`, `text`, `color`, `style` and `frame` may be given per icon, and items without both `x` and `y` are laid out in a grid, each centred in its cell. Unknown icons are reported in `errors` (`invalid_ref`) and the rest are added.
 
 ### Core methods
 
@@ -128,7 +147,7 @@ await env.Whiteboard.importData({
 
 **Ids** are a one-letter prefix, an underscore and 12 lowercase hex digits: `o_` for objects, `h_` for history entries. New object ids may be chosen by the caller, for example `"o_" + crypto.randomUUID().replace(/-/g, "").slice(0, 12)`.
 
-**Object fields**: `id, type, x, y, w, h, rot, z, frameId, text, style, version, createdAt, updatedAt, createdBy`, plus `points` for pens and `from, to, fromSide, toSide, routing` for connectors.
+**Object fields**: `id, type, x, y, w, h, rot, z, frameId, text, style, version, createdAt, updatedAt, createdBy`, plus `points` for pens, `from, to, fromSide, toSide, routing` for connectors and `packId, iconId` for icons.
 
 | Type | Notes |
 | --- | --- |
@@ -136,6 +155,7 @@ await env.Whiteboard.importData({
 | `text` | a text label; may rotate |
 | `frame` | a named region (`text` is the name); drawn below everything else; cannot rotate or belong to another frame |
 | `pen` | a freehand stroke: `points` is `[x0, y0, x1, y1, ...]` normalised to the box (each 0 to 1); `style.stroke` and `style.strokeWidth` draw it |
+| `icon` | an icon or diagram shape from a pack: `packId` and `iconId` name it (see `findIcons`; an unknown pair is `invalid_ref`) and may be changed by an update; only the reference is stored, never the drawing. May rotate. Stencils (`core.1`) stretch to the box, fill with `style.fill` and hold `text`; glyphs (`tabler.1`) keep their proportions inside the box, draw in `style.stroke` with `style.strokeWidth` in the icon's own units (2 is the design weight; it scales with the icon), draw a tile in `style.fill` unless it is `none`, and always have empty `text`. `addObjects` accepts `{type: "icon", packId, iconId, ...}` too |
 | `connector` | a line from object `from` to object `to` (neither may be a connector); `fromSide`/`toSide` are `auto`, `top`, `right`, `bottom` or `left`; `routing` is `straight` or `elbow`; `text` is an optional label; `style.arrowStart`/`arrowEnd` are `none` or `arrow`. Its box is ignored |
 
 - **Geometry**: `(x, y)` is the top-left of the unrotated box; `rot` is degrees clockwise about its centre.
@@ -210,3 +230,7 @@ The UI sends presence adaptively (`src/client/sync/presence.js`): selection and 
 ### Client connection state (for the UI and tests)
 
 The client store (`src/client/store-contract.js`) exposes `connection` as one of `connecting`, `live` (nothing pending: "Saved"), `saving`, `reconnecting`, `recovery-required` (automatic recovery gave up; retries continue) and `read-only` (reserved for verified sessions, not produced yet), plus `pendingCount`, `oldestPendingAt`, `lastAcknowledgedRevision` and `riskOfLoss`. `store.replaceTarget(gadget)` swaps the RPC stub without reloading the frame: the store re-subscribes on it, reconciles from its snapshot and replays only unacknowledged requests with their original `requestId`, so each change applies at most once. The platform cannot hand the frame a fresh stub yet (that needs a host change), so on the platform the frame still reloads, as described under "Recovering" above. `store.getRecoveryData()` returns the data-only recovery file (`{format: "whiteboard-recovery", version: 1, savedAt, lastAcknowledgedRevision, board, pending}`); it never contains request ids or the session and is never written to `window.name` or logs.
+
+## Third-party notices
+
+The general icons are a subset of [Tabler Icons](https://github.com/tabler/tabler-icons) 3.48.0, MIT licence, Copyright (c) 2020-2026 Paweł Kuna. They are compiled into inert drawing data when the gadget is built; the full licence text ships inside the gadget's code with that data (the `licence` of pack `tabler.1`), and in `THIRD_PARTY_NOTICES.md` of the source package.

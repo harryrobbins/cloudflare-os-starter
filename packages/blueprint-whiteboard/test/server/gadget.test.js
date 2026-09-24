@@ -322,3 +322,25 @@ describe("ExportHandler", () => {
     await expect(ExportHandler.prototype.export.call(null, stub, "csv")).rejects.toThrow(/Unknown/);
   });
 });
+
+describe("icons over RPC", () => {
+  it("findIcons returns summaries and addIcons creates icons that export as inert paths", async () => {
+    const { stub } = fresh();
+    const found = await stub.findIcons({ query: "database", limit: 2 });
+    expect(found).toHaveLength(2);
+    expect(found[0]).toMatchObject({ iconId: "database", aspect: expect.any(Number) });
+    expect(await stub.findIcons("cloud")).not.toHaveLength(0);
+    const { created, errors } = await stub.addIcons({ by: "Agent", icons: ["core.1/decision", { icon: "tabler.1/server", color: "red" }, "nope"] });
+    expect(created.map((o) => o.iconId)).toEqual(["decision", "server"]);
+    expect(errors).toEqual([expect.objectContaining({ index: 2, code: "invalid_ref" })]);
+    const board = await stub.getBoard();
+    expect(Object.values(board.objects).filter((o) => o.type === "icon")).toHaveLength(2);
+    const svg = await stub.exportSvg({});
+    expect(svg).toContain(`data-id="${created[0].id}"`);
+    expect(svg).toMatch(/<path d="M[0-9. -]+[LCZ]/);
+    expect(svg).not.toMatch(/<script|<image|<use|href=/);
+    // The core applyOperation path validates icons too.
+    const bad = await stub.applyOperation({ objectOps: [{ op: "create", object: { id: objectId(), type: "icon", packId: "tabler.1", iconId: "x-nope" } }] });
+    expect(bad.errors[0].code).toBe("invalid_ref");
+  });
+});

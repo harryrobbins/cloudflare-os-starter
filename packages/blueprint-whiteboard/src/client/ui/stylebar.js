@@ -15,19 +15,20 @@ import { h, icon, rovingFocus } from "./dom.js";
 import { openMenu } from "./dialogs.js";
 import { expandMoveIds, moveUpdates, resizeUpdates, rotateUpdates } from "./canvas/index.js";
 import { createArrange } from "./arrange.js";
+import { canEditText } from "./canvas/model.js";
 
 /** @typedef {import("./app.js").App} App */
 /** @typedef {import("../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("../../shared/protocol.js").ObjectType} ObjectType */
 /** @typedef {import("../../shared/protocol.js").Style} Style */
 
-const FILL_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame"]);
-const STROKE_TYPES = new Set(["rect", "ellipse", "frame", "pen", "connector"]);
-const TEXT_COLOR_TYPES = new Set(["sticky", "rect", "ellipse", "text", "connector"]);
-const WIDTH_TYPES = new Set(["rect", "ellipse", "frame", "pen", "connector"]);
-const FONT_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame", "connector"]);
-const ALIGN_TYPES = new Set(["sticky", "rect", "ellipse", "text"]);
-const TEXT_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame", "connector"]);
+const FILL_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame", "icon"]);
+const STROKE_TYPES = new Set(["rect", "ellipse", "frame", "pen", "connector", "icon"]);
+// Text controls apply to icons only when they hold text (stencils); see textObjs in render().
+const TEXT_COLOR_TYPES = new Set(["sticky", "rect", "ellipse", "text", "connector", "icon"]);
+const WIDTH_TYPES = new Set(["rect", "ellipse", "frame", "pen", "connector", "icon"]);
+const FONT_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame", "connector", "icon"]);
+const ALIGN_TYPES = new Set(["sticky", "rect", "ellipse", "text", "icon"]);
 const MOVABLE = (/** @type {WhiteboardObject} */ o) => o.type !== "connector";
 const RESIZABLE = MOVABLE;
 const ROTATABLE_TYPES = new Set(/** @type {readonly string[]} */ (ROTATABLE));
@@ -60,7 +61,7 @@ export function colorLabel(hex) {
 
 /** @param {ObjectType} type */
 export function typeLabel(type) {
-  return { sticky: "Sticky note", rect: "Rectangle", ellipse: "Ellipse", text: "Text", frame: "Frame", pen: "Drawing", connector: "Connector" }[type] ?? type;
+  return { sticky: "Sticky note", rect: "Rectangle", ellipse: "Ellipse", text: "Text", frame: "Frame", pen: "Drawing", connector: "Connector", icon: "Icon" }[type] ?? type;
 }
 
 /** @param {App} app */
@@ -182,7 +183,7 @@ export function createStyleBar(app) {
   }
   function editText() {
     const objs = selected();
-    if (objs.length === 1 && TEXT_TYPES.has(objs[0].type)) canvas.editText(objs[0].id);
+    if (objs.length === 1 && canEditText(objs[0])) canvas.editText(objs[0].id);
   }
 
   /**
@@ -292,6 +293,8 @@ export function createStyleBar(app) {
     const types = new Set(objs.map((o) => o.type));
     const has = (/** @type {Set<string>} */ set) => objs.some((o) => set.has(o.type));
     const noSticky = !types.has("sticky") && !types.has("frame");
+    // Glyph icons hold no text, so text controls ignore them.
+    const textObjs = objs.filter((o) => o.type !== "icon" || canEditText(o));
 
     // Keep focus on the same control across the rebuild.
     const active = /** @type {HTMLElement|null} */ (document.activeElement);
@@ -310,8 +313,8 @@ export function createStyleBar(app) {
     const colors = h("div", { class: "style-group", role: "group", "aria-label": "Colours" },
       colorButton("fill", "Fill colour", FILL_TYPES, objs, "fill", [...Object.values(COLORS), ...(noSticky ? ["none"] : [])]),
       colorButton("stroke", "Line colour", STROKE_TYPES, objs, "stroke",
-        [...INK, ...(objs.some((o) => o.type === "pen" || o.type === "connector") ? [] : ["none"])]),
-      colorButton("text-color", "Text colour", TEXT_COLOR_TYPES, objs, "textColor", [...INK, "#ffffff"]),
+        [...INK, ...(objs.some((o) => o.type === "pen" || o.type === "connector" || o.type === "icon") ? [] : ["none"])]),
+      colorButton("text-color", "Text colour", TEXT_COLOR_TYPES, textObjs, "textColor", [...INK, "#ffffff"]),
     );
     if (colors.children.length) groups.push(colors);
 
@@ -323,8 +326,8 @@ export function createStyleBar(app) {
           onclick: () => setStyle(WIDTH_TYPES, { strokeWidth: w }),
         }, h("span", { "aria-hidden": "true", style: { display: "block", width: "16px", height: Math.max(1, Math.min(6, w)) + "px", background: "currentColor", borderRadius: "2px" } })))));
     }
-    if (has(FONT_TYPES)) {
-      const current = common(objs.filter((o) => FONT_TYPES.has(o.type)), (o) => o.style.fontSize);
+    if (textObjs.some((o) => FONT_TYPES.has(o.type))) {
+      const current = common(textObjs.filter((o) => FONT_TYPES.has(o.type)), (o) => o.style.fontSize);
       groups.push(h("div", { class: "style-group font-group", role: "group", "aria-label": "Text size" },
         FONT_SIZES.map((f) => btn("font-" + f.size, {
           class: "btn small font-btn", "aria-pressed": String(current === f.size), "aria-label": `Text size ${f.label === "S" ? "small" : f.label === "M" ? "medium" : f.label === "L" ? "large" : "extra large"}`,
@@ -332,8 +335,8 @@ export function createStyleBar(app) {
           onclick: () => setStyle(FONT_TYPES, { fontSize: f.size }),
         }, f.label))));
     }
-    if (has(ALIGN_TYPES)) {
-      const current = common(objs.filter((o) => ALIGN_TYPES.has(o.type)), (o) => o.style.align);
+    if (textObjs.some((o) => ALIGN_TYPES.has(o.type))) {
+      const current = common(textObjs.filter((o) => ALIGN_TYPES.has(o.type)), (o) => o.style.align);
       groups.push(h("div", { class: "style-group align-group", role: "group", "aria-label": "Text alignment" },
         /** @type {const} */ (["left", "center", "right"]).map((a) => btn("align-" + a, {
           class: "btn small icon-only align-btn", "aria-pressed": String(current === a), "aria-label": `Align ${a}`, title: `Align ${a}`,
@@ -393,7 +396,7 @@ export function createStyleBar(app) {
       canConnect(objs)
         ? btn("connect", { class: "btn small connect-btn", title: "Connect the two selected objects", onclick: connect }, icon("connector", 16), "Connect")
         : null,
-      objs.length === 1 && TEXT_TYPES.has(objs[0].type)
+      objs.length === 1 && canEditText(objs[0])
         ? btn("edit-text", { class: "btn small icon-only edit-text-btn", "aria-label": "Edit text", title: "Edit text (Enter)", onclick: editText }, icon("edit", 16))
         : null,
       btn("front", { class: "btn small icon-only front-btn", "aria-label": "Bring to front", title: "Bring to front", onclick: () => reorder("front") }, icon("front", 16)),
@@ -457,7 +460,7 @@ export function createStyleBar(app) {
     /** @type {{label: string, onSelect: () => void, danger?: boolean, className?: string}[]} */
     const items = [];
     if (objs.length) {
-      if (objs.length === 1 && TEXT_TYPES.has(objs[0].type)) items.push({ label: "Edit text", className: "ctx-edit", onSelect: editText });
+      if (objs.length === 1 && canEditText(objs[0])) items.push({ label: "Edit text", className: "ctx-edit", onSelect: editText });
       if (canConnect(objs)) items.push({ label: "Connect", className: "ctx-connect", onSelect: connect });
       items.push(...arrange.menuItems(objs, { x: at.x, y: at.y, returnFocus: canvas.element, avoid: at.rect ?? null, pointerType: at.pointerType }));
       items.push({ label: "Style…", className: "ctx-style", onSelect: () => focusFirst() });

@@ -14,6 +14,7 @@ import { createPeople } from "./people.js";
 import { createMinimap } from "./minimap.js";
 import { createOutline } from "./outline.js";
 import { createActivity } from "./activity.js";
+import { createIconPicker } from "./icon-picker.js";
 import { showToast, ensureToastHost, closeMenu } from "./dialogs.js";
 import { ConnectionAnnouncer, statusText } from "../sync/connection.js";
 import { keyAction } from "./canvas/keymap.js";
@@ -43,6 +44,8 @@ import { mountShare, SHARE_CSS } from "./share.js";
  * @property {(types: Set<string>, colours: Partial<import("../../shared/protocol.js").Style>) => void} rememberStyle
  * @property {(objs: import("../../shared/protocol.js").WhiteboardObject[]) => {label: string, onSelect: () => void, danger?: boolean, className?: string}[]} [contextItems]
  *   extra context-menu items (copy, cut, paste, links, present) from ./share.js
+ * @property {boolean} [iconPickerOpen]
+ * @property {() => void} [toggleIconPicker]  opens or closes the icon and shape picker (I)
  */
 
 /** Gap between announcements of other people's changes. */
@@ -171,6 +174,8 @@ export function mountApp(root, store) {
   const minimap = createMinimap(app);
   const outline = createOutline(app);
   const activity = createActivity(app);
+  const iconPicker = createIconPicker(app);
+  app.toggleIconPicker = () => iconPicker.toggle();
 
   // The style bar follows the canvas in DOM (and Tab) order: selecting on the canvas, then Tab,
   // reaches the selection's actions first.
@@ -184,6 +189,7 @@ export function mountApp(root, store) {
   const runCommand = (command) => {
     if (command === "addMenu") toolbar.openAddMenu();
     else if (command === "outline") outline.toggle();
+    else if (command === "icons") iconPicker.toggle();
     else share.command(command);
   };
 

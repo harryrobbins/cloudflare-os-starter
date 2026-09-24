@@ -15,6 +15,7 @@ import {
 import { effectiveFrameId, compareObjects, TYPE_DEFAULTS, LIMITS, ROTATABLE } from "../../../shared/protocol.js";
 import { sizedBox, rotatedBy } from "./handles.js";
 import { alignDeltas, distributeDeltas } from "../../model/alignment.js";
+import { iconTextBox } from "../../../shared/icons/registry.js";
 
 /** @typedef {import("../../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("../../../shared/protocol.js").ObjectType} ObjectType */
@@ -27,13 +28,22 @@ import { alignDeltas, distributeDeltas } from "../../model/alignment.js";
 export const HIT_TOLERANCE_PX = 6;
 /** Objects move by this much when duplicated. */
 export const DUPLICATE_OFFSET = 20;
-/** Types whose text can be edited inline. */
-export const TEXT_EDITABLE = Object.freeze(["sticky", "rect", "ellipse", "text", "frame", "connector"]);
+/** Types whose text can be edited inline (icons only when their icon has a text box; see canEditText). */
+export const TEXT_EDITABLE = Object.freeze(["sticky", "rect", "ellipse", "text", "frame", "connector", "icon"]);
 /** Types that open the editor right after being created. */
 export const EDIT_ON_CREATE = Object.freeze(["sticky", "text"]);
 
 /** @param {number} v */
 export const round2 = (v) => Math.round(v * 100) / 100 + 0;
+
+/**
+ * Whether `o` holds editable text: its type does, and an icon's icon has a text box (stencils do,
+ * glyphs do not).
+ * @param {WhiteboardObject} o
+ */
+export function canEditText(o) {
+  return TEXT_EDITABLE.includes(o.type) && (o.type !== "icon" || !!iconTextBox(o));
+}
 
 /**
  * Flat world points of a connector's route, or null when an endpoint is missing.
@@ -318,6 +328,7 @@ export function buildDuplicates(objects, ids, newId, offset = DUPLICATE_OFFSET) 
         rot: o.rot, text: o.text, style: { ...o.style },
       };
       if (o.type === "pen") c.points = [...(o.points ?? [])];
+      if (o.type === "icon") { c.packId = o.packId; c.iconId = o.iconId; }
       if (o.type !== "frame") c.frameId = null;
       creates.push(c);
       copies[c.id] = { ...o, ...c };

@@ -107,11 +107,14 @@ export function createToolbar(app) {
 
   /** @param {HTMLElement} anchor */
   function openAddMenu(anchor) {
-    openMenu(anchor, ADDABLE.map((a) => ({
-      label: a.label,
-      className: "add-" + a.type,
-      onSelect: () => { canvas.addAtCenter(a.type); },
-    })), { label: "Add object" });
+    openMenu(anchor, [
+      ...ADDABLE.map((a) => ({
+        label: a.label,
+        className: "add-" + a.type,
+        onSelect: () => { canvas.addAtCenter(a.type); },
+      })),
+      { label: "Icons and shapes… (I)", className: "add-icon", onSelect: () => app.toggleIconPicker?.() },
+    ], { label: "Add object" });
   }
 
   const undoBtn = h("button", {

@@ -15,7 +15,7 @@ import { isValidOrderKey } from "./order.js";
 // ---------------------------------------------------------------------------------------------
 
 /**
- * @typedef {"sticky"|"rect"|"ellipse"|"text"|"frame"|"pen"|"connector"} ObjectType
+ * @typedef {"sticky"|"rect"|"ellipse"|"text"|"frame"|"pen"|"connector"|"icon"} ObjectType
  */
 
 /**
@@ -39,8 +39,8 @@ import { isValidOrderKey } from "./order.js";
  * One object on the board, stored under "obj:<id>".
  *
  * Geometry: (x, y) is the top-left corner of the unrotated box, w and h its size, all in world
- * units. `rot` is degrees clockwise about the box centre, [0, 360); only sticky, rect, ellipse
- * and text rotate, everything else is always 0. A connector's box is meaningless (always 0,0,1,1):
+ * units. `rot` is degrees clockwise about the box centre, [0, 360); only sticky, rect, ellipse,
+ * text and icon rotate, everything else is always 0. A connector's box is meaningless (always 0,0,1,1):
  * its geometry is derived from its endpoints (src/shared/geometry.js).
  *
  * Stacking: frames always render below every other object; within each group, ascending `z`
@@ -62,7 +62,8 @@ import { isValidOrderKey } from "./order.js";
  *   applies the rest of the op; naming an existing object that is not a frame is invalid_ref.
  * @property {string} text         sticky/rect/ellipse/text: content (LIMITS.text chars, newlines
  *   kept); frame: its name (LIMITS.frameName, one line); connector: a label (LIMITS.connectorLabel,
- *   one line); pen: always "".
+ *   one line); pen: always ""; icon: content drawn in its icon's text box, always "" for icons
+ *   without one (glyphs).
  * @property {Style} style
  * @property {number[]} [points]   pen only: flat [x0, y0, x1, y1, ...] normalised to the box, each
  *   coordinate in [0, 1] rounded to 4 decimals; 2..LIMITS.penPoints points
@@ -71,6 +72,9 @@ import { isValidOrderKey } from "./order.js";
  * @property {Side} [fromSide]     connector only
  * @property {Side} [toSide]       connector only
  * @property {"straight"|"elbow"} [routing]  connector only
+ * @property {string} [packId]     icon only: the icon pack, "<name>.<version>" (see
+ *   src/shared/icons/registry.js); with iconId it names compiled geometry, never markup
+ * @property {string} [iconId]     icon only: the icon within its pack
  * @property {number} version      1 on create, bumped once per request that changes the object
  * @property {number} createdAt    epoch ms
  * @property {number} updatedAt    epoch ms
@@ -378,9 +382,9 @@ export const ZOOM_MAX = 20;
 
 export const DEFAULT_TITLE = "Untitled whiteboard";
 
-export const OBJECT_TYPES = /** @type {const} */ (["sticky", "rect", "ellipse", "text", "frame", "pen", "connector"]);
+export const OBJECT_TYPES = /** @type {const} */ (["sticky", "rect", "ellipse", "text", "frame", "pen", "connector", "icon"]);
 /** Types that rotate; every other type has rot 0. */
-export const ROTATABLE = /** @type {const} */ (["sticky", "rect", "ellipse", "text"]);
+export const ROTATABLE = /** @type {const} */ (["sticky", "rect", "ellipse", "text", "icon"]);
 export const SIDES = /** @type {const} */ (["auto", "top", "right", "bottom", "left"]);
 export const BACKGROUNDS = /** @type {const} */ (["dots", "grid", "plain"]);
 
@@ -396,6 +400,7 @@ export const EDITABLE_FIELDS = Object.freeze({
   frame: ["x", "y", "w", "h", "z", "text", "style"],
   pen: ["x", "y", "w", "h", "z", "frameId", "points", "style"],
   connector: ["z", "text", "style", "from", "to", "fromSide", "toSide", "routing"],
+  icon: ["x", "y", "w", "h", "rot", "z", "frameId", "text", "style", "packId", "iconId"],
 });
 
 /** Geometry fields a client rebases by delta when a concurrent change conflicts. */
@@ -423,6 +428,8 @@ export const TYPE_DEFAULTS = Object.freeze({
   frame: { w: 800, h: 600, text: "Frame", style: style({ fill: "#ffffff", stroke: "#9ca3af", strokeWidth: 1, fontSize: 16, align: "left" }) },
   pen: { w: 1, h: 1, text: "", style: style({ fill: "none", stroke: "#1f2937", strokeWidth: 4, fontSize: 16, align: "left" }) },
   connector: { w: 1, h: 1, text: "", routing: "straight", style: style({ fill: "none", stroke: "#1f2937", strokeWidth: 2, fontSize: 14, align: "center", arrowEnd: "arrow" }) },
+  // A glyph's defaults; the board applies each icon's own size and style (registry iconDefaults).
+  icon: { w: 96, h: 96, text: "", style: style({ fill: "none", stroke: "#1f2937", strokeWidth: 2, fontSize: 18, align: "center" }) },
 });
 
 /** @param {Partial<Style>} s @returns {Style} */
@@ -440,6 +447,9 @@ const REQUEST_ID_RE = /^[A-Za-z0-9:_-]{1,64}$/;
 const SESSION_RE = /^[0-9a-f]{32}$/;
 const ORDER_RE = /^[0-9A-Za-z]+$/;
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+/** Shape of icon references; existence is checked against src/shared/icons/registry.js by the board. */
+const PACK_ID_RE = /^[a-z][a-z0-9-]{0,31}\.[0-9]{1,4}$/;
+const ICON_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 // C0/C1 controls except tab and newline, plus bidi overrides.
 const CONTROL_RE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g;
 
@@ -654,6 +664,8 @@ export function cleanObjectPatch(raw, type) {
         if (typeof v === "string" && /** @type {readonly string[]} */ (SIDES).includes(v)) out[key] = v;
         break;
       case "routing": if (v === "straight" || v === "elbow") out.routing = v; break;
+      case "packId": if (typeof v === "string" && PACK_ID_RE.test(v)) out.packId = v; break;
+      case "iconId": if (typeof v === "string" && ICON_ID_RE.test(v)) out.iconId = v; break;
     }
   }
   return /** @type {ObjectPatch} */ (out);
@@ -662,8 +674,9 @@ export function cleanObjectPatch(raw, type) {
 /**
  * Builds a complete object (minus version and timestamps) from a create op's `object`, applying
  * TYPE_DEFAULTS. Returns null when `id` or `type` is invalid. References are not checked, `z` is
- * left "" when absent or invalid (the board picks one), and a pen without valid points or a
- * connector without from/to is returned as is for the board to reject.
+ * left "" when absent or invalid (the board picks one), and a pen without valid points, a
+ * connector without from/to or an icon without a well-formed packId/iconId is returned as is for
+ * the board to reject.
  * @param {unknown} raw
  * @returns {Omit<WhiteboardObject, "version"|"createdAt"|"updatedAt"|"createdBy">|null}
  */
@@ -693,6 +706,10 @@ export function normalizeNewObject(raw) {
     obj.fromSide = patch.fromSide ?? "auto";
     obj.toSide = patch.toSide ?? "auto";
     obj.routing = patch.routing ?? d.routing ?? "straight";
+  }
+  if (type === "icon") {
+    obj.packId = patch.packId ?? "";
+    obj.iconId = patch.iconId ?? "";
   }
   return obj;
 }

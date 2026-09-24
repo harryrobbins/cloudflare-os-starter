@@ -172,6 +172,19 @@ describe("placing", () => {
   });
 });
 
+describe("icons", () => {
+  it("round-trips packId and iconId through backup and placement", () => {
+    const icon = obj("icon", { packId: "core.1", iconId: "process", w: 160, h: 100, text: "Step" });
+    const portable = toPortable([icon], board(icon));
+    expect(portable[0]).toMatchObject({ type: "icon", packId: "core.1", iconId: "process" });
+    const parsed = parseBackup(JSON.parse(JSON.stringify(buildBackup({ title: "T", background: "dots", objects: board(icon) }))));
+    expect(parsed.errors ?? []).toEqual([]);
+    const { creates } = planCreates(parsed.entries, { newId: () => newId("object"), dx: 0, dy: 0 });
+    expect(creates).toHaveLength(1);
+    expect(creates[0]).toMatchObject({ type: "icon", packId: "core.1", iconId: "process" });
+  });
+});
+
 describe("plain text", () => {
   it("makes one sticky per non-empty line in a square-ish grid", () => {
     const { entries, truncated } = textToEntries("one\r\n\n  two  \nthree\nfour\nfive\n");

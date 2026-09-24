@@ -10,7 +10,7 @@ import {
 } from "../../../shared/geometry.js";
 import { FONT_FAMILY } from "../../../shared/render.js";
 import { cleanLine, cleanText, LIMITS } from "../../../shared/protocol.js";
-import { connectorPoints, TEXT_EDITABLE } from "./model.js";
+import { connectorPoints, canEditText } from "./model.js";
 
 /** @typedef {import("../../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("../../../shared/protocol.js").ObjectPatch} ObjectPatch */
@@ -35,7 +35,7 @@ import { connectorPoints, TEXT_EDITABLE } from "./model.js";
  * @returns {EditorBox|null}
  */
 export function editorBox(o, resolve) {
-  if (!TEXT_EDITABLE.includes(o.type)) return null;
+  if (!canEditText(o)) return null;
   const fontSize = o.style.fontSize;
   const lineHeight = fontSize * LINE_HEIGHT;
   if (o.type === "connector") {

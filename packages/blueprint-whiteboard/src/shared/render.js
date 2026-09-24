@@ -5,6 +5,7 @@
 
 import { fmt, center, connectorRoute, penWorldPoints, polylineMidpoint, strokePathD, textLayout, textWidth, fitCamera, boardBounds, rotatedBounds } from "./geometry.js";
 import { DEFAULT_TITLE, sortedObjects } from "./protocol.js";
+import { getIcon, iconPaths, iconPlacement, iconTextBox, DEFAULT_ICON_STROKE, DEFAULT_INK } from "./icons/registry.js";
 
 /** @typedef {import("./protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("./protocol.js").BoardSnapshot} BoardSnapshot */
@@ -44,6 +45,7 @@ export function h(tag, attrs, children) {
  */
 export function textNode(o) {
   if (!o.text || o.type === "pen" || o.type === "connector") return null;
+  if (o.type === "icon" && !iconTextBox(o)) return null;
   const layout = textLayout(o);
   if (!layout.lines.length) return null;
   const x = layout.anchor === "middle" ? layout.x + layout.w / 2 : layout.anchor === "end" ? layout.x + layout.w : layout.x;
@@ -89,9 +91,65 @@ function shapeNodes(o) {
         d: strokePathD(penWorldPoints(o)), fill: "none", stroke: s.stroke === "none" ? "#1f2937" : s.stroke,
         "stroke-width": Math.max(0.5, s.strokeWidth), "stroke-linecap": "round", "stroke-linejoin": "round",
       })];
+    case "icon":
+      return iconNodes(o);
     default:
       return [];
   }
+}
+
+/**
+ * Compiled icon path data placed into world coordinates (see iconPlacement).
+ * @param {{cmds: string[], nums: number[]}} p @param {{x: number, y: number, sx: number, sy: number}} at
+ */
+function placePath(p, at) {
+  let d = "";
+  let k = 0;
+  for (const c of p.cmds) {
+    d += c;
+    const n = c === "C" ? 6 : c === "Z" ? 0 : 2;
+    for (let j = 0; j < n; j += 2, k += 2) {
+      d += (j ? " " : "") + fmt(at.x + p.nums[k] * at.sx) + " " + fmt(at.y + p.nums[k + 1] * at.sy);
+    }
+  }
+  return d;
+}
+
+/**
+ * An icon from its pack's compiled geometry (src/shared/icons/registry.js). Recolouring never
+ * touches the geometry: paint roles map to the object's fill and line colours. An icon whose pack
+ * or id this build does not know draws as a dashed placeholder box.
+ * @param {WhiteboardObject} o
+ * @returns {VNode[]}
+ */
+function iconNodes(o) {
+  const e = getIcon(o.packId, o.iconId);
+  const s = o.style;
+  if (!e) {
+    return [h("rect", {
+      x: o.x, y: o.y, width: o.w, height: o.h, rx: 4, fill: "none", stroke: "#9ca3af", "stroke-width": 2,
+      "stroke-dasharray": "6 4", "data-missing-icon": "1",
+    })];
+  }
+  const at = iconPlacement(e, o);
+  const glyph = e.kind === "glyph";
+  const ink = s.stroke === "none" ? (glyph ? DEFAULT_INK : "none") : s.stroke;
+  const width = glyph ? Math.max(0.25, s.strokeWidth || DEFAULT_ICON_STROKE) * at.sx : s.strokeWidth;
+  /** @type {VNode[]} */
+  const nodes = [];
+  if (glyph && s.fill !== "none") {
+    nodes.push(h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, rx: Math.min(o.w, o.h) * 0.16, fill: s.fill }));
+  }
+  for (const p of iconPaths(e)) {
+    const fill = p.paint[0] === "f" ? s.fill : p.paint[0] === "i" ? (s.stroke === "none" ? DEFAULT_INK : s.stroke) : "none";
+    const stroked = p.paint[1] === "i" && ink !== "none" && width > 0;
+    if (fill === "none" && !stroked) continue;
+    nodes.push(h("path", {
+      d: placePath(p, at), fill, stroke: stroked ? ink : "none", "stroke-width": stroked ? width : null,
+      "stroke-linecap": stroked ? "round" : null, "stroke-linejoin": stroked ? "round" : null,
+    }));
+  }
+  return nodes;
 }
 
 /**
