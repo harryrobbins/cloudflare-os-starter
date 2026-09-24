@@ -10,6 +10,8 @@ import { createStore } from "./sync/store.js";
 import { mountApp, injectStyles } from "./ui/app.js";
 import { renderExport } from "./ui/export.js";
 import { PALETTE } from "./ui/dom.js";
+import { showRecoveryScreen } from "./ui/recovery.js";
+import { TERMINAL_RECOVERY_MS, recoveryAction } from "./sync/connection.js";
 
 /* global gadget, gadgetViewer, RpcTarget, gadgetExportFormatId */
 // @ts-ignore provided by the platform prefix
@@ -21,7 +23,10 @@ const platformViewer = typeof gadgetViewer !== "undefined" ? gadgetViewer : unde
 // @ts-ignore provided by the platform in export mode
 const exportFormatId = typeof gadgetExportFormatId !== "undefined" ? gadgetExportFormatId : undefined;
 
-/** window.name survives reloads of the same browsing context; used to carry the viewer across. */
+/**
+ * window.name survives reloads of the same browsing context; used to carry the viewer's name and
+ * colour and the auto-reload budget across. Never board content or the recovery payload.
+ */
 const WINDOW_NAME_PREFIX = "whiteboard:";
 const MAX_AUTO_RELOADS = 3;
 const AUTO_RELOAD_WINDOW_MS = 60_000;
@@ -36,7 +41,7 @@ function readCarried() {
     return {
       name: typeof data?.name === "string" && data.name ? data.name : null,
       color: typeof data?.color === "string" && /^#[0-9a-f]{6}$/i.test(data.color) ? data.color : null,
-      reloads: Array.isArray(data?.reloads) ? data.reloads.filter((t) => typeof t === "number") : [],
+      reloads: Array.isArray(data?.reloads) ? data.reloads.filter((/** @type {unknown} */ t) => typeof t === "number") : [],
     };
   } catch {
     return empty;
@@ -125,19 +130,72 @@ if (exportFormatId !== undefined) {
   };
   /** @type {import("./store-contract.js").Store|undefined} */
   let store;
-  const onUnrecoverable = () => {
-    // The platform never replaces this frame's `gadget` stub after a facet restart; a reload of
-    // the frame gets a fresh one. Unsent local changes are lost with the dead connection.
+  /**
+   * The recovery screen while it shows: unacknowledged changes kept us from reloading.
+   * @type {{screen: ReturnType<typeof showRecoveryScreen>, since: number, timer: any, unsubscribe: () => void}|null}
+   */
+  let recovery = null;
+
+  const closeRecovery = () => {
+    if (!recovery) return;
+    clearTimeout(recovery.timer);
+    recovery.unsubscribe();
+    recovery.screen.close();
+    recovery = null;
+  };
+
+  /** @param {boolean} counted  counts towards the auto-reload budget (false: the user chose it) */
+  const reloadFrame = (counted) => {
     const now = Date.now();
     const recent = readCarried().reloads.filter((t) => now - t < AUTO_RELOAD_WINDOW_MS);
     const current = store?.getState().viewer ?? viewer;
-    if (recent.length >= MAX_AUTO_RELOADS) {
-      showOverlay("The whiteboard lost its connection. Reload the page.", false);
-      return;
-    }
-    writeCarried({ name: current.name || null, color: current.color, reloads: [...recent, now] });
+    writeCarried({ name: current.name || null, color: current.color, reloads: counted ? [...recent, now] : recent });
+    closeRecovery();
     showOverlay("Reconnecting…");
     setTimeout(() => location.reload(), 300);
+  };
+
+  // Interim, until the host can replace the RPC target (store.replaceTarget): the platform never
+  // replaces this frame's `gadget` stub after a facet restart, and only a reload of the frame gets
+  // a fresh one. A reload loses unacknowledged changes, so it happens on its own only when there
+  // are none, or once the recovery screen has shown for TERMINAL_RECOVERY_MS.
+  const onUnrecoverable = () => {
+    const now = Date.now();
+    const state = store?.getState();
+    const action = recoveryAction({
+      pendingCount: state?.pendingCount ?? 0,
+      heldForMs: recovery ? now - recovery.since : 0,
+      recentReloads: readCarried().reloads.filter((t) => now - t < AUTO_RELOAD_WINDOW_MS).length,
+      maxReloads: MAX_AUTO_RELOADS,
+    });
+    if (action === "reload") {
+      reloadFrame(true);
+      return;
+    }
+    if (action === "stop") {
+      // Out of auto-reloads: the user reloads. The recovery screen, if up, already says so and
+      // keeps its download.
+      if (!recovery) showOverlay("The whiteboard lost its connection. Reload the page.", false);
+      return;
+    }
+    if (recovery || !store) return;
+    const live = store;
+    const screen = showRecoveryScreen({
+      getState: () => live.getState(),
+      getData: () => live.getRecoveryData(),
+      onReload: () => reloadFrame(false),
+      autoReloadMinutes: Math.round(TERMINAL_RECOVERY_MS / 60_000),
+    });
+    const unsubscribe = live.subscribe((s, change) => {
+      if (!recovery) return;
+      if (s.connection === "live" || s.connection === "saving") {
+        closeRecovery(); // reconnected after all; the queue drains by itself
+        return;
+      }
+      if (change.kind === "connection" || change.kind === "objects" || change.kind === "snapshot") screen.update(s);
+      if (s.pendingCount === 0) onUnrecoverable(); // nothing left to lose: reload is safe now
+    });
+    recovery = { screen, since: now, unsubscribe, timer: setTimeout(onUnrecoverable, TERMINAL_RECOVERY_MS) };
   };
   try {
     store = await createStore({ gadget: platformGadget, RpcTarget: platformRpcTarget, viewer, onUnrecoverable });
@@ -154,9 +212,13 @@ if (exportFormatId !== undefined) {
   }
   const liveStore = store;
   liveStore.subscribe((state, change) => {
-    if (change.kind === "connection" && state.connection === "live") {
+    if (change.kind === "connection" && (state.connection === "live" || state.connection === "saving")) {
       document.getElementById("wb-connection-overlay")?.remove();
     }
   });
+  // A hidden tab clears its cursor and gesture ghosts once, then sends heartbeats only.
+  const syncVisibility = () => liveStore.setVisibility(document.visibilityState === "visible");
+  document.addEventListener("visibilitychange", syncVisibility);
+  syncVisibility();
   /** @type {any} */ (globalThis).whiteboardStore = store;
 }
