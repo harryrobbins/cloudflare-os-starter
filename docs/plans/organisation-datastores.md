@@ -1,12 +1,14 @@
 # Organisation datastores: implementation plan
 
 Written 2026-09-23 against starter `7d39f48` and pinned `cloudflare-os` `e50a9058`.
-Status (2026-09-23): **implemented and tested locally through Phase 3; nothing provisioned or
-deployed, Records disabled in `deployment.jsonc`.** Phase 0 decisions and their evidence are in §9 of
-the [decisions record](../research/organisation-datastores-decisions.md#9-phase-0-decisions-and-evidence-2026-09-23).
+Status (2026-09-24): **implemented and tested through Phase 3, and deployed to
+`cfos.surprisingly.ltd` against Neon, with the machine API switched off** (see the
+[deployment record](#12-deployment-record-2026-09-24)). Signed-in checks and Phase 4 are open.
+Phase 0 decisions and their evidence are in §9 of the
+[decisions record](../research/organisation-datastores-decisions.md#9-phase-0-decisions-and-evidence-2026-09-23).
 Open gates are marked `[~]` (partly done) or `[ ]` below. Code: `packages/records-contracts`,
 `packages/records-schema`, `packages/gatekeeper-records`, `packages/blueprint-project-{board,report}`,
-and the fork branch `feat/viewer-assertions` (gitlink not yet updated).
+and fork commit `a687cbdf` (viewer assertions), pinned by the submodule.
 
 This is the authoritative implementation plan for durable organisational business data. It
 supersedes [external-records-service.md](external-records-service.md) and
@@ -381,7 +383,7 @@ external service principal can use only its permitted API. Data survives connect
       conflicts and unavailable states clearly. Do not silently persist offline business writes.
 - [x] Add disabled-by-default Records configuration, Hyperdrive/Queue bindings, required secrets,
       builds and generated config tests. Router stays the sole public entrypoint.
-- [~] *Deploy order is Records before Workshop and Router; the gitlink and bundled format archives are not integrated.* Migrate before deploying dependent service code, then Workshop and Router; keep overlapping
+- [~] *Deployed in that order, with the gitlink integrated; the blueprint archives are not yet in `formats/`.* Migrate before deploying dependent service code, then Workshop and Router; keep overlapping
       versions compatible. Integrate the reviewed fork gitlink and bundled artifacts serially.
 - [ ] *Needs an isolated deployed environment.* Demonstrate a write through the board and API appearing in both clients, gadget replacement
       with data intact, revocation, late transaction commits and publisher/consumer restarts.
@@ -469,3 +471,100 @@ Provider/region and operational targets remain release decisions, not guessed co
 specific caller-capability mechanism, migration runner and poll wake-up mechanism are Phase 0
 decisions. Project-level ACLs, direct reporting SQL/PostgREST, attachments, existing Board import
 and independently isolated databases are later extensions with their own security/recovery review.
+
+## 12. Deployment record (2026-09-24)
+
+Records went live on `cfos.surprisingly.ltd` in two deploys, both `pnpm deploy`, both exit 0:
+
+1. Starter commits `85d8c7a`…`4bf8dcc`, with Records still disabled. This shipped the kernel's viewer
+   assertions: fork `a687cbdf`, pushed to `feat/viewer-assertions` and fast-forwarded onto
+   `starter-openrouter`. Router version `8c1ba146`.
+2. The same code with `records.enabled: true` and `apiAccessAudience: null` (machine API off).
+
+### Neon
+
+| Setting | Value |
+| --- | --- |
+| Organisation | `org-raspy-meadow-80210365` (API key `NEON_ORG_TOKEN` in `.env.local`) |
+| Project | `cfos-records`, ID `jolly-silence-27253955`, created 2026-09-23T23:54Z via the API |
+| Region / version | `aws-eu-west-2` (London), Postgres 17 |
+| Branch | `main` (`br-sweet-flower-zadhywpm`), the only branch |
+| Compute | endpoint `ep-still-brook-zaw5ewhf`, read-write, 0.25 CU fixed, default auto-suspend |
+| Host | `ep-still-brook-zaw5ewhf.c-2.eu-west-2.aws.neon.tech`, the **direct** endpoint. Hyperdrive does the pooling; the `-pooler` host is not used |
+| Database | `neondb` |
+| Plan limits | 6 h history (point-in-time restore window), 512 MB branch size limit, no IP allow-list, public connections allowed |
+| Schemas | `records` (registry, security, audit, outbox), `projects` (module v1), `records_meta` (migration ledger) |
+| Migrations | `0001_roles_and_registry` (`862204d2e949`…), `0002_projects_module` (`b95fd8fde0f9`…), applied with `db:migrate` |
+| Roles | `neondb_owner`: migration owner, owns every object, never given to a Worker. `records_app`/`records_publisher`: NOLOGIN group roles from migration 0001. `records_app_prod`: LOGIN, member of `records_app` only. `records_publisher_prod`: LOGIN, member of `records_publisher` only. Neither login owns anything or has `BYPASSRLS` (checked after creation) |
+| Organisation | "Surprisingly", org ID `38671f42-39d3-4999-9c0e-6d21757068fd`. First data administrator: harryrobbins@gmail.com, principal `75fa527a-8b52-4280-a58a-e57164ba1e22`, via `db:bootstrap` |
+
+Credentials live only in `.env.local` (git-ignored, mode 600) and in the Hyperdrive configurations:
+
+- `RECORDS_MIGRATION_URL`: owner, for `db:migrate`, `db:status` and `db:bootstrap`.
+- `RECORDS_APP_URL` / `RECORDS_APP_PASSWORD`: `records_app_prod`.
+- `RECORDS_PUBLISHER_URL` / `RECORDS_PUBLISHER_PASSWORD`: `records_publisher_prod`.
+- `RECORDS_NEON_PROJECT_ID`.
+
+To rotate a login password, `ALTER ROLE … PASSWORD` as the owner, then run
+`wrangler hyperdrive update <id> --origin-password …`.
+
+**Recovery is not yet adequate for real data.** Six hours of history is the only backup, well short
+of Phase 4's recovery targets. Before a team relies on Records, move to a paid Neon plan with a longer
+history window, or add scheduled exports, and rehearse a restore.
+
+### Cloudflare
+
+| Resource | Name / ID |
+| --- | --- |
+| Hyperdrive (runtime) | `cfos-records-app`, `7107e8c4ca8848f5a19b1279089ec753`, logs in as `records_app_prod`, **caching disabled** (verified with `wrangler hyperdrive get`) |
+| Hyperdrive (publisher) | `cfos-records-publisher`, `2e004047e7de47b094801a57ad34fb23`, logs in as `records_publisher_prod`, **caching disabled** |
+| Queues | `cfos-records-changes` (producer and consumer: `cfos-records`), dead-letter queue `cfos-records-changes-dlq` |
+| Worker | `cfos-records`: private, reached only through the router's `GATEKEEPER_RECORDS` binding and the Workshop's `GatekeeperVendor` binding. One-minute cron |
+| Rate limiter | namespace `4711` (from the package's `wrangler.jsonc`) |
+| Access application for `/gatekeeper/records/v1/*` | **Not created.** `apiAccessAudience` is `null`, so the machine API refuses every request. Create the application (policy: Service Auth with a service token per integration) and put its AUD tag in `deployment.jsonc` to enable it |
+
+Worker versions from the second deploy:
+
+| Worker | Version |
+| --- | --- |
+| `cfos-error-reporter` | `53acad00-f07f-405a-a3ae-88fc60d41e2f` |
+| `cfos-context` | `f099d1b8-6531-436d-aa92-e1bf2833acdc` |
+| `cfos-scheduler` | `837e3d76-36d3-41b6-8f2b-3eff08084a82` |
+| `cfos-procgen` | `9eb11f10-ac37-418e-bff4-d7b179c1f404` |
+| `cfos-custom-gatekeeper` | `0f76ba25-41e2-4f3c-ad44-b044bb0b13c0` |
+| `cfos-notebook-python` | `9ea22b82-8e22-4de1-b478-28ffd6fe4a69` |
+| `cfos-websearch` | `ab69bed6-c310-4178-9669-ab1b42291bd0` |
+| `cfos-records` | `891d0703-889b-4f84-8c40-cd27bcbe65dd` |
+| `cfos-jev` | `cda9782f-4e37-44e0-a8a0-9d9d74a49673` |
+| `cfos-workshop` | `d385f5a1-542e-45cf-bddc-2e9bce9ec111` |
+| `cfos-chat` | `29795902-8a33-4ab0-8b6e-068e5b1caad7` |
+| `cfos-router` | `35a31c4f-2107-4fb4-ada1-c44af5480d66` |
+
+### Checks done
+
+- Unauthenticated requests to `/gatekeeper/records/v1/...` and `/gatekeeper/records/connect` get a
+  302 to the Access login.
+- `wrangler queues info` shows `cfos-records` as the queue's producer and consumer.
+- `wrangler tail cfos-records` showed the Workshop calling `GatekeeperVendor.describe` and
+  `getSupportedResources`, and a cron run logging
+  `records.outbox.tick {published: 0, pending: 0, dead: 0}` in 850 ms, with no exceptions. That run
+  proves the publisher role reaches Neon through Hyperdrive.
+
+### Fix after the first signed-in attempt
+
+The first real **Connect** failed with "Confirmation must come from this site." The Worker sent
+`Referrer-Policy: no-referrer`, under which browsers send `Origin: null` on the page's own form POST,
+so the Origin check refused it. Fixed in `f4cd4b5` (the policy is now `same-origin`, with a regression
+test in `connect-guard.test.ts`) and redeployed: `cfos-records` is now `1558678a-7273-457a-a29a-c92a4a186d20`.
+
+### Signed-in checks still to do (Harry; Access blocks automated sign-in)
+
+1. **Connections → Organisation records → Connect.** A tab opens and asks you to confirm as Harry
+   Robbins. After **Connect** the tab closes, and a **Data** page appears in the sidebar.
+2. On **Data**, open **Directory**, add a colleague by the e-mail they sign in with, and create a
+   datastore with an initial project, e.g. key `ENG`.
+3. In a gadget's **Add connection** dialog, choose Organisation records. The picker lists the
+   datastore and the scopes you can grant.
+4. The project board and report blueprints are not in `formats/` yet. Packing them in (`pnpm
+   --filter blueprint-project-board pack:gadget -- --formats ../../formats`, same for the report) is
+   the next step for trying the full flow.

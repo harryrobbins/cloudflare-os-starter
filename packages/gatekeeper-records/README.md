@@ -2,7 +2,9 @@
 
 The Postgres-backed Records service and its Gatekeeper, implementing
 [docs/plans/organisation-datastores.md](../../docs/plans/organisation-datastores.md). It is
-disabled by default and **not deployed**; see "Enabling it" for the operator steps.
+disabled by default in the template; this deployment runs it against Neon (see the plan's
+deployment record). Configuration keys are documented in
+[docs/customization.md](../../docs/customization.md#organisation-records).
 
 Organisation-owned datastores (Projects module, API v1) are shared by any number of gadgets and
 external clients. Removing a gadget, a connection or the person who created a datastore never
@@ -67,8 +69,9 @@ Nothing here provisions infrastructure. In order:
    `GRANT records_app TO <app user>; GRANT records_publisher TO <publisher user>;`
 4. Create two Hyperdrive configurations (app user, publisher user) with **query caching disabled**.
 5. Create the queue and its dead-letter queue.
-6. Create a separate, path-specific Access application for `/gatekeeper/records/v1/*` with a service
-   token for each external client.
+6. Optional: create a separate, path-specific Access application for `/gatekeeper/records/v1/*`
+   with a service token for each external client. Until it exists, set `apiAccessAudience` to
+   `null`; the machine API then refuses every request.
 7. Bootstrap the organisation and first data administrator:
    `RECORDS_MIGRATION_URL=… pnpm --filter @records/schema db:bootstrap "<Org>" admin@example.com "Admin Name"`.
 8. Fill the `records` block in `deployment.jsonc`, set `"enabled": true`, run `pnpm check`, then deploy.
@@ -90,3 +93,6 @@ SQL, so migrations are additive and roll forward.
 - Consumer references are not yet reconciled when a gadget disappears without its connection being
   removed; such bindings stay listed (and revocable) in the Data page.
 - Agent writes through gadgets are not supported; use a service credential.
+- `wrangler dev` reaches Postgres through the `localConnectionString` values in `wrangler.jsonc`,
+  which must point at a disposable local database; `scripts/deploy.ts` strips them from generated
+  production config.

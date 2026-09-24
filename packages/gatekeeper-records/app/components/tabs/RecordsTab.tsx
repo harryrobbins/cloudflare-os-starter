@@ -22,8 +22,7 @@ import {
   TextAreaField,
   TextField,
   useAction,
-  useDebounced,
-} from '../ui'
+  useDebounced, SandboxForm } from '../ui'
 
 export function RecordsTab({ ds, perms, pageSize = 50 }: { ds: DatastoreView; perms: Perms; pageSize?: number }) {
   const api = useDataApi()
@@ -242,14 +241,7 @@ function CreateProjectDialog({
   }
   return (
     <Modal open={open} onClose={close} busy={action.busy} title="New project">
-      <form
-        noValidate
-        className="space-y-4"
-        onSubmit={(e) => {
-          e.preventDefault()
-          void submit()
-        }}
-      >
+      <SandboxForm className="space-y-4" onSubmit={() => void submit()}>
         <TextField
           label="Key"
           value={key}
@@ -266,11 +258,11 @@ function CreateProjectDialog({
           <Btn onClick={close} disabled={action.busy}>
             Cancel
           </Btn>
-          <Btn tone="primary" type="submit" loading={action.busy}>
+          <Btn tone="primary" onClick={() => void submit()} loading={action.busy}>
             Create project
           </Btn>
         </ModalFooter>
-      </form>
+      </SandboxForm>
     </Modal>
   )
 }

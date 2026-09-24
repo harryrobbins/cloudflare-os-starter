@@ -191,9 +191,10 @@ export interface RecordsConfig {
   publisherHyperdriveId: string;
   /**
    * AUD tag of the separate, path-specific Access application protecting
-   * `/gatekeeper/records/v1/*` (service tokens). Becomes `RECORDS_API_ACCESS_AUD`.
+   * `/gatekeeper/records/v1/*` (service tokens). Becomes `RECORDS_API_ACCESS_AUD`. `null` switches
+   * the machine API off (every request refused) until that application exists.
    */
-  apiAccessAudience: string;
+  apiAccessAudience: string | null;
   /** Change-notification queue. Absent means `<workers.records.name>-changes`. */
   changesQueue?: string;
   /** Its dead-letter queue. Absent means `<workers.records.name>-changes-dlq`. */

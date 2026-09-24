@@ -1232,13 +1232,13 @@ test("generates nothing Records-related when Records is disabled or absent", asy
     /unique/i);
 });
 
-test("the repository's deployment.jsonc keeps Records disabled", async () => {
+test("the repository's deployment.jsonc Records block is valid", async () => {
   const errors: ParseError[] = [];
   const config = parse(
     await readFile(new URL("../deployment.jsonc", import.meta.url), "utf8"), errors,
     { allowTrailingComma: true }) as DeploymentConfig;
   assert.deepEqual(errors, []);
-  assert.equal(config.records?.enabled, false);
+  assert.equal(typeof config.records?.enabled, "boolean");
   assert.equal(typeof config.workers.records?.name, "string");
   validateConfig(config);
 });
@@ -1291,6 +1291,14 @@ test("generates the Records Worker with both uncached Hyperdrive IDs, its queues
     changes: "acme-cloudflare-os-records-changes",
     deadLetter: "acme-cloudflare-os-records-changes-dlq",
   });
+});
+
+test("a null API audience switches the machine API off without blocking Records", async () => {
+  const config = recordsVariant((c) => { c.records.apiAccessAudience = null; });
+  validateConfig(config);
+  const records = generateConfigs(config, await baseConfigs()).records!;
+  // An empty audience makes every /v1 Access check fail closed.
+  assert.equal(records.vars!.RECORDS_API_ACCESS_AUD, "");
 });
 
 test("never ships the Records Worker's dev-only localConnectionString", async () => {
@@ -1352,6 +1360,7 @@ test("rejects missing, malformed or shared Records Hyperdrive IDs and audiences"
       /must be different Hyperdrive configurations/],
     [(c: Record<string, any>) => { delete c.records.apiAccessAudience; }, /records\.apiAccessAudience/],
     [(c: Record<string, any>) => { c.records.apiAccessAudience = "records-audience"; }, /AUD tag/],
+    [(c: Record<string, any>) => { c.records.apiAccessAudience = ""; }, /records\.apiAccessAudience|AUD tag/],
     [(c: Record<string, any>) => {
       c.access.audience = recordsApiAudience;
     }, /same as access\.audience/],

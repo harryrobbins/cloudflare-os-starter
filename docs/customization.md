@@ -275,6 +275,45 @@ The chat **dock** — the drawer with the unread badge in the sidebar and in the
 
 To disable chat, set `"enabled": false`. The build, the deploy and both service bindings disappear, and `pnpm check` stops validating the rest of the block. The Worker, its Durable Object and its bucket are not deleted by disabling it, so re-enabling with the same names and bucket brings the history back.
 
+### Organisation records
+
+Organisation records is a Postgres-backed service for data the organisation owns, rather than any one gadget or person: datastores that many gadgets and external systems share, with memberships, roles, audit history and change notifications. It is one Worker, `packages/gatekeeper-records`, and it is **off by default**. Design and status: [organisation datastores plan](plans/organisation-datastores.md).
+
+```jsonc
+"workers": { "records": { "name": "cfos-records" } },
+"records": {
+  "enabled": true,
+  "hyperdriveId": "<32 hex>",           // runtime role (records_app), caching disabled
+  "publisherHyperdriveId": "<32 hex>",  // outbox publisher role (records_publisher), caching disabled
+  "apiAccessAudience": null              // or the AUD tag of the /gatekeeper/records/v1 Access app
+  // "changesQueue": "cfos-records-changes", "deadLetterQueue": "cfos-records-changes-dlq"
+}
+```
+
+| Key | Controls |
+| --- | --- |
+| `records.enabled` | Whether the Worker is built, deployed and bound. When `false` the rest of the block is not validated, and a placeholder-filled block is fine. |
+| `records.hyperdriveId` | The Hyperdrive configuration the service reads and writes through, logging in as a member of `records_app`. |
+| `records.publisherHyperdriveId` | A second, distinct Hyperdrive configuration logging in as a member of `records_publisher`, used only by the outbox publisher. |
+| `records.apiAccessAudience` | AUD tag of a separate, path-specific Access application for `/gatekeeper/records/v1/*`, whose policy admits service tokens. Must differ from `access.audience`. `null` switches the machine API off: every `/v1` request is refused, while the Data page and gadget connections work normally. |
+| `records.changesQueue`, `records.deadLetterQueue` | Optional queue names. When absent they default to `<workers.records.name>-changes` and `...-changes-dlq`. |
+
+A deploy with Records enabled binds the Worker to the router as `GATEKEEPER_RECORDS` (so `/gatekeeper/records/*` reaches it) and to the Workshop with the `GatekeeperVendor` entrypoint (so **Organisation records** appears under Connections), and deploys it before both. The Worker gets `CF_ACCESS_ISS`/`CF_ACCESS_AUD` from [`access`](#cloudflare-access), because its connect page verifies the person's Access identity itself.
+
+Nothing is provisioned by `pnpm deploy`. Before enabling:
+
+1. Create a Postgres database and take its **direct** (non-pooler) connection string as the migration-owner credential.
+2. `RECORDS_MIGRATION_URL=<owner url> pnpm --filter @records/schema db:migrate`. This creates the `records` and `projects` schemas and the NOLOGIN group roles `records_app` and `records_publisher`.
+3. Create two LOGIN users and `GRANT records_app` / `GRANT records_publisher` to them, plus `CONNECT` on the database.
+4. `wrangler hyperdrive create <name> --connection-string=<login url> --caching-disabled` for each login. Caching must be disabled: permission reads have to be fresh, and `pnpm check` cannot see this setting.
+5. `wrangler queues create` the change queue and its dead-letter queue.
+6. Optionally, create the path-specific Access application for the machine API.
+7. `RECORDS_MIGRATION_URL=<owner url> pnpm --filter @records/schema db:bootstrap "<Organisation>" <admin e-mail> "<Admin name>"` creates the organisation and its first data administrator.
+
+People are not added by signing in. A data administrator adds each person on the **Data** page (by the e-mail they sign in with) before that person can connect. Membership of each datastore is granted separately, and the data administrator role itself gives no access to records.
+
+Schema changes are numbered migrations in `packages/records-schema/migrations`, applied with `db:migrate` **before** deploying code that needs them. A Worker rollback never reverses SQL. Operator detail: [`packages/gatekeeper-records/README.md`](../packages/gatekeeper-records/README.md).
+
 ## Custom Gatekeepers
 
 Keep deployment-owned Gatekeepers under `packages/`, outside the `cloudflare-os` submodule. `scripts/deploy.ts` binds this repository's example as `GATEKEEPER_CUSTOM` and Context as `GATEKEEPER_CONTEXT`, twice each: on the Workshop with the `GatekeeperVendor` entrypoint for RPC, and on the router with no entrypoint, where the binding name is what routes `/gatekeeper/custom` and `/gatekeeper/context` to it. A Gatekeeper that serves HTTP — an OAuth redirect, for instance — needs both.

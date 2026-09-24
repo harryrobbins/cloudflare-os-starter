@@ -445,3 +445,39 @@ export function formatDate(iso: string | null | undefined): string {
   if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
+
+/**
+ * A form without the native form element. The Workshop hosts this page in a sandboxed iframe without
+ * `allow-forms`, where the browser blocks native form submission before `submit` fires, so
+ * `onSubmit` never runs. This wrapper submits on Enter in a single-line field, and each submit button
+ * calls the same handler from `onClick`.
+ */
+export function SandboxForm({
+  onSubmit,
+  className,
+  label,
+  children,
+}: {
+  onSubmit: () => void
+  className?: string
+  label?: string
+  children: ReactNode
+}) {
+  return (
+    <div
+      role="form"
+      aria-label={label}
+      className={className}
+      onKeyDown={(e) => {
+        const t = e.target
+        if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return
+        if (t instanceof HTMLInputElement && !['checkbox', 'radio', 'button', 'submit'].includes(t.type)) {
+          e.preventDefault()
+          onSubmit()
+        }
+      }}
+    >
+      {children}
+    </div>
+  )
+}
