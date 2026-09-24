@@ -46,6 +46,7 @@ import { mountShare, SHARE_CSS } from "./share.js";
  *   extra context-menu items (copy, cut, paste, links, present) from ./share.js
  * @property {boolean} [iconPickerOpen]
  * @property {() => void} [toggleIconPicker]  opens or closes the icon and shape picker (I)
+ * @property {() => void} [openEmojiPicker]   opens the picker on its Emoji & symbols tab (Ctrl/⌘+.)
  */
 
 /** Gap between announcements of other people's changes. */
@@ -176,6 +177,7 @@ export function mountApp(root, store) {
   const activity = createActivity(app);
   const iconPicker = createIconPicker(app);
   app.toggleIconPicker = () => iconPicker.toggle();
+  app.openEmojiPicker = () => iconPicker.open("unicode");
 
   // The style bar follows the canvas in DOM (and Tab) order: selecting on the canvas, then Tab,
   // reaches the selection's actions first.
@@ -191,6 +193,7 @@ export function mountApp(root, store) {
     else if (command === "outline") outline.toggle();
     else if (command === "icons") iconPicker.toggle();
     else if (command === "code") canvas.addAtCenter("code");
+    else if (command === "emoji") iconPicker.open("unicode");
     else share.command(command);
   };
 

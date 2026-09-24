@@ -9,6 +9,14 @@
 //     would leak the existence of private messages through result counts and paging.
 //
 // `bm25()` is negative and lower is better (spikes/README.md), so the order is `score ASC`.
+//
+// Omni-search fusion (docs/plans/omni-search.md, decision 5). When the SEARCH binding exists and the
+// query has free text, the search Worker's `denseRecall()` runs alongside the FTS5 query, over exactly
+// the channels the lexical half may search (after `in:`), and the two rank lists are fused with
+// reciprocal rank fusion (k = 60) at message level. Chat's ACL stays authoritative: a dense hit is
+// kept only if its message row passes the same WHERE clause the lexical query uses -- visible channel,
+// not deleted, and every qualifier. Anything but a timely "ok" from search, and a qualifier-only query,
+// is lexical only, exactly as without the binding.
 
 import {
   DEFAULT_PAGE_LIMIT,
@@ -21,6 +29,7 @@ import {
   type Timestamp,
   type UserId,
 } from "../shared/protocol.js";
+import { chatScope, messageIdOfDocument, SEARCH_LIMITS, withTimeout, type DenseRecallHit } from "../search-client.js";
 import { visibleChannelIds } from "./access.js";
 import { matchChannels } from "./channels.js";
 import { allow, placeholders, refuse, type Ctx, type Outcome } from "./context.js";
@@ -35,6 +44,12 @@ const MAX_TERMS = 16;
 const SNIPPET_TOKENS = 12;
 const TOP_SECTION_LIMIT = 5;
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** How long a search waits for dense recall before answering lexical only. */
+export const DENSE_TIMEOUT_MS = 1_500;
+/** Lexical candidates fused with the dense list; results past them follow in lexical order. */
+const FUSION_CANDIDATES = SEARCH_LIMITS.candidatesPerHalf;
+/** Characters of a dense-only hit's plain snippet. */
+const PLAIN_SNIPPET_CHARS = 160;
 
 type SearchRow = MessageRow & { score: number; snip: string };
 
@@ -45,13 +60,13 @@ type SearchRow = MessageRow & { score: number; snip: string };
  * per query; UTC is predictable and wrong by at most a day at the boundary, and the qualifiers the
  * server interpreted come back in {@link SearchResult.query} so the UI can say what it did.
  */
-export function search(
+export async function search(
   ctx: Ctx,
   user: UserRow,
   raw: string,
   cursor: string | undefined,
   limitRaw: number | undefined,
-): Outcome<SearchResult> {
+): Promise<Outcome<SearchResult>> {
   const limited = consume(ctx, user.id, "search");
   if (!limited.ok) return limited;
   if (raw.length > MAX_QUERY_LENGTH) {
@@ -71,7 +86,13 @@ export function search(
   }
 
   const started = Date.now();
-  const rows = runQuery(ctx, query, visible, limit + 1, offset);
+  const fused = await fusedQuery(ctx, query, visible, limit, offset, () =>
+    visibleChannelIds(ctx, user.id),
+  );
+  const dense = fused === null ? "off" : "ok";
+  // Membership re-read after the await (fusedQuery may have waited on dense recall), so a fallback
+  // never answers from the snapshot taken before it.
+  const rows = fused ?? runQuery(ctx, query, visibleChannelIds(ctx, user.id), limit + 1, offset);
   if (!rows.ok) return rows;
   const page = rows.value.slice(0, limit);
 
@@ -102,6 +123,7 @@ export function search(
     ms: Date.now() - started,
     hits: hits.length,
     qualifiers: countQualifiers(query),
+    dense,
   });
 
   return allow({
@@ -287,16 +309,19 @@ function ftsMatchString(text: string): string {
   return parts.join(" ");
 }
 
-function runQuery(
-  ctx: Ctx,
-  query: SearchQuery,
-  visible: readonly string[],
-  limit: number,
-  offset: number,
-): Outcome<readonly SearchRow[]> {
-  const channelIds = query.in === undefined ? visible : query.in.filter((id) => visible.includes(id));
-  if (channelIds.length === 0) return allow([]);
+/** The channels a query may search: the visible ones, narrowed by `in:`. */
+function searchableChannels(query: SearchQuery, visible: readonly string[]): readonly string[] {
+  return query.in === undefined ? visible : query.in.filter((id) => visible.includes(id));
+}
 
+/**
+ * The WHERE clause every hit must pass, lexical or dense: a searchable channel, not deleted, and
+ * every qualifier. Bound parameters only.
+ */
+function filterFor(
+  query: SearchQuery,
+  channelIds: readonly string[],
+): { readonly where: readonly string[]; readonly params: readonly (string | number)[] } {
   const where: string[] = [`m.deleted_at IS NULL`, `m.channel_id IN (${placeholders(channelIds.length)})`];
   const params: (string | number)[] = [...channelIds];
 
@@ -323,6 +348,19 @@ function runQuery(
     where.push(`m.created_at <= ?`);
     params.push(query.before);
   }
+  return { where, params };
+}
+
+function runQuery(
+  ctx: Ctx,
+  query: SearchQuery,
+  visible: readonly string[],
+  limit: number,
+  offset: number,
+): Outcome<readonly SearchRow[]> {
+  const channelIds = searchableChannels(query, visible);
+  if (channelIds.length === 0) return allow([]);
+  const { where, params } = filterFor(query, channelIds);
 
   // Two shapes: with text, FTS5 ranks and highlights; with qualifiers alone there is nothing to rank,
   // so the newest matching messages win and every hit scores zero.
@@ -350,4 +388,140 @@ function runQuery(
     // validation error beats a 500.
     return refuse("invalid_request", "That search could not be run. Try simpler terms.");
   }
+}
+
+// ---------------------------------------------------------------------------
+// Omni-search fusion
+// ---------------------------------------------------------------------------
+
+/** One list's reciprocal-rank-fusion contribution; 0 when the hit is not in that list. */
+function rrf(rank: number | undefined): number {
+  return rank === undefined ? 0 : 1 / (SEARCH_LIMITS.rrfK + rank);
+}
+
+/**
+ * The dense half, or null when it cannot contribute: no binding, a failure, a timeout, or any status
+ * but "ok". Never throws.
+ */
+async function denseCandidates(ctx: Ctx, text: string, channelIds: readonly string[]): Promise<DenseRecallHit[] | null> {
+  const service = ctx.env.SEARCH;
+  if (service === undefined) return null;
+  try {
+    const result = await withTimeout(
+      service.denseRecall({
+        text,
+        scopes: channelIds.map(chatScope),
+        limit: SEARCH_LIMITS.candidatesPerHalf,
+      }),
+      DENSE_TIMEOUT_MS,
+      "dense recall",
+    );
+    if (result?.dense !== "ok" || !Array.isArray(result.hits)) return null;
+    return result.hits;
+  } catch (error) {
+    logEvent("chat.search.dense_failed", {
+      message: (error instanceof Error ? error.message : String(error)).slice(0, 200),
+    });
+    return null;
+  }
+}
+
+/**
+ * Lexical and dense, fused. Returns the page (up to `limit + 1` rows, so the caller can tell whether
+ * there is more), or null to mean "run the lexical query exactly as without search".
+ *
+ * Paging stays stable: the fused head is always the top {@link FUSION_CANDIDATES} lexical hits plus
+ * the dense hits, ranked by RRF; everything after them follows in lexical order. Which page is asked
+ * for never changes that order, so an offset cursor neither skips nor repeats a hit.
+ */
+async function fusedQuery(
+  ctx: Ctx,
+  query: SearchQuery,
+  visible: readonly string[],
+  limit: number,
+  offset: number,
+  recheckVisible: () => readonly string[],
+): Promise<Outcome<readonly SearchRow[]> | null> {
+  if (ctx.env.SEARCH === undefined) return null;
+  // A qualifier-only query has nothing to embed.
+  if (ftsMatchString(query.text).length === 0) return null;
+  const channelIds = searchableChannels(query, visible);
+  if (channelIds.length === 0) return null;
+
+  const denseHits = await denseCandidates(ctx, query.text, channelIds);
+  if (denseHits === null) return null;
+
+  // Everything below runs after the await, against the caller's membership as it is *now*: the
+  // object may have handled a leave or a delete while dense recall was in flight, and a result
+  // computed from the earlier snapshot would show that channel's messages for one more page.
+  const current = recheckVisible();
+  const channelsNow = searchableChannels(query, current);
+  if (channelsNow.length === 0) return allow([]);
+  const lexical = runQuery(ctx, query, current, Math.max(FUSION_CANDIDATES, offset + limit + 1), 0);
+  if (!lexical.ok) return lexical;
+
+  const head = lexical.value.slice(0, FUSION_CANDIDATES);
+  const tail = lexical.value.slice(FUSION_CANDIDATES);
+  const lexicalRank = new Map<string, number>(head.map((row, index) => [row.id, index + 1]));
+
+  // Dense ids in their rank order, deduplicated, restricted to chat's own documents.
+  const denseRank = new Map<string, number>();
+  for (const hit of denseHits.toSorted((a, b) => a.rank - b.rank)) {
+    const id = messageIdOfDocument(String(hit.documentId));
+    if (id === null || denseRank.has(id) || !Number.isFinite(hit.rank) || hit.rank < 1) continue;
+    denseRank.set(id, hit.rank);
+  }
+
+  // Chat's ACL and qualifiers, applied to every dense id the lexical head does not already vouch for.
+  const unvouched = [...denseRank.keys()].filter((id) => !lexicalRank.has(id));
+  const denseOnly = new Map<string, SearchRow>();
+  if (unvouched.length > 0) {
+    const { where, params } = filterFor(query, channelsNow);
+    for (const row of ctx.sql
+      .exec<MessageRow>(
+        `SELECT m.* FROM messages m
+          WHERE m.id IN (${placeholders(unvouched.length)}) AND ${where.join(" AND ")}`,
+        ...unvouched,
+        ...params,
+      )
+      .toArray()) {
+      denseOnly.set(row.id, { ...row, score: 0, snip: plainSnippet(row.body) });
+    }
+  }
+
+  const fused: { row: SearchRow; fused: number; lexical: number }[] = [];
+  for (const row of head) {
+    const lex = lexicalRank.get(row.id)!;
+    fused.push({ row, fused: rrf(lex) + rrf(denseRank.get(row.id)), lexical: lex });
+  }
+  for (const row of denseOnly.values()) {
+    fused.push({ row, fused: rrf(denseRank.get(row.id)), lexical: Number.POSITIVE_INFINITY });
+  }
+  fused.sort(
+    (a, b) =>
+      b.fused - a.fused ||
+      a.lexical - b.lexical ||
+      b.row.created_at - a.row.created_at ||
+      (a.row.id < b.row.id ? -1 : a.row.id > b.row.id ? 1 : 0),
+  );
+
+  // Lower is better, like bm25(): the fused score negated. The tail keeps its lexical-only RRF.
+  const ordered: SearchRow[] = [
+    ...fused.map((entry) => ({ ...entry.row, score: -entry.fused })),
+    ...tail.map((row, index) => ({ ...row, score: -rrf(FUSION_CANDIDATES + index + 1) })),
+  ];
+  return allow(ordered.slice(offset, offset + limit + 1));
+}
+
+/**
+ * A dense-only hit's snippet: the opening of the message, whitespace collapsed. Same contract as
+ * `snippet()`'s output -- raw text the client escapes -- so any literal `<mark>` in the body is
+ * removed rather than becoming a highlight.
+ */
+export function plainSnippet(body: string): string {
+  const flat = body.replace(/<\/?mark>/giu, "").replace(/\s+/gu, " ").trim();
+  if (flat.length <= PLAIN_SNIPPET_CHARS) return flat;
+  const cut = flat.slice(0, PLAIN_SNIPPET_CHARS);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > PLAIN_SNIPPET_CHARS / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }

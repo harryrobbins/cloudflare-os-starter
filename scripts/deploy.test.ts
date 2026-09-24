@@ -7,7 +7,7 @@ import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import { parse, type ParseError } from "jsonc-parser";
 import {
   aiGatewayPlan, buildCommandBatches, buildCommands, deployOrder, formatBlueprintsPath,
-  generateConfigs, recordsQueues, runWithConcurrency, validateConfig,
+  generateConfigs, recordsQueues, runWithConcurrency, searchNames, validateConfig,
 } from "./deploy.ts";
 import type {
   BaseConfigs,
@@ -90,6 +90,7 @@ async function baseConfigs(): Promise<BaseConfigs> {
     webSearch: await baseConfig("../packages/gatekeeper-websearch/wrangler.jsonc"),
     records: await baseConfig("../packages/gatekeeper-records/wrangler.jsonc"),
     jev: await baseConfig("../packages/gatekeeper-jev/wrangler.jsonc"),
+    search: await baseConfig("../packages/gatekeeper-search/wrangler.jsonc"),
   };
 }
 
@@ -493,6 +494,8 @@ test("deploys web search only when enabled, privately, with its key required", a
   const off = generateConfigs(validConfig, bases);
   assert.equal(off.webSearch, undefined);
   assert.equal(off.workshop.services!.some((s) => s.binding === "GATEKEEPER_WEBSEARCH"), false);
+  // Without web search the Workshop keeps upstream's built-in webFetch.
+  assert.equal(off.workshop.vars!.AGENT_WEB_FETCH, undefined);
   assert.equal(deployOrder(validConfig).includes("webSearch"), false);
   assert.equal(buildCommands(validConfig).some(({ args }) => args.includes("gatekeeper-websearch")), false);
 
@@ -518,9 +521,21 @@ test("deploys web search only when enabled, privately, with its key required", a
     entrypoint: "GatekeeperVendor",
   });
   assert.equal(generated.router.services!.some((s) => s.service === "acme-cloudflare-os-websearch"), false);
+  // Web access is a connector: agents get web tools only where web search is connected, so the
+  // unchecked built-in webFetch is withheld from every other workspace.
+  assert.equal(generated.workshop.vars!.AGENT_WEB_FETCH, "off");
   const order = deployOrder(config);
   assert.ok(order.indexOf("webSearch") < order.indexOf("workshop"));
   assert.ok(buildCommands(config).some(({ args }) => args.includes("gatekeeper-websearch")));
+});
+
+test("keeps the built-in webFetch beside web search only when asked to", async () => {
+  const bases = await baseConfigs();
+  const config = validateConfig(variant((c) => {
+    c.workers.webSearch = { name: "acme-cloudflare-os-websearch" };
+    c.webSearch = { enabled: true, builtinWebFetch: true };
+  }));
+  assert.equal(generateConfigs(config, bases).workshop.vars!.AGENT_WEB_FETCH, undefined);
 });
 
 test("requires a web search Worker name only when web search is enabled", () => {
@@ -1415,4 +1430,261 @@ test("rejects missing, malformed or shared Records Hyperdrive IDs and audiences"
   ] as const) {
     assert.throws(() => validateConfig(recordsVariant(mutate)), message);
   }
+});
+
+/** {@link validConfig} with omni-search switched on (agent access and chat fusion too), plus `mutate`. */
+function searchVariant(mutate: (config: Record<string, any>) => void = () => {}): DeploymentConfig {
+  return variant((c) => {
+    c.workers.search = { name: "acme-cloudflare-os-search" };
+    c.search = { enabled: true, agentAccess: true, chatFusion: true, index: "acme-search", rerank: false };
+    mutate(c);
+  });
+}
+
+test("generates nothing search-related when search is disabled or absent", async () => {
+  const bases = await baseConfigs();
+  for (const config of [
+    validConfig,
+    variant((c) => { c.search = { enabled: false }; }),
+    // Dormant: placeholders and junk in a disabled block are not validated.
+    variant((c) => {
+      c.workers.search = { name: "<SEARCH_WORKER_NAME>" };
+      c.search = { enabled: false, index: "Not A Valid Index!", embedQueue: "" };
+    }),
+  ]) {
+    const generated = generateConfigs(config, bases);
+    assert.equal(generated.search, undefined);
+    assert.equal(generated.router.services!.some((s) => s.binding === "GATEKEEPER_SEARCH"), false);
+    assert.equal(generated.workshop.services!.some((s) => s.binding === "GATEKEEPER_SEARCH"), false);
+    assert.equal(generated.chat!.services!.some((s) => s.binding === "SEARCH"), false);
+    assert.equal(Object.values(generated).some((w) => w?.vectorize), false);
+    assert.equal(deployOrder(config).includes("search"), false);
+    assert.equal(buildCommands(config).some(({ args }) => args.includes("gatekeeper-search")), false);
+  }
+  // A disabled search name is free to collide, because nothing is deployed under it.
+  validateConfig(variant((c) => {
+    c.workers.search = { name: c.workers.workshop.name };
+    c.search = { enabled: false };
+  }));
+  assert.throws(
+    () => validateConfig(searchVariant((c) => { c.workers.search.name = c.workers.workshop.name; })),
+    /unique/i);
+});
+
+test("generates the search Worker with its vars, index, queues and inherited bindings", async () => {
+  const bases = await baseConfigs();
+  const generated = generateConfigs(searchVariant(), bases);
+  const search = generated.search!;
+  assert.equal(search.name, "acme-cloudflare-os-search");
+  assert.equal(search.account_id, validConfig.accountId);
+  assert.equal(search.workers_dev, false);
+  assert.equal(search.preview_urls, false);
+  assert.equal(search.routes, undefined);
+  assert.deepEqual(search.vars, {
+    ADMINS: ["admin@example.com"],
+    CF_ACCESS_ISS: "https://acme.cloudflareaccess.com",
+    CF_ACCESS_AUD: "access-audience",
+    PUBLIC_BASE_URL: "https://os.example.com",
+    AI_GATEWAY: "cloudflare-os",
+    RERANK: "0",
+  });
+  assert.deepEqual(search.vectorize, [{ binding: "VECTORS", index_name: "acme-search" }]);
+  assert.deepEqual(search.queues!.producers, [
+    { binding: "EMBED", queue: "acme-cloudflare-os-search-embed" },
+  ]);
+  assert.deepEqual(search.queues!.consumers, [{
+    ...bases.search!.queues!.consumers![0],
+    queue: "acme-cloudflare-os-search-embed",
+    dead_letter_queue: "acme-cloudflare-os-search-embed-dlq",
+  }]);
+  // Inherited from the package's wrangler.jsonc.
+  assert.deepEqual(search.migrations, bases.search!.migrations);
+  // `durable_objects` is not in upstream's declared subset, but it is carried through untouched.
+  assert.deepEqual((search as Record<string, unknown>).durable_objects,
+    (bases.search as Record<string, unknown>).durable_objects);
+  assert.deepEqual(search.ai, { binding: "AI" });
+  assert.deepEqual(search.assets, bases.search!.assets);
+  assert.deepEqual(search.build, bases.search!.build);
+  assert.equal(search.secrets, undefined);
+
+  // A trailing slash on the issuer is not carried into the var.
+  const slashed = generateConfigs(searchVariant((c) => {
+    c.access.issuer = "https://acme.cloudflareaccess.com/";
+  }), bases).search!;
+  assert.equal(slashed.vars!.CF_ACCESS_ISS, "https://acme.cloudflareaccess.com");
+
+  const tuned = generateConfigs(searchVariant((c) => {
+    c.search.rerank = true;
+    c.aiGateway = { enabled: false };
+    delete c.search.index;
+    c.search.embedQueue = "search-jobs";
+    c.search.deadLetterQueue = "search-jobs-dead";
+  }), bases).search!;
+  assert.equal(tuned.vars!.RERANK, "1");
+  assert.equal(tuned.vars!.AI_GATEWAY, "");
+  // The index defaults to the Worker name.
+  assert.deepEqual(tuned.vectorize, [{ binding: "VECTORS", index_name: "acme-cloudflare-os-search" }]);
+  assert.equal(tuned.queues!.producers![0].queue, "search-jobs");
+  assert.equal(tuned.queues!.consumers![0].queue, "search-jobs");
+  assert.equal(tuned.queues!.consumers![0].dead_letter_queue, "search-jobs-dead");
+  assert.deepEqual(searchNames(searchVariant((c) => { delete c.search.index; })), {
+    index: "acme-cloudflare-os-search",
+    embedQueue: "acme-cloudflare-os-search-embed",
+    deadLetterQueue: "acme-cloudflare-os-search-embed-dlq",
+  });
+
+  // The base must declare what is rewritten, rather than the rewrite silently producing nothing.
+  const noVectors = structuredClone(bases);
+  delete noVectors.search!.vectorize;
+  assert.throws(() => generateConfigs(searchVariant(), noVectors), /VECTORS Vectorize binding/);
+  const noQueues = structuredClone(bases);
+  delete noQueues.search!.queues;
+  assert.throws(() => generateConfigs(searchVariant(), noQueues), /queue producer and consumer/);
+});
+
+test("routes /gatekeeper/search through the router and binds the vendor only under agentAccess", async () => {
+  const bases = await baseConfigs();
+  const generated = generateConfigs(searchVariant(), bases);
+  // Plain fetch: the binding name is what makes /gatekeeper/search a path.
+  assert.deepEqual(generated.router.services!.find((s) => s.binding === "GATEKEEPER_SEARCH"), {
+    binding: "GATEKEEPER_SEARCH",
+    service: "acme-cloudflare-os-search",
+  });
+  assert.deepEqual(generated.workshop.services!.find((s) => s.binding === "GATEKEEPER_SEARCH"), {
+    binding: "GATEKEEPER_SEARCH",
+    service: "acme-cloudflare-os-search",
+    entrypoint: "GatekeeperVendor",
+  });
+
+  const noAgent = generateConfigs(searchVariant((c) => { c.search.agentAccess = false; }), bases);
+  assert.equal(noAgent.workshop.services!.some((s) => s.binding === "GATEKEEPER_SEARCH"), false);
+  // The router keeps its binding either way; the app does not depend on agent access.
+  assert.ok(noAgent.router.services!.some((s) => s.binding === "GATEKEEPER_SEARCH"));
+  assert.equal(generateConfigs(searchVariant((c) => { delete c.search.agentAccess; }), bases)
+    .workshop.services!.some((s) => s.binding === "GATEKEEPER_SEARCH"), false);
+});
+
+test("binds search to the same Context Library as the Workshop unless contextFeed is off", async () => {
+  const bases = await baseConfigs();
+  const generated = generateConfigs(searchVariant(), bases);
+  const workshopContext = generated.workshop.services!.find((s) => s.binding === "GATEKEEPER_CONTEXT");
+  const searchContext = generated.search!.services!.find((s) => s.binding === "GATEKEEPER_CONTEXT");
+  assert.ok(searchContext);
+  // Same service, entrypoint and sharing domain: a different domain would index an empty Library.
+  assert.deepEqual(searchContext, workshopContext);
+  assert.equal(searchContext.entrypoint, "GatekeeperVendor");
+
+  const off = generateConfigs(searchVariant((c) => { c.search.contextFeed = false; }), bases);
+  assert.equal(off.search!.services, undefined);
+  assert.throws(
+    () => generateConfigs(searchVariant((c) => { (c.search as { contextFeed: unknown }).contextFeed = "yes"; }), bases),
+    /search.contextFeed must be a boolean/,
+  );
+});
+
+test("binds SearchService to chat only under chatFusion, beside the Workshop gateway", async () => {
+  const bases = await baseConfigs();
+  const searchBinding = {
+    binding: "SEARCH",
+    service: "acme-cloudflare-os-search",
+    entrypoint: "SearchService",
+    props: { source: "chat" },
+  };
+  const gateway = {
+    binding: "WORKSHOP_GATEWAY",
+    service: "acme-cloudflare-os-backend",
+    entrypoint: "ExternalMessageGateway",
+    props: { source: "chat" },
+  };
+  assert.deepEqual(generateConfigs(searchVariant(), bases).chat!.services, [gateway, searchBinding]);
+  // With @agent replies off, the search binding stays on its own.
+  assert.deepEqual(
+    generateConfigs(searchVariant((c) => { c.chat.agentReplies = false; }), bases).chat!.services,
+    [searchBinding]);
+  // Without chatFusion, chat is exactly what it was.
+  assert.deepEqual(
+    generateConfigs(searchVariant((c) => { c.search.chatFusion = false; }), bases).chat!.services,
+    [gateway]);
+  assert.equal(generateConfigs(searchVariant((c) => {
+    c.search.chatFusion = false;
+    c.chat.agentReplies = false;
+  }), bases).chat!.services, undefined);
+});
+
+test("rejects malformed search blocks and switches that need a Worker", () => {
+  assert.doesNotThrow(() => validateConfig(searchVariant()));
+  for (const [mutate, message] of [
+    [(c: Record<string, any>) => { delete c.workers.search; }, /workers\.search\.name/],
+    [(c: Record<string, any>) => { c.search = []; }, /search must be an object/],
+    [(c: Record<string, any>) => { c.search.enabled = "yes"; }, /search\.enabled must be a boolean/],
+    [(c: Record<string, any>) => { c.search.agentAccess = "yes"; }, /search\.agentAccess must be a boolean/],
+    [(c: Record<string, any>) => { c.search.chatFusion = 1; }, /search\.chatFusion must be a boolean/],
+    [(c: Record<string, any>) => { c.search.rerank = "0"; }, /search\.rerank must be a boolean/],
+    [(c: Record<string, any>) => { c.search = { enabled: false, agentAccess: true }; },
+      /agentAccess is true while search\.enabled is false/],
+    [(c: Record<string, any>) => { c.search = { enabled: false, chatFusion: true }; },
+      /chatFusion is true while search\.enabled is false/],
+    [(c: Record<string, any>) => { c.chat = { enabled: false }; },
+      /chatFusion is true while chat\.enabled is false/],
+    [(c: Record<string, any>) => { c.search.index = "Acme_Search"; }, /search\.index/],
+    [(c: Record<string, any>) => { c.search.index = "1search"; }, /search\.index/],
+    [(c: Record<string, any>) => { c.search.index = "a".repeat(65); }, /search\.index/],
+    [(c: Record<string, any>) => { c.search.index = "<SEARCH_INDEX>"; }, /placeholder/i],
+    [(c: Record<string, any>) => { delete c.search.index; c.workers.search.name = "9-search"; },
+      /Set search\.index/],
+    [(c: Record<string, any>) => { c.search.embedQueue = "Search_Embed"; }, /search\.embedQueue/],
+    [(c: Record<string, any>) => { c.search.embedQueue = c.search.deadLetterQueue = "same"; },
+      /must be different queues/],
+  ] as const) {
+    assert.throws(() => validateConfig(searchVariant(mutate)), message);
+  }
+  // chatFusion off makes search independent of chat.
+  validateConfig(searchVariant((c) => { c.chat = { enabled: false }; c.search.chatFusion = false; }));
+  validateConfig(searchVariant((c) => { c.search.index = "a".repeat(64); }));
+  // Records and search must not share a queue.
+  assert.throws(() => validateConfig(searchVariant((c) => {
+    c.workers.records = { name: "acme-cloudflare-os-records" };
+    c.records = {
+      enabled: true,
+      hyperdriveId: recordsAppHyperdrive,
+      publisherHyperdriveId: recordsPublisherHyperdrive,
+      apiAccessAudience: null,
+    };
+    c.search.embedQueue = "acme-cloudflare-os-records-changes";
+  })), /must not share a queue/);
+});
+
+test("deploys search before chat, the Workshop and the router that bind it, and builds its app", () => {
+  for (const config of [
+    searchVariant(),
+    searchVariant((c) => { c.chat.agentAccess = true; }),
+    searchVariant((c) => { c.chat.agentReplies = false; }),
+  ]) {
+    const order = deployOrder(config);
+    assert.ok(order.includes("search"), order.join(" "));
+    assert.ok(order.indexOf("search") < order.indexOf("chat"), order.join(" "));
+    assert.ok(order.indexOf("search") < order.indexOf("workshop"), order.join(" "));
+    assert.equal(order.at(-1), "router");
+    assert.equal(new Set(order).size, order.length);
+  }
+  assert.deepEqual(deployOrder(searchVariant()), [
+    "errorReporter", "context", "scheduler", "procgen", "customGatekeeper", "search", "workshop",
+    "chat", "router",
+  ]);
+
+  const commands = buildCommands(searchVariant()).map(({ args }) => args.join(" "));
+  const build = commands.indexOf("exec vp run -F gatekeeper-search --no-cache build");
+  assert.ok(build >= 0, commands.join("\n"));
+});
+
+test("the repository's deployment.jsonc search block is valid", async () => {
+  const errors: ParseError[] = [];
+  const config = parse(
+    await readFile(new URL("../deployment.jsonc", import.meta.url), "utf8"), errors,
+    { allowTrailingComma: true }) as DeploymentConfig;
+  assert.deepEqual(errors, []);
+  assert.equal(typeof config.search?.enabled, "boolean");
+  assert.equal(typeof config.workers.search?.name, "string");
+  validateConfig(config);
+  generateConfigs(config, await baseConfigs());
 });

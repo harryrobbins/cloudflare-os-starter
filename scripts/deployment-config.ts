@@ -163,6 +163,12 @@ export interface WebSearchConfig {
    * domain (`cfos.example.com` gives `example.com`); the public origin itself is always allowed.
    */
   privateDomains?: string[];
+  /**
+   * Whether agents keep the Workshop's built-in `webFetch` tool, which fetches any public URL with
+   * no check, in workspaces that are not connected to web search. Absent or false withholds it, so
+   * an agent reaches the web only in a workspace someone has explicitly connected to web search.
+   */
+  builtinWebFetch?: boolean;
 }
 
 /**
@@ -214,6 +220,47 @@ export interface JevConfig {
   enabled: boolean;
 }
 
+/**
+ * Omni-search: one Worker (`packages/gatekeeper-search`) holding a deployment-wide hybrid index --
+ * a SQLite Durable Object for the lexical half and facets, a Vectorize index for the dense half, and
+ * an embed queue with a dead-letter queue for the work it gives itself. Serves its own SPA and API
+ * at `/gatekeeper/search/` through the router.
+ *
+ * Absent or disabled generates nothing: no Worker, and no `GATEKEEPER_SEARCH` or `SEARCH` binding
+ * on the router, the Workshop or chat. The Vectorize index, its metadata indexes and both queues
+ * are not provisioned by the deploy: `pnpm search:provision` creates them, and `pnpm check`
+ * refuses to continue until they exist with the shape the Worker expects.
+ */
+export interface SearchConfig {
+  /** Whether the search Worker is built, deployed and bound at all. */
+  enabled: boolean;
+  /**
+   * Whether the Workshop binds search as a Gatekeeper vendor, so every workspace gets an ambient
+   * `SearchSession`. Public content only in v1: the singleton session carries no identity.
+   */
+  agentAccess?: boolean;
+  /**
+   * Whether chat binds search's `SearchService` entrypoint as `SEARCH`, to push its messages into
+   * the index and fuse dense recall into chat's own search. Requires `chat.enabled`.
+   */
+  chatFusion?: boolean;
+  /**
+   * Whether search binds cfos-context's GatekeeperVendor (with the Workshop's own sharing domain)
+   * and indexes the Context Library's public collections every 15 minutes. Default true. The
+   * Context vendor trusts the `isAdmin` flag its caller passes, so this binding extends trust to
+   * the search Worker; its feed only ever passes `isAdmin: false`.
+   */
+  contextFeed?: boolean;
+  /** Vectorize index name. Absent means `<workers.search.name>`. */
+  index?: string;
+  /** Whether the bge-reranker-base pass runs over the fused top 30. Becomes `RERANK` ("1"/"0"). */
+  rerank?: boolean;
+  /** Embed queue. Absent means `<workers.search.name>-embed`. */
+  embedQueue?: string;
+  /** Its dead-letter queue. Absent means `<workers.search.name>-embed-dlq`. */
+  deadLetterQueue?: string;
+}
+
 /** Worker telemetry. Maps onto wrangler's `observability` block. */
 export interface DeploymentObservabilityConfig {
   enabled: boolean;
@@ -258,6 +305,8 @@ export interface DeploymentConfig {
     records?: { name: string };
     /** Jev decisions. Only required when `jev.enabled`. */
     jev?: { name: string };
+    /** Omni-search. Only required when `search.enabled`. */
+    search?: { name: string };
   };
   /** Optional private Python execution service; disabled unless explicitly enabled. */
   runtime?: { enabled: boolean; workerName: string; maxInstances: number };
@@ -276,6 +325,8 @@ export interface DeploymentConfig {
   records?: RecordsConfig;
   /** Jev decisions. Absent means disabled, as does `enabled: false`. */
   jev?: JevConfig;
+  /** Omni-search. Absent means disabled, as does `enabled: false`. */
+  search?: SearchConfig;
   /** Workshop KV/R2. `null` requests Wrangler automatic provisioning. */
   resources: {
     blueprintsKvNamespaceId: string | null;
@@ -353,6 +404,8 @@ export type ProdWranglerConfig =
     };
     /** Cron triggers. */
     triggers?: { crons: string[] };
+    /** Vectorize bindings. The index itself is provisioned outside wrangler deploy. */
+    vectorize?: { binding: string; index_name: string }[];
     /** Rate limiting bindings. */
     ratelimits?: { name: string; namespace_id: string; simple: { limit: number; period: number } }[];
   };
@@ -377,6 +430,8 @@ export interface GeneratedConfigs {
   records?: ProdWranglerConfig;
   /** Absent when `jev.enabled` is false or the block is missing. */
   jev?: ProdWranglerConfig;
+  /** Absent when `search.enabled` is false or the block is missing. */
+  search?: ProdWranglerConfig;
 }
 
 /** The upstream base configs the generated ones are derived from. */
@@ -398,6 +453,8 @@ export interface BaseConfigs {
   records?: ProdWranglerConfig;
   /** Jev base; required only when Jev is enabled. */
   jev?: ProdWranglerConfig;
+  /** Search base; required only when search is enabled. */
+  search?: ProdWranglerConfig;
 }
 
 /** One build step `deploy.ts` runs before deploying. See `buildCommands`. */

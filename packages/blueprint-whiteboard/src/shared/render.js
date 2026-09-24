@@ -8,6 +8,7 @@ import { DEFAULT_TITLE, sortedObjects } from "./protocol.js";
 import { getIcon, iconPaths, iconPlacement, iconTextBox, DEFAULT_ICON_STROKE, DEFAULT_INK } from "./icons/registry.js";
 import { codeLayout, fitColumns, CODE_FONT_FAMILY, CODE_CHAR_EM } from "./code/layout.js";
 import { codeTheme } from "./code/theme.js";
+import { truncateText } from "./graphemes.js";
 
 /** @typedef {import("./protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("./protocol.js").BoardSnapshot} BoardSnapshot */
@@ -21,7 +22,9 @@ import { codeTheme } from "./code/theme.js";
  */
 
 export const SVG_NS = "http://www.w3.org/2000/svg";
-export const FONT_FAMILY = "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+// The emoji fonts at the end let emoji use the system's colour emoji font everywhere, including a
+// downloaded SVG; no emoji images are bundled, so emoji look different on different systems.
+export const FONT_FAMILY = "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji'";
 
 /**
  * Looks up an object's geometry by id; the client passes one that prefers ghost transforms, so a
@@ -354,9 +357,9 @@ export function boardToSvg(board, { padding = 40, frameId = null } = {}) {
     const text = typeof o.text === "string" ? o.text : "";
     let shown = o;
     if (text.length > budget) {
-      // Never cut between the halves of a surrogate pair.
-      const end = budget > 0 && /[\ud800-\udbff]/.test(text[budget - 1]) ? budget - 1 : budget;
-      shown = { ...o, text: end > 0 ? text.slice(0, end) + "…" : "" };
+      // Never cut inside an emoji or other multi-code-point character.
+      const kept = truncateText(text, budget);
+      shown = { ...o, text: kept ? kept + "…" : "" };
     }
     budget = Math.max(0, budget - text.length);
     const node = objectNode(shown, resolve);

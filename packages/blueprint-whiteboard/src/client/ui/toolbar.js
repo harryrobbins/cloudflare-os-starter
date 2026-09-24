@@ -115,6 +115,7 @@ export function createToolbar(app) {
         onSelect: () => { canvas.addAtCenter(a.type); },
       })),
       { label: "Icons and shapes… (I)", className: "add-icon", onSelect: () => app.toggleIconPicker?.() },
+      { label: `Emoji and symbols… (${MOD}.)`, className: "add-emoji", onSelect: () => app.openEmojiPicker?.() },
     ], { label: "Add object" });
   }
 

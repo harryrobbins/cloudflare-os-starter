@@ -72,6 +72,10 @@ export const API_ROUTES = {
   unfollowThread: { method: "DELETE", path: "/threads/:rootId/follow" },
 
   search: { method: "GET", path: "/search" },
+  /** Admins only: the omni-search outbox and backfill status (`SearchSyncStatus`). */
+  searchIndexStatus: { method: "GET", path: "/admin/search-reindex" },
+  /** Admins only: restart the omni-search backfill of the whole corpus. Answers `SearchSyncStatus`. */
+  searchReindex: { method: "POST", path: "/admin/search-reindex" },
 
   createUpload: { method: "POST", path: "/uploads" },
 

@@ -17,7 +17,8 @@
     "check": "node scripts/deploy.ts --check",
     "check:cached": "node scripts/deploy.ts --check --use-cache",
     "deploy": "node scripts/deploy.ts",
-    "release": "node scripts/deploy.ts --release"
+    "release": "node scripts/deploy.ts --release",
+    "search:provision": "node scripts/provision-search.ts"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",

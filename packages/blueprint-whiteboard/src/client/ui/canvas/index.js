@@ -24,7 +24,7 @@
 // menu beside rather than on top of.
 
 import { TYPE_DEFAULTS, sortedObjects, newId } from "../../../shared/protocol.js";
-import { center, corners, boardBounds, unionRects } from "../../../shared/geometry.js";
+import { center, corners, boardBounds, unionRects, textWidth, textObjectHeight } from "../../../shared/geometry.js";
 import {
   cleanCamera, screenToWorld, worldToScreen, zoomAt, panBy, viewportOf, cameraTransform,
   fitRect, centerOn, revealRect, lerpCamera, easeOutCubic, gridSpacing, wheelPixels, wheelZoomFactor,
@@ -587,6 +587,9 @@ export function createCanvas(store, options = {}) {
       }
       return fence ? fence.object.text : null;
     },
+    // The icon picker's panel may take focus without ending the edit, to insert at the caret.
+    keepOpen: (t) => t instanceof Element && !!t.closest("[data-wb-keeps-editor]"),
+    onCommand: (command) => emit({ kind: "command", command: /** @type {any} */ (command) }),
     onClose() {
       layer.setEditing(null);
       schedule("cull");
@@ -1302,6 +1305,53 @@ export function createCanvas(store, options = {}) {
       return id;
     },
     editText,
+    getTextEdit() {
+      if (!editor?.isOpen || !editor.id) return null;
+      const o = objects()[editor.id];
+      return o ? { id: o.id, type: o.type } : null;
+    },
+    finishTextEdit() {
+      if (editor?.isOpen) editor.commit();
+    },
+    focusTextEdit() {
+      if (!editor?.isOpen) return false;
+      editor.focus();
+      return true;
+    },
+    insertText(text, opts = {}) {
+      if (exportMode || typeof text !== "string" || !text) return null;
+      const at = opts.at && Number.isFinite(opts.at.clientX) && Number.isFinite(opts.at.clientY) ? opts.at : null;
+      // Into the text being edited, at its caret (a drop always makes a new object).
+      if (editor?.isOpen && editor.id && !at) {
+        const id = editor.id;
+        return editor.insert(text) ? { mode: "caret", id } : null;
+      }
+      if (editor?.isOpen) editor.commit();
+      if (!cameraReady) measure();
+      const fontSize = Math.max(8, Math.min(200, Math.round(opts.fontSize ?? INSERTED_TEXT_FONT_SIZE)));
+      // A box fitted to the glyph (emoji are about 1em wide, drawn a little wider by some fonts).
+      const w = Math.ceil(Math.max(fontSize, textWidth(text, fontSize)) * 1.25);
+      const hgt = textObjectHeight(text, w, fontSize);
+      let c = screenToWorld(camera, { x: size.w / 2, y: size.h / 2 });
+      if (at) c = screenToWorld(camera, toLocal({ x: at.clientX, y: at.clientY }));
+      let x = round2(c.x - w / 2), y = round2(c.y - hgt / 2);
+      if (!at) {
+        const taken = (/** @type {number} */ px, /** @type {number} */ py) =>
+          Object.values(objects()).some((o) => o.type === "text" && Math.abs(o.x - px) < 1 && Math.abs(o.y - py) < 1);
+        for (let i = 0; i < 20 && taken(x, y); i++) { x += 20; y += 20; }
+      }
+      const remembered = toolStyle("text");
+      /** @type {any} */
+      const obj = {
+        type: "text", x, y, w, h: hgt, text,
+        style: { ...(remembered.textColor ? { textColor: remembered.textColor } : {}), fontSize, align: "center" },
+        frameId: frameAtPoint(objects(), center({ x, y, w, h: hgt })),
+      };
+      const [id] = store.createObjects([obj]);
+      if (!id) return null;
+      setSelectionInternal([id], { announce: true });
+      return { mode: "object", id };
+    },
     follow(clientId) {
       if (clientId === following) return;
       if (!clientId) { stopFollowing(); return; }
@@ -1388,6 +1438,9 @@ export function createCanvas(store, options = {}) {
 
   return api;
 }
+
+/** Font size of a text object made by inserting an emoji or symbol from the picker. */
+export const INSERTED_TEXT_FONT_SIZE = 64;
 
 /** @param {string} pointerType */
 function handleRadius(pointerType) {

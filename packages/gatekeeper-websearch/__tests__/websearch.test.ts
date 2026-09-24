@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { createExecutionContext, env } from "cloudflare:test";
+import CONFIGURATOR_HTML from "../src/configurator-html.js";
 import typesSource from "../src/types.d.ts?raw";
 import TYPES_CODE from "../src/types-code.js";
 import type { GateDecision } from "../src/classifier/gate.js";
 import {
   describeWebSearchAccount,
   describeWebSearchVendor,
+  GatekeeperVendor,
+  WEB_RESOURCE,
+  WebSearchAccount,
   WebSearchSessionImpl,
   type WebSearchBackend,
 } from "../src/websearch.js";
@@ -52,9 +57,12 @@ describe("websearch gatekeeper", () => {
     expect(TYPES_CODE).toBe(typesSource);
   });
 
-  it("describes an auto-provisioned singleton", () => {
+  it("is auto-provisioned but never an agent singleton, so it reaches no workspace by itself", () => {
     expect(describeWebSearchVendor()).toMatchObject({ autoProvisionsAccount: true, providesAuth: false });
-    expect(describeWebSearchAccount()).toMatchObject({ singleton: { tsType: "WebSearchSession" } });
+    // A singleton account is installed by the Workshop into every workspace its owner has.
+    expect(describeWebSearchAccount()).not.toHaveProperty("singleton");
+    expect(describeWebSearchAccount()).not.toHaveProperty("providesUi");
+    expect(WebSearchAccount.prototype).not.toHaveProperty("getSingletonGatekeeperClass");
   });
 
   it("refuses a blocked query without observing, searching or asking", async () => {
@@ -114,5 +122,46 @@ describe("websearch gatekeeper", () => {
     let h = harness("review");
     expect(await h.session.check({ query: "jane smith" })).toEqual({ outcome: "review", reasons: ["financial_identifier"] });
     expect(h.log).toEqual(["gate:jane smith"]);
+  });
+});
+
+// A fake entrypoint context: records which Gatekeeper classes the account hands out.
+function entrypoint<T>(Entrypoint: new (ctx: ExecutionContext, env: Cloudflare.Env) => T) {
+  let made: unknown[] = [];
+  let ctx = createExecutionContext();
+  Object.defineProperty(ctx, "exports", {
+    value: { WebSearchGatekeeper: (options: unknown) => { made.push(options); return "WebSearchGatekeeper"; } },
+  });
+  return { instance: new Entrypoint(ctx, env as Cloudflare.Env), made };
+}
+
+describe("websearch connections", () => {
+  it("offers one resource to connect, from the vendor and from the account", async () => {
+    let vendor = entrypoint(GatekeeperVendor).instance;
+    let account = entrypoint(WebSearchAccount).instance;
+    expect(await vendor.getSupportedResources()).toEqual([WEB_RESOURCE]);
+    expect(await account.getSupportedResources()).toEqual([WEB_RESOURCE]);
+    expect(WEB_RESOURCE.urlPattern).toBe("websearch://web");
+  });
+
+  it("hands out a Gatekeeper only for an explicit connection to its resource", async () => {
+    let { instance: account, made } = entrypoint(WebSearchAccount);
+    let first = await account.getGatekeeperClassFor("websearch://web");
+    expect(first).toEqual({ class: "WebSearchGatekeeper", resource: WEB_RESOURCE });
+    await account.getGatekeeperClassFor("websearch://web/");
+    // One Gatekeeper per connection: each workspace keeps its own approvals and audit log.
+    expect(made).toHaveLength(2);
+    await expect(account.getGatekeeperClassFor("https://example.com/")).rejects.toThrow(/one resource/);
+    await expect(account.ensureResources(["websearch://*"])).rejects.toThrow(/one resource/);
+    expect(await account.ensureResources(["websearch://web"])).toEqual({});
+  });
+
+  it("serves a configurator that selects the resource with nothing to fill in", async () => {
+    let account = entrypoint(WebSearchAccount).instance;
+    let frame = await account.startResourceConfigurator("websearch://web");
+    expect(frame.iframeHtml).toBe(CONFIGURATOR_HTML);
+    expect(CONFIGURATOR_HTML).toContain('data-resource-url="websearch://web"');
+    expect(CONFIGURATOR_HTML).toContain("setSelectionReady");
+    await expect(account.startResourceConfigurator("jev://decisions")).rejects.toThrow(/one resource/);
   });
 });

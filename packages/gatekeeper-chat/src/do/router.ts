@@ -15,6 +15,7 @@ import {
   type ChatIdentity,
   type MeResponse,
   type OkResponse,
+  type SearchSyncStatus,
   type UserListResponse,
   type UserResponse,
 } from "../shared/protocol.js";
@@ -58,7 +59,9 @@ import {
   setThreadFollow,
 } from "./messages.js";
 import { toPrefs, toUser, type UserRow } from "./rows.js";
+import { hashId, logEvent } from "./logs.js";
 import { search } from "./search.js";
+import { restartSearchBackfill, searchEnabled, searchSyncStatus } from "./search-sync.js";
 import { acceptSocket } from "./sockets.js";
 import { badgeSummary } from "./unread.js";
 import { isAdmin, listUsers, loadUserRow, updatePrefs, usersByIds, visibleInDirectory } from "./users.js";
@@ -225,7 +228,7 @@ export async function route(
 
     case "search":
       return respond(
-        search(
+        await search(
           ctx,
           user,
           url.searchParams.get("q") ?? "",
@@ -233,6 +236,20 @@ export async function route(
           numberParam(url, "limit"),
         ),
       );
+
+    case "searchIndexStatus":
+      if (!admin) return errorResponse("forbidden", "Only an admin can see the search index status.");
+      return json(searchSyncStatus(ctx) satisfies SearchSyncStatus);
+
+    case "searchReindex":
+      if (!admin) return errorResponse("forbidden", "Only an admin can reindex search.");
+      if (!searchEnabled(ctx)) {
+        return errorResponse("conflict", "Omni-search is not enabled on this deployment.");
+      }
+      restartSearchBackfill(ctx);
+      logEvent("chat.search.reindex", { user: hashId(user.id) });
+      await ctx.wakeAt(ctx.now());
+      return json(searchSyncStatus(ctx) satisfies SearchSyncStatus);
 
     case "createUpload":
       return respond(await createUpload(ctx, user.id, request));

@@ -1,0 +1,207 @@
+/* The search app's stylesheet. Tailwind v4 utilities over a small token layer whose values are the
+   chat app's (and the shell's) palette: warm near-neutral greys in light mode, violet-tinted surfaces
+   in dark mode, the brand orange reserved for intent (focus, active filter, primary link).
+
+   Dark mode is driven by `[data-mode="dark"]` on <html>, set before first paint by
+   public/theme-boot.js from `prefers-color-scheme` and kept in step by src/main.tsx. */
+@import "tailwindcss";
+@custom-variant dark (&:where([data-mode="dark"], [data-mode="dark"] *));
+
+@theme {
+  --font-sans: "FT Kunst Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+    "Helvetica Neue", sans-serif;
+  --font-mono: "Apercu Mono Pro", "SF Mono", Menlo, Monaco, Consolas, monospace;
+
+  /* Surfaces */
+  --color-page: #fcfcfb;
+  --color-panel: #f8f8f7;
+  --color-tint: #f3f3f1;
+  --color-control: #ffffff;
+  --color-fill: #e8e7e4;
+  --color-fill-hover: #dededb;
+  --color-line: #14111014;
+  --color-ring: #cac8c3;
+
+  /* Text */
+  --color-fg: #1c1a18;
+  --color-strong: #100f0d;
+  --color-muted: oklch(50% 0.006 60);
+  --color-faint: oklch(58% 0.005 60);
+
+  /* Intent */
+  --color-brand: #ff4801;
+  --color-link: #c23a00;
+  --color-selected: #fff1ea;
+  --color-contrast: #14110f;
+  --color-on-contrast: #ffffff;
+
+  --color-warn: oklch(47.6% 0.114 61.907);
+  --color-warn-tint: oklch(95% 0.05 85);
+  --color-danger: oklch(52% 0.2 25.331);
+  --color-danger-tint: oklch(95% 0.035 25);
+  --color-info: oklch(48% 0.15 259.815);
+  --color-info-tint: oklch(95% 0.03 250);
+  --color-ok: oklch(48% 0.13 150);
+  --color-mark: color-mix(in srgb, oklch(79.5% 0.184 86.047) 42%, transparent);
+
+  /* Source dots */
+  --color-src-chat: oklch(62% 0.19 259);
+  --color-src-context: oklch(62% 0.17 150);
+  --color-src-gadget: oklch(58% 0.2 300);
+  --color-src-other: oklch(62% 0.02 60);
+
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+[data-mode="dark"] {
+  --color-page: oklch(0.115 0.012 285);
+  --color-panel: oklch(0.155 0.011 285);
+  --color-tint: oklch(0.2 0.02 285);
+  --color-control: oklch(0.155 0.011 285);
+  --color-fill: oklch(0.225 0.025 285);
+  --color-fill-hover: oklch(0.295 0.045 285);
+  --color-line: oklch(0.3 0.02 285);
+  --color-ring: oklch(0.52 0.065 285);
+
+  --color-fg: oklch(0.92 0.01 285);
+  --color-strong: oklch(0.97 0.006 285);
+  --color-muted: oklch(0.72 0.02 285);
+  --color-faint: oklch(0.64 0.025 285);
+
+  --color-brand: #ff6a2b;
+  --color-link: #ff8a5c;
+  --color-selected: oklch(0.22 0.04 40);
+  --color-contrast: oklch(0.92 0.01 285);
+  --color-on-contrast: oklch(0.13 0.012 285);
+
+  --color-warn: oklch(82.8% 0.14 84.429);
+  --color-warn-tint: oklch(0.25 0.05 84.429);
+  --color-danger: oklch(74% 0.16 22.216);
+  --color-danger-tint: oklch(0.25 0.065 25.331);
+  --color-info: oklch(78% 0.1 259.815);
+  --color-info-tint: oklch(0.24 0.05 259.815);
+  --color-ok: oklch(79.2% 0.15 151.711);
+  --color-mark: color-mix(in srgb, oklch(79.5% 0.184 86.047) 30%, transparent);
+}
+
+html {
+  color-scheme: light;
+}
+[data-mode="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  font-family: var(--font-sans);
+  background-color: var(--color-page);
+  color: var(--color-fg);
+}
+
+::selection {
+  background-color: color-mix(in srgb, var(--color-brand) 22%, transparent);
+}
+
+/* One focus treatment: a brand outline, for keyboard users only. */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+/* Text fields carry the indicator on their wrapper instead (`.field`). */
+:where(input:not([type="checkbox"]):not([type="radio"]), textarea):focus-visible {
+  outline: none;
+}
+.field:focus-within {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand) 18%, transparent);
+}
+
+/* The listbox holds focus while its active row is shown by `aria-selected`; the ring goes on the row
+   so it is visible where the eye is. */
+.results:focus-visible {
+  outline: none;
+}
+.results:focus-visible [aria-selected="true"] {
+  box-shadow: inset 0 0 0 2px var(--color-brand);
+}
+
+.snippet mark {
+  background: var(--color-mark);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 0.1em;
+}
+
+
+/* Element defaults sit in the base layer so utilities (`hidden`, `font-sans`) still win. */
+@layer base {
+  code,
+  pre,
+  kbd {
+    font-family: var(--font-mono);
+  }
+
+  kbd {
+    display: inline-block;
+    min-width: 1.35em;
+    padding: 0 0.3em;
+    border: 1px solid var(--color-line);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: var(--color-panel);
+    font-size: 0.7rem;
+    line-height: 1.3rem;
+    text-align: center;
+    color: var(--color-muted);
+  }
+}
+
+.quiet-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-ring) 60%, transparent) transparent;
+}
+
+@keyframes skeleton {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--color-tint) 0%, var(--color-fill) 50%, var(--color-tint) 100%);
+  background-size: 200% 100%;
+  animation: skeleton 1.4s ease-in-out infinite;
+  border-radius: 0.375rem;
+}
+
+@keyframes progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+.progress-bar {
+  animation: progress 1s var(--ease-out-strong) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton,
+  .progress-bar {
+    animation: none;
+  }
+}
+
+.sr-only-focusable:not(:focus) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

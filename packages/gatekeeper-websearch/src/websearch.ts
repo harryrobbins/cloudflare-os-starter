@@ -33,6 +33,7 @@ import type {
   WebSearchSession,
 } from "./types.js";
 import TYPES_CODE from "./types-code.js";
+import CONFIGURATOR_HTML from "./configurator-html.js";
 
 const ICON = {
   url:
@@ -68,16 +69,39 @@ export function describeWebSearchVendor(): VendorDescription {
     color: "#e9f7ef",
     tagline: "Web search and page fetches that keep private data in",
     description:
-      "Searches the web and fetches pages for the agent. Every query and URL is checked first: " +
-      "personal data, identifiers and secrets are refused, and anything uncertain waits for your approval.",
+      "Searches the web and fetches pages for the agent, in the workspaces you connect it to. Every " +
+      "query and URL is checked first: personal data, identifiers and secrets are refused, and " +
+      "anything uncertain waits for your approval.",
     autoProvisionsAccount: true,
     providesAuth: false,
   };
 }
 
-export function describeWebSearchAccount(): AccountDescription {
-  return { displayName: "Web Search", avatar: ICON, singleton: { tsType: "WebSearchSession" } };
+/**
+ * The one resource: web access for the workspace it is connected to. Web Search is deliberately not
+ * an agent singleton (which the Workshop would install in every workspace the account owner has);
+ * like any other connector, it reaches a workspace only through an explicit connection there.
+ */
+export const WEB_RESOURCE: SupportedResource = {
+  urlPattern: "websearch://web",
+  title: "Web search",
+  description: "Privacy-gated web search and page fetches for this workspace.",
+  icon: ICON,
+};
+
+/** Accepts the resource URL (tolerating a trailing slash) and returns its canonical form. */
+export function parseWebResourceUrl(url: string): string {
+  if (url.replace(/\/+$/, "") !== WEB_RESOURCE.urlPattern) {
+    throw new Error(`Web Search has one resource: ${WEB_RESOURCE.urlPattern}.`);
+  }
+  return WEB_RESOURCE.urlPattern;
 }
+
+export function describeWebSearchAccount(): AccountDescription {
+  return { displayName: "Web Search", avatar: ICON };
+}
+
+class FixedResourceConfigurator extends RpcTarget {}
 
 /** What the session needs from its Durable Object; narrow so tests can supply a fake. */
 export interface WebSearchBackend {
@@ -404,23 +428,25 @@ export class WebSearchAccount extends WorkerEntrypoint<Cloudflare.Env> implement
     return describeWebSearchAccount();
   }
 
-  async getSingletonGatekeeperClass(): Promise<DurableObjectClass<Gatekeeper<WebSearchSession>>> {
-    return this.ctx.exports.WebSearchGatekeeper({});
-  }
-
   async getSupportedResources(): Promise<SupportedResource[]> {
-    return [];
+    return [WEB_RESOURCE];
   }
 
-  getGatekeeperClassFor(_url: string): never {
-    throw new Error("Web Search has no URL-addressed resources.");
+  async getGatekeeperClassFor(url: string): Promise<{
+    class: DurableObjectClass<Gatekeeper<WebSearchSession>>; resource: SupportedResource;
+  }> {
+    parseWebResourceUrl(url);
+    // One Gatekeeper per connection, so each workspace keeps its own audit log and approvals.
+    return { class: this.ctx.exports.WebSearchGatekeeper({}), resource: WEB_RESOURCE };
   }
 
-  startResourceConfigurator(_pattern: string): Promise<ResourceConfiguratorFrame> {
-    throw new Error("Web Search has no URL-addressed resources.");
+  async startResourceConfigurator(pattern: string): Promise<ResourceConfiguratorFrame> {
+    parseWebResourceUrl(pattern);
+    return { iframeHtml: CONFIGURATOR_HTML, ui: new RpcStub(new FixedResourceConfigurator()) };
   }
 
-  async ensureResources(_patterns: string[]): Promise<{ url?: string }> {
+  async ensureResources(patterns: string[]): Promise<{ url?: string }> {
+    for (let pattern of patterns) parseWebResourceUrl(pattern);
     return {};
   }
 
@@ -464,7 +490,7 @@ export class GatekeeperVendor extends WorkerEntrypoint<Cloudflare.Env> {
   }
 
   async getSupportedResources(_options?: { userId?: string }): Promise<SupportedResource[]> {
-    return [];
+    return [WEB_RESOURCE];
   }
 
   async getTypeScriptTypes(): Promise<string> {

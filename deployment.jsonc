@@ -51,7 +51,11 @@
     "records": { "name": "cfos-records" },
 
     // Jev decisions. RPC-only; only deployed while the "jev" block below is enabled.
-    "jev": { "name": "cfos-jev" }
+    "jev": { "name": "cfos-jev" },
+
+    // Omni-search: serves /gatekeeper/search/ through the router, and is bound to chat and the
+    // Workshop. Only deployed while the "search" block below is enabled.
+    "search": { "name": "cfos-search" }
   },
 
   // This starter deploys Cloudflare Access mode. Cloudflare OS also supports built-in password
@@ -203,6 +207,10 @@
   // wait for the user's approval, and personal data, identifiers or secrets are refused.
   // Needs an OpenRouter key on its Worker, never in this file:
   //   CLOUDFLARE_ACCOUNT_ID=<id> pnpm exec wrangler secret put OPENROUTER_API_KEY --name cfos-websearch
+  // Deploying it grants nothing by itself: a workspace gets web tools only once someone connects
+  // Web Search to it (like Synthetic Data), and loses them when that connection is removed. While
+  // this is enabled, the Workshop's unchecked built-in webFetch is withheld from agents everywhere
+  // else; "builtinWebFetch": true keeps it. Reference: docs/customization.md#web-search-and-jev
   // Plan: docs/plans/web-search-gatekeeper.md
   "webSearch": {
     "enabled": true,
@@ -257,5 +265,46 @@
   // rather than chat completions, so it cannot be listed under aiGateway.models.
   // Needs an OpenRouter key on its Worker, never in this file:
   //   CLOUDFLARE_ACCOUNT_ID=<id> pnpm exec wrangler secret put OPENROUTER_API_KEY --name cfos-jev
-  "jev": { "enabled": true }
+  // Like Web Search, it reaches only the workspaces someone explicitly connects it to.
+  "jev": { "enabled": true },
+
+  // Omni-search: one hybrid index (Vectorize for meaning, SQLite full-text for words and facets) over
+  // team chat first, then more sources. Serves its app and API at /gatekeeper/search/ through the
+  // router, behind the same Access application; identity and admins come from "access" above.
+  // false deploys nothing search-related and nothing in this block is checked.
+  //
+  // Operator prerequisite: wrangler deploy cannot create a Vectorize index, so before the first
+  // deploy (and after any change to the names below) run
+  //   pnpm search:provision          # read-only: prints what is missing
+  //   pnpm search:provision --yes    # creates the index (768 dims, cosine), its six metadata
+  //                                  # indexes, the embed queue and its dead-letter queue
+  // pnpm check and pnpm deploy verify all of them before building anything.
+  // Reference: docs/customization.md#omni-search. Plan: docs/plans/omni-search.md
+  "search": {
+    "enabled": true,
+
+    // Binds search to the Workshop as a Gatekeeper vendor, so every workspace gets an ambient,
+    // read-only SearchSession and /find. It sees deployment-public content only (public channels,
+    // public collections): the agent's session carries no identity.
+    "agentAccess": true,
+
+    // Binds search's SearchService to chat (requires chat.enabled): chat pushes messages into the
+    // index and fuses meaning-based recall into its own search results.
+    "chatFusion": true,
+
+    // Indexes the Context Library's public collections every 15 minutes through a read-only
+    // Context account minted by search. Private collections are never read.
+    "contextFeed": true,
+
+    // The Vectorize index. Absent uses workers.search.name. Its dimensions and metadata indexes
+    // are fixed for life: a new name here means provisioning a new index and a backfill.
+    "index": "cfos-search",
+
+    // A reranking pass (bge-reranker-base) over the fused top 30. Slower and slightly dearer.
+    "rerank": false
+    // Optional queue names; absent uses <workers.search.name>-embed and
+    // <workers.search.name>-embed-dlq. To set them, add a comma above and uncomment:
+    // "embedQueue": "cfos-search-embed",
+    // "deadLetterQueue": "cfos-search-embed-dlq"
+  }
 }

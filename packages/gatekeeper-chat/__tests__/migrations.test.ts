@@ -121,6 +121,66 @@ describe("migrations", () => {
     expect(MIGRATIONS[2]?.description).toBe("the agent outbox: one row per question to the Agent");
   });
 
+  it("leaves version 3 as it was released: version 4 only adds the search outbox", () => {
+    expect(MIGRATIONS[2]?.description).toBe("the agent outbox: one row per question to the Agent");
+    expect(MIGRATIONS[3]?.version).toBe(4);
+    expect(MIGRATIONS[3]?.description).toBe("the omni-search outbox and its sync state");
+  });
+
+  it("upgrades an object at version 3 to the search outbox without touching its data", async () => {
+    const stub = workspace(`upgrade-v3-${crypto.randomUUID()}`);
+    await stub.fetch(new Request("https://chat/gatekeeper/chat/api/me", { headers: IDENTITY }));
+    await runInDurableObject(stub, (_instance, state) => {
+      state.storage.sql.exec(
+        `INSERT INTO messages (id, channel_id, seq, author_id, body, kind, created_at)
+         VALUES ('m_v3', 'general', 1, 'alice', 'from version 3', 'user', 1)`,
+      );
+      state.storage.sql.exec(`DROP TABLE search_outbox`);
+      state.storage.sql.exec(`DROP TABLE search_sync`);
+      state.storage.sql.exec(`UPDATE schema_meta SET value = 3 WHERE key = 'schema_version'`);
+
+      expect(runMigrations(state.storage)).toBe(TARGET_SCHEMA_VERSION);
+      const sync = state.storage.sql
+        .exec<{ id: number; backfill_phase: string | null }>(`SELECT id, backfill_phase FROM search_sync`)
+        .toArray();
+      // One row, and no backfill yet: that starts only once SEARCH is seen bound.
+      expect(sync).toEqual([{ id: 1, backfill_phase: null }]);
+      const kept = state.storage.sql.exec<{ body: string }>(`SELECT body FROM messages WHERE id = 'm_v3'`).toArray();
+      expect(kept).toEqual([{ body: "from version 3" }]);
+    });
+  });
+
+  it("rejects an invalid search outbox kind and a second sync row at the database level", async () => {
+    const stub = workspace(`search-check-${crypto.randomUUID()}`);
+    await runInDurableObject(stub, (_instance, state) => {
+      expect(() =>
+        state.storage.sql.exec(`INSERT INTO search_outbox (kind, ref, queued_at) VALUES ('user', 'u1', 0)`),
+      ).toThrow();
+      expect(() => state.storage.sql.exec(`INSERT INTO search_sync (id) VALUES (2)`)).toThrow();
+    });
+  });
+
+  it("writes no search outbox rows and starts no backfill without a SEARCH binding", async () => {
+    // This project binds no SEARCH: exactly a deployment with omni-search off.
+    const stub = workspace(`search-off-${crypto.randomUUID()}`);
+    const headers = { ...IDENTITY, "content-type": "application/json" };
+    const sent = await stub.fetch(
+      new Request("https://chat/gatekeeper/chat/api/channels/general/messages", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ body: "no search here", clientId: "c-off" }),
+      }),
+    );
+    expect(sent.status).toBe(200);
+    await runInDurableObject(stub, (_instance, state) => {
+      expect(state.storage.sql.exec(`SELECT * FROM search_outbox`).toArray()).toEqual([]);
+      expect(
+        state.storage.sql.exec<{ phase: string | null }>(`SELECT backfill_phase AS phase FROM search_sync`).toArray(),
+      ).toEqual([{ phase: null }]);
+    });
+    await expect(stub.runSearchOutbox()).resolves.toBeNull();
+  });
+
   it("rejects an invalid agent request state at the database level", async () => {
     const stub = workspace(`agent-check-${crypto.randomUUID()}`);
     await runInDurableObject(stub, (_instance, state) => {

@@ -10,6 +10,7 @@
 
 import { isValidOrderKey } from "./order.js";
 import { resolveLanguage } from "./code/languages.js";
+import { truncateText } from "./graphemes.js";
 
 // ---------------------------------------------------------------------------------------------
 // Data model
@@ -518,21 +519,23 @@ export function newSession() {
 export const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
 /**
- * Single-line text: controls and newlines removed, trimmed, truncated.
+ * Single-line text: controls and newlines removed, trimmed, truncated (limits count UTF-16 code
+ * units; truncation never splits an emoji or other multi-code-point character).
  * @param {unknown} value @param {number} max
  */
 export function cleanLine(value, max) {
   if (value == null) return "";
-  return String(value).replace(CONTROL_RE, "").replace(/[\r\n\t]+/g, " ").trim().slice(0, max);
+  return truncateText(String(value).replace(CONTROL_RE, "").replace(/[\r\n\t]+/g, " ").trim(), max);
 }
 
 /**
- * Multi-line text: controls removed (tabs and newlines kept), CRLF normalised, truncated.
+ * Multi-line text: controls removed (tabs and newlines kept), CRLF normalised, truncated without
+ * splitting a multi-code-point character (see cleanLine).
  * @param {unknown} value @param {number} max
  */
 export function cleanText(value, max) {
   if (value == null) return "";
-  return String(value).replace(/\r\n?/g, "\n").replace(CONTROL_RE, "").slice(0, max);
+  return truncateText(String(value).replace(/\r\n?/g, "\n").replace(CONTROL_RE, ""), max);
 }
 
 /**

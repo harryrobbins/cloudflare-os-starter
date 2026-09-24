@@ -21,6 +21,7 @@ import type {
 } from "@gadgets/workshop-shared/gatekeeper";
 import type { JevAnswer, JevDecision, JevQuestion, JevRequest, JevSession } from "./types.js";
 import TYPES_CODE from "./types-code.js";
+import CONFIGURATOR_HTML from "./configurator-html.js";
 
 export const JEV_MODEL = "typesafe/jev-1.13";
 export const DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions";
@@ -58,9 +59,31 @@ export function describeJevVendor(): VendorDescription {
   };
 }
 
-export function describeJevAccount(): AccountDescription {
-  return { displayName: "Jev decisions", avatar: ICON, singleton: { tsType: "JevSession" } };
+/**
+ * The one resource: Jev for the workspace it is connected to. Jev is deliberately not an agent
+ * singleton (which the Workshop would install in every workspace the account owner has); like any
+ * other connector, it reaches a workspace only through an explicit connection there.
+ */
+export const JEV_RESOURCE: SupportedResource = {
+  urlPattern: "jev://decisions",
+  title: "Jev decisions",
+  description: "Calibrated yes/no, choice and score decisions for this workspace.",
+  icon: ICON,
+};
+
+/** Accepts the resource URL (tolerating a trailing slash) and returns its canonical form. */
+export function parseJevResourceUrl(url: string): string {
+  if (url.replace(/\/+$/, "") !== JEV_RESOURCE.urlPattern) {
+    throw new Error(`Jev decisions has one resource: ${JEV_RESOURCE.urlPattern}.`);
+  }
+  return JEV_RESOURCE.urlPattern;
 }
+
+export function describeJevAccount(): AccountDescription {
+  return { displayName: "Jev decisions", avatar: ICON };
+}
+
+class FixedResourceConfigurator extends RpcTarget {}
 
 function isText(value: unknown): boolean {
   return typeof value === "string" ? value.trim() !== "" : !!value && typeof value === "object" && !Array.isArray(value);
@@ -293,23 +316,24 @@ export class JevAccount extends WorkerEntrypoint<Cloudflare.Env> implements Gate
     return describeJevAccount();
   }
 
-  async getSingletonGatekeeperClass(): Promise<DurableObjectClass<Gatekeeper<JevSession>>> {
-    return this.ctx.exports.JevGatekeeper({});
-  }
-
   async getSupportedResources(): Promise<SupportedResource[]> {
-    return [];
+    return [JEV_RESOURCE];
   }
 
-  getGatekeeperClassFor(_url: string): never {
-    throw new Error("Jev decisions has no URL-addressed resources.");
+  async getGatekeeperClassFor(url: string): Promise<{
+    class: DurableObjectClass<Gatekeeper<JevSession>>; resource: SupportedResource;
+  }> {
+    parseJevResourceUrl(url);
+    return { class: this.ctx.exports.JevGatekeeper({}), resource: JEV_RESOURCE };
   }
 
-  startResourceConfigurator(_pattern: string): Promise<ResourceConfiguratorFrame> {
-    throw new Error("Jev decisions has no URL-addressed resources.");
+  async startResourceConfigurator(pattern: string): Promise<ResourceConfiguratorFrame> {
+    parseJevResourceUrl(pattern);
+    return { iframeHtml: CONFIGURATOR_HTML, ui: new RpcStub(new FixedResourceConfigurator()) };
   }
 
-  async ensureResources(_patterns: string[]): Promise<{ url?: string }> {
+  async ensureResources(patterns: string[]): Promise<{ url?: string }> {
+    for (let pattern of patterns) parseJevResourceUrl(pattern);
     return {};
   }
 
@@ -353,7 +377,7 @@ export class GatekeeperVendor extends WorkerEntrypoint<Cloudflare.Env> {
   }
 
   async getSupportedResources(_options?: { userId?: string }): Promise<SupportedResource[]> {
-    return [];
+    return [JEV_RESOURCE];
   }
 
   async getTypeScriptTypes(): Promise<string> {

@@ -48,6 +48,13 @@ export interface Ctx {
   wakeAt(at: number): Promise<void>;
   /** The Workshop's gateway for `@agent` questions, or null when agent replies are turned off. */
   readonly agentGateway: AgentGateway | null;
+  /**
+   * Called after something was queued for omni-search (src/do/search-sync.ts): asks the object to
+   * wake its alarm so the outbox flushes soon. Synchronous and fire-and-forget, because the writes
+   * that queue search work are synchronous and must never wait on, or fail because of, search.
+   * Optional so a hand-built test context need not provide it.
+   */
+  searchChanged?(): void;
 }
 
 /** `?, ?, ?` for an `IN (...)` list. Bound parameters only; never interpolated values. */

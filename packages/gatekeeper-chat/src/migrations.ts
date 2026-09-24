@@ -8,7 +8,7 @@
 //   * The applied version is recorded in `schema_meta`, not inferred from the tables present.
 //
 // Version 1 is what `/api/me` needs; version 2 is the rest of the plan's schema block; version 3 is
-// the agent outbox.
+// the agent outbox; version 4 is the omni-search outbox.
 //
 // `ALTER TABLE ... ADD COLUMN` has no `IF NOT EXISTS`, so {@link addColumn} checks
 // `pragma_table_info` first -- otherwise a migration that is re-run after a partial failure throws
@@ -301,6 +301,53 @@ export const MIGRATIONS: readonly Migration[] = [
       sql.exec(
         `CREATE INDEX IF NOT EXISTS agent_requests_reply ON agent_requests (reply_id) WHERE reply_id IS NOT NULL`,
       );
+    },
+  },
+  {
+    version: 4,
+    description: "the omni-search outbox and its sync state",
+    up(sql) {
+      // One row per thing search has not been told about yet: a *reference* (a message or channel
+      // id), never a snapshot. The flush reads the current row when it builds the batch, so a message
+      // edited three times before the flush is pushed once, a message deleted before the flush becomes
+      // a delete, and a channel that no longer exists becomes a dropped scope (src/do/search-sync.ts).
+      // Written in the same code path as the chat write, only when the SEARCH binding exists.
+      sql.exec(`
+        CREATE TABLE IF NOT EXISTS search_outbox (
+          kind       TEXT NOT NULL CHECK (kind IN ('message', 'channel')),
+          ref        TEXT NOT NULL,
+          -- Bumped when the same reference is queued again while a flush is in flight, so the flush
+          -- only clears the rows it actually pushed and a newer change is never lost.
+          generation INTEGER NOT NULL DEFAULT 0,
+          queued_at  INTEGER NOT NULL,
+          PRIMARY KEY (kind, ref)
+        )
+      `);
+      sql.exec(`CREATE INDEX IF NOT EXISTS search_outbox_queued ON search_outbox (queued_at)`);
+
+      // Exactly one row: the flush's retry state and the backfill's resumable cursor.
+      sql.exec(`
+        CREATE TABLE IF NOT EXISTS search_sync (
+          id                   INTEGER PRIMARY KEY CHECK (id = 1),
+          -- NULL until SEARCH is first seen bound; then 'channels' -> 'messages' -> 'done'.
+          backfill_phase       TEXT CHECK (backfill_phase IN ('channels', 'messages', 'done')),
+          -- channels: the last channel id queued. messages: the last messages.rowid queued.
+          backfill_cursor      TEXT NOT NULL DEFAULT '',
+          backfill_queued      INTEGER NOT NULL DEFAULT 0,
+          backfill_started_at  INTEGER,
+          backfill_finished_at INTEGER,
+          -- Consecutive failed ingest calls, and when the next attempt may run.
+          attempts             INTEGER NOT NULL DEFAULT 0,
+          next_attempt_at      INTEGER,
+          last_error           TEXT,
+          last_error_at        INTEGER,
+          last_success_at      INTEGER,
+          pushed_documents     INTEGER NOT NULL DEFAULT 0,
+          -- Outbox rows discarded because search refused their batch as invalid input.
+          dropped              INTEGER NOT NULL DEFAULT 0
+        )
+      `);
+      sql.exec(`INSERT INTO search_sync (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
     },
   },
 ];

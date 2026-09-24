@@ -21,6 +21,23 @@ declare global {
         calls(prefix: string): Promise<Array<Record<string, unknown>>>;
         respond(messageKey: string, text: string): Promise<void>;
       };
+      /**
+       * The mock search Worker's `Control` entrypoint (__tests__/aux/search-service.js). Bound only in
+       * the `omni-search` project; undefined in `chat`.
+       */
+      SEARCH_CONTROL: Fetcher & {
+        ingests(marker: string): Promise<Array<{ source: string; batch: import("../src/search-client.js").IngestBatch }>>;
+        failedAttempts(marker: string): Promise<number>;
+        failIngest(marker: string, times: number, skip?: number, message?: string): Promise<void>;
+        healIngest(marker: string): Promise<void>;
+        script(
+          text: string,
+          result:
+            | { hits?: import("../src/search-client.js").DenseRecallHit[]; dense?: string; hangMs?: number }
+            | { error: string },
+        ): Promise<void>;
+        recalls(text: string): Promise<Array<import("../src/search-client.js").DenseRecallRequest & { source: string }>>;
+      };
     }
   }
 }

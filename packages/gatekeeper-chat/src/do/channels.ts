@@ -34,6 +34,7 @@ import { newChannelId } from "./ids.js";
 import { hashId, logEvent } from "./logs.js";
 import { advanceThreadCursors, postSystemMessage } from "./messages.js";
 import { toChannel, toMembership, type ChannelRow, type MembershipRow, type UserRow } from "./rows.js";
+import { queueSearchChannel, queueSearchChannelMessages } from "./search-sync.js";
 import { badgeSummary } from "./unread.js";
 import { escapeLike, loadUsers, visibleUserIds } from "./users.js";
 
@@ -169,6 +170,8 @@ export function createChannel(
           now,
         );
       }
+      // The scope, its label and (for anything but a public channel) its principals.
+      queueSearchChannel(ctx, id);
     });
   } catch {
     // The only constraint that can fire here is one of the unique indexes, which means somebody won
@@ -222,6 +225,9 @@ export function updateChannel(
     topic: request.topic,
     purpose: request.purpose,
   });
+  // The scope label follows the name, and so does every message title in the channel.
+  queueSearchChannel(ctx, channelId);
+  if (rename !== null) queueSearchChannelMessages(ctx, channelId);
 
   // Renames go into the message stream, because a channel that changed name under you is otherwise
   // indistinguishable from a channel you have never seen (chat.md: admin actions are system messages).
@@ -257,6 +263,8 @@ export function leaveChannel(ctx: Ctx, user: UserRow, channelId: ChannelId): Out
   if (user.id === AGENT_USER_ID) return refuse("forbidden", "The agent's memberships are implicit.");
 
   ctx.sql.exec(`DELETE FROM memberships WHERE channel_id = ? AND user_id = ?`, channelId, user.id);
+  // A public channel has no principals to replace; anything else loses this reader in search too.
+  if (channel.kind !== "public") queueSearchChannel(ctx, channelId);
   logEvent("chat.channel.leave", { channel: hashId(channelId), user: hashId(user.id) });
   ctx.bus.badges([user.id]);
   const response = channelResponse(ctx, channelId, user.id);
@@ -284,6 +292,7 @@ export function archiveChannel(
 
   const notice = postSystemMessage(ctx, channelId, `${user.name} archived #${channel.name}`);
   ctx.sql.exec(`UPDATE channels SET archived_at = ? WHERE id = ?`, ctx.now(), channelId);
+  queueSearchChannel(ctx, channelId);
   logEvent("chat.channel.archive", { channel: hashId(channelId), user: hashId(user.id), admin });
   ctx.bus.badges(memberIdsOf(ctx, channelId));
   return channelResponse(ctx, channelId, user.id, notice);

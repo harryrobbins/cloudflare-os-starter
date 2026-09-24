@@ -19,7 +19,7 @@
  * as a "command" event. "present" actions apply only while presenting (scope "presentation").
  */
 
-/** @typedef {"addMenu"|"outline"|"icons"|"help"|"present"|"code"} ShellCommand */
+/** @typedef {"addMenu"|"outline"|"icons"|"help"|"present"|"emoji"|"code"} ShellCommand */
 
 /**
  * How a key event matches: `key` (one-character keys compared lower-cased) or `code`. `mod` (Ctrl
@@ -40,7 +40,8 @@
  * @property {string[]} keys  display form, alternatives
  * @property {KeyMatch[]} [match]
  * @property {KeyAction|((e: KeyEventLike) => KeyAction)} [action]
- * @property {"canvas"|"presentation"} [scope]  default "canvas"
+ * @property {"canvas"|"presentation"|"text"} [scope]  default "canvas"; "text": while typing in
+ *   the inline text editor (text-editor.js)
  */
 
 /** @typedef {{key: string, code?: string, ctrlKey?: boolean, metaKey?: boolean, shiftKey?: boolean, altKey?: boolean}} KeyEventLike */
@@ -130,6 +131,8 @@ export const COMMANDS = Object.freeze([
   { id: "present", group: "View", label: "Present the frames one at a time", keys: ["Shift+P"], match: [{ key: "p", shift: true }], action: { type: "command", command: "present" } },
   { id: "icons", group: "Tools", label: "Icons and shapes", keys: ["I"], match: [{ key: "i", shift: false }], action: { type: "command", command: "icons" } },
   { id: "code", group: "Tools", label: "Add a code block at the centre of the view", keys: ["K"], match: [{ key: "k", shift: false }], action: { type: "command", command: "code" } },
+  { id: "emoji", group: "Tools", label: "Emoji and symbols (while typing, inserts at the caret)", keys: ["Mod+."], match: [{ key: ".", mod: true }], action: { type: "command", command: "emoji" } },
+  { id: "emoji-text", group: "", label: "", keys: [], scope: "text", match: [{ key: ".", mod: true }], action: { type: "command", command: "emoji" } },
   { id: "help", group: "View", label: "Show these keyboard shortcuts", keys: ["?"], match: [{ key: "?" }], action: { type: "command", command: "help" } },
 
   // While presenting
@@ -146,7 +149,7 @@ export const COMMANDS = Object.freeze([
 export const SHORTCUTS_HINT =
   "Whiteboard canvas. Tools: V select, H hand, N sticky note, R rectangle, O ellipse, T text, F frame, " +
   "C connector, P pen. A opens the Add menu, Shift+O the Objects list. " +
-  "I opens icons and shapes, K adds a code block. " +
+  "I opens icons and shapes, Ctrl+period emoji and symbols, K adds a code block. " +
   "Arrow keys move the selection (Shift for 10), or pan the view when nothing is selected. " +
   "Alt+Arrow keys resize the selection by 1 (Shift for 10); comma and period rotate it by 15 degrees. " +
   "Enter edits text, Delete removes, Ctrl+D duplicates, Ctrl+A selects all, ] brings to front, " +
@@ -168,7 +171,7 @@ function matches(e, key, m) {
 /**
  * The action of a key event, from COMMANDS, or null.
  * @param {KeyEventLike} e
- * @param {"canvas"|"presentation"} [scope]
+ * @param {"canvas"|"presentation"|"text"} [scope]
  * @returns {KeyAction|null}
  */
 export function keyAction(e, scope = "canvas") {
