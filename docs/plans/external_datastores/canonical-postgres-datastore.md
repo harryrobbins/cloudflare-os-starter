@@ -10,9 +10,10 @@ levels are in [the research record](../../research/external_datastores/canonical
 
 1. **Postgres is the source of truth.** Every read of record is strongly consistent. Nothing is
    authoritative anywhere else: not a Durable Object, not a gadget, not a browser.
-2. **An API is the only way in.** No other system writes tables directly. The API speaks domain
-   commands, and a module may also offer a compatibility surface. The Projects module offers a
-   Jira-compatible subset, so existing Jira clients and SDKs work against it.
+2. **An API is the only way in.** No other system writes tables directly. Each kind of datastore
+   has its own data model and its own REST API shaped to that model (§2, "Modules"). A module may
+   also model its API on a well-known product in its domain, so existing clients work against it.
+   Projects is the first module, and its API follows Jira.
 3. **Writable from anywhere:** cloudflare-os gadgets, browsers outside cloudflare-os, backend services,
    scripts, agents and Jira tooling.
 4. **A snappy UI.** Local changes apply at once and may be overwritten by what Postgres decides.
@@ -39,7 +40,7 @@ flowchart LR
     GW["Records gatekeeper<br/>viewer assertions → delegated token"]
   end
   subgraph svc["Datastore service (portable)"]
-    API["HTTP adapters<br/>native v1 · sync · Jira"]
+    API["HTTP adapters<br/>sync · one API per module<br/>(Projects: native + Jira)"]
     CB["Command bus<br/>identity · authz · idempotency · clock"]
     HUB["Poke hub<br/>DO or SSE"]
   end
@@ -62,6 +63,32 @@ Four parts, each replaceable on its own:
 | Datastore service | Every read and write; identity; command execution; adapters | Cloudflare Worker with Hyperdrive and a placement hint for `aws:eu-west-2`. The same code runs on Node beside any Postgres |
 | Poke hub | Tells subscribers "datastore D is now at seq N". Carries no data | Durable Object per datastore (hibernating WebSockets); SSE plus pub/sub off Cloudflare |
 | cloudflare-os adapter | Gatekeeper vendor, connect flow, gadget sessions, management UI hosting, viewer assertions, delegated tokens | `gatekeeper-records`, as today |
+
+### Modules: one data model and one API per kind of datastore
+
+A datastore is an instance of a **module**, such as Projects, Finance or a Message board. The service
+is shared by every module; the data model and the API are not.
+
+| Shared by every module (the core) | Owned by each module |
+| --- | --- |
+| Registry, memberships, roles, credentials, approvals | Its tables and migrations |
+| Journal, per-datastore clock, `/changes`, `/history` | Its commands and business rules (handlers) |
+| Identity, delegated tokens, RLS helpers (`records.can`) | Its permissions (`issues.read`, `invoices.approve`, …) |
+| Command bus, idempotency, sync push/pull, poke hub | Its REST API, shaped to its data model |
+| Problem codes, `Idempotency-Key`, `If-Match`, OpenAPI generation | Optionally, an API modelled on a familiar product |
+
+So every datastore gets a REST API, but each module's API is tailored to its own data. Where a
+well-known product already defines the shape people and tools expect, the module follows it:
+
+| Module | Data model | API modelled on | Status |
+| --- | --- | --- | --- |
+| Projects | Projects, issues, workflow states, comments | Jira (§7) | Deployed as Records; Jira subset proposed here |
+| Finance (example) | Accounts, contacts, invoices, payments, journals | Xero | Not planned yet |
+| Message board (example) | Channels, threads, messages, reactions | Slack | Not planned yet |
+
+Finance and Message board are illustrations of the pattern, not commitments. Each new module is its
+own plan: data model, commands, permissions, API and, if it helps adoption, a compatibility target.
+Everything else in this document applies to every module unchanged.
 
 ## 3. Data model: current state plus an immutable journal
 
@@ -275,6 +302,10 @@ sequenceDiagram
 
 ## 7. APIs
 
+Every module has a native API. A module may add a compatibility API modelled on a familiar product.
+Both are thin adapters over the same commands. The native routes and the Jira subset below belong to
+the Projects module; a Finance or Message board module would define its own.
+
 ### Native API (`/v1`, existing)
 
 `/gatekeeper/records/v1/datastores/:id/…` stays: typed commands with `Idempotency-Key` and `If-Match`,
@@ -291,7 +322,7 @@ SDKs are generated from that document: TypeScript first, then Python. They send 
 automatically, retry only idempotent calls, honour `Retry-After`, and surface 412 conflicts with the
 current revision.
 
-### Jira-compatible subset (Projects module)
+### Projects module: Jira-compatible subset
 
 Served per datastore at `…/datastores/:id/jira/rest/api/{2,3}/…`, so a client points its base URL at
 that path. There is no maintained open-source Jira-compatible server to copy, so compatibility is
@@ -441,6 +472,6 @@ provisioning, the registry, observer rules, approvals and credentials carry over
 | Ordering | Per-datastore clock row; split by project only if phase 0 shows contention |
 | Sync library | Our own implementation of Replicache-style semantics; neither Replicache nor Zero as a dependency |
 | Where the service runs | The existing Worker, placed near Neon; portability proven by a Node entry point, not by a second deployment |
-| Jira surface first cut | v2 plain text and v3 with ADF, issues, transitions, comments, projects, `search/jql`; no Agile API |
+| Jira surface first cut (Projects only) | v2 plain text and v3 with ADF, issues, transitions, comments, projects, `search/jql`; no Agile API |
 | Identity for UIs outside cfos | Cloudflare Access for SaaS as the OIDC provider |
 | Postgres version | Stay on 17 until a feature needs 18 (temporal keys, `uuidv7()`, `RETURNING OLD`) |

@@ -15,8 +15,10 @@ how does everything else get at it?"
 The direction, agreed 2026-09-24:
 
 - **Postgres is the source of truth** for organisational business data.
-- **An API is the only way in.** It exposes domain commands, and modules can add compatibility surfaces,
-  such as a Jira-compatible subset for Projects.
+- **An API is the only way in.** Each kind of datastore (a module, such as Projects, Finance or a
+  Message board) has its own data model and a REST API tailored to it. A module's API may follow a
+  familiar product in its domain: Jira for Projects, and perhaps Xero for Finance or Slack for a
+  Message board.
 - **Change history is immutable:** a journal written in the same transaction as each change, ordered
   by a per-datastore clock.
 - **UIs are optimistic and rebase** onto whatever the server decides.
@@ -30,7 +32,7 @@ feature for automating one gadget.
 
 | Plan | Status | What it is |
 | --- | --- | --- |
-| [canonical-postgres-datastore.md](canonical-postgres-datastore.md) | **Target design**, proposal | The canonical shape: journal and clock, command bus, RLS by principal, delegated tokens, optimistic sync, native and Jira-compatible APIs, portability. Builds on Records |
+| [canonical-postgres-datastore.md](canonical-postgres-datastore.md) | **Target design**, proposal | The canonical shape: journal and clock, command bus, RLS by principal, delegated tokens, optimistic sync, per-module data models and APIs (Projects follows Jira), portability. Builds on Records |
 | [organisation-datastores.md](organisation-datastores.md) | **Implemented and deployed** (2026-09-24), signed-in checks pending | Records: the Postgres-backed service on Neon, with registry, memberships, approvals, viewer assertions, outbox delivery, the Data management page and the project board and report blueprints. Includes the deployment record |
 | [gadget-http-api.md](gadget-http-api.md) | Planned, not built | Give one gadget a REST endpoint through a gatekeeper and hook. For gadget automation, not organisational records |
 | [immutable-datastores.md](immutable-datastores.md) | **Not pursued** | Event-sourced Durable Object shards exporting to an R2 lakehouse. Rejected because the source of truth must be strongly consistent; its ordering and journal ideas moved into the canonical plan |

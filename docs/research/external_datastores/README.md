@@ -18,7 +18,7 @@ The research went through four questions, in this order:
    was chosen.
 4. **What does the canonical version look like?** A per-datastore commit-ordered journal, row-level
    security by principal, delegated tokens from the platform, Replicache-style optimistic sync,
-   and a Jira-compatible surface.
+   and a REST API per module tailored to its data model. The Projects module's API follows Jira.
 
 ## Documents
 
