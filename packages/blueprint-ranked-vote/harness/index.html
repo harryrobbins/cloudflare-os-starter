@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ranked vote harness</title>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { font: 13px system-ui, sans-serif; display: flex; flex-direction: column; background: #20242c; color: #e8ebf1; }
+    .controls { display: flex; gap: 12px; align-items: center; padding: 8px 12px; border-bottom: 1px solid #353b47; }
+    .controls h1 { font-size: 14px; margin: 0; }
+    button { font: inherit; background: #2f3542; color: inherit; border: 1px solid #4a5160; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+    #panes { flex: 1; min-height: 0; display: flex; gap: 6px; padding: 6px; }
+    .pane { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; border: 1px solid #353b47; border-radius: 8px; overflow: hidden; }
+    .pane-bar { padding: 4px 8px; background: #2a2f3a; }
+    .pane iframe { flex: 1; border: 0; width: 100%; background: #fff; }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <h1>Ranked vote harness</h1>
+    <button id="restart" title="New service over the same storage; every pane's stub then fails, as on the platform after a code update">Restart server (stale stubs)</button>
+    <span id="log"></span>
+  </div>
+  <div id="panes"></div>
+  <script type="module" src="harness.js"></script>
+</body>
+</html>

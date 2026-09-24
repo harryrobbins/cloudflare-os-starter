@@ -1,0 +1,17 @@
+{
+  "blueprintId": "format.ranked-vote",
+  "title": "Ranked Vote",
+  "description": "Choose between options together: everyone proposes options with fields like a description or a web address, privately drags every option into their own order, and when all voters click Reveal a single transferable vote count picks the winner, round by round.",
+  "output": {
+    "id": "ranked-vote",
+    "noun": "Vote",
+    "plural": "Votes",
+    "icon": "listChecks"
+  },
+  "author": {
+    "type": "user",
+    "name": "Surprisingly Ltd",
+    "id": "harryrobbins@gmail.com"
+  },
+  "revision": 1
+}
