@@ -8,7 +8,7 @@ import { LIMITS } from "../../src/shared/protocol.js";
 import { expandRect, OVERSCAN } from "../../src/client/ui/canvas/culling.js";
 import { BUDGETS } from "./budgets.js";
 import { SIZES, fixtureOps, buildFixture, simpleObjects } from "./fixtures.js";
-import { snapshotMetrics, modelMetrics, queryMetrics, canvasMetrics } from "./measure.js";
+import { snapshotMetrics, modelMetrics, queryMetrics, canvasMetrics, connectorMetrics } from "./measure.js";
 import { simulatePresence } from "./presence-sim.js";
 import { canvasRig } from "./canvas-rig.js";
 
@@ -77,6 +77,24 @@ describe("culling acceptance", () => {
       rig.destroy();
     }
   });
+});
+
+describe("connector-heavy board (2,000 shapes, 1,000 elbow connectors)", () => {
+  it("routes around obstacles within the search budgets and re-routes only what a move affects", async () => {
+    const m = await connectorMetrics({ verify: true });
+    const B = BUDGETS.connectors;
+    expect(m.build.connectors).toBe(1000);
+    // Most connectors in this dense board have something in the way and route around it.
+    expect(m.build.avoided).toBeGreaterThan(200);
+    expect(m.build.expandedPerSearch).toBeLessThanOrEqual(B.expandedPerSearch);
+    expect(m.build.maxExpandedPerSearch).toBeLessThanOrEqual(m.build.expandedBudget + 1);
+    expect(m.build.fallbacks / m.build.connectors).toBeLessThanOrEqual(B.fallbackShare);
+    expect(m.moves.connectorsReindexedPerMove).toBeLessThanOrEqual(B.reindexedPerMove);
+    expect(m.moves.routesRecomputedPerMove).toBeLessThanOrEqual(B.recomputedPerMove);
+    expect(m.moves.maxRoutesRecomputed).toBeLessThanOrEqual(B.maxRecomputedPerMove);
+    // Incremental re-routing leaves the index exactly as a full rebuild would.
+    expect(m.consistent).toEqual({ missing: [], extra: [], stale: [] });
+  }, 120_000);
 });
 
 describe("presence fan-out (hub simulation)", () => {

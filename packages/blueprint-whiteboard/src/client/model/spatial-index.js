@@ -31,7 +31,7 @@
 import {
   rotatedBounds, connectorRoute, textWidth, rectsIntersect, LINE_HEIGHT,
 } from "../../shared/geometry.js";
-import { routeBounds, routeMidpoint, routeRegion, OBSTACLE_TYPES, segmentsOf } from "../../shared/connectors.js";
+import { routeBounds, routeMidpoint, routeRegion, forgetRoute, OBSTACLE_TYPES, segmentsOf } from "../../shared/connectors.js";
 
 /** @typedef {import("../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {{x: number, y: number, w: number, h: number}} Rect */
@@ -397,7 +397,7 @@ export class SpatialIndex {
     this.rects.delete(id);
     this.obstacleIds.delete(id);
     this.regions.delete(id);
-    if (!Object.hasOwn(this.objects, id)) this.routeMemo.delete(id);
+    if (!Object.hasOwn(this.objects, id)) forgetRoute(this.routeMemo, id);
     const ends = this.endsOf.get(id);
     if (ends) {
       for (const e of ends) {

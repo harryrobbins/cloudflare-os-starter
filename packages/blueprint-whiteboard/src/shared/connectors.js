@@ -550,19 +550,47 @@ export function curveCubic(a, b, uv) {
 export function connectorRoute(conn, from, to, env) {
   CONNECTOR_STATS.routes++;
   const routing = conn.routing === "elbow" || conn.routing === "curved" ? conn.routing : "straight";
-  const { fromSide, toSide } = chooseSides({ ...conn, routing }, from, to);
+  const segs = routing === "elbow" ? segmentsOf(conn.segments) : [];
+  const auto = routing === "elbow" && !segs.length;
+  // Memo of everything that depends only on the connector and its two ends (see RouteEnv): the
+  // whole route, or for automatic elbows the side choice (their obstacles are checked below).
+  const id = env?.memo && typeof conn.id === "string" ? conn.id : null;
+  const key = id ? id + GEOMETRY_KEY : "";
+  const sig = id ? [
+    routing, conn.fromSide, conn.toSide, segs.join(":"), routing === "curved" ? curveOf(conn.curve)?.join(":") : "",
+    from.x, from.y, from.w, from.h, from.rot || 0, to.x, to.y, to.w, to.h, to.rot || 0,
+  ].join(",") : "";
+  const hit = id ? env?.memo?.get(key) : undefined;
+  if (hit && hit.sig === sig && !auto) { CONNECTOR_STATS.memoHits++; return hit.route; }
+  const { fromSide, toSide } = hit && hit.sig === sig ? hit.route : chooseSides({ ...conn, routing }, from, to);
   const a = anchor(from, fromSide), b = anchor(to, toSide);
+  /** @type {Route} */
+  let route;
   if (routing === "curved") {
     const cubic = curveCubic(a, b, curveOf(conn.curve));
-    return { kind: "cubic", points: flattenCubic(cubic, CURVE_FLATTEN_TOL, 8), cubic, fromSide, toSide, routing, avoided: false };
-  }
-  if (routing === "elbow") {
-    const segs = segmentsOf(conn.segments);
-    if (segs.length) return { kind: "polyline", points: elbowFromSegments(a, b, segs), cubic: null, fromSide, toSide, routing, avoided: false };
+    route = { kind: "cubic", points: flattenCubic(cubic, CURVE_FLATTEN_TOL, 8), cubic, fromSide, toSide, routing, avoided: false };
+  } else if (routing === "elbow" && segs.length) {
+    route = { kind: "polyline", points: elbowFromSegments(a, b, segs), cubic: null, fromSide, toSide, routing, avoided: false };
+  } else if (routing === "elbow") {
     const { points, avoided } = autoElbow(conn, from, to, a, b, env, fromSide, toSide);
-    return { kind: "polyline", points, cubic: null, fromSide, toSide, routing, avoided };
+    route = { kind: "polyline", points, cubic: null, fromSide, toSide, routing, avoided };
+  } else {
+    route = { kind: "polyline", points: [a.point, b.point], cubic: null, fromSide, toSide, routing, avoided: false };
   }
-  return { kind: "polyline", points: [a.point, b.point], cubic: null, fromSide, toSide, routing, avoided: false };
+  if (id && !(hit && hit.sig === sig)) env?.memo?.set(key, { sig, route });
+  return route;
+}
+
+/** Suffix of the memo key holding a connector's end-geometry memo (see connectorRoute). */
+const GEOMETRY_KEY = "#g";
+
+/**
+ * Drops a connector's entries from a route memo (it was deleted).
+ * @param {Map<string, unknown>} memo @param {string} id
+ */
+export function forgetRoute(memo, id) {
+  memo.delete(id);
+  memo.delete(id + GEOMETRY_KEY);
 }
 
 /** Exact axis-aligned bounds of a route. @param {Route} route @returns {Rect} */

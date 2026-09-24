@@ -14,6 +14,7 @@ How it is measured (all in Node, no board content in the output):
 - Fixtures (`fixtures.js`): deterministic 500/2,000/5,000-object boards with frames, stickies
   (some with long text), icons, shapes, long text objects, pen strokes (40-200 points) and ~15%
   connectors between nearby shapes, built through the real core over the in-memory repository.
+  A second, connector-heavy fixture exercises elbow routing (see "Connector routing" below).
 - "Core cold load" is a fresh `createWhiteboard` over the stored board followed by `getBoard()`:
   the Durable Object wake proxy (load plus index rebuild), without workerd or storage latency.
 - Canvas counts come from the real canvas controller over a fake DOM (`fake-dom.js`); element
@@ -83,6 +84,34 @@ Timings in milliseconds: median of repeated runs (p95). Fake-DOM timings are rel
   and ~9.3 MiB/s for 50 viewers with 10 moving, 219 deliveries/s for 50 idle, and ~152 MiB/s for
   200 viewers with 40 moving (now ~16 MiB/s). The remaining idle cost is heartbeat fan-out; a hub
   that did not rebroadcast unchanged heartbeats would remove it (not done here: hub behaviour).
+
+## Connector routing (2026-09-24, `feat/wb-connectors`)
+
+Obstacle-avoiding elbow routes (`src/shared/connectors.js`, A* in `src/shared/orthogonal.js`),
+measured on `connectorFixture` (`fixtures.js`): 2,000 sticky notes, rectangles, text and icons on a
+jittered 260-unit grid (narrow channels between them) and 1,000 automatic elbow connectors, each to
+a shape 1 to 3 cells away. `connectorMetrics` (`measure.js`) indexes every route, then moves 60
+random shapes one at a time and counts the work. CI asserts the counts (`budgets.js`
+`connectors`); the timings are this machine's (`baseline.json` has the raw numbers under
+`connectors`).
+
+| Measure | Value |
+| --- | --- |
+| Routes around obstacles / simple elbows (fast path, no search) | 880 / 120 |
+| A* searches / node-budget fallbacks | 880 / 0 |
+| A* states expanded per search, mean / max (budget 3,000) | 92.3 / 623 |
+| Spatial index build with all 1,000 routes | 147 ms (0.17 ms per search) |
+| Single-object move: connectors re-indexed, mean / max | 7.2 / 14 |
+| Single-object move: routes recomputed (memo misses), mean / max | 7.2 / 14 |
+| Single-object move: index update | 0.8 ms |
+
+Effect on the mixed fixtures above (re-run on the same machine, Node v24.19.0): every counted
+proxy is unchanged except "Object renders for a remote 1-object update", now 2 / 3 / 1 for
+500 / 2,000 / 5,000 objects (budget 5): moving a shape also redraws the automatic elbows that
+route around it. The client spatial index build now includes routing (automatic side choice for
+every connector, A* for elbows): 3.9 / 13.8 / 34.9 ms instead of 1.3 / 2.7 / 8.7 ms, once per
+load; hit tests stay at ~2-3 µs with the index's route memo (the brute-force comparison column
+recomputes routes and is slower, ~0.4-4.7 ms).
 
 ## 3.6 snapshot/delta decision gate: NO-GO (keep the single snapshot)
 
