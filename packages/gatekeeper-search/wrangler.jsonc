@@ -20,7 +20,7 @@
   "migrations": [
     {
       "tag": "v0",
-      "new_sqlite_classes": ["SearchIndex", "SearchGatekeeper"]
+      "new_sqlite_classes": ["SearchIndex", "SearchGatekeeper", "ContextFeed"]
     }
   ],
 
@@ -29,6 +29,11 @@
       {
         "name": "SEARCH_INDEX",
         "class_name": "SearchIndex"
+      },
+      // The Context Library feed: holds the minted read-only Context account and what it pushed.
+      {
+        "name": "CONTEXT_FEED",
+        "class_name": "ContextFeed"
       }
     ]
   },
@@ -59,6 +64,9 @@
       }
     ]
   },
+
+  // Drives the Context Library feed (dormant unless deploy.ts binds GATEKEEPER_CONTEXT).
+  "triggers": { "crons": ["*/15 * * * *"] },
 
   // `run_worker_first` so the Access check runs before the SPA shell is served.
   "assets": {

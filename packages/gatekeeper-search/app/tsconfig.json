@@ -1,0 +1,22 @@
+{
+  // The SPA's own program: DOM types and JSX, which the Worker's tsconfig deliberately excludes.
+  // `types:check` runs both, so app/ is covered.
+  "extends": "../../../cloudflare-os/tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noEmit": true,
+    "types": ["vite/client", "node"]
+  },
+  // The contract lives outside app/ and is listed explicitly; the app imports types and constants
+  // from it through src/contract.ts and nothing else.
+  "include": ["./src/**/*.ts", "./src/**/*.tsx", "../src/shared/contract.ts", "./vite.config.ts", "./vitest.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}
