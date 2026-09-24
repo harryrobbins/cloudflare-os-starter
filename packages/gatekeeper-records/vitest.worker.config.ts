@@ -32,6 +32,7 @@ export default defineConfig({
           RECORDS_GATEKEEPER: { className: "RecordsGatekeeper", useSQLite: true },
           CONNECT_FLOWS: { className: "RecordsConnectFlow", useSQLite: true },
           FEEDS: { className: "DatastoreFeed", useSQLite: true },
+          POKE_HUBS: { className: "DatastorePokeHub", useSQLite: true },
         },
         hyperdrives: { HYPERDRIVE: appUrl, HYPERDRIVE_PUBLISHER: publisherUrl },
         queueProducers: { CHANGES: "records-changes" },

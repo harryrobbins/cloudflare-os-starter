@@ -4,7 +4,7 @@
 import { RpcTarget } from "cloudflare:workers";
 import { effectivePermissions, RECORD_SCOPES, type CallerContext, type DatastoreSummary, type Page, type RecordScope } from "@records/contracts";
 
-import type { RecordsService } from "../domain/service.js";
+import type { RecordsService } from "@records/core";
 import { datastoreUrl } from "./resource.js";
 
 export class ConfiguratorApi extends RpcTarget {

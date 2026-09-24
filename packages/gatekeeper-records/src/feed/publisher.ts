@@ -10,7 +10,7 @@
 
 import { ChangeEventSchema, type ChangeEvent } from "@records/contracts";
 
-import type { Db } from "../db/context.js";
+import type { Db } from "@records/core";
 
 export type PublishOptions = { batch?: number; leaseSeconds?: number; maxAttempts?: number };
 export type PublishResult = { claimed: number; published: number; failed: number };
@@ -104,4 +104,13 @@ export async function outboxLag(db: Db): Promise<{ pending: number; oldestSecond
            count(*) FILTER (WHERE state = 'dead')::int AS dead
       FROM records.outbox WHERE state IN ('pending', 'dead')`;
   return { pending: row!.pending as number, oldestSeconds: row!.oldest as number, dead: row!.dead as number };
+}
+
+/**
+ * Create the journal's monthly partitions for this month and `monthsAhead` more (migration 0003's
+ * records.ensure_journal_partitions, executable by the publisher role). Returns how many it made.
+ */
+export async function ensureJournalPartitions(db: Db, monthsAhead = 3): Promise<number> {
+  const [row] = await db`SELECT records.ensure_journal_partitions(${monthsAhead}::int) AS created`;
+  return Number(row?.created ?? 0);
 }

@@ -16,6 +16,12 @@
 // `recordsIntentDigest` is SHA-256 over canonical JSON (see `RecordsSession.intentFormat`). The
 // assertion is valid once, for 60 seconds, for exactly that input and key. A write is only saved
 // when the outcome's status is "applied"; "pending" means it awaits approval in the Workshop.
+//
+// Sync (optimistic UI, e.g. @records/sync-client): `syncPush` and `syncPull` speak the sync
+// protocol. Each pushed mutation needs its own viewer assertion, for the intent
+// `{ operation: name without "projects.", input: args, idempotencyKey: "sync:<clientId>:<id>" }`.
+// Register `onChange(callback, { deliver: "pokes" })` to be told `{ datastoreId, head }` after
+// each commit, then `syncPull`.
 
 /** A person or service principal, for display only. */
 export type RecordsPrincipal = { id: string; displayName: string; kind: "human" | "service" };
@@ -89,6 +95,8 @@ export type RecordsListIssuesInput = {
 };
 
 export type RecordsCreateIssueInput = {
+  /** Optional client-chosen UUID (sync clients choose it so follow-up edits can refer to it). */
+  id?: string;
   projectId: string;
   title: string;
   description?: string;
@@ -113,7 +121,7 @@ export type RecordsEditIssueInput = {
 
 export type RecordsTransitionIssueInput = { issueId: string; expectedRevision: number; toState: string };
 
-export type RecordsAddCommentInput = { issueId: string; body: string };
+export type RecordsAddCommentInput = { id?: string; issueId: string; body: string };
 
 /** Accompanies every write. Both values come from the gadget UI; see the file header. */
 export type RecordsWriteOptions = { idempotencyKey: string; viewerAssertion: string };
@@ -153,6 +161,58 @@ export type RecordsChange = {
   revision: number;
 };
 
+/** A poke: the datastore's change counter (`head`) moved. Carries no record content. */
+export type RecordsPoke = { datastoreId: string; head: number };
+
+export type RecordsSyncCommandName = "projects.createIssue" | "projects.editIssue" | "projects.transitionIssue" | "projects.addComment";
+
+export type RecordsPushRequest = {
+  /** 8-64 URL-safe characters. */
+  clientGroupId: string;
+  /** 8-64 URL-safe characters; fresh per page load (mutation ids restart at 1). */
+  clientId: string;
+  /** 1-100 mutations, ids strictly increasing per client (gaps allowed). */
+  mutations: { id: number; name: RecordsSyncCommandName; args: unknown; timestamp?: number }[];
+};
+
+/** One per pushed mutation, in the same order. */
+export type RecordsSyncWriteOptions = { viewerAssertion: string };
+
+export type RecordsPushOutcome =
+  | { id: number; status: "applied"; seq: number }
+  /** Awaiting approval in the Workshop; still counts as processed. See `syncApprovals`. */
+  | { id: number; status: "pending"; actionId: number }
+  | { id: number; status: "rejected"; code: string; message: string }
+  | { id: number; status: "conflict"; code: "revision_conflict" | "workflow_conflict"; message: string; currentRevision?: number }
+  | { id: number; status: "skipped" };
+
+/** Outcomes for the prefix of mutations handled (push the rest again), and the clock after it. */
+export type RecordsPushResponse = { outcomes: RecordsPushOutcome[]; head: number };
+
+export type RecordsPullRequest = { clientGroupId: string; cookie: number | null };
+
+/** Keys: `project/<id>`, `issue/<id>`, `comment/<id>` (the DTOs above) and `meta/workflow`. */
+export type RecordsPatchOp = { op: "clear" } | { op: "put"; key: string; value: unknown } | { op: "del"; key: string };
+
+export type RecordsPullResponse = {
+  cookie: number;
+  /** Highest processed mutation id per client of the group (clients of the viewer who pushed). */
+  lastMutationIdChanges: Record<string, number>;
+  patch: RecordsPatchOp[];
+};
+
+export type RecordsApprovalStatus = {
+  actionId: number;
+  status: "pending" | "approved" | "rejected" | "expired";
+  message?: string;
+};
+
+/** Callback interface for `onChange(callback, { deliver: "pokes" })`. */
+export interface RecordsPokeHook {
+  /** The datastore changed; pull (`syncPull`) from your cookie. Best effort: also pull on a timer. */
+  poked(poke: RecordsPoke): void | Promise<void>;
+}
+
 /** Callback interface for `onChange`. Delivery is at-least-once and may be out of order. */
 export interface RecordsChangeHook {
   /** One or more changes happened. Refetch what you display; ignore revisions you already have. */
@@ -191,8 +251,25 @@ export interface RecordsSession {
   getWriteOutcome(actionId: number): Promise<RecordsWriteOutcome<RecordsIssue | RecordsComment>>;
 
   /**
+   * Push sync mutations, in order, as the viewer who asserted them (one assertion per mutation, all
+   * from the same viewer; see the file header for the intent). Each mutation goes through the
+   * Workshop's approval queue like any write: "applied" when approved at once (pre-approved kinds),
+   * otherwise "pending" with its actionId. Replayed ids return their saved outcome.
+   */
+  syncPush(request: RecordsPushRequest, options: RecordsSyncWriteOptions[]): Promise<RecordsPushResponse>;
+
+  /** Pull changes since `cookie` (null: everything). Read as this binding, like other reads. */
+  syncPull(request: RecordsPullRequest): Promise<RecordsPullResponse>;
+
+  /** Status of approvals from "pending" push outcomes. */
+  syncApprovals(actionIds: number[]): Promise<RecordsApprovalStatus[]>;
+
+  /**
    * Ask to be told when records in this datastore change. Registers a persistent hook, which the
    * Workshop owner approves once. `callback` must be a persistent stub (see ctx.restore).
+   * `deliver: "changes"` (default) calls `changed`/`resync` with identifiers; `deliver: "pokes"`
+   * calls `poked({ datastoreId, head })` after each commit, for clients that pull by seq.
+   * Registering again replaces the previous hook of this connection.
    */
-  onChange(callback: RecordsChangeHook): Promise<void>;
+  onChange(callback: RecordsChangeHook | RecordsPokeHook, options?: { deliver?: "changes" | "pokes" }): Promise<void>;
 }

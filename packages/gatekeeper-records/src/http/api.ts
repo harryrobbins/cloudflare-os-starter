@@ -12,6 +12,19 @@
 //   If-Match: "r<revision>"  → expectedRevision (428 when missing on a change to an existing record)
 //   Idempotency-Key header   → the mutation's idempotency key (required on every mutation)
 //   ETag                      → the record's revision
+//
+// Sync and change routes (canonical plan §6-7):
+//   POST …/sync/push, POST …/sync/pull   the sync protocol (@records/contracts sync.ts); the body is
+//                                        the request as is; pull responses may be up to
+//                                        SYNC_LIMITS.pullMaxBytes (the other routes: 1 MiB)
+//   GET  …/changes?after=&limit=         the commit-ordered journal (ChangesPage)
+//   GET  …/issues/:id/history            one issue's journal entries
+//   GET  …/poke                          WebSocket upgrade: `Poke` messages ({datastoreId, head})
+//                                        after each committed write. Authorised (issues.read) on
+//                                        connect; the hub closes every socket after a maximum
+//                                        lifetime, so a revoked credential stops receiving pokes.
+// Native writes journal with via 'http'; sync push journals with via 'sync'. After a commit the
+// adapter reports the new head through `onCommit`, which the Worker turns into a poke.
 
 import {
   LIMITS,
@@ -20,7 +33,7 @@ import {
   type Problem,
 } from "@records/contracts";
 
-import type { RecordsService } from "../domain/service.js";
+import { SYNC_LIMITS, type RecordsService } from "@records/core";
 
 export const API_PREFIX = "/gatekeeper/records/v1";
 
@@ -32,6 +45,10 @@ export type ApiDeps = {
   rateLimit?(key: string): Promise<boolean>;
   /** Deadline for one request, in milliseconds. */
   deadlineMs?: number;
+  /** Called after a write committed, with the datastore's clock at or after it (best effort). */
+  onCommit?(datastoreId: string, head: number): void;
+  /** Hand an authorised WebSocket upgrade to the datastore's poke hub. Absent: no poke route. */
+  subscribePokes?(datastoreId: string, request: Request): Promise<Response>;
 };
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
@@ -43,9 +60,9 @@ function problem(err: RecordsError, extraHeaders: Record<string, string> = {}): 
   return new Response(JSON.stringify(body), { status: err.status, headers });
 }
 
-function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
+function json(body: unknown, status = 200, headers: Record<string, string> = {}, maxBytes: number = LIMITS.httpResponseMaxBytes): Response {
   const text = JSON.stringify(body);
-  if (text.length > LIMITS.httpResponseMaxBytes) {
+  if (text.length > maxBytes) {
     return problem(new RecordsError("payload_too_large", "The response is too large; narrow the query or page it."));
   }
   return new Response(text, { status, headers: { ...JSON_HEADERS, ...headers } });
@@ -116,8 +133,12 @@ function searchInput(url: URL): Record<string, unknown> {
 type Route = {
   method: string;
   pattern: RegExp;
-  handle(ctx: { caller: CallerContext; datastoreId: string; params: string[]; request: Request; url: URL; service: RecordsService }): Promise<Response>;
+  handle(ctx: { caller: CallerContext; datastoreId: string; params: string[]; request: Request; url: URL; service: RecordsService; deps: ApiDeps }): Promise<Response>;
 };
+
+function committed(deps: ApiDeps, datastoreId: string, result: { replayed: boolean; seq?: number }): void {
+  if (!result.replayed && result.seq) deps.onCommit?.(datastoreId, result.seq);
+}
 
 const ID = "([0-9a-f-]{36})";
 
@@ -148,9 +169,11 @@ const routes: Route[] = [
   },
   {
     method: "POST", pattern: /^\/issues$/,
-    async handle({ caller, datastoreId, service, request }) {
+    async handle({ caller, datastoreId, service, request, deps }) {
       const key = idempotencyKey(request);
-      const { record, replayed } = await service.projects.createIssue(caller, datastoreId, await readJson(request), key);
+      const result = await service.projects.createIssue(caller, datastoreId, await readJson(request), key);
+      committed(deps, datastoreId, result);
+      const { record, replayed } = result;
       return json(record, replayed ? 200 : 201, { ...etag(record.revision), ...(replayed ? { "idempotent-replayed": "true" } : {}) });
     },
   },
@@ -163,22 +186,26 @@ const routes: Route[] = [
   },
   {
     method: "PATCH", pattern: new RegExp(`^/issues/${ID}$`),
-    async handle({ caller, datastoreId, service, request, params }) {
+    async handle({ caller, datastoreId, service, request, params, deps }) {
       const key = idempotencyKey(request);
       const revision = expectedRevision(request);
       const patch = await readJson(request);
-      const { record, replayed } = await service.projects.editIssue(caller, datastoreId, { issueId: params[0], expectedRevision: revision, patch }, key);
+      const result = await service.projects.editIssue(caller, datastoreId, { issueId: params[0], expectedRevision: revision, patch }, key);
+      committed(deps, datastoreId, result);
+      const { record, replayed } = result;
       return json(record, 200, { ...etag(record.revision), ...(replayed ? { "idempotent-replayed": "true" } : {}) });
     },
   },
   {
     method: "POST", pattern: new RegExp(`^/issues/${ID}/transitions$`),
-    async handle({ caller, datastoreId, service, request, params }) {
+    async handle({ caller, datastoreId, service, request, params, deps }) {
       const key = idempotencyKey(request);
       const revision = expectedRevision(request);
       const body = (await readJson(request)) as { toState?: unknown } | null;
-      const { record, replayed } = await service.projects.transitionIssue(
+      const result = await service.projects.transitionIssue(
         caller, datastoreId, { issueId: params[0], expectedRevision: revision, toState: body?.toState }, key);
+      committed(deps, datastoreId, result);
+      const { record, replayed } = result;
       return json(record, 200, { ...etag(record.revision), ...(replayed ? { "idempotent-replayed": "true" } : {}) });
     },
   },
@@ -194,11 +221,55 @@ const routes: Route[] = [
   },
   {
     method: "POST", pattern: new RegExp(`^/issues/${ID}/comments$`),
-    async handle({ caller, datastoreId, service, request, params }) {
+    async handle({ caller, datastoreId, service, request, params, deps }) {
       const key = idempotencyKey(request);
       const body = (await readJson(request)) as { body?: unknown } | null;
-      const { record, replayed } = await service.projects.addComment(caller, datastoreId, { issueId: params[0], body: body?.body }, key);
+      const result = await service.projects.addComment(caller, datastoreId, { issueId: params[0], body: body?.body }, key);
+      committed(deps, datastoreId, result);
+      const { record, replayed } = result;
       return json(record, replayed ? 200 : 201, replayed ? { "idempotent-replayed": "true" } : {});
+    },
+  },
+  {
+    method: "GET", pattern: new RegExp(`^/issues/${ID}/history$`),
+    async handle({ caller, datastoreId, service, params }) {
+      return json({ items: await service.journal.history(caller, datastoreId, "issue", params[0]!) });
+    },
+  },
+  {
+    method: "GET", pattern: /^\/changes$/,
+    async handle({ caller, datastoreId, service, url }) {
+      const p = url.searchParams;
+      return json(await service.journal.changes(caller, datastoreId, {
+        ...(p.has("after") ? { after: p.get("after") } : {}),
+        ...(p.has("limit") ? { limit: p.get("limit") } : {}),
+      }));
+    },
+  },
+  {
+    method: "POST", pattern: /^\/sync\/push$/,
+    async handle({ caller, datastoreId, service, request, deps }) {
+      const response = await service.sync.push(caller, datastoreId, await readJson(request));
+      if (response.outcomes.some((o) => o.status === "applied")) deps.onCommit?.(datastoreId, response.head);
+      return json(response);
+    },
+  },
+  {
+    method: "POST", pattern: /^\/sync\/pull$/,
+    async handle({ caller, datastoreId, service, request }) {
+      return json(await service.sync.pull(caller, datastoreId, await readJson(request)), 200, {}, SYNC_LIMITS.pullMaxBytes);
+    },
+  },
+  {
+    method: "GET", pattern: /^\/poke$/,
+    async handle({ caller, datastoreId, service, request, deps }) {
+      if (!deps.subscribePokes) throw new RecordsError("not_found", "No such API route.");
+      if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
+        throw new RecordsError("validation_failed", "Connect with a WebSocket upgrade (Upgrade: websocket).");
+      }
+      // Authorised now, on connect; the hub bounds how long the socket then lives.
+      await service.registry.checkAccess(caller, datastoreId, "listIssues");
+      return deps.subscribePokes(datastoreId, request);
     },
   },
   {
@@ -248,6 +319,7 @@ async function route(request: Request, deps: ApiDeps): Promise<Response> {
     request,
     url,
     service: deps.service,
+    deps,
   });
 }
 

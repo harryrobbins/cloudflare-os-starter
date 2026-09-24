@@ -2,7 +2,7 @@
 // Durable Object that instantiates RecordsGatekeeper as a facet (the way the overseer does) and
 // drives it with a scripted ApprovalQueue standing in for the kernel.
 
-import { DurableObject, RpcStub, RpcTarget } from "cloudflare:workers";
+import { DurableObject, RpcStub, RpcTarget, WorkerEntrypoint } from "cloudflare:workers";
 import type { GadgetViewer } from "@gadgets/workshop-shared/api";
 import type { ActionDescription, ObservationDescription } from "@gadgets/workshop-shared/gatekeeper";
 
@@ -11,6 +11,7 @@ import type { RecordsGatekeeper, RecordsGatekeeperProps } from "../../src/vendor
 export { default } from "../../src/index.js";
 export {
   DatastoreFeed,
+  DatastorePokeHub,
   GatekeeperVendor,
   RecordsAccount,
   RecordsConnectFlow,
@@ -58,8 +59,48 @@ class ScriptedQueue extends RpcTarget {
 
 type Call = { method: string; args: unknown[] };
 
+type HooksStub = { recordPoke(log: string, poke: unknown): Promise<void> };
+
+/** Plays the Workshop's HookInitiator for a feed hook: each startHook() yields a recording callback. */
+export class TestInitiator extends WorkerEntrypoint<Cloudflare.Env, { log: string }> {
+  async startHook() {
+    const log = this.ctx.props.log;
+    const hooks = (this.env as unknown as { TEST_HOOKS: DurableObjectNamespace }).TEST_HOOKS.getByName("hooks") as unknown as HooksStub;
+    return {
+      callback: new (class extends RpcTarget {
+        async poked(poke: unknown) {
+          await hooks.recordPoke(log, poke);
+        }
+        changed() {}
+        resync() {}
+      })(),
+      approvalQueue: new (class extends RpcTarget {
+        async authorizeObservation() {}
+      })(),
+    };
+  }
+}
+
 export class TestHooks extends DurableObject<Cloudflare.Env> {
   #assertions = new Map<string, { digest: string; viewer: GadgetViewer }>();
+  #pokes = new Map<string, unknown[]>();
+
+  async recordPoke(log: string, poke: unknown): Promise<void> {
+    this.#pokes.set(log, [...(this.#pokes.get(log) ?? []), poke]);
+  }
+
+  pokesFor(log: string): unknown[] {
+    return this.#pokes.get(log) ?? [];
+  }
+
+  /** Register a feed hook for `bindingId` whose callbacks are recorded under `log`. */
+  async registerHook(datastoreId: string, orgId: string, bindingId: string, log: string, deliver: "changes" | "pokes"): Promise<void> {
+    const exports = this.ctx.exports as unknown as { TestInitiator(o: { props: { log: string } }): Fetcher };
+    const feeds = (this.env as unknown as { FEEDS: DurableObjectNamespace }).FEEDS.getByName(datastoreId) as unknown as {
+      register(orgId: string, bindingId: string, initiator: Fetcher, target: unknown, deliver: string): Promise<void>;
+    };
+    await feeds.register(orgId, bindingId, exports.TestInitiator({ props: { log } }), { title: "test" }, deliver);
+  }
 
   #facet(name: string, props: RecordsGatekeeperProps) {
     const exports = this.ctx.exports as unknown as { RecordsGatekeeper(o: { props: RecordsGatekeeperProps }): DurableObjectClass<RecordsGatekeeper> };

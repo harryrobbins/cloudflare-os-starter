@@ -3,9 +3,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { ChangeEvent, ChangeNotification } from "@records/contracts";
 
-import type { Db } from "../src/db/context.ts";
+import type { Db } from "@records/core";
 import { consumeChanges } from "../src/feed/consumer.ts";
-import { backoffSeconds, outboxLag, publishPending, pruneDelivered } from "../src/feed/publisher.ts";
+import { backoffSeconds, ensureJournalPartitions, outboxLag, publishPending, pruneDelivered } from "../src/feed/publisher.ts";
 import { createWorld, key, type World } from "./world.ts";
 
 let w: World;
@@ -158,5 +158,15 @@ describe("queue consumer", () => {
     expect(delivered[a]!.map((n) => n.revision)).toEqual([1, 3]);
     expect(Object.keys(delivered[a]![0]!)).not.toContain("orgId");
     expect(msgs.map((m) => [m.acked, m.retried])).toEqual([[true, false], [false, true], [true, false], [true, false]]);
+  });
+});
+
+describe("journal partition maintenance", () => {
+  it("the publisher creates missing monthly partitions ahead, idempotently", async () => {
+    expect(await ensureJournalPartitions(publisher, 3)).toBe(0); // the migration made this month + 3
+    expect(await ensureJournalPartitions(publisher, 5)).toBe(2);
+    expect(await ensureJournalPartitions(publisher, 5)).toBe(0);
+    const [row] = await w.owner`SELECT count(*)::int AS n FROM pg_inherits WHERE inhparent = 'records.journal'::regclass`;
+    expect(row!.n).toBeGreaterThanOrEqual(7); // 6 months + the default partition
   });
 });

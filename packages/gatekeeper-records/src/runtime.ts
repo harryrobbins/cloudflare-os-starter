@@ -3,8 +3,8 @@
 // or HTTP request opens its own small postgres.js client over Hyperdrive, which does the pooling.
 // Idle sockets close themselves after a few seconds; HTTP handlers also end theirs explicitly.
 
-import type { Db } from "./db/context.js";
-import { connect, RecordsService } from "./domain/service.js";
+import type { Db } from "@records/core";
+import { connect, RecordsService } from "@records/core";
 
 export function recordsService(env: Pick<Cloudflare.Env, "HYPERDRIVE">): RecordsService {
   return new RecordsService(connect(env.HYPERDRIVE.connectionString, { max: 3 }));

@@ -51,9 +51,18 @@ export async function seedWorkerdWorld(superuserUrl: string): Promise<WorkerdSee
     };
     const ds1 = await datastore("Engineering projects", [["olive", "owner"], ["adam", "admin"], ["ed", "editor"], ["rae", "reader"]]);
     const ds2 = await datastore("Operations", [["olive", "owner"]]);
+    // A journaled row needs its journal entry in the same transaction (migration 0003 checks at
+    // commit), so the seed takes the clock and writes the entry itself, as the command bus would.
     const eng = crypto.randomUUID();
-    await sql`INSERT INTO projects.projects (org_id, datastore_id, id, key, name, created_by, updated_by)
-              VALUES (${a.orgId}, ${ds1}, ${eng}, 'ENG', 'Engineering', ${people.olive!.id}, ${people.olive!.id})`;
+    await sql.begin(async (tx) => {
+      const [{ seq }] = (await tx`UPDATE records.datastore_clock SET seq = seq + 1 WHERE datastore_id = ${ds1} RETURNING seq`) as unknown as [{ seq: string }];
+      await tx`INSERT INTO projects.projects (org_id, datastore_id, id, key, name, created_by, updated_by, last_seq)
+               VALUES (${a.orgId}, ${ds1}, ${eng}, 'ENG', 'Engineering', ${people.olive!.id}, ${people.olive!.id}, ${seq})`;
+      await tx`INSERT INTO records.journal (org_id, datastore_id, seq, ordinal, change_id, command, command_id, entity_type, entity_id,
+                                            entity_rev, op, after, actor_id, via)
+               VALUES (${a.orgId}, ${ds1}, ${seq}, 0, gen_random_uuid(), 'projects.createProject', gen_random_uuid(), 'project', ${eng},
+                       1, 'create', ${tx.json({ key: "ENG", name: "Engineering", description: "" })}, ${people.olive!.id}, 'system')`;
+    });
     return { db, orgA: a.orgId, orgB: b.orgId, ds1, ds2, eng, people };
   } finally {
     await sql.end();

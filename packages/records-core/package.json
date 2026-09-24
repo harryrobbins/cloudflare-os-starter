@@ -10,7 +10,8 @@
   },
   "scripts": {
     "types:check": "tsc --noEmit",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "bench:clock": "vitest run --config bench/vitest.config.ts"
   },
   "dependencies": {
     "@records/contracts": "workspace:*",

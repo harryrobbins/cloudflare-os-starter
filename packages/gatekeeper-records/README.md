@@ -21,7 +21,7 @@ deletes its records.
 | `src/http/` | Versioned machine API (`/gatekeeper/records/v1/*`) and Access verification |
 | `src/vendor/` | Gatekeeper vendor, account, per-gadget facet, session, observers, configurator, management capability |
 | `src/connect.ts` | Access-verified connect flow for people |
-| `src/feed/` | Outbox publisher, Queue consumer, per-datastore notification Durable Object, hook controller |
+| `src/feed/` | Outbox publisher, Queue consumer, per-datastore notification Durable Object, hook controller, per-datastore poke hub (`DatastorePokeHub`) |
 | `app/` | Workshop-hosted **Data** management page |
 
 ## Who can do what
@@ -79,11 +79,30 @@ Nothing here provisions infrastructure. In order:
 Upgrades: run migrations **before** deploying dependent Worker code; Worker rollback never reverses
 SQL, so migrations are additive and roll forward.
 
+## Sync and pokes
+
+The sync protocol (plan §6; server side in `records-core/src/sync`) is served twice:
+
+- HTTP: `POST …/v1/datastores/:id/sync/push`, `POST …/sync/pull` (pull responses up to 8 MiB),
+  plus `GET …/changes?after=&limit=` and `GET …/issues/:id/history`. `GET …/poke` upgrades to a
+  WebSocket that receives `{"datastoreId","head"}` after every commit; it is authorised on connect
+  (issues.read) and closed with code 4000 after 10 minutes, so revocation takes effect within that
+  bound. Reconnect and pull.
+- Gadget session: `syncPush(request, [{ viewerAssertion }…])`, `syncPull(request)`,
+  `syncApprovals(actionIds)` and `onChange(callback, { deliver: "pokes" })` (see
+  `src/vendor/types.d.ts`). Pushed mutations go through the approval queue like single writes.
+
+Full-state pulls are bounded (200 projects, 5 000 issues, 20 000 comments, 8 MiB); a larger
+datastore gets `payload_too_large` rather than a truncated state.
+
 ## Operations
 
 - The cron logs `records.outbox.tick` with `pending`, `oldestPendingSeconds` and `dead` (outbox age
   and dead-letter metrics). Dead rows need a person: fix the cause, then set them back to `pending`.
-- Published outbox rows are kept 7 days (replay window); idempotency outcomes 7 days.
+- Published outbox rows are kept 7 days (replay window); idempotency outcomes 7 days (sync push
+  outcomes too; an older replayed mutation id is answered `skipped`).
+- Once an hour the cron runs `records.ensure_journal_partitions(3)` (logged as
+  `partitionsCreated`).
 - Record bodies and credentials are never logged.
 
 ## Known limits (v1)

@@ -8,8 +8,8 @@ import type { CallerContext } from "@records/contracts";
 import { bootstrapOrganisation } from "@records/schema/bootstrap";
 import { createTestDatabase, type TestDatabase } from "@records/schema/testing";
 
-import type { Db } from "../src/db/context.ts";
-import { connect, RecordsService } from "../src/domain/service.ts";
+import type { Db } from "@records/core";
+import { connect, RecordsService } from "@records/core";
 
 export type Person = { id: string; caller: CallerContext; email: string };
 

@@ -20,8 +20,8 @@ import type { GatekeeperConnectCallback, GatekeeperUser } from "@gadgets/worksho
 
 import { checkConnectRequest, CONNECT_PAGE_HEADERS } from "./connect-guard.js";
 import { userEmail, verifyAccessAssertion } from "./http/access.js";
-import { normaliseEmail, WORKSHOP_ISSUER } from "./domain/registry.js";
-import type { RecordsService } from "./domain/service.js";
+import { normaliseEmail, WORKSHOP_ISSUER } from "@records/core";
+import type { RecordsService } from "@records/core";
 import { closeQuietly, recordsService } from "./runtime.js";
 
 const FLOW_TTL_MS = 10 * 60_000;

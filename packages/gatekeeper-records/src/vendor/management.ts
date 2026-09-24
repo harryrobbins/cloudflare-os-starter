@@ -23,8 +23,8 @@ import type {
   Workflow,
 } from "@records/contracts";
 
-import type { RecordsService } from "../domain/service.js";
-import type { Whoami } from "../domain/registry.js";
+import type { RecordsService } from "@records/core";
+import type { Whoami } from "@records/core";
 
 /** What the management page can do. Mirrors the domain; see packages/records-contracts. */
 export interface DataManagementApi {

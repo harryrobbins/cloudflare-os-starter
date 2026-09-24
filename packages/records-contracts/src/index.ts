@@ -6,3 +6,4 @@ export * from "./manifest.js";
 export * from "./caller.js";
 export * from "./sync.js";
 export * from "./identity.js";
+export * from "./issue-query.js";

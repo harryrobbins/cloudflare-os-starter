@@ -25,7 +25,7 @@ import {
   type RecordScope,
 } from "@records/contracts";
 
-import type { RecordsService } from "../domain/service.js";
+import type { RecordsService } from "@records/core";
 import { recordsService } from "../runtime.js";
 import { datastoreUrl } from "./resource.js";
 import { RecordsSessionImpl, type PendingWrite, type SessionHost } from "./session.js";
@@ -42,6 +42,11 @@ export type RecordsGatekeeperProps = {
 };
 
 type StoredObserver = { principalId: string };
+type StoredSyncGroup = { principalId: string; at: number };
+
+/** Sync group → viewer entries unused for this long are forgotten (their pulls then report no clients). */
+const SYNC_GROUP_TTL_MS = 30 * 24 * 3600_000;
+const SYNC_GROUP_SWEEP_MS = 24 * 3600_000;
 
 const LABELS: Record<string, string> = {
   createIssue: "create issues",
@@ -135,6 +140,7 @@ export class RecordsGatekeeper
     const caller: CallerContext = { orgId: this.ctx.props.orgId, principalId: pending.principalId, via: "gadget", bindingId: binding.bindingId };
     const ds = this.ctx.props.datastoreId;
     let outcome: MutationOutcome<unknown>;
+    let seq: number | undefined;
     try {
       const projects = this.#records.projects;
       const result =
@@ -143,6 +149,7 @@ export class RecordsGatekeeper
         : pending.operation === "transitionIssue" ? await projects.transitionIssue(caller, ds, pending.input, pending.idempotencyKey)
         : await projects.addComment(caller, ds, pending.input, pending.idempotencyKey);
       outcome = { status: "applied", record: result.record, replayed: result.replayed };
+      seq = result.seq;
     } catch (err) {
       const code = RecordsError.codeOf(err);
       // Transient failures stay pending so the approver can retry.
@@ -154,8 +161,9 @@ export class RecordsGatekeeper
       this.#settle(action, outcome);
       throw err;
     }
-    this.#settle(action, outcome);
+    this.#settle(action, outcome, seq);
     this.ctx.waitUntil(this.#kickPublisher());
+    if (seq && !(outcome.status === "applied" && outcome.replayed)) this.ctx.waitUntil(this.#poke(seq));
   }
 
   async rejectAction(action: number): Promise<void> {
@@ -171,13 +179,25 @@ export class RecordsGatekeeper
 
   // ---------------------------------------------------------------------------------------------
 
-  #settle(action: number, outcome: MutationOutcome<unknown>): void {
+  #settle(action: number, outcome: MutationOutcome<unknown>, seq?: number): void {
     this.ctx.storage.transactionSync(() => {
       this.ctx.storage.kv.delete(`pending:${action}`);
       this.ctx.storage.kv.put(`outcome:${action}`, outcome);
+      if (seq) this.ctx.storage.kv.put(`seq:${action}`, seq);
       // Keep a bounded outcome window for polling clients.
       this.ctx.storage.kv.delete(`outcome:${action - 256}`);
+      this.ctx.storage.kv.delete(`seq:${action - 256}`);
     });
+  }
+
+  /** Best effort: tell the datastore's poke hub (sockets and poke hooks) about the new head. */
+  async #poke(head: number): Promise<void> {
+    const datastoreId = this.ctx.props.datastoreId;
+    try {
+      await this.ctx.exports.DatastorePokeHub.getByName(datastoreId).poke(datastoreId, head);
+    } catch {
+      // Subscribers also pull on a timer.
+    }
   }
 
   async #kickPublisher(): Promise<void> {
@@ -235,15 +255,33 @@ export class RecordsGatekeeper
       putPending: (action, write) => kv.put(`pending:${action}`, write),
       getOutcome: (action) => kv.get<MutationOutcome<unknown>>(`outcome:${action}`),
       hasPending: (action) => kv.get(`pending:${action}`) !== undefined,
-      registerHook: async (callback, queue) => {
+      actionSeq: (action) => kv.get<number>(`seq:${action}`),
+      syncGroupOwner: (group) => kv.get<StoredSyncGroup>(`syncgroup:${group}`)?.principalId,
+      claimSyncGroup: (group, principalId) => {
+        const now = Date.now();
+        kv.put<StoredSyncGroup>(`syncgroup:${group}`, { principalId, at: now });
+        // Bounded growth: sync clients start a new group per page load.
+        if (now - (kv.get<number>("syncgroup-sweep") ?? 0) > SYNC_GROUP_SWEEP_MS) {
+          kv.put("syncgroup-sweep", now);
+          for (const [key, value] of kv.list<StoredSyncGroup>({ prefix: "syncgroup:" })) {
+            if (now - value.at > SYNC_GROUP_TTL_MS) kv.delete(key);
+          }
+        }
+      },
+      registerHook: async (callback, queue, deliver) => {
         const bindingId = await this.#ensureBinding();
         const controller = this.ctx.exports.RecordsHookController({
-          props: { orgId: this.ctx.props.orgId, datastoreId: this.ctx.props.datastoreId, bindingId },
+          props: { orgId: this.ctx.props.orgId, datastoreId: this.ctx.props.datastoreId, bindingId, deliver },
         });
-        await queue.bindHook(controller as never, callback as never, {
-          title: "Records change notifications",
-          description: "Tell this gadget when issues, comments or projects change in its organisation datastore (identifiers only; it refetches through its own connection).",
-        });
+        await queue.bindHook(controller as never, callback as never, deliver === "pokes"
+          ? {
+            title: "Records change pokes",
+            description: "Tell this gadget when its organisation datastore changes (its change counter only; it pulls the changes through its own connection).",
+          }
+          : {
+            title: "Records change notifications",
+            description: "Tell this gadget when issues, comments or projects change in its organisation datastore (identifiers only; it refetches through its own connection).",
+          });
       },
     };
   }

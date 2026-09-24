@@ -39,7 +39,11 @@ export async function startTestCluster(): Promise<TestCluster> {
     persistent: false,
     onLog: () => {},
     onError: () => {},
-    postgresFlags: ["-c", "max_connections=200", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"],
+    postgresFlags: [
+      "-c", "max_connections=200", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off",
+      // Lets the clock tests prove seq order equals commit order (pg_xact_commit_timestamp).
+      "-c", "track_commit_timestamp=on",
+    ],
   });
   await pg.initialise();
   await pg.start();

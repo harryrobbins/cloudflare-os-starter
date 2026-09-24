@@ -9,6 +9,24 @@
 // session's own ApprovalQueue for exactly this operation, input and idempotency key. Rights are
 // the viewer's ∩ the binding's scopes, checked now (to fail fast) and again when the approved
 // action is applied. No viewer identity outlives the call that carried it.
+//
+// Sync (canonical plan §6):
+//   syncPush(request, options[])  every mutation carries its own viewer assertion, for the intent
+//                                 { operation: name minus "projects.", input: args,
+//                                   idempotencyKey: syncIdempotencyKey(clientId, id) }; all must be
+//                                 from one viewer. Core push runs with an approval gate: each new
+//                                 mutation is checked (fail fast) and submitted to the approval
+//                                 queue exactly like a single write. If the Workshop applied it at
+//                                 once (a pre-approved kind), the outcome is `applied` with its seq;
+//                                 otherwise `pending` with the actionId. Either way the mutation is
+//                                 processed (lastMutationId advances) and its outcome saved, so a
+//                                 replayed id returns it. The approved command later runs in
+//                                 applyAction under the viewer, with the same checks, and arrives
+//                                 by pull.
+//   syncPull(request)             read as the binding (observed like every read); the group's
+//                                 lastMutationIds are those of the viewer who pushed into it
+//                                 through this connection (remembered per group in the facet).
+//   syncApprovals(actionIds)      approval status for `pending` outcomes.
 
 import { RpcTarget, type RpcStub } from "cloudflare:workers";
 import type { ApprovalQueue } from "@gadgets/workshop-shared/gatekeeper";
@@ -16,6 +34,8 @@ import {
   IdempotencyKeySchema,
   intentDigest,
   parseInput,
+  PullRequestSchema,
+  PushRequestSchema,
   RecordsError,
   type CallerContext,
   type Comment,
@@ -25,12 +45,14 @@ import {
   type Page,
   type PrincipalRef,
   type Project,
+  type PullResponse,
+  type PushResponse,
   type Workflow,
 } from "@records/contracts";
 import { z } from "zod";
 
-import { normaliseEmail, WORKSHOP_ISSUER } from "../domain/registry.js";
-import type { RecordsService } from "../domain/service.js";
+import { normaliseEmail, PROJECTS_HANDLERS, syncIdempotencyKey, WORKSHOP_ISSUER, type SettledPushOutcome, type SyncGate } from "@records/core";
+import type { RecordsService } from "@records/core";
 import type { RecordsBindingInfo } from "./types.js";
 
 export type PendingWrite = {
@@ -52,13 +74,28 @@ export interface SessionHost {
   putPending(action: number, write: PendingWrite): void;
   getOutcome(action: number): MutationOutcome<unknown> | undefined;
   hasPending(action: number): boolean;
-  registerHook(callback: unknown, queue: RpcStub<ApprovalQueue>): Promise<void>;
+  /** The seq an applied action committed at, when known. */
+  actionSeq(action: number): number | undefined;
+  /** The principal who pushed into a sync client group through this connection, if any. */
+  syncGroupOwner(clientGroupId: string): string | undefined;
+  claimSyncGroup(clientGroupId: string, principalId: string): void;
+  registerHook(callback: unknown, queue: RpcStub<ApprovalQueue>, deliver: "changes" | "pokes"): Promise<void>;
 }
+
+export type ApprovalStatus = { actionId: number; status: "pending" | "approved" | "rejected" | "expired"; message?: string };
+
+const ViewerAssertionSchema = z.string().min(1).max(200);
 
 const WriteOptionsSchema = z.object({
   idempotencyKey: IdempotencyKeySchema,
-  viewerAssertion: z.string().min(1).max(200),
+  viewerAssertion: ViewerAssertionSchema,
 });
+
+const SyncWriteOptionsSchema = z.array(z.object({ viewerAssertion: ViewerAssertionSchema })).max(100);
+
+const OnChangeOptionsSchema = z.object({ deliver: z.enum(["changes", "pokes"]).optional() }).optional();
+
+const ActionIdsSchema = z.array(z.number().int().min(1)).max(100);
 
 const LABELS: Record<MutatingRecordOperation, string> = {
   createIssue: "Create issue",
@@ -153,37 +190,59 @@ export class RecordsSessionImpl extends RpcTarget {
   // ---------------------------------------------------------------------------------------------
   // Writes
 
-  async #write(operation: MutatingRecordOperation, input: unknown, rawOptions: unknown): Promise<MutationOutcome<unknown>> {
-    const options = parseInput(WriteOptionsSchema, rawOptions);
-    const digest = await intentDigest({ operation, input, idempotencyKey: options.idempotencyKey });
-    // Throws unless this exact intent was asserted by an authenticated viewer of this gadget.
-    const viewer = await this.#queue.consumeViewerAssertion(options.viewerAssertion, digest);
-    const principal = await this.#host.service.registry.resolveIdentity(WORKSHOP_ISSUER, normaliseEmail(viewer.id));
-    if (!principal || principal.orgId !== this.#host.orgId) {
-      return { status: "rejected", code: "forbidden", message: "You are not in this organisation's Records directory. Ask a data administrator to add you." };
-    }
+  /** The Records principal of a verified viewer, or a rejection when they have none here. */
+  async #viewerPrincipal(viewerId: string): Promise<string | null> {
+    const principal = await this.#host.service.registry.resolveIdentity(WORKSHOP_ISSUER, normaliseEmail(viewerId));
+    return principal && principal.orgId === this.#host.orgId ? principal.principalId : null;
+  }
+
+  async #viewerCaller(principalId: string): Promise<CallerContext> {
     const binding = await this.#host.bindingCaller();
-    const caller: CallerContext = { orgId: this.#host.orgId, principalId: principal.principalId, via: "gadget", bindingId: binding.bindingId };
+    return { orgId: this.#host.orgId, principalId, via: "gadget", bindingId: binding.bindingId };
+  }
+
+  /** Fail fast on rights the viewer lacks now (they are checked again when applied). */
+  async #precheck(caller: CallerContext, operation: MutatingRecordOperation, viewerName: string): Promise<{ status: "rejected"; code: string; message: string } | null> {
     try {
       const access = await this.#host.service.registry.checkAccess(caller, this.#host.datastoreId, operation);
       if (access.lifecycle !== "active") return { status: "rejected", code: "datastore_archived", message: "This datastore is archived and read-only." };
     } catch (err) {
       const code = RecordsError.codeOf(err);
       if (code === "forbidden" || code === "not_found") {
-        return { status: "rejected", code, message: `${viewer.displayName} may not ${LABELS[operation].toLowerCase()} through this connection.` };
+        return { status: "rejected", code, message: `${viewerName} may not ${LABELS[operation].toLowerCase()} through this connection.` };
       }
       throw err;
     }
+    return null;
+  }
 
+  /** Queue the write for approval; the Workshop may apply it before this returns. */
+  async #submit(operation: MutatingRecordOperation, input: unknown, idempotencyKey: string, principalId: string, viewerName: string): Promise<number> {
     const action = this.#host.nextActionId();
-    this.#host.putPending(action, { operation, input, idempotencyKey: options.idempotencyKey, principalId: principal.principalId, viewerName: viewer.displayName });
+    this.#host.putPending(action, { operation, input, idempotencyKey, principalId, viewerName });
     await this.#queue.submitAction(action, {
-      title: `${LABELS[operation]} (${viewer.displayName})`,
-      description: describeWrite(operation, input, viewer.displayName),
+      title: `${LABELS[operation]} (${viewerName})`,
+      description: describeWrite(operation, input, viewerName),
       implementsRevert: false,
       autoApprovable: true,
       actionKind: { tag: `records.${operation}`, label: `Records: ${LABELS[operation].toLowerCase()}` },
     });
+    return action;
+  }
+
+  async #write(operation: MutatingRecordOperation, input: unknown, rawOptions: unknown): Promise<MutationOutcome<unknown>> {
+    const options = parseInput(WriteOptionsSchema, rawOptions);
+    const digest = await intentDigest({ operation, input, idempotencyKey: options.idempotencyKey });
+    // Throws unless this exact intent was asserted by an authenticated viewer of this gadget.
+    const viewer = await this.#queue.consumeViewerAssertion(options.viewerAssertion, digest);
+    const principalId = await this.#viewerPrincipal(viewer.id);
+    if (!principalId) {
+      return { status: "rejected", code: "forbidden", message: "You are not in this organisation's Records directory. Ask a data administrator to add you." };
+    }
+    const caller = await this.#viewerCaller(principalId);
+    const refused = await this.#precheck(caller, operation, viewer.displayName);
+    if (refused) return refused;
+    const action = await this.#submit(operation, input, options.idempotencyKey, principalId, viewer.displayName);
     return this.#outcome(action, options.idempotencyKey);
   }
 
@@ -206,7 +265,75 @@ export class RecordsSessionImpl extends RpcTarget {
     throw new RecordsError("not_found", "Unknown action.");
   }
 
-  async onChange(callback: unknown): Promise<void> {
-    await this.#host.registerHook(callback, this.#queue);
+  async onChange(callback: unknown, options?: unknown): Promise<void> {
+    const parsed = parseInput(OnChangeOptionsSchema, options);
+    await this.#host.registerHook(callback, this.#queue, parsed?.deliver ?? "changes");
   }
+
+  // ---------------------------------------------------------------------------------------------
+  // Sync
+
+  async syncPush(rawRequest: unknown, rawOptions: unknown): Promise<PushResponse> {
+    const request = parseInput(PushRequestSchema, rawRequest);
+    const options = parseInput(SyncWriteOptionsSchema, rawOptions);
+    if (options.length !== request.mutations.length) {
+      throw new RecordsError("validation_failed", "Send one viewer assertion per mutation, in the same order.");
+    }
+    // Redeem every assertion first: one push speaks for one viewer.
+    let viewer: { id: string; displayName: string } | undefined;
+    for (const [i, m] of request.mutations.entries()) {
+      const digest = await intentDigest({ operation: operationOf(m.name), input: m.args, idempotencyKey: syncIdempotencyKey(request.clientId, m.id) });
+      const v = await this.#queue.consumeViewerAssertion(options[i]!.viewerAssertion, digest);
+      if (viewer && v.id !== viewer.id) throw new RecordsError("validation_failed", "Every mutation in one push must come from the same viewer.");
+      viewer = v;
+    }
+    const who = viewer!;
+    const principalId = await this.#viewerPrincipal(who.id);
+    if (!principalId) throw new RecordsError("forbidden", "You are not in this organisation's Records directory. Ask a data administrator to add you.");
+    const owner = this.#host.syncGroupOwner(request.clientGroupId);
+    if (owner !== undefined && owner !== principalId) throw new RecordsError("forbidden", "This sync client group belongs to another viewer; start a new one.");
+    this.#host.claimSyncGroup(request.clientGroupId, principalId);
+    const caller = await this.#viewerCaller(principalId);
+
+    const gate: SyncGate = async (m, { idempotencyKey }) => {
+      const operation = operationOf(m.name);
+      // Malformed args are this mutation's rejection (validation_failed), not an approver's problem.
+      // Thrown RecordsErrors become the outcome; the command checks everything again when applied.
+      PROJECTS_HANDLERS[m.name].parse(m.args);
+      const refused = await this.#precheck(caller, operation, who.displayName);
+      if (refused) return { kind: "settled", outcome: refused };
+      const action = await this.#submit(operation, m.args, idempotencyKey, principalId, who.displayName);
+      return { kind: "settled", outcome: this.#pushOutcome(action) };
+    };
+    return this.#host.service.sync.push(caller, this.#host.datastoreId, request, { gate, via: "gadget" });
+  }
+
+  #pushOutcome(action: number): SettledPushOutcome {
+    const outcome = this.#host.getOutcome(action);
+    if (!outcome || outcome.status === "pending") return { status: "pending", actionId: action };
+    if (outcome.status === "applied") return { status: "applied", seq: this.#host.actionSeq(action) ?? 0 };
+    return outcome;
+  }
+
+  async syncPull(rawRequest: unknown): Promise<PullResponse> {
+    const request = parseInput(PullRequestSchema, rawRequest);
+    const owner = this.#host.syncGroupOwner(request.clientGroupId);
+    return this.#observe("Sync records", "Read the records in this datastore that changed since the gadget last synced.", (c) =>
+      this.#host.service.sync.pull(c, this.#host.datastoreId, request, { clientsOf: owner ?? null }));
+  }
+
+  async syncApprovals(rawActionIds: unknown): Promise<ApprovalStatus[]> {
+    const ids = parseInput(ActionIdsSchema, rawActionIds);
+    return ids.map((actionId): ApprovalStatus => {
+      const outcome = this.#host.getOutcome(actionId);
+      if (!outcome) return this.#host.hasPending(actionId) ? { actionId, status: "pending" } : { actionId, status: "expired" };
+      if (outcome.status === "applied") return { actionId, status: "approved" };
+      if (outcome.status === "pending") return { actionId, status: "pending" };
+      return { actionId, status: "rejected", message: outcome.message };
+    });
+  }
+}
+
+function operationOf(name: string): MutatingRecordOperation {
+  return name.slice("projects.".length) as MutatingRecordOperation;
 }

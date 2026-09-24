@@ -132,3 +132,90 @@ describe("HTTP / domain parity", () => {
     expect((await call(`${ds()}/issues`, { token: created.secret })).status).toBe(401);
   });
 });
+
+describe("sync, changes and history over HTTP", () => {
+  const commits: [string, number][] = [];
+  const recording = (): ApiDeps => ({ ...deps, onCommit: (ds, head) => commits.push([ds, head]) });
+  const post = (path: string, body: unknown, d = recording()) => handleApi(new Request(`https://records.test${API_PREFIX}${ds()}${path}`, {
+    method: "POST", body: JSON.stringify(body),
+    headers: { "cf-access-jwt-assertion": "valid", authorization: `Bearer ${secret}`, "content-type": "application/json" },
+  }), d);
+
+  it("pushes with client ids and pulls the result; the journal says via sync; commits are reported", async () => {
+    commits.length = 0;
+    const issueId = crypto.randomUUID();
+    const group = `group-${crypto.randomUUID().slice(0, 8)}`;
+    const client = `client-${crypto.randomUUID().slice(0, 8)}`;
+    const pushed = await post("/sync/push", { clientGroupId: group, clientId: client, mutations: [
+      { id: 1, name: "projects.createIssue", args: { id: issueId, projectId: w.eng, title: "Pushed over HTTP" } },
+      { id: 2, name: "projects.editIssue", args: { issueId, expectedRevision: 5, patch: { title: "stale" } } },
+    ] });
+    expect(pushed.status).toBe(200);
+    const res = (await pushed.json()) as { outcomes: { status: string; seq?: number }[]; head: number };
+    expect(res.outcomes.map((o) => o.status)).toEqual(["applied", "conflict"]);
+    expect(commits).toEqual([[w.ds1, res.head]]);
+
+    const pulled = await post("/sync/pull", { clientGroupId: group, cookie: res.head - 1 });
+    expect(pulled.status).toBe(200);
+    const pull = (await pulled.json()) as { cookie: number; lastMutationIdChanges: Record<string, number>; patch: { op: string; key?: string }[] };
+    expect(pull.cookie).toBe(res.head);
+    expect(pull.lastMutationIdChanges).toEqual({ [client]: 2 });
+    expect(pull.patch.map((p) => p.key)).toEqual(["meta/workflow", `issue/${issueId}`]);
+
+    const history = await call(`${ds()}/issues/${issueId}/history`);
+    expect(history.status).toBe(200);
+    const entries = ((await history.json()) as { items: { via: string; op: string }[] }).items;
+    expect(entries).toEqual([expect.objectContaining({ via: "sync", op: "create" })]);
+
+    const changes = await call(`${ds()}/changes?after=${res.head - 1}&limit=5`);
+    expect(await changes.json()).toMatchObject({ entries: [{ seq: res.head, entityId: issueId }], nextAfter: res.head, head: res.head, resetRequired: false });
+    expect((await call(`${ds()}/changes?limit=5000`)).status).toBe(400);
+  });
+
+  it("native writes report their seq; replays and reads do not", async () => {
+    commits.length = 0;
+    const k = key("commit");
+    const body = JSON.stringify({ projectId: w.eng, title: "Reported" });
+    const once = (await handleApi(new Request(`https://records.test${API_PREFIX}${ds()}/issues`, {
+      method: "POST", body, headers: { "cf-access-jwt-assertion": "valid", authorization: `Bearer ${secret}`, "content-type": "application/json", "idempotency-key": k },
+    }), recording()));
+    expect(once.status).toBe(201);
+    await handleApi(new Request(`https://records.test${API_PREFIX}${ds()}/issues`, {
+      method: "POST", body, headers: { "cf-access-jwt-assertion": "valid", authorization: `Bearer ${secret}`, "content-type": "application/json", "idempotency-key": k },
+    }), recording());
+    await post("/sync/pull", { clientGroupId: "group-readonly", cookie: null });
+    expect(commits).toHaveLength(1);
+    const [journal] = await w.owner`SELECT via FROM records.journal WHERE datastore_id = ${w.ds1} AND seq = ${commits[0]![1]}`;
+    expect(journal).toEqual({ via: "http" });
+  });
+
+  it("refuses a malformed sync envelope as a problem document and needs read scopes", async () => {
+    const bad = await post("/sync/push", { clientGroupId: "x", clientId: "y", mutations: [] });
+    expect(bad.status).toBe(400);
+    expect(bad.headers.get("content-type")).toBe("application/problem+json");
+    const writeOnly = (await w.service.registry.createCredential(w.olive.caller, w.ds1, { label: "Writer", scopes: ["issues.create"], expiresInDays: 1 })).secret;
+    const res = await handleApi(new Request(`https://records.test${API_PREFIX}${ds()}/sync/pull`, {
+      method: "POST", body: JSON.stringify({ clientGroupId: "group-writeonly", cookie: null }),
+      headers: { "cf-access-jwt-assertion": "valid", authorization: `Bearer ${writeOnly}`, "content-type": "application/json" },
+    }), deps);
+    expect(res.status).toBe(404);
+  });
+
+  it("the poke route needs a WebSocket upgrade and read access, then hands over to the hub", async () => {
+    const handed: string[] = [];
+    const withHub: ApiDeps = { ...deps, subscribePokes: async (dsId) => {
+      handed.push(dsId);
+      return new Response("hub", { status: 200 });
+    } };
+    const get = (token: string, upgrade: boolean) => handleApi(new Request(`https://records.test${API_PREFIX}${ds()}/poke`, {
+      headers: { "cf-access-jwt-assertion": "valid", authorization: `Bearer ${token}`, ...(upgrade ? { upgrade: "websocket" } : {}) },
+    }), withHub);
+    expect((await get(secret, false)).status).toBe(400);
+    const writeOnly = (await w.service.registry.createCredential(w.olive.caller, w.ds1, { label: "Writer 2", scopes: ["issues.create"], expiresInDays: 1 })).secret;
+    expect((await get(writeOnly, true)).status).toBe(404);
+    expect(await (await get(secret, true)).text()).toBe("hub");
+    expect(handed).toEqual([w.ds1]);
+    // Without a hub the route does not exist.
+    expect((await call(`${ds()}/poke`, { headers: { upgrade: "websocket" } })).status).toBe(404);
+  });
+});

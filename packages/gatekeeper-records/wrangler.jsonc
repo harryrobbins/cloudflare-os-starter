@@ -14,6 +14,11 @@
     {
       "tag": "v0",
       "new_sqlite_classes": ["RecordsGatekeeper", "RecordsConnectFlow", "DatastoreFeed"]
+    },
+    // DatastorePokeHub: one per datastore, holding hibernating WebSocket subscribers for pokes.
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DatastorePokeHub"]
     }
   ],
   // Two Hyperdrive configurations over the same database, each with query caching DISABLED

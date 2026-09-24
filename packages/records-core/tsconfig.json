@@ -5,8 +5,9 @@
     "lib": ["ESNext"],
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["src", "__tests__"]
+  "include": ["src", "__tests__", "bench"]
 }

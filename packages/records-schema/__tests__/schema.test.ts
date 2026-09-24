@@ -1,7 +1,7 @@
 import postgres, { type Sql } from "postgres";
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 
-import { ModuleManifestSchema } from "@records/contracts";
+import { DATASTORE_ROLES, ModuleManifestSchema, ROLE_PERMISSIONS } from "@records/contracts";
 
 import { projectsModuleManifest } from "../src/manifest.ts";
 import { loadMigrations, migrate, plan, status } from "../src/migrate.ts";
@@ -37,17 +37,32 @@ async function seed(sql: Sql) {
     INSERT INTO projects.workflow_states (org_id, datastore_id, key, name, category, position) VALUES
       ('${ORG_A}', '${DS_A1}', 'todo', 'To do', 'todo', 0),
       ('${ORG_A}', '${DS_A2}', 'todo', 'To do', 'todo', 0);
-    INSERT INTO projects.projects (org_id, datastore_id, id, key, name, created_by, updated_by) VALUES
-      ('${ORG_A}', '${DS_A1}', '${PROJ_A1}', 'ENG', 'Engineering', '${ALICE}', '${ALICE}'),
-      ('${ORG_A}', '${DS_A2}', '${PROJ_A2}', 'OPS', 'Ops', '${ALICE}', '${ALICE}');
+    INSERT INTO records.memberships (org_id, datastore_id, principal_id, role, granted_by) VALUES
+      ('${ORG_A}', '${DS_A1}', '${ALICE}', 'editor', '${ALICE}'),
+      ('${ORG_A}', '${DS_A2}', '${ALICE}', 'editor', '${ALICE}');
   `);
+  // Journaled rows need their journal entry in the same transaction.
+  for (const [ds, id, key] of [[DS_A1, PROJ_A1, "ENG"], [DS_A2, PROJ_A2, "OPS"]] as const) {
+    await sql.begin(async (tx) => {
+      const [{ seq }] = (await tx`UPDATE records.datastore_clock SET seq = seq + 1 WHERE datastore_id = ${ds} RETURNING seq`) as unknown as [{ seq: string }];
+      await tx`INSERT INTO projects.projects (org_id, datastore_id, id, key, name, created_by, updated_by, last_seq)
+               VALUES (${ORG_A}, ${ds}, ${id}, ${key}, ${key}, ${ALICE}, ${ALICE}, ${seq})`;
+      await tx`INSERT INTO records.journal (org_id, datastore_id, seq, ordinal, change_id, command, command_id, entity_type, entity_id,
+                                            entity_rev, op, after, actor_id, via)
+               VALUES (${ORG_A}, ${ds}, ${seq}, 0, gen_random_uuid(), 'projects.createProject', gen_random_uuid(), 'project', ${id},
+                       1, 'create', ${tx.json({ key, name: key, description: "" })}, ${ALICE}, 'system')`;
+    });
+  }
 }
 
-/** Run `fn` as the app role inside a transaction with the given trusted context. */
-async function asApp<T>(org: string | null, datastore: string | null, fn: (tx: Sql) => Promise<T>): Promise<T> {
+/** Run `fn` as the app role inside a transaction with the given trusted context (Alice by default). */
+async function asApp<T>(org: string | null, datastore: string | null, fn: (tx: Sql) => Promise<T>,
+                        principal: string | null = ALICE, scopes = "*", binding: string | null = null): Promise<T> {
   return (await app.begin(async (tx) => {
     if (org) await tx`SELECT set_config('records.org_id', ${org}, true)`;
     if (datastore) await tx`SELECT set_config('records.datastore_id', ${datastore}, true)`;
+    if (principal) await tx`SELECT set_config('records.principal_id', ${principal}, true), set_config('records.scopes', ${scopes}, true)`;
+    if (binding) await tx`SELECT set_config('records.binding_id', ${binding}, true)`;
     return fn(tx as unknown as Sql);
   })) as T;
 }
@@ -166,7 +181,9 @@ describe("privileges", () => {
       SELECT p.proname, p.proconfig, has_function_privilege('public', p.oid, 'EXECUTE') AS public_exec
         FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
        WHERE n.nspname = 'records' AND p.prosecdef`;
-    expect(rows.map((r) => r.proname).toSorted()).toEqual(["resolve_credential", "resolve_identity"]);
+    expect(rows.map((r) => r.proname).toSorted()).toEqual([
+      "can_any", "create_datastore_clock", "ensure_journal_partitions", "require_journal_entry", "resolve_credential", "resolve_identity",
+    ]);
     for (const r of rows) {
       expect(r.public_exec).toBe(false);
       expect(r.proconfig).toContain("search_path=pg_catalog, records");
@@ -233,8 +250,8 @@ describe("row-level security", () => {
 describe("integrity", () => {
   it("rejects a cross-datastore reference even for the owner role", async () => {
     await expect(owner`
-      INSERT INTO projects.issues (org_id, datastore_id, id, project_id, number, title, state, created_by, updated_by)
-      VALUES (${ORG_A}, ${DS_A2}, gen_random_uuid(), ${PROJ_A1}, 1, 't', 'todo', ${ALICE}, ${ALICE})`).rejects.toThrow(/foreign key/);
+      INSERT INTO projects.issues (org_id, datastore_id, id, project_id, number, title, state, created_by, updated_by, last_seq)
+      VALUES (${ORG_A}, ${DS_A2}, gen_random_uuid(), ${PROJ_A1}, 1, 't', 'todo', ${ALICE}, ${ALICE}, 1)`).rejects.toThrow(/foreign key/);
   });
 
   it("rejects a cross-organisation principal reference", async () => {
@@ -249,10 +266,158 @@ describe("integrity", () => {
   });
 
   it("allows one owner membership per datastore", async () => {
-    await owner`INSERT INTO records.memberships (org_id, datastore_id, principal_id, role, granted_by) VALUES (${ORG_A}, ${DS_A1}, ${ALICE}, 'owner', ${ALICE})`;
+    const dan = crypto.randomUUID();
+    await owner`INSERT INTO records.principals (org_id, id, kind, display_name) VALUES (${ORG_A}, ${dan}, 'human', 'Dan')`;
+    await owner`INSERT INTO records.memberships (org_id, datastore_id, principal_id, role, granted_by) VALUES (${ORG_A}, ${DS_A1}, ${dan}, 'owner', ${ALICE})`;
     const carol = crypto.randomUUID();
     await owner`INSERT INTO records.principals (org_id, id, kind, display_name) VALUES (${ORG_A}, ${carol}, 'human', 'Carol')`;
     await expect(owner`INSERT INTO records.memberships (org_id, datastore_id, principal_id, role, granted_by) VALUES (${ORG_A}, ${DS_A1}, ${carol}, 'owner', ${ALICE})`)
       .rejects.toThrow(/memberships_one_owner/);
+  });
+});
+
+describe("journal and clock (0003)", () => {
+  it("backfills a clock and a create entry for rows that predate the journal", async () => {
+    const fresh = await createTestDatabase(inject("pgSuperuserUrl"), false);
+    const sql = postgres(fresh.ownerUrl, { max: 1, ...quiet });
+    try {
+      const files = loadMigrations();
+      await migrate(sql, files.slice(0, 2));
+      const issue = crypto.randomUUID();
+      const comment = crypto.randomUUID();
+      await sql.unsafe(`
+        INSERT INTO records.organisations (id, name) VALUES ('${ORG_A}', 'Org A');
+        INSERT INTO records.principals (org_id, id, kind, display_name) VALUES ('${ORG_A}', '${ALICE}', 'human', 'Alice');
+        INSERT INTO records.datastores (org_id, id, name, module_id, api_major, owner_principal_id, retention_policy, created_by)
+          VALUES ('${ORG_A}', '${DS_A1}', 'A1', 'projects', 1, '${ALICE}', 'keep', '${ALICE}');
+        INSERT INTO projects.workflow_states (org_id, datastore_id, key, name, category, position) VALUES ('${ORG_A}', '${DS_A1}', 'todo', 'To do', 'todo', 0);
+        INSERT INTO projects.projects (org_id, datastore_id, id, key, name, created_by, updated_by) VALUES ('${ORG_A}', '${DS_A1}', '${PROJ_A1}', 'ENG', 'Eng', '${ALICE}', '${ALICE}');
+        INSERT INTO projects.issues (org_id, datastore_id, id, project_id, number, title, state, created_by, updated_by, revision)
+          VALUES ('${ORG_A}', '${DS_A1}', '${issue}', '${PROJ_A1}', 1, 'Old', 'todo', '${ALICE}', '${ALICE}', 3);
+        INSERT INTO projects.comments (org_id, datastore_id, id, issue_id, body, author_id) VALUES ('${ORG_A}', '${DS_A1}', '${comment}', '${issue}', 'hi', '${ALICE}');
+      `);
+      await migrate(sql);
+      const [clock] = await sql`SELECT seq FROM records.datastore_clock WHERE datastore_id = ${DS_A1}`;
+      expect(clock!.seq).toBe("3");
+      const entries = await sql`SELECT seq, entity_type, entity_id, entity_rev, op, after, via FROM records.journal ORDER BY seq`;
+      expect(entries.map((e) => [e.seq, e.entity_type, e.entity_id, e.entity_rev, e.op, e.via])).toEqual([
+        ["1", "project", PROJ_A1, 1, "create", "system"],
+        ["2", "issue", issue, 3, "create", "system"],
+        ["3", "comment", comment, 1, "create", "system"],
+      ]);
+      expect(entries[1]!.after).toMatchObject({ key: "ENG-1", title: "Old", state: "todo", assigneeId: null, customFields: {} });
+      const seqs = await sql`
+        SELECT (SELECT last_seq FROM projects.projects) AS p, (SELECT last_seq FROM projects.issues) AS i, (SELECT last_seq FROM projects.comments) AS c`;
+      expect(seqs[0]).toEqual({ p: "1", i: "2", c: "3" });
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("gives every new datastore a clock at zero", async () => {
+    const ds = crypto.randomUUID();
+    await owner`INSERT INTO records.datastores (org_id, id, name, module_id, api_major, owner_principal_id, retention_policy, created_by)
+                VALUES (${ORG_A}, ${ds}, 'New', 'projects', 1, ${ALICE}, 'keep', ${ALICE})`;
+    expect((await owner`SELECT seq FROM records.datastore_clock WHERE datastore_id = ${ds}`)[0]!.seq).toBe("0");
+  });
+
+  it("the journal is append-only: no UPDATE or DELETE privilege, and a trigger for any role granted one", async () => {
+    await expect(asApp(ORG_A, DS_A1, (tx) => tx`UPDATE records.journal SET via = 'system'`)).rejects.toThrow(/permission denied/);
+    await expect(asApp(ORG_A, DS_A1, (tx) => tx`DELETE FROM records.journal`)).rejects.toThrow(/permission denied/);
+    const role = `journal_tamper_${crypto.randomUUID().slice(0, 8)}`;
+    await owner.unsafe(`CREATE ROLE ${role} NOLOGIN`);
+    await owner.unsafe(`GRANT USAGE ON SCHEMA records TO ${role}; GRANT SELECT, UPDATE, DELETE ON records.journal TO ${role}`);
+    await owner.unsafe(`CREATE POLICY tamper ON records.journal TO ${role} USING (true) WITH CHECK (true)`);
+    try {
+      for (const stmt of ["UPDATE records.journal SET via = 'system'", "DELETE FROM records.journal"]) {
+        await expect(owner.begin(async (tx) => {
+          await tx.unsafe(`SET LOCAL ROLE ${role}`);
+          await tx.unsafe(stmt);
+        })).rejects.toThrow(/append-only/);
+      }
+    } finally {
+      await owner.unsafe(`DROP POLICY tamper ON records.journal; REVOKE ALL ON records.journal FROM ${role}; REVOKE ALL ON SCHEMA records FROM ${role}; DROP ROLE ${role}`);
+    }
+  });
+
+  it("refuses a content change that does not advance last_seq, even for the owner", async () => {
+    await expect(owner`UPDATE projects.projects SET name = 'Silent' WHERE id = ${PROJ_A1}`).rejects.toThrow(/advance last_seq/);
+    // The issue-number allocator is bookkeeping, not content.
+    await owner`UPDATE projects.projects SET next_issue_number = next_issue_number WHERE id = ${PROJ_A1}`;
+  });
+
+  it("the publisher maintains partitions ahead and rescues rows that landed in the default partition", async () => {
+    const created = await publisher`SELECT records.ensure_journal_partitions(3) AS n`;
+    expect(created[0]!.n).toBe(0); // the migration already did it
+    const far = new Date();
+    far.setUTCMonth(far.getUTCMonth() + 6, 15);
+    await owner.begin(async (tx) => {
+      await tx`INSERT INTO records.journal (org_id, datastore_id, seq, ordinal, change_id, command, command_id, entity_type, entity_id,
+                                            entity_rev, op, after, actor_id, via, occurred_at)
+               VALUES (${ORG_A}, ${DS_A2}, 999, 0, gen_random_uuid(), 'system.test', gen_random_uuid(), 'project', gen_random_uuid(),
+                       1, 'create', '{}', ${ALICE}, 'system', ${far})`;
+    });
+    const where = () => owner`SELECT tableoid::regclass::text AS part FROM records.journal WHERE seq = 999 AND datastore_id = ${DS_A2}`;
+    expect((await where())[0]!.part).toBe("records.journal_default");
+    expect((await publisher`SELECT records.ensure_journal_partitions(6) AS n`)[0]!.n).toBe(3);
+    expect((await where())[0]!.part).toMatch(/^records\.journal_\d{4}m\d{2}$/);
+    await expect(publisher`SELECT records.ensure_journal_partitions(99)`).rejects.toThrow(/between 0 and 24/);
+    await expect(app`SELECT records.ensure_journal_partitions(1)`).rejects.toThrow(/permission denied/);
+  });
+});
+
+describe("principal row-level security (0004)", () => {
+  it("records.role_permissions mirrors ROLE_PERMISSIONS in the contracts", async () => {
+    const rows = await owner`SELECT role, permission FROM records.role_permissions ORDER BY role, permission`;
+    const fromDb = Object.fromEntries(DATASTORE_ROLES.map((r) => [r, rows.filter((x) => x.role === r).map((x) => x.permission as string).toSorted()]));
+    const fromContracts = Object.fromEntries(DATASTORE_ROLES.map((r) => [r, [...ROLE_PERMISSIONS[r]].toSorted()]));
+    expect(fromDb).toEqual(fromContracts);
+  });
+
+  it("a principal with no membership sees no module rows and cannot write them", async () => {
+    const mallory = crypto.randomUUID();
+    await owner`INSERT INTO records.principals (org_id, id, kind, display_name) VALUES (${ORG_A}, ${mallory}, 'human', 'Mallory')`;
+    expect(await asApp(ORG_A, DS_A1, (tx) => tx`SELECT id FROM projects.projects`, mallory)).toHaveLength(0);
+    expect(await asApp(ORG_A, DS_A1, (tx) => tx`SELECT key FROM projects.workflow_states`, mallory)).toHaveLength(0);
+    expect(await asApp(ORG_A, DS_A1, (tx) => tx`SELECT seq FROM records.journal`, mallory)).toHaveLength(0);
+    await expect(asApp(ORG_A, DS_A1, (tx) => tx`
+      INSERT INTO projects.workflow_states (org_id, datastore_id, key, name, category, position) VALUES (${ORG_A}, ${DS_A1}, 'x', 'X', 'todo', 9)`, mallory))
+      .rejects.toThrow(/row-level security/);
+    // No principal at all: nothing.
+    expect(await asApp(ORG_A, DS_A1, (tx) => tx`SELECT id FROM projects.projects`, null)).toHaveLength(0);
+  });
+
+  it("scopes narrow the role: '*' is unnarrowed, a list narrows, empty means nothing", async () => {
+    expect(await asApp(ORG_A, DS_A1, (tx) => tx`SELECT id FROM projects.projects`, ALICE, "*")).toHaveLength(1);
+    expect(await asApp(ORG_A, DS_A1, (tx) => tx`SELECT id FROM projects.projects`, ALICE, "projects.read")).toHaveLength(1);
+    expect(await asApp(ORG_A, DS_A1, (tx) => tx`SELECT seq FROM records.journal`, ALICE, "projects.read")).toHaveLength(0);
+    expect(await asApp(ORG_A, DS_A1, (tx) => tx`SELECT seq FROM records.journal`, ALICE, "issues.read")).toHaveLength(1);
+    expect(await asApp(ORG_A, DS_A1, (tx) => tx`SELECT id FROM projects.projects`, ALICE, "")).toHaveLength(0);
+    // Scopes never widen: an editor claiming a management scope still cannot add workflow states.
+    await expect(asApp(ORG_A, DS_A1, (tx) => tx`
+      INSERT INTO projects.workflow_states (org_id, datastore_id, key, name, category, position) VALUES (${ORG_A}, ${DS_A1}, 'y', 'Y', 'todo', 9)`, ALICE, "projects.manage"))
+      .rejects.toThrow(/row-level security/);
+  });
+
+  it("a binding narrows to its stored scopes and stops working when revoked", async () => {
+    const binding = crypto.randomUUID();
+    await owner`INSERT INTO records.bindings (org_id, datastore_id, id, kind, label, principal_id, scopes, created_by)
+                VALUES (${ORG_A}, ${DS_A1}, ${binding}, 'gadget', 'Board', ${ALICE}, ${["projects.read"]}, ${ALICE})`;
+    expect(await asApp(ORG_A, DS_A1, (tx) => tx`SELECT id FROM projects.projects`, ALICE, "*", binding)).toHaveLength(1);
+    expect(await asApp(ORG_A, DS_A1, (tx) => tx`SELECT seq FROM records.journal`, ALICE, "*", binding)).toHaveLength(0);
+    // Bound to another datastore: nothing there.
+    expect(await asApp(ORG_A, DS_A2, (tx) => tx`SELECT id FROM projects.projects`, ALICE, "*", binding)).toHaveLength(0);
+    await owner`UPDATE records.bindings SET status = 'revoked', revoked_at = now() WHERE id = ${binding}`;
+    expect(await asApp(ORG_A, DS_A1, (tx) => tx`SELECT id FROM projects.projects`, ALICE, "*", binding)).toHaveLength(0);
+  });
+
+  it("trusted issuers are readable by the service and changed only by the owner", async () => {
+    await owner`INSERT INTO records.trusted_issuers (issuer, kind, audiences, jwks_url)
+                VALUES ('https://records.example/gatekeeper', 'delegated', ${["records-datastore"]}, 'https://records.example/.well-known/jwks.json')`;
+    const rows = await app`SELECT issuer, kind, audiences, enabled FROM records.trusted_issuers`;
+    expect(rows[0]).toEqual({ issuer: "https://records.example/gatekeeper", kind: "delegated", audiences: ["records-datastore"], enabled: true });
+    await expect(app`UPDATE records.trusted_issuers SET enabled = false`).rejects.toThrow(/permission denied/);
+    await expect(owner`INSERT INTO records.trusted_issuers (issuer, kind, audiences, jwks_url) VALUES ('https://x.example', 'delegated', '{}', 'https://x.example/j')`)
+      .rejects.toThrow(/check constraint/);
   });
 });
