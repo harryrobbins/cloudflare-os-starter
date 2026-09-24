@@ -2,7 +2,7 @@
 
 Source of the **Project Report** blueprint: a read-only report over an organisation Projects datastore. It shows counts by state, priority and assignee, recently updated issues, CSS bar charts with table views, and a CSV download of the current view. It is the second demonstration client in [organisation-datastores.md](../../docs/plans/external_datastores/organisation-datastores.md). The writable one is [`blueprint-project-board`](../blueprint-project-board).
 
-It requests only `projects.read` and `issues.read` (`src/service-requirement.json`). The gadget server (`src/server/proxy.js`) has **no write methods**, and never calls `$createViewerAssertion`. Tests assert both of these.
+It requests only `projects.read` and `issues.read` (`src/service-requirement.json`). The gadget server (`src/server/proxy.js`) has **no write methods** (no `syncPush` either), and never calls `$createViewerAssertion`. Tests assert both of these. The report reads by sync pull (`syncPull` from its cookie, canonical-postgres-datastore plan §6 and §9), so a poke costs one delta read rather than a full re-read.
 
 The user guide that ships inside the gadget is [`src/README.md`](src/README.md).
 
@@ -10,9 +10,10 @@ The user guide that ships inside the gadget is [`src/README.md`](src/README.md).
 
 | Path | What |
 | --- | --- |
-| `src/client/report.js` | Pure loading (paged, newest first, up to 2,000), filtering, aggregation, CSV with formula-injection guard |
-| `src/client/app.js` | Plain-DOM UI and charts |
-| `src/client/sync.js`, `src/server/feed.js` | Same live/polling machinery as the board, polling every 60 s |
+| `src/client/report.js` | Pure filtering, aggregation, CSV with formula-injection guard; paged loading for the server-side CSV export |
+| `src/client/app.js` | Plain-DOM UI and charts over a pull-only `SyncClient` (`@records/sync-client`, bundled by relative path) |
+| `src/client/transport.js` | Read-only SyncClient transport: `syncPull` through the gadget server; push always refused locally |
+| `src/client/pokes.js`, `src/server/pokes.js` | Same poke machinery as the board: the hook (`deliver: "pokes"`) records the latest head; tabs poll it every 3 s when live and pull by seq, or pull every 60 s until live |
 | `src/server/index.js` | `Gadget` DO plus `ExportHandler` (server CSV of all issues, the fallback when the iframe blocks downloads) |
 
 ## Commands

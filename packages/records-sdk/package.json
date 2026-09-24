@@ -10,7 +10,9 @@
   },
   "scripts": {
     "types:check": "tsc --noEmit",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "generate": "node scripts/generate.ts",
+    "test:python": "python3 -m unittest discover -s python/tests -t python"
   },
   "dependencies": {},
   "devDependencies": {

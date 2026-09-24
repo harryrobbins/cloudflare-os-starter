@@ -182,7 +182,8 @@ describe("privileges", () => {
         FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
        WHERE n.nspname = 'records' AND p.prosecdef`;
     expect(rows.map((r) => r.proname).toSorted()).toEqual([
-      "can_any", "create_datastore_clock", "ensure_journal_partitions", "require_journal_entry", "resolve_credential", "resolve_identity",
+      "can_any", "claim_delegated_token", "create_datastore_clock", "ensure_journal_partitions", "prune_delegated_token_uses", "require_journal_entry",
+      "resolve_credential", "resolve_identity",
     ]);
     for (const r of rows) {
       expect(r.public_exec).toBe(false);

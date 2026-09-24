@@ -1,8 +1,6 @@
 // @ts-check
-// Board state derived from Records reads. Pure: no DOM, no RPC.
-//
-// Records delivery is at-least-once and responses can race, so every merge keeps the higher
-// revision of an issue and ignores obsolete ones.
+// Board state derived from the SyncClient's view (server state with local guesses replayed on top).
+// Pure: no DOM, no RPC.
 
 /** @typedef {import("../../../gatekeeper-records/src/vendor/types.d.ts").RecordsIssue} Issue */
 /** @typedef {import("../../../gatekeeper-records/src/vendor/types.d.ts").RecordsWorkflow} Workflow */
@@ -11,53 +9,35 @@
 export const PRIORITIES = /** @type {const} */ (["urgent", "high", "medium", "low", "none"]);
 export const PRIORITY_LABELS = { urgent: "Urgent", high: "High", medium: "Medium", low: "Low", none: "No priority" };
 
-/** Loads at most this many issues per project (10 pages of 100). */
-export const MAX_ISSUES = 1000;
+/** @typedef {import("../../../gatekeeper-records/src/vendor/types.d.ts").RecordsProject} Project */
+/** @typedef {import("../../../gatekeeper-records/src/vendor/types.d.ts").RecordsComment} Comment */
+/** @typedef {{scan(prefix: string): Array<[string, any]>, get(key: string): any}} View */
 
-/**
- * Merges one issue into the map unless an equal or newer revision is already held.
- * @param {Map<string, Issue>} issues
- * @param {Issue} issue
- * @returns {boolean} whether the map changed
- */
-export function mergeIssue(issues, issue) {
-  const held = issues.get(issue.id);
-  if (held && held.revision >= issue.revision) return false;
-  issues.set(issue.id, issue);
-  return true;
+/** Projects in the synced view, by key. @param {View} view @returns {Project[]} */
+export function projectsIn(view) {
+  return view.scan("project/").map(([, p]) => /** @type {Project} */ (p)).toSorted((a, b) => a.key.localeCompare(b.key));
 }
 
-/**
- * Replaces the map with a full snapshot, keeping any held copy that is newer than the snapshot's
- * (a write result can arrive before a list page that was read earlier).
- * @param {Map<string, Issue>} held
- * @param {Issue[]} snapshot
- */
-export function replaceIssues(held, snapshot) {
+/** One project's issues in the synced view (local guesses included). @param {View} view @param {string|null} projectId */
+export function issuesIn(view, projectId) {
   /** @type {Map<string, Issue>} */
-  const next = new Map();
-  for (const issue of snapshot) {
-    const old = held.get(issue.id);
-    next.set(issue.id, old && old.revision > issue.revision ? old : issue);
+  const out = new Map();
+  for (const [, v] of view.scan("issue/")) {
+    const issue = /** @type {Issue} */ (v);
+    if (issue.projectId === projectId) out.set(issue.id, issue);
   }
-  return next;
+  return out;
 }
 
-/**
- * Reads every page of a project's issues, up to MAX_ISSUES.
- * @param {(input: any) => Promise<{items: Issue[], nextCursor: string|null}>} listIssues
- * @param {string} projectId
- */
-export async function loadAllIssues(listIssues, projectId) {
-  /** @type {Issue[]} */
-  const items = [];
-  let cursor = /** @type {string|null} */ (null);
-  do {
-    const page = await listIssues({ projectId, order: "number_asc", limit: 100, ...(cursor ? { cursor } : {}) });
-    items.push(...page.items);
-    cursor = page.nextCursor;
-  } while (cursor && items.length < MAX_ISSUES);
-  return { items: items.slice(0, MAX_ISSUES), truncated: Boolean(cursor) || items.length > MAX_ISSUES };
+/** An issue's comments, oldest first. @param {View} view @param {string} issueId @returns {Comment[]} */
+export function commentsIn(view, issueId) {
+  return view.scan("comment/").map(([, c]) => /** @type {Comment} */ (c)).filter((c) => c.issueId === issueId)
+    .toSorted((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+}
+
+/** A local create the server has not numbered yet (key `ENG-?`). @param {Pick<Issue, "number">} issue */
+export function isProvisional(issue) {
+  return issue.number === 0;
 }
 
 /** @param {Workflow} workflow */
@@ -98,7 +78,9 @@ export function columns(workflow, issues, filter = {}) {
     (byState.get(issue.state) ?? other).push(issue);
   }
   const rank = (/** @type {Issue} */ i) => PRIORITIES.indexOf(i.priority);
-  const order = (/** @type {Issue} */ a, /** @type {Issue} */ b) => rank(a) - rank(b) || a.number - b.number;
+  // Unnumbered local creates (number 0) go after numbered issues of the same priority.
+  const num = (/** @type {Issue} */ i) => (i.number === 0 ? Infinity : i.number);
+  const order = (/** @type {Issue} */ a, /** @type {Issue} */ b) => rank(a) - rank(b) || num(a) - num(b) || a.id.localeCompare(b.id);
   const cols = states.map((state) => ({ state, issues: (byState.get(state.key) ?? []).toSorted(order) }));
   if (other.length) {
     cols.push({ state: { key: "__other", name: "Other states", category: "todo", position: Infinity }, issues: other.toSorted(order) });
@@ -118,7 +100,7 @@ export function knownPeople(issues, members = []) {
   const people = new Map(members.map((m) => [m.id, m]));
   for (const issue of issues) {
     for (const p of [issue.assignee, issue.createdBy, issue.updatedBy]) {
-      if (p && p.kind === "human" && !people.has(p.id)) people.set(p.id, p);
+      if (p && p.kind === "human" && p.displayName && !people.has(p.id)) people.set(p.id, p);
     }
   }
   return [...people.values()].toSorted((a, b) => a.displayName.localeCompare(b.displayName));

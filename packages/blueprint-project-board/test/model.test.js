@@ -1,19 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { allowedTargets, capabilities, columns, conflictingFields, loadAllIssues, mergeIssue, missingScopes, replaceIssues } from "../src/client/model.js";
-import { FakeRecords, WORKFLOW } from "./fake-records.js";
+import { allowedTargets, capabilities, columns, commentsIn, conflictingFields, isProvisional, issuesIn, missingScopes, projectsIn } from "../src/client/model.js";
 
 const issue = (id, revision, extra = {}) => ({ id, revision, number: 1, key: id, title: id, state: "todo", priority: "none", assignee: null, ...extra });
 
+const WORKFLOW = {
+  states: [
+    { key: "todo", name: "To do", category: "todo", position: 1 },
+    { key: "doing", name: "In progress", category: "in_progress", position: 2 },
+    { key: "done", name: "Done", category: "done", position: 3 },
+  ],
+  transitions: [{ from: "todo", to: "doing" }, { from: "doing", to: "todo" }, { from: "doing", to: "done" }, { from: "done", to: "doing" }],
+};
+
 describe("model", () => {
-  it("ignores obsolete revisions", () => {
-    const m = new Map();
-    expect(mergeIssue(m, issue("a", 3))).toBe(true);
-    expect(mergeIssue(m, issue("a", 2, { title: "old" }))).toBe(false);
-    expect(mergeIssue(m, issue("a", 3, { title: "dup" }))).toBe(false);
-    expect(m.get("a").revision).toBe(3);
-    const next = replaceIssues(m, [issue("a", 1), issue("b", 1)]);
-    expect(next.get("a").revision).toBe(3);
-    expect([...next.keys()]).toEqual(["a", "b"]);
+  it("reads projects, issues and comments from the synced view", () => {
+    const entries = new Map([
+      ["project/b", { id: "b", key: "OPS" }], ["project/a", { id: "a", key: "ENG" }],
+      ["issue/1", issue("1", 1, { projectId: "a" })], ["issue/2", issue("2", 1, { projectId: "b" })],
+      ["comment/y", { id: "y", issueId: "1", createdAt: "2026-09-02" }], ["comment/x", { id: "x", issueId: "1", createdAt: "2026-09-01" }],
+      ["comment/z", { id: "z", issueId: "2", createdAt: "2026-09-01" }],
+    ]);
+    const view = { get: (k) => entries.get(k), scan: (p) => [...entries].filter(([k]) => k.startsWith(p)).toSorted(([x], [y]) => (x < y ? -1 : 1)) };
+    expect(projectsIn(view).map((p) => p.key)).toEqual(["ENG", "OPS"]);
+    expect([...issuesIn(view, "a").keys()]).toEqual(["1"]);
+    expect(commentsIn(view, "1").map((c) => c.id)).toEqual(["x", "y"]);
+  });
+
+  it("puts unnumbered local creates after numbered issues", () => {
+    const cols = columns(WORKFLOW, [issue("new", 1, { number: 0, key: "ENG-?" }), issue("b", 1, { number: 2 }), issue("a", 1, { number: 1 })]);
+    expect(cols[0].issues.map((i) => i.id)).toEqual(["a", "b", "new"]);
+    expect(isProvisional({ number: 0 })).toBe(true);
+    expect(isProvisional({ number: 3 })).toBe(false);
   });
 
   it("offers only workflow transitions", () => {
@@ -25,14 +42,6 @@ describe("model", () => {
     const cols = columns(WORKFLOW, [issue("a", 1), issue("b", 1, { state: "gone" })]);
     expect(cols.map((c) => c.state.key)).toEqual(["todo", "doing", "done", "__other"]);
     expect(cols[3].issues.map((i) => i.id)).toEqual(["b"]);
-  });
-
-  it("pages through issues", async () => {
-    const records = new FakeRecords({ issues: 230 });
-    const { items, truncated } = await loadAllIssues((i) => records.listIssues(i), "prj-1");
-    expect(items).toHaveLength(230);
-    expect(truncated).toBe(false);
-    expect(records.calls.filter((c) => c.name === "listIssues")).toHaveLength(3);
   });
 
   it("derives capabilities from scopes and lifecycle", () => {

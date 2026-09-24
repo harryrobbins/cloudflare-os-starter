@@ -1,11 +1,17 @@
 // @ts-check
-// The read-only project report. It calls only read methods on the gadget server, which itself has
-// no write path to Records.
+// The read-only project report. It keeps a synced copy of the datastore with a SyncClient that only
+// pulls (by seq, from its cookie) through the gadget server, which itself has no write path to
+// Records. A poke, a timer until live updates are on, or Refresh triggers a pull.
 
 import { h, option, relativeTime } from "./dom.js";
-import { PRIORITIES, PRIORITY_LABELS, filterIssues, loadIssues, recentlyUpdated, summarise, toCsv } from "./report.js";
-import { createSync } from "./sync.js";
+import { PRIORITIES, PRIORITY_LABELS, filterIssues, recentlyUpdated, summarise, toCsv } from "./report.js";
+import { readOnlyTransport } from "./transport.js";
+import { createPokeChannel } from "./pokes.js";
+import { SyncClient } from "../../../records-sync-client/src/index.ts";
 import { errorCode, errorDetail } from "../shared/records.js";
+
+/** Safety pull while live updates are on (pokes are best effort). */
+const SAFETY_PULL_MS = 120_000;
 
 /** @typedef {import("./report.js").Issue} Issue */
 
@@ -96,38 +102,73 @@ export function barChart(title, rows) {
         h("tbody", null, rows.map((r) => h("tr", null, h("td", null, r.label), h("td", { class: "num" }, String(r.count))))))) : null);
 }
 
+/** @param {string|null} code */
+function phaseForCode(code) {
+  if (code === "not_connected") return "not_connected";
+  if (code === "forbidden" || code === "unauthenticated") return "forbidden";
+  if (code === "payload_too_large") return "too_large";
+  return "error";
+}
+
 /**
  * @param {{gadget: any, root: HTMLElement, prefs?: {load(): any, save(v: any): void},
- *   download?: (name: string, text: string) => void, autoStart?: boolean}} options
+ *   download?: (name: string, text: string) => void, autoStart?: boolean,
+ *   syncOptions?: Record<string, any>, pokeOptions?: Record<string, any>}} options
  */
 export function createReportApp(options) {
   const { gadget, root } = options;
   const prefs = options.prefs ?? windowNameStore;
   const saved = prefs.load() ?? {};
   const state = {
-    /** @type {"loading"|"not_connected"|"incompatible"|"forbidden"|"no_read"|"error"|"ready"} */
+    /** @type {"loading"|"not_connected"|"incompatible"|"forbidden"|"no_read"|"too_large"|"error"|"ready"} */
     phase: "loading",
     errorMessage: "",
-    staleError: "",
     /** @type {any} */ setup: null,
     /** @type {any} */ binding: null,
     /** @type {any[]} */ projects: [],
     /** @type {any} */ workflow: null,
     /** @type {Issue[]} */ issues: [],
-    truncated: false,
     view: { projectId: "", state: "", priority: "", assigneeId: "", ...saved.view },
     sync: { live: "off", lastRefresh: /** @type {number|null} */ (null), error: /** @type {string|null} */ (null) },
     notice: "",
   };
 
-  const sync = createSync({
+  /** @type {SyncClient|null} */
+  let client = null;
+  let started = false;
+  /** @type {(() => void)[]} */
+  const cleanups = [];
+
+  const pokes = createPokeChannel({
     gadget,
-    onRefetchAll: () => load({ quiet: true }),
-    // Any change can move every count, so a report simply re-reads.
-    onChanges: () => load({ quiet: true }),
-    onStatus: (s) => { state.sync = s; render(); },
+    onStatus: (s) => { state.sync.live = s.live; render(); },
     isHidden: () => document.hidden,
+    ...options.pokeOptions,
   });
+
+  function createClient() {
+    const c = new SyncClient({
+      transport: readOnlyTransport(gadget),
+      // Never used: the report makes no changes, so nothing is predicted in its name.
+      principal: { id: "project-report", displayName: "Project report", kind: "service" },
+      onPoke: (handler) => pokes.subscribe(handler),
+      safetyPullIntervalMs: SAFETY_PULL_MS,
+      ...options.syncOptions,
+    });
+    cleanups.push(
+      // Any change can move every count, so the report re-derives everything from the view.
+      c.subscribe(() => { if (["loading", "ready", "error", "forbidden", "too_large"].includes(state.phase)) evaluate(); }),
+      c.on("status", (st) => {
+        const before = state.sync.error;
+        if (!st.pulling) {
+          state.sync.error = st.lastError?.message ?? null;
+          if (!st.lastError) state.sync.lastRefresh = Date.now();
+        }
+        if (before !== state.sync.error || !st.pulling) render();
+      }),
+    );
+    return c;
+  }
 
   async function load({ quiet = false } = {}) {
     if (!quiet) { state.phase = "loading"; render(); }
@@ -141,19 +182,37 @@ export function createReportApp(options) {
         state.phase = "incompatible"; render(); return;
       }
       if (!["projects.read", "issues.read"].every((s) => setup.binding.scopes.includes(s))) { state.phase = "no_read"; render(); return; }
-      const [projects, workflow, loaded] = await Promise.all([
-        gadget.listProjects(), gadget.getWorkflow(), loadIssues((input) => gadget.listIssues(input)),
-      ]);
-      Object.assign(state, { projects, workflow, issues: loaded.items, truncated: loaded.truncated, phase: "ready", staleError: "" });
-      if (state.view.projectId && !projects.some((/** @type {any} */ p) => p.id === state.view.projectId)) state.view.projectId = "";
-      render();
+      client ??= createClient();
+      if (!started) { started = true; await client.start(); } else await client.pull();
+      evaluate();
     } catch (err) {
-      const code = errorCode(err);
-      const phase = code === "not_connected" ? "not_connected" : code === "forbidden" || code === "unauthenticated" ? "forbidden" : "error";
-      if (state.phase === "ready" && phase === "error") state.staleError = errorDetail(err);
-      else { state.phase = phase; state.errorMessage = errorDetail(err); }
+      state.phase = /** @type {any} */ (phaseForCode(errorCode(err)));
+      state.errorMessage = errorDetail(err);
       render();
     }
+  }
+
+  /** Derives the report's data from the synced view. */
+  function evaluate() {
+    if (!client) return;
+    if (client.cookie === null) {
+      const e = client.status().lastError;
+      state.phase = /** @type {any} */ (phaseForCode(e?.code ?? null));
+      state.errorMessage = e?.message ?? "The report could not be loaded.";
+      render();
+      return;
+    }
+    const projects = client.scan("project/").map(([, p]) => /** @type {any} */ (p)).toSorted((a, b) => a.key.localeCompare(b.key));
+    const workflow = client.get("meta/workflow");
+    const issues = client.scan("issue/").map(([, i]) => /** @type {Issue} */ (i));
+    Object.assign(state, { projects, workflow, issues, phase: "ready" });
+    if (state.view.projectId && !projects.some((/** @type {any} */ p) => p.id === state.view.projectId)) state.view.projectId = "";
+    render();
+  }
+
+  function refresh() {
+    if (client && started) void client.pull();
+    else void load();
   }
 
   function currentIssues() { return filterIssues(state.issues, state.view); }
@@ -199,16 +258,15 @@ export function createReportApp(options) {
       h("span", { class: "spacer" }),
       state.phase === "ready" ? h("span", { class: "muted", role: "status" }, live + (state.sync.lastRefresh ? ` · updated ${relativeTime(new Date(state.sync.lastRefresh).toISOString())}` : "")) : null,
       state.phase === "ready" && state.sync.live === "off" ? h("button", { class: "link", onclick: async () => {
-        try { await sync.requestLive(); } catch (err) { state.notice = `Live updates could not be requested: ${errorDetail(err)}`; render(); }
+        try { await pokes.requestLive(); } catch (err) { state.notice = `Live updates could not be requested: ${errorDetail(err)}`; render(); }
       } }, "Turn on live updates") : null,
-      state.phase !== "loading" ? h("button", { "aria-label": "Refresh from the datastore", onclick: () => void sync.refreshNow().catch(() => {}) }, "Refresh") : null);
+      state.phase !== "loading" ? h("button", { "aria-label": "Refresh from the datastore", onclick: () => refresh() }, "Refresh") : null);
   }
 
   function banners() {
     const out = [];
     if (state.phase === "ready" && state.binding?.datastore.lifecycle === "archived") out.push(h("div", { class: "banner warn", role: "status" }, "This datastore is archived. Its figures no longer change."));
-    if (state.staleError) out.push(h("div", { class: "banner bad", role: "alert" }, `The last refresh failed (${state.staleError}). Figures may be out of date.`));
-    if (state.truncated) out.push(h("div", { class: "banner", role: "status" }, "This datastore has more than 2,000 issues. The report covers the 2,000 most recently updated."));
+    if (state.phase === "ready" && state.sync.error) out.push(h("div", { class: "banner bad", role: "alert" }, `The last refresh failed (${state.sync.error}). Figures may be out of date.`));
     if (state.notice) out.push(h("div", { class: "banner warn", role: "status" }, state.notice));
     return out;
   }
@@ -225,6 +283,9 @@ export function createReportApp(options) {
         h("p", null, "Records checks your own membership of the datastore. Having this report shared with you does not grant access to its records. Ask a datastore owner or administrator to add you as a reader."), retry);
       case "no_read": return h("div", { class: "state-panel", role: "alert" }, h("h2", null, "This connection cannot read issues"),
         h("p", null, "Reconnect the datastore with projects.read and issues.read."));
+      case "too_large": return h("div", { class: "state-panel", role: "alert" }, h("h2", null, "This datastore is too large for the report"),
+        h("p", null, "The report keeps a synced copy of every project and issue, and this datastore has more than that copy allows. The gadget menu → Export → CSV (all issues) still exports every issue."),
+        state.errorMessage ? h("p", { class: "muted" }, state.errorMessage) : null);
       default: return h("div", { class: "state-panel", role: "alert" }, h("h2", null, "The Records service is unavailable"),
         h("p", null, state.errorMessage || "The report could not be loaded."), h("button", { onclick: () => void load() }, "Try again"));
     }
@@ -269,10 +330,16 @@ export function createReportApp(options) {
   render();
   let ready = Promise.resolve();
   if (options.autoStart !== false) {
-    ready = sync.start().catch(() => {});
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) void sync.wake(); });
+    ready = load();
+    const onVisible = () => { if (!document.hidden) void pokes.wake(); };
+    document.addEventListener("visibilitychange", onVisible);
+    cleanups.push(() => document.removeEventListener("visibilitychange", onVisible));
   }
-  return { state, ready, load, setView, downloadCsv, render, destroy() { sync.stop(); style.remove(); root.replaceChildren(); } };
+  return {
+    state, ready, load, setView, downloadCsv, render, refresh, pokes,
+    get client() { return client; },
+    destroy() { client?.close(); for (const fn of cleanups.splice(0)) fn(); style.remove(); root.replaceChildren(); },
+  };
 }
 
 /** @param {string} name @param {string} text */

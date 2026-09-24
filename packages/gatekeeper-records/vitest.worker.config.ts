@@ -5,6 +5,7 @@
 
 import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
 import capnwebValidate from "capnweb-validate/vite";
+import { calculateJwkThumbprint, exportJWK, generateKeyPair } from "jose";
 import { defineConfig } from "vitest/config";
 
 import { startTestCluster } from "../records-schema/src/testing.ts";
@@ -13,6 +14,11 @@ import { seedWorkerdWorld } from "./__tests__/workerd-seed.ts";
 const cluster = await startTestCluster();
 const { db, ...seed } = await seedWorkerdWorld(cluster.superuserUrl);
 const appUrl = db.appUrl;
+// A delegated-token signing key for this run, in the RECORDS_DELEGATION_SIGNING_KEY format that
+// @records/identity generateSigningKey() produces (built with jose here: see workerd-seed.ts on
+// why config-time code avoids the workspace's `.js`-suffixed TypeScript).
+const signing = await exportJWK((await generateKeyPair("ES256", { extractable: true })).privateKey);
+const signingKey = JSON.stringify({ ...signing, kid: await calculateJwkThumbprint({ kty: "EC", crv: "P-256", x: signing.x!, y: signing.y! }), alg: "ES256" });
 const publisherUrl = db.publisherUrl;
 // Stopped by workerd-teardown.ts (a globalSetup in this same process).
 (globalThis as { __recordsTestCluster?: { stop(): Promise<void> } }).__recordsTestCluster = cluster;
@@ -41,6 +47,7 @@ export default defineConfig({
           CF_ACCESS_AUD: "workshop-aud",
           RECORDS_API_ACCESS_AUD: "api-aud",
           PUBLIC_BASE_URL: "https://records.example.test",
+          RECORDS_DELEGATION_SIGNING_KEY: signingKey,
           TEST_SEED: JSON.stringify(seed),
         },
       },

@@ -1,11 +1,17 @@
 // Queue consumer: validate each change event, group by datastore, hand each group to that
 // datastore's feed. Invalid messages are acknowledged and logged (retrying cannot fix them);
 // delivery failures retry with backoff and eventually land in the dead-letter queue.
+//
+// The same batch also triggers outbound webhook delivery for its datastores (`webhooks`, optional).
+// That is best effort and never affects acknowledgement: webhooks keep their own delivery state,
+// retries and dead-lettering in Postgres, and the cron runs them as the backstop.
 
 import { ChangeEventSchema, toNotification, type ChangeNotification } from "@records/contracts";
 
 export interface FeedDirectory {
   deliver(datastoreId: string, notifications: ChangeNotification[]): Promise<unknown>;
+  /** Run outbound webhook delivery for these datastores. Errors are logged and swallowed. */
+  webhooks?(datastoreIds: string[]): Promise<unknown>;
 }
 
 export async function consumeChanges(batch: MessageBatch<unknown>, feeds: FeedDirectory): Promise<void> {
@@ -32,4 +38,11 @@ export async function consumeChanges(batch: MessageBatch<unknown>, feeds: FeedDi
       }
     }),
   );
+  if (feeds.webhooks && groups.size > 0) {
+    try {
+      await feeds.webhooks([...groups.keys()]);
+    } catch (err) {
+      console.warn(JSON.stringify({ event: "records.webhook.run_failed", error: err instanceof Error ? err.name : "error" }));
+    }
+  }
 }

@@ -66,14 +66,17 @@ textarea { resize: vertical; min-height: 70px; width: 100%; }
 .pb-card .title { font-weight: 550; overflow-wrap: anywhere; }
 .pb-card .meta { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin-top: 4px; }
 .pb-card .move { margin-top: 6px; width: 100%; font-size: 12px; }
-.pb-card.busy { opacity: .75; }
+.pb-card.provisional { border-style: dashed; }
+.pb-card.provisional .key::after { content: " (not numbered yet)"; }
+.pb-header .unsynced { font-size: 12px; color: var(--warn); background: var(--warn-bg); border-radius: 10px; padding: 1px 8px; }
+.comments li.sending { opacity: .7; border: 1px dashed var(--line); }
 .prio { font-size: 11px; padding: 0 6px; border-radius: 10px; border: 1px solid var(--line); }
 .prio.urgent, .prio.high { border-color: var(--bad); color: var(--bad); }
 .chip { font-size: 11px; padding: 1px 7px; border-radius: 10px; display: inline-block; }
 .chip.saving { background: var(--surface-2); }
 .chip.pending { background: var(--warn-bg); color: var(--warn); }
 .chip.applied { background: var(--ok-bg); color: var(--ok); }
-.chip.conflict, .chip.rejected, .chip.unknown { background: var(--bad-bg); color: var(--bad); }
+.chip.conflict, .chip.rejected { background: var(--bad-bg); color: var(--bad); }
 
 .pb-detail { flex: 0 0 380px; max-width: 100%; border-left: 1px solid var(--line); background: var(--surface); overflow-y: auto; padding: 14px 16px 24px; }
 .pb-detail h2:focus { outline: none; }
@@ -96,7 +99,7 @@ textarea { resize: vertical; min-height: 70px; width: 100%; }
 .pb-writes .write { background: var(--surface); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 8px 10px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 4px; }
 .pb-writes .write[data-status=applied] { border-left-color: var(--ok); }
 .pb-writes .write[data-status=pending] { border-left-color: var(--warn); }
-.pb-writes .write[data-status=conflict], .pb-writes .write[data-status=rejected], .pb-writes .write[data-status=unknown] { border-left-color: var(--bad); }
+.pb-writes .write[data-status=conflict], .pb-writes .write[data-status=rejected] { border-left-color: var(--bad); }
 .pb-writes .write .actions { display: flex; gap: 8px; }
 .pb-writes .write .what { font-weight: 550; overflow-wrap: anywhere; }
 

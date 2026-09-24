@@ -8,9 +8,13 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "bin": {
+    "records-node": "./bin/records-node.mjs"
+  },
   "scripts": {
-    "types:check": "tsc --noEmit",
-    "test:run": "vitest run"
+    "types:check": "tsc --noEmit && tsc --noEmit -p tsconfig.workerd.json",
+    "test:run": "vitest run",
+    "start": "node bin/records-node.mjs"
   },
   "dependencies": {
     "@records/contracts": "workspace:*",

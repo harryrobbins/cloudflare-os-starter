@@ -23,8 +23,7 @@ import type {
   Workflow,
 } from "@records/contracts";
 
-import type { RecordsService } from "@records/core";
-import type { Whoami } from "@records/core";
+import { WebhookService, type CreatedWebhook, type RecordsService, type Webhook, type WebhookDelivery, type Whoami } from "@records/core";
 
 /** What the management page can do. Mirrors the domain; see packages/records-contracts. */
 export interface DataManagementApi {
@@ -56,16 +55,26 @@ export interface DataManagementApi {
   getWorkflow(datastoreId: string): Promise<Workflow>;
   /** The read-only record inspector. Business edits go through module operations in gadgets. */
   listIssues(datastoreId: string, input: unknown): Promise<Page<Issue>>;
+  // Outbound webhooks. All need bindings.manage (webhooks are integrations); the signing secret is
+  // returned by createWebhook only. A ping is queued and sent by the next delivery run.
+  listWebhooks(datastoreId: string): Promise<Webhook[]>;
+  createWebhook(datastoreId: string, input: unknown): Promise<CreatedWebhook>;
+  setWebhookEnabled(datastoreId: string, webhookId: string, enabled: boolean): Promise<Webhook>;
+  deleteWebhook(datastoreId: string, webhookId: string): Promise<void>;
+  pingWebhook(datastoreId: string, webhookId: string): Promise<WebhookDelivery>;
+  listWebhookDeliveries(datastoreId: string, webhookId: string): Promise<WebhookDelivery[]>;
 }
 
 export class DataManagement extends RpcTarget implements DataManagementApi {
   readonly #service: RecordsService;
   readonly #caller: CallerContext;
   readonly #apiBase: string;
+  readonly #webhooks: WebhookService;
 
   constructor(service: RecordsService, account: { orgId: string; principalId: string }, apiBase: string) {
     super();
     this.#service = service;
+    this.#webhooks = new WebhookService(service.db);
     this.#caller = { orgId: account.orgId, principalId: account.principalId, via: "management" };
     this.#apiBase = apiBase;
   }
@@ -99,4 +108,13 @@ export class DataManagement extends RpcTarget implements DataManagementApi {
   createProject(id: string, input: unknown) { return this.#service.projects.createProject(this.#caller, id, input); }
   getWorkflow(id: string) { return this.#service.projects.getWorkflow(this.#caller, id); }
   listIssues(id: string, input: unknown) { return this.#service.projects.listIssues(this.#caller, id, input); }
+  listWebhooks(id: string) { return this.#webhooks.listWebhooks(this.#caller, id); }
+  createWebhook(id: string, input: unknown) { return this.#webhooks.createWebhook(this.#caller, id, input); }
+  setWebhookEnabled(id: string, webhookId: string, enabled: boolean) {
+    if (typeof enabled !== "boolean") throw new Error("validation_failed: enabled must be true or false");
+    return this.#webhooks.setWebhookEnabled(this.#caller, id, webhookId, enabled);
+  }
+  deleteWebhook(id: string, webhookId: string) { return this.#webhooks.deleteWebhook(this.#caller, id, webhookId); }
+  pingWebhook(id: string, webhookId: string) { return this.#webhooks.pingWebhook(this.#caller, id, webhookId); }
+  listWebhookDeliveries(id: string, webhookId: string) { return this.#webhooks.listDeliveries(this.#caller, id, webhookId); }
 }

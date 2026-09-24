@@ -11,9 +11,10 @@ import { ConnectionsTab } from './tabs/ConnectionsTab'
 import { CredentialsTab } from './tabs/CredentialsTab'
 import { MembersTab } from './tabs/MembersTab'
 import { RecordsTab } from './tabs/RecordsTab'
+import { WebhooksTab } from './tabs/WebhooksTab'
 import { Badge, Btn, ConfirmDialog, ErrorNotice, formatDate, Loading, Notice, Tabs, useAction } from './ui'
 
-type TabKey = 'overview' | 'members' | 'connections' | 'credentials' | 'audit' | 'records'
+type TabKey = 'overview' | 'members' | 'connections' | 'credentials' | 'webhooks' | 'audit' | 'records'
 
 export type DatastoreView = DatastoreSummary | Detail
 
@@ -60,6 +61,7 @@ export function DatastoreDetail({
   if (perms.has('members.manage')) tabs.push({ key: 'members', label: 'Members' })
   if (perms.has('bindings.manage')) tabs.push({ key: 'connections', label: 'Connections' })
   if (perms.has('credentials.manage')) tabs.push({ key: 'credentials', label: 'Credentials' })
+  if (perms.has('bindings.manage')) tabs.push({ key: 'webhooks', label: 'Webhooks' })
   if (perms.has('audit.read')) tabs.push({ key: 'audit', label: 'Audit' })
   if (perms.has('projects.read')) tabs.push({ key: 'records', label: 'Records' })
   const active = tabs.some((t) => t.key === tab) ? tab : 'overview'
@@ -100,6 +102,7 @@ export function DatastoreDetail({
         {active === 'members' ? <MembersTab ds={ds} perms={perms} myPrincipalId={myPrincipalId} onChanged={refresh} /> : null}
         {active === 'connections' ? <ConnectionsTab ds={ds} perms={perms} /> : null}
         {active === 'credentials' ? <CredentialsTab ds={ds} perms={perms} /> : null}
+        {active === 'webhooks' ? <WebhooksTab ds={ds} /> : null}
         {active === 'audit' ? <AuditTab ds={ds} /> : null}
         {active === 'records' ? <RecordsTab ds={ds} perms={perms} /> : null}
       </div>

@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createReportApp } from "../src/client/app.js";
 import { createReadOnlyProxy } from "../src/server/proxy.js";
-import { ChangeFeed } from "../src/server/feed.js";
+import { PokeLog } from "../src/server/pokes.js";
 import { WRITES, fakeGadget, fakeSession, memoryKv } from "./fake.js";
 
 let app;
@@ -13,7 +13,7 @@ async function mount(session, download = vi.fn()) {
   const root = document.createElement("div");
   document.body.replaceChildren(root);
   const gadget = fakeGadget(session);
-  app = createReportApp({ gadget, root, prefs: memoryPrefs(), download });
+  app = createReportApp({ gadget, root, prefs: memoryPrefs(), download, pokeOptions: { liveTickMs: 10, pollMs: 60_000 } });
   await app.ready;
   return { root, gadget, download };
 }
@@ -21,8 +21,8 @@ const text = (root) => root.textContent.replace(/\s+/g, " ");
 
 describe("read-only report", () => {
   it("has no write path on the gadget server", () => {
-    const proxy = createReadOnlyProxy(() => ({}), new ChangeFeed(memoryKv()), async () => ({}));
-    for (const w of [...WRITES, "getWriteOutcome"]) expect(proxy).not.toHaveProperty(w);
+    const proxy = createReadOnlyProxy(() => ({}), new PokeLog(memoryKv()), async () => ({}));
+    for (const w of [...WRITES, "getWriteOutcome", "syncApprovals"]) expect(proxy).not.toHaveProperty(w);
   });
 
   it("renders tiles, charts and recent issues without ever calling a write method", async () => {
@@ -44,12 +44,44 @@ describe("read-only report", () => {
     expect(name).toBe("OPS-issues.csv");
     expect(csv.trim().split("\r\n")).toHaveLength(3);
     [...root.querySelectorAll("button")].find((b) => b.textContent === "Turn on live updates")?.click();
+    const pullsBefore = session.reads.filter((r) => r.syncPull !== undefined).length;
     root.querySelector('button[aria-label="Refresh from the datastore"]').click();
-    await vi.waitFor(() => expect(session.reads.filter((r) => r === "listIssues").length).toBeGreaterThan(1));
-    await gadget.exportCsv();
+    await vi.waitFor(() => expect(session.reads.filter((r) => r.syncPull !== undefined).length).toBeGreaterThan(pullsBefore));
+    expect(await gadget.exportCsv()).toContain("ENG-1");
 
     for (const w of WRITES) expect(session[w]).not.toHaveBeenCalled();
     expect(gadget.$createViewerAssertion).not.toHaveBeenCalled();
+  });
+
+  it("reads by sync pull, not by listing issues", async () => {
+    const session = fakeSession();
+    await mount(session);
+    expect(session.reads).toContainEqual({ syncPull: null });
+    expect(session.reads).not.toContain("listIssues");
+  });
+
+  it("updates on a poke by pulling from its cookie", async () => {
+    const session = fakeSession();
+    const { root, gadget } = await mount(session);
+    [...root.querySelectorAll("button")].find((b) => b.textContent === "Turn on live updates").click();
+    await vi.waitFor(() => expect(session.hooks).toHaveLength(1));
+    expect(session.hooks[0].options).toEqual({ deliver: "pokes" });
+    const cookie = app.client.cookie;
+    // Someone moves the only in-progress issue to done: Open 4 → 3, Done 2 → 3.
+    session.edit("i3", { state: "done" });
+    expect(gadget.pokes.summary()).toMatchObject({ live: "active", head: session.seq });
+    await vi.waitFor(() => expect([...root.querySelectorAll(".tile .value")].map((e) => e.textContent)).toEqual(["6", "3", "3", "1"]));
+    expect(root.querySelector('section[aria-label="By state"] ul.bars').getAttribute("aria-label")).toBe("By state: To do 3, In progress 0, Done 3");
+    expect(session.reads.filter((r) => r.syncPull !== undefined).at(-1)).toEqual({ syncPull: cookie });
+    expect(root.textContent).toContain("Live updates on");
+  });
+
+  it("explains a datastore too large to sync", async () => {
+    const session = fakeSession();
+    session.syncPull = async () => { throw new Error("payload_too_large: This datastore has more data than sync supports; use the paged API."); };
+    const { root } = await mount(session);
+    expect(text(root)).toContain("This datastore is too large for the report");
+    expect(text(root)).toContain("Export → CSV (all issues)");
   });
 
   it("explains forbidden access and a missing connection", async () => {

@@ -1,0 +1,13 @@
+[project]
+name = "records-sdk"
+version = "1.0.0"
+description = "Client for the Records native API, generated from its OpenAPI document (standard library only)."
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["records_sdk"]

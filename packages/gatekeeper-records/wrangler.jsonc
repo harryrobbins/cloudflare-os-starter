@@ -57,6 +57,14 @@
     "RECORDS_API_ACCESS_AUD": "",
     "PUBLIC_BASE_URL": ""
   },
+  // Secrets (wrangler secret put; typed in src/identity/env.d.ts). Deliberately not
+  // `secrets.required`: without them the Worker still runs (see src/identity/keys.ts).
+  //   RECORDS_DELEGATION_SIGNING_KEY    ES256 private JWK (JSON) signing the delegated tokens the
+  //                                     gadget gatekeeper mints; its public half is served at
+  //                                     /gatekeeper/records/.well-known/jwks.json. Unset: each
+  //                                     isolate uses an unpublished ephemeral key (in-process only).
+  //   RECORDS_DELEGATION_PREVIOUS_KEYS  optional public JWKS (JSON) of retired signing keys, kept
+  //                                     for at least 60 s plus verifiers' JWKS cache after rotation.
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,

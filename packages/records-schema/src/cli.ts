@@ -1,11 +1,14 @@
-// Operator entrypoint: `node src/cli.ts <status|migrate|manifest|bootstrap>` with RECORDS_MIGRATION_URL set to
-// the migration-owner credential. Never point this at a runtime (records_app) credential.
+// Operator entrypoint: `node src/cli.ts <command>` with RECORDS_MIGRATION_URL set to the migration-owner
+// credential. Never point this at a runtime (records_app) credential. Commands: status, migrate,
+// manifest, bootstrap, and the operations commands in ops-cli.ts (restore-datastore, redact,
+// archive-journal, analytics-grant), which change nothing without --apply.
 
 import postgres from "postgres";
 
 import { bootstrapOrganisation } from "./bootstrap.ts";
 import { projectsModuleManifest } from "./manifest.ts";
 import { migrate, status } from "./migrate.ts";
+import { OPS_COMMANDS, OPS_USAGE, runOpsCommand } from "./ops-cli.ts";
 
 const command = process.argv[2];
 if (command === "manifest") {
@@ -29,8 +32,15 @@ try {
     const [orgName, adminEmail, adminName] = process.argv.slice(3);
     if (!orgName || !adminEmail || !adminName) throw new Error('usage: bootstrap "<organisation>" <admin e-mail> "<admin name>"');
     console.log(JSON.stringify(await bootstrapOrganisation(sql, { orgName, adminEmail, adminName })));
+  } else if ((OPS_COMMANDS as readonly string[]).includes(command ?? "")) {
+    try {
+      await runOpsCommand(command as (typeof OPS_COMMANDS)[number], sql, process.argv.slice(3));
+    } catch (err) {
+      console.error(`${command}: ${(err as Error).message}`);
+      process.exitCode = 1;
+    }
   } else {
-    console.error("usage: node src/cli.ts <status|migrate|manifest|bootstrap>");
+    console.error(`usage: node src/cli.ts <status|migrate|manifest|bootstrap>${OPS_USAGE}`);
     process.exitCode = 2;
   }
 } finally {

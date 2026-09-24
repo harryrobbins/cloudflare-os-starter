@@ -15,8 +15,8 @@ Open the gadget's Connections tab, connect a Records account and choose a Projec
 - **Filters** (project, state, priority, assignee) apply to every figure, chart and the CSV. They are remembered in this browser tab only.
 - **Charts** are horizontal bars. Hover a bar for its share. **Show as table** lists the same numbers.
 - **Download CSV** saves the issues in the current view. If the browser blocks the download, the gadget menu → Export → **CSV (all issues)** exports every issue from the server.
-- **Freshness:** the report re-reads the datastore every minute. With **Turn on live updates**, which the Workshop owner approves once, it re-reads when Records reports a change. **Refresh** re-reads at any time.
-- The report covers at most the 2,000 most recently updated issues, and says so when there are more.
+- **Freshness:** the report keeps a synced copy of the datastore and reads only what changed since its last read. It checks every minute. With **Turn on live updates**, which the Workshop owner approves once, it updates within a few seconds of each change. **Refresh** checks at once.
+- The report covers every project and issue. A datastore larger than sync allows (more than 5,000 issues) shows a message instead; the gadget menu → Export → **CSV (all issues)** still works for it.
 
 ## Programmatic use
 
@@ -27,6 +27,7 @@ await env.ProjectReport.getSetup();       // { connected, requirement, binding, 
 await env.ProjectReport.listProjects();
 await env.ProjectReport.getWorkflow();
 await env.ProjectReport.listIssues({ order: "updated_desc", limit: 100 });
+await env.ProjectReport.syncPull({ clientGroupId, cookie: null }); // sync protocol: { cookie, patch, … }
 await env.ProjectReport.exportCsv();      // CSV text of every issue
 ```
 

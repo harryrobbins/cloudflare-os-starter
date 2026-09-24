@@ -1,0 +1,12 @@
+{
+  "extends": "../../cloudflare-os/tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ESNext"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["../gatekeeper-records/worker-configuration.d.ts", "@cloudflare/vitest-pool-workers/types"],
+    "noEmit": true
+  },
+  "include": ["__tests__/workerd", "__tests__/contract"]
+}

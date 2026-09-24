@@ -47,7 +47,7 @@ describe('role-based hiding', () => {
     const { w, adam } = world()
     renderApp(w.as(adam.id))
     const user = await open('Engineering')
-    expect(tabNames()).toEqual(['Overview', 'Members', 'Connections', 'Credentials', 'Audit', 'Records'])
+    expect(tabNames()).toEqual(['Overview', 'Members', 'Connections', 'Credentials', 'Webhooks', 'Audit', 'Records'])
     expect(screen.getByRole('button', { name: /export json/i })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^archive$/i })).toBeNull()
 

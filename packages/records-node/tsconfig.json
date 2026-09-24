@@ -9,5 +9,7 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["src", "__tests__", "bench"]
+  // The workerd half of the contract run type-checks under tsconfig.workerd.json (Workers types).
+  "include": ["src", "__tests__", "vitest.config.ts", "vitest.workerd.config.ts"],
+  "exclude": ["__tests__/workerd"]
 }

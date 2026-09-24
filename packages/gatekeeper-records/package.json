@@ -4,6 +4,13 @@
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./http/api": "./src/http/api.ts",
+    "./http/access": "./src/http/access.ts",
+    "./http/openapi": "./src/http/openapi.ts",
+    "./jira/handler": "./src/jira/handler.ts"
+  },
   "scripts": {
     "types:check": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.app.json",
     "generate": "node scripts/gen-types.mjs && node scripts/build-configurator.mjs && node build-app.mjs",

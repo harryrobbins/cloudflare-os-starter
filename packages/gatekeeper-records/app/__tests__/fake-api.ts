@@ -32,6 +32,9 @@ import {
 } from '@records/contracts'
 import type { DataApi, DirectoryPerson, Whoami } from '../api'
 
+type Webhook = Awaited<ReturnType<DataApi['listWebhooks']>>[number]
+type WebhookDelivery = Awaited<ReturnType<DataApi['listWebhookDeliveries']>>[number]
+
 type Person = DirectoryPerson & { dataAdmin: boolean; status: 'active' | 'disabled' }
 
 type Store = {
@@ -45,6 +48,7 @@ type Store = {
   members: Map<string, { role: DatastoreRole; grantedAt: string }>
   bindings: Binding[]
   credentials: CredentialInfo[]
+  webhooks: { hook: Webhook; deliveries: WebhookDelivery[] }[]
   audit: AuditEvent[]
   projects: Project[]
   issues: Issue[]
@@ -97,6 +101,7 @@ export class FakeWorld {
       members: new Map(Object.entries(members).map(([id, role]) => [id, { role, grantedAt: NOW }])),
       bindings: [],
       credentials: [],
+      webhooks: [],
       audit: [],
       projects: [],
       issues: [],
@@ -353,6 +358,70 @@ export class FakeWorld {
         const c = s.credentials.find((x) => x.id === credentialId)
         if (!c) fail('not_found', 'Unknown credential.')
         c.revokedAt = NOW
+      },
+      async listWebhooks(id) {
+        record('listWebhooks', [id])
+        return need(id, 'bindings.manage').s.webhooks.map((w) => w.hook)
+      },
+      async createWebhook(id, raw) {
+        record('createWebhook', [id, raw])
+        const { s } = need(id, 'bindings.manage')
+        writable(s)
+        const input = raw as { label: string; url: string; format?: 'native' | 'jira'; events?: Webhook['events'] }
+        if (!input.label) fail('validation_failed', 'label: Required')
+        if (!/^https:\/\/[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(input.url) || /^https:\/\/localhost/i.test(input.url)) {
+          fail('validation_failed', 'Webhook URLs must use https and a public host name.')
+        }
+        const hook: Webhook = {
+          id: uuid(),
+          datastoreId: s.id,
+          label: input.label,
+          url: input.url,
+          format: input.format ?? 'native',
+          events: input.events ?? ['issue.created'],
+          status: 'active',
+          createdBy: principalId,
+          createdAt: NOW,
+          consecutiveFailures: 0,
+          lastSuccessAt: null,
+          lastFailureAt: null,
+          lastError: null,
+          disabledAt: null,
+          disabledReason: null,
+        }
+        s.webhooks.push({ hook, deliveries: [] })
+        audit(s, 'createWebhook', `Added webhook ${input.label}`)
+        return { webhook: hook, secret: `whsec_SECRETsecretSECRETsecretSECRETsecret${counter}` }
+      },
+      async setWebhookEnabled(id, webhookId, enabled) {
+        record('setWebhookEnabled', [id, webhookId, enabled])
+        const w = need(id, 'bindings.manage').s.webhooks.find((x) => x.hook.id === webhookId)
+        if (!w) fail('not_found', 'Unknown webhook.')
+        w.hook = { ...w.hook, status: enabled ? 'active' : 'disabled', disabledAt: enabled ? null : NOW, disabledReason: enabled ? null : 'Disabled by a manager.' }
+        return w.hook
+      },
+      async deleteWebhook(id, webhookId) {
+        record('deleteWebhook', [id, webhookId])
+        const { s } = need(id, 'bindings.manage')
+        if (!s.webhooks.some((x) => x.hook.id === webhookId)) fail('not_found', 'Unknown webhook.')
+        s.webhooks = s.webhooks.filter((x) => x.hook.id !== webhookId)
+      },
+      async pingWebhook(id, webhookId) {
+        record('pingWebhook', [id, webhookId])
+        const w = need(id, 'bindings.manage').s.webhooks.find((x) => x.hook.id === webhookId)
+        if (!w) fail('not_found', 'Unknown webhook.')
+        const d: WebhookDelivery = {
+          id: uuid(), webhookId, kind: 'ping', seq: null, state: 'pending', attempts: 0, lastStatus: null, lastError: null,
+          createdAt: NOW, nextAttemptAt: NOW, settledAt: null,
+        }
+        w.deliveries.unshift(d)
+        return d
+      },
+      async listWebhookDeliveries(id, webhookId) {
+        record('listWebhookDeliveries', [id, webhookId])
+        const w = need(id, 'bindings.manage').s.webhooks.find((x) => x.hook.id === webhookId)
+        if (!w) fail('not_found', 'Unknown webhook.')
+        return w.deliveries
       },
       async listAudit(id, input) {
         record('listAudit', [id, input])

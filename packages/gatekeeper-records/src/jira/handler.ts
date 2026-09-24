@@ -15,15 +15,18 @@
 // continued credentials.manage right keeps it alive. An owner without an e-mail cannot use Basic
 // (use Bearer). A mismatch is the same 401 as a bad token, so the answer does not reveal whose
 // token it is. This keeps a leaked token from being presented under an arbitrary name, and makes
-// the configured "user" in a Jira client match a real, accountable person.
+// the configured "user" in a Jira client match a real, accountable person. The rule, and the
+// credential parsing (@records/identity parseAuthorization), are the ServiceAuthenticator's
+// (src/identity/authenticator.ts); JWTs are not accepted on this surface.
 //
 // Everything after authentication is handleJira (@records/jira) over a port bound to the
 // credential's service principal (createJiraPort). Every failure is a Jira-shaped error body.
 
 import { LIMITS, RecordsError } from "@records/contracts";
-import { contextOf, normaliseEmail, withContext, type RecordsService } from "@records/core";
+import type { RecordsService } from "@records/core";
 import { handleJira, JIRA_MESSAGES, JiraError, jiraErrorFromRecords, type JiraRouterOptions } from "@records/jira";
 
+import { ServiceAuthenticator } from "../identity/authenticator.js";
 import { createJiraPort } from "./port.js";
 
 // The native API's prefix (http/api.ts API_PREFIX), repeated so api.ts can import this module
@@ -37,6 +40,8 @@ export type JiraApiDeps = {
   service: RecordsService;
   /** Verify the Access assertion for the API audience. Returns false when absent or invalid. */
   verifyAccess(request: Request): Promise<boolean>;
+  /** Resolves credentials. Default: one over `service`. */
+  authenticator?: ServiceAuthenticator;
   /** Optional per-credential rate limit. Returns false when the caller should back off. */
   rateLimit?(key: string): Promise<boolean>;
   /** Deadline for one request, in milliseconds. Default 15 s. */
@@ -54,65 +59,23 @@ function jiraError(err: JiraError): Response {
 const unauthenticated = () =>
   jiraError(new JiraError(401, [JIRA_MESSAGES.unauthenticated], {}, { "www-authenticate": 'Basic realm="records", Bearer realm="records"' }));
 
-const CREDENTIAL_TOKEN = /^rk1_[0-9a-f]{32}_[A-Za-z0-9_-]{43}$/;
-const BASIC_USER = /^[^\u0000-\u001f\u007f:\s]{1,320}$/u;
-
-type Presented = { type: "bearer"; token: string } | { type: "basic"; email: string; token: string } | null;
-
-/**
- * The credential in `Authorization`, in the same shapes and bounds as @records/identity's
- * parseAuthorization (not imported: that module does not yet type-check under the Workers types).
- */
-function presentedCredential(request: Request): Presented {
-  const value = request.headers.get("authorization");
-  if (!value || value.length > 8192) return null;
-  const m = /^([A-Za-z]+) +([^ ]+)$/.exec(value.trim());
-  if (!m) return null;
-  const scheme = m[1]!.toLowerCase();
-  if (scheme === "bearer") return CREDENTIAL_TOKEN.test(m[2]!) ? { type: "bearer", token: m[2]! } : null;
-  if (scheme !== "basic" || m[2]!.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(m[2]!)) return null;
-  let decoded: string;
-  try {
-    decoded = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(Uint8Array.from(atob(m[2]!), (c) => c.charCodeAt(0)));
-  } catch {
-    return null;
-  }
-  const colon = decoded.indexOf(":");
-  if (colon <= 0) return null;
-  const email = decoded.slice(0, colon);
-  const token = decoded.slice(colon + 1);
-  return BASIC_USER.test(email) && CREDENTIAL_TOKEN.test(token) ? { type: "basic", email, token } : null;
-}
-
-/** The e-mail of the person who owns the credential behind `bindingId`, or null. */
-async function credentialOwnerEmail(service: RecordsService, caller: Parameters<typeof contextOf>[0], datastoreId: string): Promise<string | null> {
-  if (!caller.bindingId) return null;
-  return withContext(service.db, contextOf(caller, datastoreId), async (tx) => {
-    const [row] = await tx`
-      SELECT o.email FROM records.credentials c JOIN records.principals o ON o.id = c.owner_principal_id
-       WHERE c.binding_id = ${caller.bindingId!}`;
-    return (row?.email as string | null | undefined) ?? null;
-  });
-}
-
 async function route(request: Request, deps: JiraApiDeps): Promise<Response> {
   const url = new URL(request.url);
   const match = JIRA_PATH.exec(url.pathname);
   if (!match) return jiraError(new JiraError(404, [JIRA_MESSAGES.notFound]));
   const datastoreId = match[1]!;
 
-  if (!(await deps.verifyAccess(request))) return unauthenticated();
-
-  const parsed = presentedCredential(request);
-  if (!parsed) return unauthenticated();
-  const resolved = await deps.service.registry.authenticateCredential(parsed.token);
-  if (!resolved) return unauthenticated();
-  if (parsed.type === "basic") {
-    const owner = await credentialOwnerEmail(deps.service, resolved.caller, resolved.datastoreId);
-    if (!owner || normaliseEmail(owner) !== normaliseEmail(parsed.email)) return unauthenticated();
+  const authenticator = deps.authenticator ?? new ServiceAuthenticator({ service: deps.service });
+  const resolved = await authenticator.authenticate(request.headers, {
+    datastoreId,
+    verifyAccess: () => deps.verifyAccess(request),
+    allowBasic: true,
+  });
+  if (!resolved.ok) {
+    if (resolved.stage === "datastore") return jiraError(new JiraError(404, [JIRA_MESSAGES.notFound]));
+    return unauthenticated();
   }
-  if (resolved.datastoreId !== datastoreId) return jiraError(new JiraError(404, [JIRA_MESSAGES.notFound]));
-  if (deps.rateLimit && !(await deps.rateLimit(resolved.caller.bindingId ?? resolved.caller.principalId))) {
+  if (deps.rateLimit && !(await deps.rateLimit(resolved.rateKey))) {
     return jiraError(new JiraError(429, ["Rate limit exceeded."], {}, { "retry-after": "10" }));
   }
 

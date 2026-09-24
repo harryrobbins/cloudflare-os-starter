@@ -10,6 +10,11 @@
 // the viewer's ∩ the binding's scopes, checked now (to fail fast) and again when the approved
 // action is applied. No viewer identity outlives the call that carried it.
 //
+// Every domain call goes through a DatastoreHandle (../identity/client.ts): the facet mints a
+// 60-second, single-use delegated token for the principal the call acts as (the binding owner for
+// reads, the verified viewer for writes and sync pushes), and the handle is opened only after the
+// ServiceAuthenticator verified that token. This session never builds a CallerContext itself.
+//
 // Sync (canonical plan §6):
 //   syncPush(request, options[])  every mutation carries its own viewer assertion, for the intent
 //                                 { operation: name minus "projects.", input: args,
@@ -37,7 +42,6 @@ import {
   PullRequestSchema,
   PushRequestSchema,
   RecordsError,
-  type CallerContext,
   type Comment,
   type Issue,
   type MutatingRecordOperation,
@@ -53,6 +57,7 @@ import { z } from "zod";
 
 import { normaliseEmail, PROJECTS_HANDLERS, syncIdempotencyKey, WORKSHOP_ISSUER, type SettledPushOutcome, type SyncGate } from "@records/core";
 import type { RecordsService } from "@records/core";
+import type { DatastoreHandle } from "../identity/client.js";
 import type { RecordsBindingInfo } from "./types.js";
 
 export type PendingWrite = {
@@ -65,10 +70,15 @@ export type PendingWrite = {
 
 /** What the facet provides the session: resolved binding, storage and the action store. */
 export interface SessionHost {
+  /** Identity lookups only (viewer e-mail → principal, before a token is minted). */
   readonly service: RecordsService;
   readonly orgId: string;
   readonly datastoreId: string;
-  bindingCaller(): Promise<CallerContext>;
+  /**
+   * Mint a delegated token through this gadget's binding for `principalId` (default: the binding
+   * owner, the person who connected it) and open the datastore with it.
+   */
+  datastore(principalId?: string): Promise<DatastoreHandle>;
   observerPrincipals(): Map<string, string>;
   nextActionId(): number;
   putPending(action: number, write: PendingWrite): void;
@@ -136,25 +146,25 @@ export class RecordsSessionImpl extends RpcTarget {
   // ---------------------------------------------------------------------------------------------
   // Reads
 
-  async #observe<T>(title: string, description: string, read: (caller: CallerContext) => Promise<T>): Promise<T> {
-    const caller = await this.#host.bindingCaller();
-    const result = await read(caller);
+  async #observe<T>(title: string, description: string, read: (datastore: DatastoreHandle) => Promise<T>): Promise<T> {
+    const datastore = await this.#host.datastore();
+    const result = await read(datastore);
     const observers = this.#host.observerPrincipals();
-    const readers = await this.#host.service.registry.readersAmong(this.#host.orgId, this.#host.datastoreId, [...new Set(observers.values())]);
+    const readers = await datastore.readersAmong([...new Set(observers.values())]);
     const excludeObservers = [...observers].filter(([, principal]) => !readers.has(principal)).map(([id]) => id);
     await this.#queue.authorizeObservation({ title, description, ...(excludeObservers.length ? { excludeObservers } : {}) });
     return result;
   }
 
   async describe(): Promise<RecordsBindingInfo> {
-    return this.#observe("Describe Records datastore", "Read the datastore's name and this connection's scopes.", async (caller) => {
-      const ds = await this.#host.service.registry.getDatastore(caller, this.#host.datastoreId);
-      const binding = await this.#host.service.registry.resolveBinding(this.#host.orgId, caller.bindingId!);
+    return this.#observe("Describe Records datastore", "Read the datastore's name and this connection's scopes.", async (d) => {
+      const ds = await d.getDatastore();
+      const scopes = await d.bindingScopes();
       return {
         datastore: { id: ds.id, name: ds.name, description: ds.description, lifecycle: ds.lifecycle },
         moduleId: "projects" as const,
         apiMajor: 1 as const,
-        scopes: binding?.scopes ?? [],
+        scopes,
       };
     });
   }
@@ -164,27 +174,27 @@ export class RecordsSessionImpl extends RpcTarget {
   }
 
   async listProjects(): Promise<Project[]> {
-    return this.#observe("List projects", "Read the projects in this datastore.", (c) => this.#host.service.projects.listProjects(c, this.#host.datastoreId));
+    return this.#observe("List projects", "Read the projects in this datastore.", (d) => d.listProjects());
   }
 
   async getWorkflow(): Promise<Workflow> {
-    return this.#observe("Read workflow", "Read the issue workflow of this datastore.", (c) => this.#host.service.projects.getWorkflow(c, this.#host.datastoreId));
+    return this.#observe("Read workflow", "Read the issue workflow of this datastore.", (d) => d.getWorkflow());
   }
 
   async listIssues(input?: unknown): Promise<Page<Issue>> {
-    return this.#observe("List issues", "Read a page of issues from this datastore.", (c) => this.#host.service.projects.listIssues(c, this.#host.datastoreId, input ?? {}));
+    return this.#observe("List issues", "Read a page of issues from this datastore.", (d) => d.listIssues(input ?? {}));
   }
 
   async getIssue(issueId: string): Promise<Issue> {
-    return this.#observe("Read issue", "Read one issue from this datastore.", (c) => this.#host.service.projects.getIssue(c, this.#host.datastoreId, issueId));
+    return this.#observe("Read issue", "Read one issue from this datastore.", (d) => d.getIssue(issueId));
   }
 
   async listAssignees(): Promise<PrincipalRef[]> {
-    return this.#observe("List assignable people", "Read the names of the people who can be assigned issues in this datastore.", (c) => this.#host.service.registry.listAssignees(c, this.#host.datastoreId));
+    return this.#observe("List assignable people", "Read the names of the people who can be assigned issues in this datastore.", (d) => d.listAssignees());
   }
 
   async listComments(input: unknown): Promise<Page<Comment>> {
-    return this.#observe("List comments", "Read comments on one issue in this datastore.", (c) => this.#host.service.projects.listComments(c, this.#host.datastoreId, input));
+    return this.#observe("List comments", "Read comments on one issue in this datastore.", (d) => d.listComments(input));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -196,22 +206,13 @@ export class RecordsSessionImpl extends RpcTarget {
     return principal && principal.orgId === this.#host.orgId ? principal.principalId : null;
   }
 
-  async #viewerCaller(principalId: string): Promise<CallerContext> {
-    const binding = await this.#host.bindingCaller();
-    return { orgId: this.#host.orgId, principalId, via: "gadget", bindingId: binding.bindingId };
-  }
-
   /** Fail fast on rights the viewer lacks now (they are checked again when applied). */
-  async #precheck(caller: CallerContext, operation: MutatingRecordOperation, viewerName: string): Promise<{ status: "rejected"; code: string; message: string } | null> {
+  async #precheck(datastore: DatastoreHandle, operation: MutatingRecordOperation, viewerName: string): Promise<{ status: "rejected"; code: string; message: string } | null> {
     try {
-      const access = await this.#host.service.registry.checkAccess(caller, this.#host.datastoreId, operation);
+      const access = await datastore.checkAccess(operation);
       if (access.lifecycle !== "active") return { status: "rejected", code: "datastore_archived", message: "This datastore is archived and read-only." };
     } catch (err) {
-      const code = RecordsError.codeOf(err);
-      if (code === "forbidden" || code === "not_found") {
-        return { status: "rejected", code, message: `${viewerName} may not ${LABELS[operation].toLowerCase()} through this connection.` };
-      }
-      throw err;
+      return refusal(err, operation, viewerName);
     }
     return null;
   }
@@ -239,8 +240,15 @@ export class RecordsSessionImpl extends RpcTarget {
     if (!principalId) {
       return { status: "rejected", code: "forbidden", message: "You are not in this organisation's Records directory. Ask a data administrator to add you." };
     }
-    const caller = await this.#viewerCaller(principalId);
-    const refused = await this.#precheck(caller, operation, viewer.displayName);
+    // The viewer's delegated token: their rights ∩ the binding's scopes. A revoked binding or an
+    // inactive viewer is this write's rejection, as when the precheck refuses it.
+    let datastore: DatastoreHandle;
+    try {
+      datastore = await this.#host.datastore(principalId);
+    } catch (err) {
+      return refusal(err, operation, viewer.displayName);
+    }
+    const refused = await this.#precheck(datastore, operation, viewer.displayName);
     if (refused) return refused;
     const action = await this.#submit(operation, input, options.idempotencyKey, principalId, viewer.displayName);
     return this.#outcome(action, options.idempotencyKey);
@@ -293,19 +301,19 @@ export class RecordsSessionImpl extends RpcTarget {
     const owner = this.#host.syncGroupOwner(request.clientGroupId);
     if (owner !== undefined && owner !== principalId) throw new RecordsError("forbidden", "This sync client group belongs to another viewer; start a new one.");
     this.#host.claimSyncGroup(request.clientGroupId, principalId);
-    const caller = await this.#viewerCaller(principalId);
+    const datastore = await this.#host.datastore(principalId);
 
     const gate: SyncGate = async (m, { idempotencyKey }) => {
       const operation = operationOf(m.name);
       // Malformed args are this mutation's rejection (validation_failed), not an approver's problem.
       // Thrown RecordsErrors become the outcome; the command checks everything again when applied.
       PROJECTS_HANDLERS[m.name].parse(m.args);
-      const refused = await this.#precheck(caller, operation, who.displayName);
+      const refused = await this.#precheck(datastore, operation, who.displayName);
       if (refused) return { kind: "settled", outcome: refused };
       const action = await this.#submit(operation, m.args, idempotencyKey, principalId, who.displayName);
       return { kind: "settled", outcome: this.#pushOutcome(action) };
     };
-    return this.#host.service.sync.push(caller, this.#host.datastoreId, request, { gate, via: "gadget" });
+    return datastore.syncPush(request, { gate, via: "gadget" });
   }
 
   #pushOutcome(action: number): SettledPushOutcome {
@@ -318,8 +326,8 @@ export class RecordsSessionImpl extends RpcTarget {
   async syncPull(rawRequest: unknown): Promise<PullResponse> {
     const request = parseInput(PullRequestSchema, rawRequest);
     const owner = this.#host.syncGroupOwner(request.clientGroupId);
-    return this.#observe("Sync records", "Read the records in this datastore that changed since the gadget last synced.", (c) =>
-      this.#host.service.sync.pull(c, this.#host.datastoreId, request, { clientsOf: owner ?? null }));
+    return this.#observe("Sync records", "Read the records in this datastore that changed since the gadget last synced.", (d) =>
+      d.syncPull(request, { clientsOf: owner ?? null }));
   }
 
   async syncApprovals(rawActionIds: unknown): Promise<ApprovalStatus[]> {
@@ -332,6 +340,15 @@ export class RecordsSessionImpl extends RpcTarget {
       return { actionId, status: "rejected", message: outcome.message };
     });
   }
+}
+
+/** A forbidden or not_found refusal as a rejected outcome; anything else is rethrown. */
+function refusal(err: unknown, operation: MutatingRecordOperation, viewerName: string): { status: "rejected"; code: string; message: string } {
+  const code = RecordsError.codeOf(err);
+  if (code === "forbidden" || code === "not_found") {
+    return { status: "rejected", code, message: `${viewerName} may not ${LABELS[operation].toLowerCase()} through this connection.` };
+  }
+  throw err;
 }
 
 function operationOf(name: string): MutatingRecordOperation {

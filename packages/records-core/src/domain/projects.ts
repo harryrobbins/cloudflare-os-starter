@@ -96,12 +96,14 @@ export class ProjectsService {
     return withContext(this.db, contextOf(caller, datastoreId), async (tx) => {
       await authorize(tx, caller, datastoreId, "listComments");
       const after = decodeCursor("comments", input.cursor);
-      const page = after ? tx`AND (c.created_at, c.id) > (${new Date(after[0] as string)}, ${after[1] as string})` : tx``;
+      // Compare at millisecond precision: the cursor carries the DTO's ISO time, and the column
+      // holds microseconds, so a raw comparison would return the page's last comment again.
+      const page = after ? tx`AND (date_trunc('milliseconds', c.created_at), c.id) > (${new Date(after[0] as string)}, ${after[1] as string})` : tx``;
       const rows = await tx`
         SELECT c.*, p.id AS author_id, p.display_name AS author_name, p.kind AS author_kind
           FROM projects.comments c JOIN records.principals p ON p.id = c.author_id
          WHERE c.datastore_id = ${datastoreId} AND c.issue_id = ${input.issueId} ${page}
-         ORDER BY c.created_at, c.id LIMIT ${input.limit + 1}`;
+         ORDER BY date_trunc('milliseconds', c.created_at), c.id LIMIT ${input.limit + 1}`;
       const items = rows.slice(0, input.limit).map(toComment);
       const last = items.at(-1);
       return { items, nextCursor: rows.length > input.limit && last ? encodeCursor("comments", [last.createdAt, last.id]) : null };

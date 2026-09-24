@@ -1,6 +1,8 @@
 # Canonical Postgres datastore
 
-Written 2026-09-24 against starter `main` `5f8c12c`. Status: **proposal, nothing built.** This is the
+Written 2026-09-24 against starter `main` `5f8c12c`. Status (2026-09-25): **phases 1–5 built and tested
+locally, phase 6 built as code and a [runbook](records-operations.md); remote phase 0 measurements
+open.** See §10 for what each item left open. This is the
 target shape for organisation datastores. It builds on the deployed
 [organisation datastores](organisation-datastores.md) service (Records) rather than replacing it:
 most of Records is already this design, and the phases below close the gaps. Evidence and confidence
@@ -395,57 +397,57 @@ provisioning, the registry, observer rules, approvals and credentials carry over
 
 ## 10. Phases
 
-`[ ]` not started. Each phase ends with tests and a short evidence note in the research record.
+`[x]` done with tests, `[~]` partly done (the note says what is missing), `[ ]` not started. Each phase ends with tests and a short evidence note in the research record.
 
 ### Phase 0: spikes
 
-- [ ] **Clock.** Commit latency and writes per second on one datastore with the clock taken last,
+- [~] *Local only (embedded PG 17, `records-core/bench`): 119 cmd/s with one writer, ~300 with four, gapless over 6,089 entries; a single hot project's issue numbering, not the clock, starves first. Through Hyperdrive with and without placement: not measured.* **Clock.** Commit latency and writes per second on one datastore with the clock taken last,
       through Hyperdrive from a Worker with and without `placement.region = "aws:eu-west-2"`. Kill gate:
       if single-datastore throughput is below 50 commands per second, design clock splitting before
       phase 1.
-- [ ] **RLS by principal.** Policy cost for list and search queries at 100k issues and 1,000 members,
+- [~] *`records.can_any` costs ~0.05 ms per statement locally; 100k-issue scale and deployed Hyperdrive not measured.* **RLS by principal.** Policy cost for list and search queries at 100k issues and 1,000 members,
       with the `(SELECT …)` pattern. Confirm transaction-local settings through deployed Hyperdrive.
-- [ ] **Delegated token.** Gatekeeper mints it, the service verifies it, and a replayed, expired,
+- [x] **Delegated token.** Gatekeeper mints it, the service verifies it, and a replayed, expired,
       re-scoped or wrong-audience token is refused.
-- [ ] **Jira clients.** A stub serving `serverInfo`, `myself`, `field`, `project/search`, `issue` and
+- [~] *jira.js 6.2.0 and Python `jira` 3.10.5 pass against the real service (`packages/records-jira/COMPATIBILITY.md`); jira-cli and go-jira need network installs and are untested.* **Jira clients.** A stub serving `serverInfo`, `myself`, `field`, `project/search`, `issue` and
       `search/jql`, driven by jira.js, Python `jira` and jira-cli. Record what each client calls and
       assumes.
-- [ ] **Sync loop.** Push, pull and rebase with two browsers and a pending approval, under dropped pokes
+- [x] **Sync loop.** Push, pull and rebase with two browsers and a pending approval, under dropped pokes
       and reordered responses.
 
 ### Phase 1: journal and clock
 
-- [ ] Migration 0003 (clock, journal, `last_seq`, trigger, partitions and their maintenance job).
-- [ ] Command bus in `@records/core`; Projects handlers write journal entries.
-- [ ] Rebuild-and-compare test; late-commit and concurrency tests on the clock.
+- [x] Migration 0003 (clock, journal, `last_seq`, trigger, partitions and their maintenance job).
+- [x] Command bus in `@records/core`; Projects handlers write journal entries.
+- [x] Rebuild-and-compare test; late-commit and concurrency tests on the clock.
 
 ### Phase 2: identity
 
-- [ ] `trusted_issuers`, JWT verification (Access, Access for SaaS, delegated), `rk1_` and Basic.
-- [ ] Principal RLS on every module table; negative tests with a service that skips its own checks.
-- [ ] Gatekeeper switches to delegated tokens.
+- [x] `trusted_issuers`, JWT verification (Access, Access for SaaS, delegated), `rk1_` and Basic.
+- [x] Principal RLS on every module table; negative tests with a service that skips its own checks.
+- [x] Gatekeeper switches to delegated tokens.
 
 ### Phase 3: sync and realtime
 
-- [ ] Push, pull, `client_mutations`, poke hub, `/changes`, `/history`.
-- [ ] Browser sync client and shared mutators; the project board adopts it; gadget hooks pull by `seq`.
-- [ ] Retire the Queue path for realtime.
+- [x] Push, pull, `client_mutations`, poke hub, `/changes`, `/history`.
+- [x] Browser sync client and shared mutators; the project board adopts it; gadget hooks pull by `seq`.
+- [~] *Pokes replace it for the board and report; the identifier feed still runs for older hooks, and the Queue now drives webhooks.* Retire the Queue path for realtime.
 
 ### Phase 4: portability and SDKs
 
-- [ ] Hono app with generated OpenAPI; a Node runtime entry point running the same contract suite
+- [x] *Without Hono: OpenAPI 3.1 from the Zod contracts with `z.toJSONSchema` (`gatekeeper-records/src/http/openapi.ts`); `packages/records-node` runs the same contract suite as real workerd against one database.* Hono app with generated OpenAPI; a Node runtime entry point running the same contract suite
       against the same database.
-- [ ] TypeScript and Python SDKs from the OpenAPI document.
+- [x] TypeScript and Python SDKs from the OpenAPI document.
 
 ### Phase 5: Jira surface
 
-- [ ] The subset in §7, with ADF conversion and the JQL subset.
-- [ ] The client compatibility suite in CI; Jira-shaped webhooks from the outbox.
+- [x] The subset in §7, with ADF conversion and the JQL subset.
+- [~] *jira.js and Python `jira` suites run in the package tests; webhooks (native and Jira-shaped) deliver from the outbox via the Queue and cron.* The client compatibility suite in CI; Jira-shaped webhooks from the outbox.
 
 ### Phase 6: operations
 
-- [ ] Backups to R2, restore rehearsal, per-datastore restore by journal replay.
-- [ ] Redaction procedure; journal retention and archival; analytics views on a read replica.
+- [~] *Scripts and replay-restore built and tested locally; no bucket, schedule or rehearsal on real data yet.* Backups to R2, restore rehearsal, per-datastore restore by journal replay.
+- [x] *Retention archival is code only; no window chosen.* Redaction procedure; journal retention and archival; analytics views on a read replica.
 - [ ] Operator workflow before any production change, per `CLAUDE.md`.
 
 ## 11. Acceptance scenarios

@@ -14,15 +14,19 @@ Each viewer's own datastore membership still applies. If this board is shared wi
 
 ## How changes are saved
 
-- Every change asks the Workshop to confirm that you made it (a one-use viewer assertion bound to that exact change). The Records service then either applies it, queues it for approval or refuses it.
-- The status panel in the bottom left shows each change: **Saving**, **Pending approval** (with the action number, checked every few seconds), **Saved**, **Conflict** or **Not saved**. A change counts as saved only when it shows **Saved**. Nothing is queued offline.
-- **Conflict** means someone else changed the issue first, or the move is no longer allowed. Choose **Reload issue** to see the current version next to yours, then decide again.
-- **Unconfirmed** means the call got no answer. **Check again** resends the same change with the same idempotency key. If the first attempt was saved, Records returns that result and nothing is applied twice.
-- Drag a card to another column, or open it and use **Move to …**. Only moves the workflow allows are offered.
+- Every change shows on the board at once, as your local version. A new issue shows with the key `ENG-?` (dashed card, "Not saved yet") until the Records service numbers it. You can keep working on it meanwhile.
+- The board sends changes to the Records service in order, in the background. Each change asks the Workshop to confirm that you made it (a one-use viewer assertion bound to that exact change). The Records service then applies it, queues it for approval or refuses it. The server's version always replaces your local one when it arrives.
+- The status panel in the bottom left shows each change: **Saving**, **Pending approval** (with the action number, checked every few seconds), **Saved**, **Conflict** or **Not saved**. A change counts as saved only when it shows **Saved**.
+- **Pending approval**: the card shows where the datastore has it, marked **Awaiting approval**, until the Workshop owner decides. If they approve, the change arrives by itself. If they decline, the panel says so.
+- **Conflict** means someone else changed the issue first, or the move is no longer allowed. The board shows their version. If the issue is open, a table compares your values with the current ones, and the form holds yours on top of theirs: **Save changes** applies them again, **Discard** drops them.
+- **Not saved** means the Records service refused the change (for example, the connection lacks that operation). The board shows the server's version again.
+- Changes are kept in this page only, never stored offline. While any have not reached the Records service, the header shows **N unsynced changes** and the browser asks before you close the page. If they cannot be sent (for example, you are not signed in), a banner says so and offers **Retry**. Network failures are retried automatically.
 
 ## Freshness
 
-With **Turn on live updates**, the board asks Records to notify it of changes. The Workshop owner approves this once. Until notifications arrive, the board re-reads the datastore every 15 seconds. **Refresh** reads everything again at any time.
+The board keeps a synced copy of the datastore and pulls only what changed since its last pull. With **Turn on live updates**, the board asks Records to notify it after each change. The Workshop owner approves this once, and the board then updates within a few seconds. Until notifications arrive, the board checks every 15 seconds. **Refresh** sends any unsent changes and pulls at once.
+
+Very large datastores (more than 5,000 issues or 20,000 comments) cannot be synced; the board says so. Use a Project report or the Records API for those.
 
 ## Programmatic use
 
@@ -35,17 +39,18 @@ await env.ProjectBoard.getWorkflow();       // { states, transitions }
 await env.ProjectBoard.listIssues({ projectId, order: "updated_desc", limit: 50 });
 await env.ProjectBoard.getIssue(issueId);
 await env.ProjectBoard.listComments({ issueId });
-await env.ProjectBoard.getWriteOutcome(actionId);
+await env.ProjectBoard.syncPull({ clientGroupId, cookie: null }); // sync protocol: { cookie, patch, lastMutationIdChanges }
+await env.ProjectBoard.getPokes();          // { live, head, … }: the latest change notification this board received
 ```
 
-**Agents cannot write through this board.** `createIssue`, `editIssue`, `transitionIssue` and `addComment` need a viewer assertion, and only a signed-in person using the board UI can obtain one. Ask the person to make the change in the board, or use a Records service credential with the HTTP API.
+**Agents cannot write through this board.** `syncPush` needs a viewer assertion per change, and only a signed-in person using the board UI can obtain one. Ask the person to make the change in the board, or use a Records service credential with the HTTP API.
 
 To turn on live updates from `executeCode`, register the gadget's restore target as the hook:
 
 ```js
 import { restore } from "cloudflare:workers";
-const hook = await env.ProjectBoard[restore]({ type: "records-change" });
-await env.RECORDS.onChange(hook);
+const hook = await env.ProjectBoard[restore]({ type: "records-poke" });
+await env.RECORDS.onChange(hook, { deliver: "pokes" });
 ```
 
 Clicking **Turn on live updates** in the board does the same.

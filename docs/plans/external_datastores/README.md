@@ -32,8 +32,9 @@ feature for automating one gadget.
 
 | Plan | Status | What it is |
 | --- | --- | --- |
-| [canonical-postgres-datastore.md](canonical-postgres-datastore.md) | **Target design**, proposal | The canonical shape: journal and clock, command bus, RLS by principal, delegated tokens, optimistic sync, per-module data models and APIs (Projects follows Jira), portability. Builds on Records |
+| [canonical-postgres-datastore.md](canonical-postgres-datastore.md) | **Built** (2026-09-25): phases 1–5, phase 6 as code | The canonical shape: journal and clock, command bus, RLS by principal, delegated tokens, optimistic sync, per-module data models and APIs (Projects follows Jira), portability. Builds on Records |
 | [organisation-datastores.md](organisation-datastores.md) | **Implemented and deployed** (2026-09-24), signed-in checks pending | Records: the Postgres-backed service on Neon, with registry, memberships, approvals, viewer assertions, outbox delivery, the Data management page and the project board and report blueprints. Includes the deployment record |
+| [records-operations.md](records-operations.md) | Runbook | Backups, restore rehearsal, per-datastore restore, redaction, retention, analytics |
 | [gadget-http-api.md](gadget-http-api.md) | Planned, not built | Give one gadget a REST endpoint through a gatekeeper and hook. For gadget automation, not organisational records |
 | [immutable-datastores.md](immutable-datastores.md) | **Not pursued** | Event-sourced Durable Object shards exporting to an R2 lakehouse. Rejected because the source of truth must be strongly consistent; its ordering and journal ideas moved into the canonical plan |
 | [external-records-service.md](external-records-service.md) | **Superseded** | An earlier Postgres records-service sketch using PostgREST and the Neon Data API |

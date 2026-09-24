@@ -4,6 +4,14 @@
 // organisation and principal (from the Access-verified connect flow), the connector account ID,
 // and the requested datastore and scopes. The facet's own storage holds only the Records binding
 // ID, its verified observers and its submitted actions; business data lives in Postgres.
+//
+// Record operations (reads, writes, sync, the agent catalog, applying approved actions) go through
+// a delegated token (canonical plan §5): the facet mints one per call for the principal it acts as,
+// and the DelegatedDatastoreClient verifies it before any domain code runs. Reads act as the
+// binding owner (the connecting person, as before); writes act as the verified viewer who asked.
+// Three registry calls still act directly as the connect-flow-verified person, because no binding
+// exists yet or the question is about someone else: describe() (before the binding is made), the
+// binding's creation, and addObserver()'s membership check of the new observer.
 
 import { DurableObject, type RpcStub } from "cloudflare:workers";
 import { validateRpc } from "capnweb-validate";
@@ -26,6 +34,10 @@ import {
 } from "@records/contracts";
 
 import type { RecordsService } from "@records/core";
+import { ServiceAuthenticator } from "../identity/authenticator.js";
+import { DelegatedDatastoreClient, type DatastoreHandle } from "../identity/client.js";
+import { delegationKeys } from "../identity/keys.js";
+import { mintFor } from "../identity/minter.js";
 import { recordsService } from "../runtime.js";
 import { datastoreUrl } from "./resource.js";
 import { RecordsSessionImpl, type PendingWrite, type SessionHost } from "./session.js";
@@ -62,8 +74,28 @@ export class RecordsGatekeeper
 {
   #service?: RecordsService;
 
+  #client?: DelegatedDatastoreClient;
+
   get #records(): RecordsService {
     return (this.#service ??= recordsService(this.env));
+  }
+
+  get #datastoreClient(): DelegatedDatastoreClient {
+    return (this.#client ??= new DelegatedDatastoreClient(
+      new ServiceAuthenticator({ service: this.#records, keys: () => delegationKeys(this.env) }),
+      this.#records,
+    ));
+  }
+
+  /**
+   * Mint a delegated token through this gadget's binding for `principalId` (default: the binding
+   * owner) and open the datastore with it.
+   */
+  async #datastore(principalId: string = this.ctx.props.principalId): Promise<DatastoreHandle> {
+    const bindingId = await this.#ensureBinding();
+    const { orgId, datastoreId, scopes } = this.ctx.props;
+    const token = await mintFor(await delegationKeys(this.env), { principalId, orgId, datastoreId, bindingId, scopes });
+    return this.#datastoreClient.open(token, datastoreId);
   }
 
   /** Describes the datastore, confirming the connecting person can read it before anything is granted. */
@@ -100,8 +132,7 @@ export class RecordsGatekeeper
 
   /** The projects in the bound datastore, so an agent knows what it can read. */
   async getAgentCatalog(authorizer: RpcStub<ObservationAuthorizer>): Promise<AgentCatalog | null> {
-    const caller = await this.#bindingCaller();
-    const projects = await this.#records.projects.listProjects(caller, this.ctx.props.datastoreId);
+    const projects = await (await this.#datastore()).listProjects();
     await authorizer.authorizeObservation({
       title: "List Records projects",
       description: `Read the names of ${projects.length} project(s) in the bound datastore.`,
@@ -136,18 +167,13 @@ export class RecordsGatekeeper
       if (this.ctx.storage.kv.get(`outcome:${action}`)) return;
       throw new Error("This Records action is no longer available.");
     }
-    const binding = await this.#bindingCaller();
-    const caller: CallerContext = { orgId: this.ctx.props.orgId, principalId: pending.principalId, via: "gadget", bindingId: binding.bindingId };
-    const ds = this.ctx.props.datastoreId;
     let outcome: MutationOutcome<unknown>;
     let seq: number | undefined;
     try {
-      const projects = this.#records.projects;
-      const result =
-        pending.operation === "createIssue" ? await projects.createIssue(caller, ds, pending.input, pending.idempotencyKey)
-        : pending.operation === "editIssue" ? await projects.editIssue(caller, ds, pending.input, pending.idempotencyKey)
-        : pending.operation === "transitionIssue" ? await projects.transitionIssue(caller, ds, pending.input, pending.idempotencyKey)
-        : await projects.addComment(caller, ds, pending.input, pending.idempotencyKey);
+      // A fresh delegated token for the viewer who asked, minted now: the assertion was redeemed
+      // when the write was submitted, and approval may come much later.
+      const datastore = await this.#datastore(pending.principalId);
+      const result = await datastore.write(pending.operation, pending.input, pending.idempotencyKey);
       outcome = { status: "applied", record: result.record, replayed: result.replayed };
       seq = result.seq;
     } catch (err) {
@@ -230,18 +256,13 @@ export class RecordsGatekeeper
     return this.#binding;
   }
 
-  async #bindingCaller(): Promise<CallerContext> {
-    const bindingId = await this.#ensureBinding();
-    return { orgId: this.ctx.props.orgId, principalId: this.ctx.props.principalId, via: "gadget", bindingId };
-  }
-
   #host(): SessionHost {
     const kv = this.ctx.storage.kv;
     return {
       service: this.#records,
       orgId: this.ctx.props.orgId,
       datastoreId: this.ctx.props.datastoreId,
-      bindingCaller: () => this.#bindingCaller(),
+      datastore: (principalId) => this.#datastore(principalId),
       observerPrincipals: () => {
         const out = new Map<string, string>();
         for (const [key, value] of kv.list<StoredObserver>({ prefix: "observer:" })) out.set(key.slice("observer:".length), value.principalId);

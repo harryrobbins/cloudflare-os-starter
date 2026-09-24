@@ -1,10 +1,13 @@
 // Versioned machine API: /gatekeeper/records/v1/datastores/:datastoreId/...
 //
-// Two independent checks on every request (plan §7):
-//   1. A Cloudflare Access assertion for the API's own path-specific application/audience
-//      (typically an Access service token), verified here, not merely trusted from the edge.
-//   2. A Records credential (`Authorization: Bearer rk1_...`), which resolves to a delegated
-//      service principal with fixed scopes on one datastore.
+// Authentication (src/identity/authenticator.ts, canonical plan §5):
+//   - A Records credential (`Authorization: Bearer rk1_...`) needs two independent checks, as
+//     before: a Cloudflare Access assertion for the API's own path-specific application/audience
+//     (typically an Access service token), verified here, and the credential itself, which resolves
+//     to a service principal with fixed scopes on one datastore.
+//   - `Authorization: Bearer <JWT>` from a trusted issuer (records.trusted_issuers): a delegated
+//     token (scoped to one binding and datastore) or an Access for SaaS token (a mapped person).
+//     The token is the proof; the path Access application is not required for it.
 // The datastore ID in the path is only a selector: it must equal the credential's datastore.
 //
 // The adapter calls the same domain operations as the Gatekeeper session, so authorization,
@@ -35,12 +38,17 @@ import {
 
 import { SYNC_LIMITS, type RecordsService } from "@records/core";
 
+import { ServiceAuthenticator } from "../identity/authenticator.js";
+import { OPENAPI_PATH, openApiDocument } from "./openapi.js";
+
 export const API_PREFIX = "/gatekeeper/records/v1";
 
 export type ApiDeps = {
   service: RecordsService;
   /** Verify the Access assertion for the API audience. Returns false when absent or invalid. */
   verifyAccess(request: Request): Promise<boolean>;
+  /** Resolves credentials and trusted JWTs. Default: one over `service` without delegation keys. */
+  authenticator?: ServiceAuthenticator;
   /** Optional per-credential rate limit. Returns false when the caller should back off. */
   rateLimit?(key: string): Promise<boolean>;
   /** Deadline for one request, in milliseconds. */
@@ -288,20 +296,20 @@ const DATASTORE_PATH = new RegExp(`^${API_PREFIX}/datastores/${ID}(/.*)?$`);
 
 async function route(request: Request, deps: ApiDeps): Promise<Response> {
   const url = new URL(request.url);
+  if (url.pathname === OPENAPI_PATH && request.method === "GET") return json(openApiDocument(url.origin));
   const match = DATASTORE_PATH.exec(url.pathname);
   if (!match) return problem(new RecordsError("not_found", "No such API route."));
 
-  if (!(await deps.verifyAccess(request))) {
-    return problem(new RecordsError("unauthenticated", "A valid Access service token is required."));
+  const authenticator = deps.authenticator ?? new ServiceAuthenticator({ service: deps.service });
+  const resolved = await authenticator.authenticate(request.headers, {
+    datastoreId: match[1]!,
+    verifyAccess: () => deps.verifyAccess(request),
+    allowJwt: true,
+  });
+  if (!resolved.ok) {
+    return problem(resolved.error, resolved.stage === "credential" && resolved.error.code === "unauthenticated" ? { "www-authenticate": 'Bearer realm="records"' } : {});
   }
-  const auth = request.headers.get("authorization") ?? "";
-  const token = /^Bearer (\S+)$/.exec(auth)?.[1];
-  const resolved = token ? await deps.service.registry.authenticateCredential(token) : null;
-  if (!resolved) {
-    return problem(new RecordsError("unauthenticated", "A valid Records credential is required."), { "www-authenticate": 'Bearer realm="records"' });
-  }
-  if (resolved.datastoreId !== match[1]) return problem(new RecordsError("not_found", "Unknown datastore."));
-  if (deps.rateLimit && !(await deps.rateLimit(resolved.caller.bindingId ?? resolved.caller.principalId))) {
+  if (deps.rateLimit && !(await deps.rateLimit(resolved.rateKey))) {
     return problem(new RecordsError("rate_limited", "Too many requests; slow down."), { "retry-after": "10" });
   }
 
