@@ -28,7 +28,15 @@
  */
 
 /**
- * @typedef {"connecting"|"live"|"reconnecting"} ConnectionState
+ * The connection/save state machine (src/client/sync/connection.js):
+ *   connecting         no initial snapshot yet;
+ *   live               subscribed and nothing pending: every local change is acknowledged ("Saved");
+ *   saving             subscribed with queued or in-flight changes;
+ *   reconnecting       the subscription or RPC target is being replaced; the queue is kept;
+ *   recovery-required  the automatic recovery budget is exhausted; pending work may exist. Retries
+ *                      continue, and a later success returns to live or saving;
+ *   read-only          the session lacks edit authority (reserved for verified sessions; not yet produced).
+ * @typedef {"connecting"|"live"|"saving"|"reconnecting"|"recovery-required"|"read-only"} ConnectionState
  */
 
 /**
@@ -37,7 +45,13 @@
  * @property {Viewer} viewer
  * @property {Map<string, Peer>} peers
  * @property {ConnectionState} connection
- * @property {number} pending          local ops not yet acknowledged
+ * @property {number} pending          local ops not yet acknowledged (same as pendingCount; kept for callers)
+ * @property {number} pendingCount     local ops not yet acknowledged
+ * @property {number|null} oldestPendingAt  local clock ms when the oldest of them was made; null when none
+ * @property {number} lastAcknowledgedRevision  board revision up to which this client has seen every
+ *   change confirmed (snapshots, events and its own acknowledged requests)
+ * @property {boolean} riskOfLoss      reloading now may lose a change: something is unacknowledged and
+ *   the link is down, or the oldest change has waited SLOW_SAVE_MS or more
  * @property {boolean} canUndo
  * @property {boolean} canRedo
  * @property {HistoryEntry[]} history  most recent last; seeded by loadHistory(), then live
@@ -52,6 +66,8 @@
  *              The UI patches only those elements (plus connectors attached to them).
  *   structure  title or background changed.
  *   presence   `peers` lists client ids that joined, changed or left.
+ *   connection `connection` or `riskOfLoss` changed (not emitted for pendingCount alone; an
+ *              "objects" change with an empty list covers that).
  *   flash      `objects` lists ids where a local change lost to a concurrent one (text or style
  *              kept theirs, or the object was deleted by someone else); the UI briefly highlights them.
  * @typedef {object} Change
@@ -91,12 +107,23 @@
  * @property {(limit?: number) => Promise<HistoryEntry[]>} loadHistory
  * @property {(historyId: string) => Promise<void>} undoHistory
  *
- * Presence. Fields left out keep their value. Throttled to one send per PRESENCE_SEND_MS; the
- * last value is always sent. `transforms` and `stroke` should be cleared ([] / null) when the
- * gesture ends, in the same tick as the commit.
+ * Presence (src/client/sync/presence.js). Fields left out keep their value. Boundaries (selection
+ * or editing changes, gesture start/end, pointer leave/re-entry) are sent at once; movement is
+ * capped at about 20 Hz (less with many peers or a slow gadget) and states equal once rounded are
+ * skipped; the last value is always sent. `transforms` and `stroke` should be cleared ([] / null)
+ * when the gesture ends, in the same tick as the commit.
  * @property {(p: Partial<Pick<PresenceState, "cursor"|"viewport"|"selection"|"transforms"|"stroke"|"editingId">>) => void} setPresence
  * @property {() => void} flushPresence  send the pending presence now (e.g. on pointer up)
+ * @property {(visible: boolean) => void} setVisibility  document visibility: a hidden tab clears its
+ *   cursor and gesture ghosts once, then sends heartbeats only
  * @property {(name: string, color?: string) => void} setViewer
+ *
+ * Connection seam and recovery.
+ * @property {(gadget: any) => void} replaceTarget  swap the RPC stub (e.g. the host refreshed it after
+ *   a facet restart) without reloading: re-subscribes on it, reconciles from its snapshot and replays
+ *   only unacknowledged requests with their original request ids. Queue and undo stacks are kept.
+ * @property {() => RecoveryData} getRecoveryData  data-only copy of what a reload could lose, for
+ *   the recovery screen's download. Never store it in window.name or logs.
  * @property {() => void} dispose  leave presence, stop timers
  *
  * Conflicts (handled inside the store, see src/README.md):
@@ -114,11 +141,27 @@
  * @property {Viewer} viewer
  * @property {{setTimeout: typeof setTimeout, clearTimeout: typeof clearTimeout,
  *   setInterval: typeof setInterval, clearInterval: typeof clearInterval, now: () => number}} [timers]
- * @property {() => void} [onUnrecoverable]  called at most once, when the connection looks dead
- *   for good (3 failed subscribes in a row, 8 s non-live with no call succeeding, not counting time
- *   waiting on a subscribe call, or one subscribe call unsettled for 45 s). On the
- *   platform the iframe's `gadget` stub stays broken after a facet restart (code edit), so main.js
- *   reloads the frame. The store keeps retrying regardless.
+ * @property {() => void} [onUnrecoverable]  called at most once per outage, when the connection
+ *   looks dead for good (3 failed subscribes in a row, 8 s non-live with no call succeeding, not
+ *   counting time waiting on a subscribe call, or one subscribe call unsettled for 45 s); the state
+ *   is then recovery-required. On the platform the iframe's `gadget` stub stays broken after a facet
+ *   restart (code edit), so main.js reloads the frame, but only when nothing is unacknowledged
+ *   (otherwise it shows the recovery screen). The store keeps retrying regardless, and a success
+ *   (or replaceTarget) starts a new outage budget.
+ */
+
+/**
+ * A data-only recovery file: the last acknowledged server state plus the pending changes in
+ * queue order. No request ids, sessions or executable content.
+ * @typedef {object} RecoveryData
+ * @property {"whiteboard-recovery"} format
+ * @property {number} version
+ * @property {string} savedAt                 ISO time
+ * @property {number} lastAcknowledgedRevision
+ * @property {BoardSnapshot} board            the last acknowledged server state
+ * @property {Array<{kind: "create"|"update"|"delete"|"structure", id?: string, object?: any, patch?: any,
+ *   structure?: any, baseVersion?: number|null, queuedAt: number|null, sent: boolean}>} pending
+ *   `sent`: a request carrying it went out and its outcome is unknown (it may already be applied)
  */
 
 export {};

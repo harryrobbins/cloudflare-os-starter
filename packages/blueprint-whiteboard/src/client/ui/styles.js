@@ -112,11 +112,12 @@ input:focus { border-color: var(--accent); }
 .inline-edit { min-width: 0; display: inline-flex; }
 .conn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); white-space: nowrap; }
 .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); flex: none; }
-.conn[data-state="live"] .conn-dot { background: var(--ok); }
-.conn[data-state="live"] .conn-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.conn[data-state="live"] .conn-dot, .conn[data-state="saving"] .conn-dot { background: var(--ok); }
+.conn-text { overflow: hidden; text-overflow: ellipsis; }
 .conn[data-state="reconnecting"] .conn-dot, .conn[data-state="connecting"] .conn-dot { background: #e8871e; animation: wb-pulse 1s infinite alternate; }
+.conn[data-state="recovery-required"] .conn-dot { background: var(--danger); }
+.conn.conn-warn { color: var(--warn); font-weight: 600; }
 @keyframes wb-pulse { to { opacity: .3; } }
-.pending { font-size: 12px; color: var(--text-3); white-space: nowrap; }
 
 .wb-topright { top: 10px; right: 10px; display: flex; align-items: center; gap: 6px; padding: 4px; }
 .people { display: flex; align-items: center; padding: 0 2px; }
@@ -236,7 +237,8 @@ input:focus { border-color: var(--accent); }
 @media (max-width: 600px) {
   .wb-topbar { top: 6px; left: 6px; max-width: calc(100vw - 12px - 150px); }
   .board-title .inline-edit-display { max-width: 16ch; font-size: 14px; }
-  .pending { display: none; }
+  .conn:not(.conn-warn) .conn-text { display: none; }
+  .conn { min-width: 0; }
   .wb-topright { top: 6px; right: 6px; }
   .me-btn .me-name { display: none; }
   .me-btn { padding: 2px; }

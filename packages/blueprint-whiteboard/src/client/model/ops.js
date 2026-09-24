@@ -32,6 +32,9 @@
  * @property {boolean} [frameRetried]  already re-sent once without its frameId after invalid_ref
  * @property {Action[]} [undoEntry]  the undo (or redo) entry that re-creates what this delete removes
  * @property {WhiteboardObject|null} [baseObject]  server object this update/delete was last sent against
+ * @property {number} [queuedAt]  local clock ms when the change was first queued (a merge keeps it)
+ * @property {boolean} [pinnedBase]  send against `baseObject` (the version it was made on, from before
+ *   a re-subscribe) rather than the current server version, so a concurrent change conflicts
  */
 
 /** @typedef {OpBody & OpMeta} PendingOp */

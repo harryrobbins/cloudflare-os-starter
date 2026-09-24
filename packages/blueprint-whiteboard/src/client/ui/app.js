@@ -15,6 +15,7 @@ import { createMinimap } from "./minimap.js";
 import { createOutline } from "./outline.js";
 import { createActivity } from "./activity.js";
 import { showToast, ensureToastHost, closeMenu } from "./dialogs.js";
+import { ConnectionAnnouncer, statusText } from "../sync/connection.js";
 
 /** @typedef {import("../store-contract.js").Store} Store */
 /** @typedef {import("../store-contract.js").ClientState} ClientState */
@@ -144,7 +145,7 @@ export function mountApp(root, store) {
     },
   };
 
-  // ---- top left: title, connection, pending
+  // ---- top left: title, connection and save status
   const title = inlineEditable({
     className: "board-title",
     label: "Whiteboard title",
@@ -152,10 +153,12 @@ export function mountApp(root, store) {
     getValue: () => uiStore.getState().board.title || DEFAULT_TITLE,
     onSave: (value) => uiStore.setStructure({ title: value }),
   });
-  const conn = h("span", { class: "conn", role: "status", dataset: { state: "connecting" } },
-    h("span", { class: "conn-dot", "aria-hidden": "true" }), h("span", { class: "conn-text" }, "Connecting…"));
-  const pending = h("span", { class: "pending", hidden: true, "aria-hidden": "true" }, "Saving…");
-  const topbar = h("div", { class: "wb-float wb-topbar" }, h("h1", { style: { margin: "0", font: "inherit", display: "flex", minWidth: "0" } }, title.el), conn, pending);
+  // Not a live region: it changes on every save. Meaningful transitions are announced instead.
+  const conn = h("span", { class: "conn", dataset: { state: "connecting" } },
+    h("span", { class: "conn-dot", "aria-hidden": "true" }), h("span", { class: "conn-text", "aria-hidden": "true" }, "Connecting…"),
+    h("span", { class: "conn-detail sr-only" }, "Connecting to the whiteboard."));
+  const connAnnouncer = new ConnectionAnnouncer(announce);
+  const topbar = h("div", { class: "wb-float wb-topbar" }, h("h1", { style: { margin: "0", font: "inherit", display: "flex", minWidth: "0" } }, title.el), conn);
 
   const toolbar = createToolbar(app);
   const styleBar = createStyleBar(app);
@@ -254,15 +257,16 @@ export function mountApp(root, store) {
   /** @param {ClientState} state */
   function renderHeader(state) {
     title.refresh();
-    const s = state.connection;
-    if (conn.dataset.state !== s) {
-      conn.dataset.state = s;
-      /** @type {HTMLElement} */ (conn.querySelector(".conn-text")).textContent =
-        s === "live" ? "Live" : s === "reconnecting" ? "Reconnecting…" : "Connecting…";
-    }
-    const n = state.pending;
-    pending.hidden = !n;
-    pending.dataset.count = String(n);
+    const status = statusText(state);
+    conn.dataset.state = state.connection;
+    conn.dataset.count = String(state.pendingCount);
+    conn.classList.toggle("conn-warn", status.warn);
+    const text = /** @type {HTMLElement} */ (conn.querySelector(".conn-text"));
+    if (text.textContent !== status.label) text.textContent = status.label;
+    const detail = /** @type {HTMLElement} */ (conn.querySelector(".conn-detail"));
+    if (detail.textContent !== status.detail) detail.textContent = status.detail;
+    if (conn.title !== status.detail) conn.title = status.detail;
+    connAnnouncer.update(state);
     const t = state.board.title || DEFAULT_TITLE;
     if (document.title !== t) document.title = t;
   }
