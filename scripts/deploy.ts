@@ -7,6 +7,14 @@ import { parse, printParseErrorCode, type ParseError } from "jsonc-parser";
 import { pnpmCommand } from "../cloudflare-os/scripts/pnpm-command.ts";
 import { resolveBinEntry } from "../cloudflare-os/scripts/bin-entry.ts";
 import { AI_GATEWAY_PROVIDERS } from "./deployment-config.ts";
+import {
+  readSearchState,
+  searchProblems,
+  searchProblemsMessage,
+  searchResourceSpec,
+  wranglerRunner,
+  type SearchResourceNames,
+} from "./search-resources.ts";
 import type {
   AiGatewayModels,
   AiGatewayProvider,
@@ -34,6 +42,7 @@ const packageDirs = {
   webSearch: "packages/gatekeeper-websearch",
   records: "packages/gatekeeper-records",
   jev: "packages/gatekeeper-jev",
+  search: "packages/gatekeeper-search",
 } as const;
 const generatedPaths = Object.fromEntries(
   Object.entries(packageDirs).map(([name, dir]) => [name, join(root, dir, generatedName)]),
@@ -42,7 +51,8 @@ const defaultContextArtifactsNamespace = "gatekeeper-context-collections";
 // One chat upload arrives as a single Worker request body, and 100 MiB is what the platform accepts:
 // https://developers.cloudflare.com/workers/platform/limits/#request-limits
 const maxChatUploadBytes = 100 * 1024 * 1024;
-// The chat SPA is uploaded from here through the Worker's own `assets` binding.
+// The chat SPA is uploaded from here through the Worker's own `assets` binding. The search Worker's
+// SPA uses the same directory in its own package.
 const chatAssetsDir = "app/dist";
 const accountIdPattern = /^[a-f\d]{32}$/i;
 // Hyperdrive configuration IDs have the same shape as account IDs.
@@ -51,6 +61,8 @@ const hyperdriveIdPattern = accountIdPattern;
 const accessAudiencePattern = /^[a-f\d]{64}$/i;
 // Queue names: lowercase letters, numbers and hyphens, at most 63 characters.
 const queueNamePattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+// Vectorize index names: kebab-case starting with a letter, at most 64 bytes (the documented limit).
+const vectorizeIndexPattern = /^[a-z](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 
 const requiredPaths = [
   "accountId",
@@ -104,6 +116,10 @@ const recordsPaths = [
 
 const jevPaths = [
   "workers.jev.name",
+];
+
+const searchPaths = [
+  "workers.search.name",
 ];
 
 const resourcePaths = [
@@ -208,6 +224,7 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
     ...(config.webSearch?.enabled ? webSearchPaths : []),
     ...(config.records?.enabled === true ? recordsPaths : []),
     ...(config.jev?.enabled ? jevPaths : []),
+    ...(config.search?.enabled === true ? searchPaths : []),
   ];
   for (const path of activePaths) {
     const value = valueAt(config, path);
@@ -263,6 +280,13 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
       jev: undefined,
     };
   }
+  if (config.search?.enabled !== true) {
+    activeConfig = {
+      ...activeConfig,
+      workers: { ...activeConfig.workers, search: undefined },
+      search: undefined,
+    };
+  }
   const placeholder = JSON.stringify(activeConfig).match(/<[^>]+>/)?.[0];
   if (placeholder) throw new Error(`Replace deployment placeholder ${placeholder}.`);
 
@@ -304,11 +328,12 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
     .filter(([key]) => key !== "webSearch" || (config.webSearch?.enabled ?? false))
     .filter(([key]) => key !== "records" || config.records?.enabled === true)
     .filter(([key]) => key !== "jev" || (config.jev?.enabled ?? false))
+    .filter(([key]) => key !== "search" || config.search?.enabled === true)
     .map(([, worker]) => worker!.name);
   if (new Set(workerNames).size !== workerNames.length) {
     throw new Error(
-      "Router, Workshop, Context, Scheduler, Synthetic Data, chat, web search, Records, Jev, and " +
-      "custom Gatekeeper names must be unique.");
+      "Router, Workshop, Context, Scheduler, Synthetic Data, chat, web search, Records, Jev, " +
+      "search, and custom Gatekeeper names must be unique.");
   }
   if (!workerNames.every((name) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(name))) {
     throw new Error("Worker names must use lowercase letters, numbers, and hyphens.");
@@ -356,6 +381,7 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
   validateAiGateway(config);
   validateChat(config);
   validateRecords(config);
+  validateSearch(config);
 
   if (typeof config.errorReporting.enabled !== "boolean") {
     throw new Error("Error reporting enabled must be a boolean.");
@@ -659,6 +685,87 @@ function validateRecords(config: DeploymentConfig): void {
   }
 }
 
+/**
+ * The omni-search block. Dormant unless enabled, like Records: a disabled deployment generates no
+ * search Worker and binds nothing to it, so nothing else in the block has to be valid -- except the
+ * two switches that only mean something with a search Worker, which are mistakes rather than no-ops.
+ */
+function validateSearch(config: DeploymentConfig): void {
+  const search = config.search;
+  if (search === undefined) return;
+  if (search === null || typeof search !== "object" || Array.isArray(search)) {
+    throw new Error('search must be an object when present. Use { "enabled": false } to turn it off.');
+  }
+  if (typeof search.enabled !== "boolean") {
+    throw new Error("search.enabled must be a boolean.");
+  }
+  for (const key of ["agentAccess", "chatFusion", "contextFeed", "rerank"] as const) {
+    if (search[key] !== undefined && typeof search[key] !== "boolean") {
+      throw new Error(`search.${key} must be a boolean when present.`);
+    }
+  }
+  if (!search.enabled) {
+    if (search.agentAccess) {
+      throw new Error(
+        "search.agentAccess is true while search.enabled is false: there would be no search Worker " +
+        "for the Workshop to bind. Enable search, or drop agentAccess.");
+    }
+    if (search.chatFusion) {
+      throw new Error(
+        "search.chatFusion is true while search.enabled is false: there would be no search Worker " +
+        "for chat to push to. Enable search, or drop chatFusion.");
+    }
+    return;
+  }
+  if (search.chatFusion && !config.chat?.enabled) {
+    throw new Error(
+      "search.chatFusion is true while chat.enabled is false: there is no chat Worker to bind " +
+      "search's SearchService. Enable chat, or drop chatFusion.");
+  }
+  if (search.index !== undefined &&
+      (typeof search.index !== "string" || !vectorizeIndexPattern.test(search.index))) {
+    throw new Error(
+      "search.index must be omitted or a Vectorize index name: lowercase letters, numbers and " +
+      "hyphens, starting with a letter, at most 64 characters.");
+  }
+  const names = searchNames(config);
+  if (!vectorizeIndexPattern.test(names.index)) {
+    throw new Error(
+      `The Vectorize index name defaults to workers.search.name ("${names.index}"), which is not ` +
+      "a valid index name (lowercase letters, numbers and hyphens, starting with a letter, at most " +
+      "64 characters). Set search.index.");
+  }
+  for (const [key, name] of [["embedQueue", names.embedQueue], ["deadLetterQueue", names.deadLetterQueue]]) {
+    if (typeof name !== "string" || !queueNamePattern.test(name)) {
+      throw new Error(
+        `search.${key} must be omitted or a queue name of lowercase letters, numbers and hyphens ` +
+        "(at most 63 characters).");
+    }
+  }
+  if (names.embedQueue === names.deadLetterQueue) {
+    throw new Error("search.embedQueue and search.deadLetterQueue must be different queues.");
+  }
+  // Records' queues are this deployment's too; sharing one would feed each Worker the other's messages.
+  if (config.records?.enabled === true) {
+    const records = recordsQueues(config);
+    const shared = [names.embedQueue, names.deadLetterQueue]
+      .filter((name) => name === records.changes || name === records.deadLetter);
+    if (shared.length) {
+      throw new Error(`search and records must not share a queue: ${shared.join(", ")}.`);
+    }
+  }
+}
+
+/** The search Worker's Vectorize index, embed queue and dead-letter queue, defaults applied. */
+export function searchNames(config: DeploymentConfig): SearchResourceNames {
+  const worker = config.workers.search?.name;
+  return {
+    index: config.search?.index ?? `${worker}`,
+    embedQueue: config.search?.embedQueue ?? `${worker}-embed`,
+    deadLetterQueue: config.search?.deadLetterQueue ?? `${worker}-embed-dlq`,
+  };
+}
+
 /** The Records change queue and its dead-letter queue, defaults applied. */
 export function recordsQueues(config: DeploymentConfig): { changes: string; deadLetter: string } {
   const worker = config.workers.records?.name;
@@ -736,7 +843,12 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
   if (config.records?.enabled && !records) throw new Error("Records base configuration is required.");
   const jev = config.jev?.enabled ? structuredClone(bases.jev) : undefined;
   if (config.jev?.enabled && !jev) throw new Error("Jev base configuration is required.");
+  const search = config.search?.enabled ? structuredClone(bases.search) : undefined;
+  if (config.search?.enabled && !search) throw new Error("Search base configuration is required.");
   const origin = publicOrigin(config);
+  // One value for every GATEKEEPER_CONTEXT vendor binding: the Workshop's and search's feed must
+  // read the same Library, and a different domain would silently index an empty one.
+  const contextSharingDomain = config.context.sharingDomain ?? origin;
 
   setCommon(router, config, config.workers.router.name, config.workers.router.route);
   router.services = [
@@ -756,6 +868,11 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     // and the people connect flow. Plain fetch; the router stays the sole public entrypoint.
     ...(records
       ? [{ binding: "GATEKEEPER_RECORDS", service: config.workers.records!.name }]
+      : []),
+    // /gatekeeper/search: the omni-search SPA and its API. Plain fetch, like chat's; the search
+    // Worker verifies the Access JWT itself.
+    ...(search
+      ? [{ binding: "GATEKEEPER_SEARCH", service: config.workers.search!.name }]
       : []),
   ];
 
@@ -811,7 +928,7 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
       binding: "GATEKEEPER_CONTEXT",
       service: config.workers.context.name,
       entrypoint: "GatekeeperVendor",
-      props: { sharingDomain: config.context.sharingDomain ?? origin },
+      props: { sharingDomain: contextSharingDomain },
     },
     // No props: unlike Context, the Scheduler scopes nothing to a domain -- its schedules live in
     // its own `ScheduleDriver`/`SchedulerGatekeeper` Durable Objects, which belong to that Worker's
@@ -856,6 +973,13 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     ...(jev ? [{
       binding: "GATEKEEPER_JEV",
       service: config.workers.jev!.name,
+      entrypoint: "GatekeeperVendor",
+    }] : []),
+    // The agent's read-only SearchSession. Opt-in like chat's, and public content only in v1: the
+    // singleton session carries no caller identity (docs/plans/omni-search.md).
+    ...(search && config.search?.agentAccess ? [{
+      binding: "GATEKEEPER_SEARCH",
+      service: config.workers.search!.name,
       entrypoint: "GatekeeperVendor",
     }] : []),
   ];
@@ -934,13 +1058,25 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     // as the Workshop's own ERROR_REPORTER binding. `source` is the gateway's namespace for this
     // caller's keys (its workspaces are named `chat:user:<id>`), so it is fixed here rather than
     // configurable: changing it would orphan every asker's existing "Chat agent" workspace.
-    if (agentRepliesEnabled(config)) {
-      chat.services = [{
+    // Omni-search fusion: chat pushes its messages into the index and asks it for dense recall
+    // through `SearchService`. `source` is the ingest namespace (`chat:` document ids), fixed for the
+    // same reason as the gateway's: changing it would orphan every document chat already pushed.
+    const chatServices = [
+      ...(agentRepliesEnabled(config) ? [{
         binding: "WORKSHOP_GATEWAY",
         service: config.workers.workshop.name,
         entrypoint: "ExternalMessageGateway",
         props: { source: "chat" },
-      }];
+      }] : []),
+      ...(search && config.search?.chatFusion ? [{
+        binding: "SEARCH",
+        service: config.workers.search!.name,
+        entrypoint: "SearchService",
+        props: { source: "chat" },
+      }] : []),
+    ];
+    if (chatServices.length) {
+      chat.services = chatServices;
     } else {
       delete chat.services;
     }
@@ -1013,6 +1149,58 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     setCommon(jev, config, config.workers.jev!.name);
   }
 
+  if (search && config.search) {
+    setCommon(search, config, config.workers.search!.name);
+    search.vars = {
+      // The same people trust boundary chat gets: the SPA and its API verify the Access JWT on every
+      // request rather than trusting the router. ADMINS structured, as chat's is.
+      ADMINS: config.access.admins,
+      CF_ACCESS_ISS: config.access.issuer.replace(/\/$/, ""),
+      CF_ACCESS_AUD: config.access.audience,
+      // Reached through the router, so deep links are the router's origin plus /gatekeeper/search.
+      PUBLIC_BASE_URL: origin,
+      // Embedding calls go through the deployment's gateway for cost logging; empty calls Workers AI
+      // directly. The AI binding resolves a gateway name in its own account only, so with a
+      // cross-account aiGateway.accountId this name is looked up in the deployment account instead.
+      AI_GATEWAY: config.aiGateway.enabled ? config.aiGateway.name! : "",
+      RERANK: config.search.rerank ? "1" : "0",
+    };
+    const names = searchNames(config);
+    const baseVectorize = search.vectorize ?? [];
+    if (!baseVectorize.some((entry) => entry.binding === "VECTORS")) {
+      throw new Error(`${packageDirs.search}/wrangler.jsonc declares no VECTORS Vectorize binding.`);
+    }
+    search.vectorize = baseVectorize.map((entry) =>
+      entry.binding === "VECTORS" ? { ...entry, index_name: names.index } : entry);
+    const baseQueues = search.queues ?? {};
+    if (!baseQueues.producers?.length || !baseQueues.consumers?.length) {
+      throw new Error(`${packageDirs.search}/wrangler.jsonc must declare a queue producer and consumer.`);
+    }
+    // One queue, as with Records: the Worker produces embed jobs and consumes them itself, failing
+    // over to the DLQ. Neither is created by wrangler deploy -- `pnpm search:provision` does it.
+    search.queues = {
+      producers: baseQueues.producers.map((producer) => ({ ...producer, queue: names.embedQueue })),
+      consumers: baseQueues.consumers.map((consumer) => ({
+        ...consumer,
+        queue: names.embedQueue,
+        dead_letter_queue: names.deadLetterQueue,
+      })),
+    };
+    // The Context Library feed (src/feeds/): cfos-context deploys before search in deployOrder().
+    if (config.search.contextFeed ?? true) {
+      search.services = [{
+        binding: "GATEKEEPER_CONTEXT",
+        service: config.workers.context.name,
+        entrypoint: "GatekeeperVendor",
+        props: { sharingDomain: contextSharingDomain },
+      }];
+    } else {
+      delete search.services;
+    }
+    // Migrations, the Durable Object, `ai`, `assets` (served behind its own Access check with
+    // `run_worker_first`) and the capnweb-validate build step are inherited from the package.
+  }
+
   const generated: GeneratedConfigs = {
     router, workshop, context, scheduler, procgen, customGatekeeper,
     ...(errorReporter && { errorReporter }),
@@ -1021,6 +1209,7 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     ...(webSearch && { webSearch }),
     ...(records && { records }),
     ...(jev && { jev }),
+    ...(search && { search }),
   };
   requireNoDevValues(generated, "generated production config");
   requireNoLocalConnectionStrings(generated);
@@ -1147,6 +1336,9 @@ export function buildCommands(config: DeploymentConfig): BuildCommand[] {
       { args: ownBuild("gatekeeper-records") },
     ] : []),
     ...(config.jev?.enabled ? [{ args: ownBuild("gatekeeper-jev") }] : []),
+    // Search's `build` is the Vite build of its SPA into `app/dist`, like chat's; the Worker bundle
+    // is its capnweb-validate `build.command`, which wrangler runs at deploy time.
+    ...(config.search?.enabled ? [{ args: ownBuild("gatekeeper-search") }] : []),
     ...(config.errorReporting.enabled ? [{ args: ownBuild("error-reporter") }] : []),
     // Access mode is a build-time constant in the frontend bundle (`src/useAuth.ts`), so it is set
     // here rather than inherited: a bundle built under a different value is wrong, not just stale.
@@ -1209,6 +1401,9 @@ export function agentRepliesEnabled(config: DeploymentConfig): boolean {
  * forward edge -- so a *first-ever* deploy with both switched on must be run once with
  * `agentReplies: false` (README, "Agent"): a binding's target has to exist when the Worker holding
  * it is deployed, which is also why `agentAccess` is its own switch.
+ *
+ * Search binds nothing of ours, and chat (`SearchService`), the Workshop (`GatekeeperVendor`) and
+ * the router all bind it, so it goes before all three.
  */
 export function deployOrder(config: DeploymentConfig): (keyof typeof packageDirs)[] {
   const chat = config.chat?.enabled ? ["chat" as const] : [];
@@ -1224,6 +1419,7 @@ export function deployOrder(config: DeploymentConfig): (keyof typeof packageDirs
     // Records binds nothing; the Workshop (vendor) and the router (/gatekeeper/records) bind it.
     ...(config.records?.enabled ? ["records" as const] : []),
     ...(config.jev?.enabled ? ["jev" as const] : []),
+    ...(config.search?.enabled ? ["search" as const] : []),
     ...(chatFirst ? chat : []),
     "workshop",
     ...(chatFirst ? [] : chat),
@@ -1278,6 +1474,46 @@ function requireRecordsPackage(config: DeploymentConfig): void {
   }
 }
 
+/** The search package's base config has to exist before anything can be generated for it. */
+function requireSearchPackage(config: DeploymentConfig): void {
+  if (!config.search?.enabled) return;
+  if (!existsSync(join(root, packageDirs.search, "wrangler.jsonc"))) {
+    throw new Error(
+      `search.enabled is true but ${packageDirs.search}/wrangler.jsonc is missing. Add the ` +
+      "package, or set search.enabled to false.");
+  }
+}
+
+/** The search SPA, after its build and only on a real deploy -- the same rule as chat's. */
+function requireSearchAssets(config: DeploymentConfig): void {
+  if (!config.search?.enabled) return;
+  const entry = join(root, packageDirs.search, chatAssetsDir, "index.html");
+  if (!existsSync(entry)) {
+    throw new Error(
+      `${packageDirs.search}/${chatAssetsDir}/index.html is missing, so the search Worker would ` +
+      `deploy with no app. Its \`build\` script must build the SPA into ${chatAssetsDir} ` +
+      "(pnpm --filter gatekeeper-search build).");
+  }
+}
+
+/**
+ * The Vectorize index, its metadata indexes and both queues, verified against the account before
+ * anything is built. Read-only. wrangler cannot create any of them at deploy time, and a dry run
+ * does not look them up, so without this a `pnpm check` passes on a deploy that then fails -- or,
+ * worse, succeeds against an index missing a metadata index, which cannot be repaired without
+ * re-upserting the corpus.
+ */
+async function verifySearchResources(config: DeploymentConfig): Promise<void> {
+  if (!config.search?.enabled) return;
+  const spec = searchResourceSpec(searchNames(config));
+  console.log(
+    `\nVerifying omni-search resources: Vectorize index ${spec.index}, queues ${spec.embedQueue} ` +
+    `and ${spec.deadLetterQueue}...`);
+  const state = await readSearchState(spec, wranglerRunner(root, config.accountId));
+  const problems = searchProblems(spec, state);
+  if (problems.length) throw new Error(searchProblemsMessage(problems));
+}
+
 /**
  * The chat SPA, after the build that produces it and only on a real deploy.
  *
@@ -1312,7 +1548,7 @@ async function readJsonc<T>(path: string): Promise<T> {
 }
 
 // Every validateConfig message names a config path, so say which file those paths live in.
-async function readDeployment(path: string): Promise<DeploymentConfig> {
+export async function readDeployment(path: string): Promise<DeploymentConfig> {
   const config = await readJsonc<DeploymentConfig>(path);
   try {
     return validateConfig(config);
@@ -1409,6 +1645,7 @@ async function main(): Promise<void> {
   requireFormatBlueprints(config);
   requireChatPackage(config);
   requireRecordsPackage(config);
+  requireSearchPackage(config);
   const generated = generateConfigs(config, {
     router: await readJsonc(join(root, packageDirs.router, "wrangler.jsonc")),
     workshop: await readJsonc(join(root, packageDirs.workshop, "wrangler.jsonc")),
@@ -1426,8 +1663,13 @@ async function main(): Promise<void> {
       ? { records: await readJsonc(join(root, packageDirs.records, "wrangler.jsonc")) }
       : {}),
     ...(config.jev?.enabled ? { jev: await readJsonc(join(root, packageDirs.jev, "wrangler.jsonc")) } : {}),
+    ...(config.search?.enabled
+      ? { search: await readJsonc(join(root, packageDirs.search, "wrangler.jsonc")) }
+      : {}),
   });
   reportAiGateway(config);
+  // Before anything is written or built, in --check and on a live deploy alike.
+  await verifySearchResources(config);
 
   try {
     for (const [name, generatedConfig] of Object.entries(generated)) {
@@ -1439,7 +1681,10 @@ async function main(): Promise<void> {
     if (check) run(["test"]);
     build(config);
     const deployArgs = check ? ["--dry-run"] : [];
-    if (!check) requireChatAssets(config);
+    if (!check) {
+      requireChatAssets(config);
+      requireSearchAssets(config);
+    }
     for (const name of deployOrder(config)) {
       deployWorker(packageDirs[name], deployArgs);
     }

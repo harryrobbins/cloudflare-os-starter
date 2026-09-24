@@ -43,7 +43,7 @@ Secrets are never valid values in this file. Install them interactively with Wra
 
 ### Workers and routing
 
-The deployment is seven Workers, plus team chat and Notebook Python execution when those are enabled. Keep their names unique: service bindings use these names, so update and deploy them together.
+The deployment is seven Workers, plus team chat, omni-search and Notebook Python execution when those are enabled. Keep their names unique: service bindings use these names, so update and deploy them together.
 
 | Worker | Role |
 | --- | --- |
@@ -54,6 +54,7 @@ The deployment is seven Workers, plus team chat and Notebook Python execution wh
 | `procgen` | The Synthetic Data Gatekeeper, which generates finite deterministic datasets. |
 | `customGatekeeper` | This repository's example integration. |
 | `chat` | [Team chat](#team-chat), which also serves its own app at `/gatekeeper/chat/`. Deployed only while `chat.enabled`. |
+| `search` | [Omni-search](#omni-search), which serves its own app at `/gatekeeper/search/`. Deployed only while `search.enabled`. |
 | `errorReporter` | The private explicit-issue destination. |
 
 Context and Scheduler are *ambient*: upstream's release marks both `PREINSTALL`, so the hosted flow installs them on every instance and this starter deploys them for the same reason. Neither takes configuration beyond its name — the Scheduler takes none at all.
@@ -239,6 +240,19 @@ This repository builds these formats from source, and each package's tests fail 
 | Wave (`format.wave`) | [`packages/blueprint-wave`](../packages/blueprint-wave/README.md) | `pnpm --filter blueprint-wave pack:gadget` |
 | Tessera Mosaic (`format.tessera`) | [`packages/blueprint-tessera`](../packages/blueprint-tessera/README.md) | `pnpm --filter blueprint-tessera pack:gadget` |
 
+#### Docs, Sheets and Slides are patched for search
+
+The copies of upstream's Docs, Sheets and Slides in `formats/` are not verbatim: [`scripts/patch-format-search.mjs`](../scripts/patch-format-search.mjs) injects a push into each `server.js`, so an instance whose `env` has a `SEARCH` binding sends its text to [omni-search](plans/omni-search.md#bundled-docs-sheets-and-slides) a few seconds after each change. An instance without the binding behaves exactly as upstream's does. The archives declare no binding (a declared binding is mandatory at **New**); the agent wires the ambient search capsule into a gadget with `setGadgetBinding`, or a person binds it from Connections.
+
+The patched `revision` is upstream's × 100 plus the patch version (Docs 8 → 801), so it never collides with an upstream revision. **Whenever you re-copy a Docs, Sheets or Slides pair from upstream, re-run the patch:**
+
+```sh
+node scripts/patch-format-search.mjs          # upstream pairs -> formats/
+node scripts/patch-format-search.mjs --check  # exits 1 if formats/ is stale
+```
+
+It is a no-op on an already-patched pair, and it refuses, naming the format and anchor, if upstream's `server.js` has changed where it hooks in; update the anchors in the script, not the archive. `node --test scripts/patch-format-search.test.ts` fails while `formats/` differs from a fresh patch.
+
 Each command rebuilds `formats/<name>.gadget` and bumps its revision.
 
 ### Team chat
@@ -314,6 +328,65 @@ People are not added by signing in. A data administrator adds each person on the
 
 Schema changes are numbered migrations in `packages/records-schema/migrations`, applied with `db:migrate` **before** deploying code that needs them. A Worker rollback never reverses SQL. Operator detail: [`packages/gatekeeper-records/README.md`](../packages/gatekeeper-records/README.md).
 
+### Omni-search
+
+Omni-search is one hybrid index across the deployment: ask "where are the docs about project X?" and results are ranked by meaning as well as by words. Team chat is its first source; the Context Library, connected services and gadgets follow. It is one Worker, `packages/gatekeeper-search`. Design and status: [omni-search plan](plans/omni-search.md).
+
+```jsonc
+"workers": { "search": { "name": "cfos-search" } },
+"search": {
+  "enabled": true,
+  "agentAccess": true,    // ambient SearchSession for the agent (public content only)
+  "chatFusion": true,     // chat pushes into the index and fuses dense recall into its search
+  "index": "cfos-search", // Vectorize index; absent uses workers.search.name
+  "rerank": false
+  // "embedQueue": "cfos-search-embed", "deadLetterQueue": "cfos-search-embed-dlq"
+}
+```
+
+A deploy with search enabled creates or binds:
+
+| Resource | What it holds |
+| --- | --- |
+| One Worker, named by `workers.search.name` | The search app and its API at `/gatekeeper/search/`, the `SearchService` entrypoint sources push to, and the agent's `GatekeeperVendor`. No route and no Preview URL of its own. |
+| One SQLite Durable Object, `SearchIndex` | Documents, chunks, the FTS5 lexical index, ACL principals and tombstones. It is the authority for who may see what. |
+| One Vectorize index, bound as `VECTORS` | 768-dimension cosine embeddings (`@cf/baai/bge-base-en-v1.5`) and six string metadata indexes: `scope`, `vis`, `source`, `kind`, `author`, `day`. Chunk text never goes into it. |
+| One Queue and its dead-letter queue, bound as `EMBED` | Embedding, backfill and re-embedding jobs the Worker gives itself. Sources never see it. |
+| Workers AI, bound as `AI` | Embeddings and the optional reranker, through the deployment's AI Gateway when `aiGateway.enabled`. |
+
+| Key | Controls |
+| --- | --- |
+| `search.enabled` | Whether the Worker is built, deployed and bound. When `false` the rest of the block is not validated, and nothing is bound on the router, the Workshop or chat. |
+| `search.agentAccess` | Optional, default `false`. Binds the Worker to the Workshop as `GATEKEEPER_SEARCH` with the `GatekeeperVendor` entrypoint, so every workspace gets a read-only search session and `/find`. Requires `search.enabled`. |
+| `search.chatFusion` | Optional, default `false`. Binds `SearchService` to chat as `SEARCH` (props `{ source: "chat" }`), beside chat's `WORKSHOP_GATEWAY`. Requires `search.enabled` and `chat.enabled`. |
+| `search.index` | The Vectorize index name: lowercase letters, numbers and hyphens, starting with a letter, at most 64 characters. Absent uses `workers.search.name`. |
+| `search.rerank` | Optional, default `false`. Deployed as `RERANK` (`"1"`/`"0"`): a `bge-reranker-base` pass over the fused top 30. |
+| `search.embedQueue`, `search.deadLetterQueue` | Optional queue names. When absent they default to `<workers.search.name>-embed` and `...-embed-dlq`. |
+
+The router binds the Worker as `GATEKEEPER_SEARCH` with plain fetch, and that binding name is what creates `/gatekeeper/search/*`. The Worker gets `ADMINS`, `CF_ACCESS_ISS` and `CF_ACCESS_AUD` from [`access`](#cloudflare-access) and verifies the Access JWT itself, `PUBLIC_BASE_URL` for deep links, and `AI_GATEWAY` (the `aiGateway.name`, or empty when the catalog is off) for embedding cost logging. It deploys before chat, the Workshop and the router, all of which bind it.
+
+**Provision before the first deploy.** `wrangler deploy` cannot create a Vectorize index, and every metadata index must exist *before the first vector is written*: a vector written earlier is not indexed on a property added later, and re-upserting the whole corpus is the only repair. So:
+
+```sh
+pnpm search:provision        # read-only: reads the account, prints what is missing
+pnpm search:provision --yes  # creates it, then verifies
+```
+
+It creates, in order and only what is missing, with the names from `deployment.jsonc`:
+
+```sh
+wrangler vectorize create <index> --dimensions 768 --metric cosine
+wrangler vectorize create-metadata-index <index> --propertyName <scope|vis|source|kind|author|day> --type string
+wrangler queues create <deadLetterQueue>
+wrangler queues create <embedQueue>
+```
+
+It is safe to re-run. An existing index with the wrong dimensions or metric, or a metadata index with the wrong type, cannot be changed in place, so it is reported and nothing is created: choose a new `search.index`, provision it, and backfill. `pnpm check` and `pnpm deploy` run the same read-only verification (`wrangler vectorize get`, `vectorize list-metadata-index`, `queues info`) before building anything and stop with a message naming `pnpm search:provision` if anything is missing or mis-shaped. That makes `pnpm check` need Wrangler authentication for the account while search is enabled.
+
+**What people and the agent see.** At `/gatekeeper/search/`, a signed-in person gets results filtered by their own access: the ACL filter runs before ranking on both halves, and a post-filter against the Durable Object's principals drops anything revoked since. The agent's `SearchSession` and any in-shell app page carry **no caller identity** — the platform's singleton session and `AppUiContext` do not include one — so in v1 they see **deployment-public content only**: public chat channels, public Context collections, and documents a source marked visible to all. That is the same decision chat's agent access made; review it in `/admin` before turning `agentAccess` on. Per-user results for the agent wait for the identity fork patch described in the plan.
+
+A document is searchable by words as soon as it is ingested and by meaning a few seconds later, once its embedding job has run. To disable search, set `"enabled": false`: the build, the deploy and all three service bindings disappear. The Worker, its Durable Object, the Vectorize index and the queues are not deleted.
+
 ## Custom Gatekeepers
 
 Keep deployment-owned Gatekeepers under `packages/`, outside the `cloudflare-os` submodule. `scripts/deploy.ts` binds this repository's example as `GATEKEEPER_CUSTOM` and Context as `GATEKEEPER_CONTEXT`, twice each: on the Workshop with the `GatekeeperVendor` entrypoint for RPC, and on the router with no entrypoint, where the binding name is what routes `/gatekeeper/custom` and `/gatekeeper/context` to it. A Gatekeeper that serves HTTP — an OAuth redirect, for instance — needs both.
@@ -346,7 +419,7 @@ Prefer wrapper-owned Workers and [service bindings](https://developers.cloudflar
 3. Review Workshop and Context Wrangler base-config changes and Gatekeeper contracts.
 4. Diff `cloudflare-os/pnpm-workspace.yaml`'s `catalog:` against this repository's and re-sync it. Two submodule packages are members of this workspace and resolve `catalog:` here, so a missing entry fails the install and a *stale* one silently gives the tree two copies of `capnweb` — a failure that only appears once the two installs are separate, as they are in CI.
 5. Run `pnpm install`, `pnpm --dir cloudflare-os install`, `pnpm lint`, and `pnpm check`.
-6. If `formatBlueprintsDir` is set, compare `cloudflare-os/packages/workshop-backend/format-blueprints/*.json` with the copies in `formats/`. Re-copy any `.gadget`/`.json` pair whose `revision` moved, or the deployment keeps shipping the old Docs, Sheets and Slides.
+6. If `formatBlueprintsDir` is set, compare `cloudflare-os/packages/workshop-backend/format-blueprints/*.json` with the copies in `formats/`. Re-copy any `.gadget`/`.json` pair whose `revision` moved, or the deployment keeps shipping the old Docs, Sheets and Slides. Then re-run `node scripts/patch-format-search.mjs` (see [Docs, Sheets and Slides are patched for search](#docs-sheets-and-slides-are-patched-for-search)); it reads the pairs straight from the submodule, so re-copying them is optional when you patch.
 7. Carry the fork's `feat/chat-dock` commit forward with the rest of the fork branch. It is frontend-only — `ChatDock.tsx`, `ChatTrigger.tsx`, `chatDockBus.ts`, `routes/chat.tsx`, `routes/chat_.$.tsx`, `ChatDock.integration.test.tsx`, four call sites and `routeTree.gen.ts` — so it either rebases cleanly or is dropped: chat keeps working at `/gatekeeper/chat/` without it. `routeTree.gen.ts` is generated, so resolve a conflict there by re-running the frontend build rather than by hand.
 8. If [team chat](#team-chat) is enabled, rebuild `packages/gatekeeper-chat` against the new submodule — its Gatekeeper vendor uses `@gadgets/workshop-shared` — and check that its `ChatWorkspace` migrations are unchanged and still replay in order. Never roll back chat by deleting that Durable Object class or its uploads bucket.
 9. Deploy and verify Access, administrator access, storage, configured AI, Context, custom observations, the Error Reporter query surface, and that every bundled format still instantiates from **New**.
