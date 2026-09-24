@@ -1,9 +1,9 @@
 # Organisation datastores: research and decisions
 
 Written 2026-09-23 against starter `7d39f48` and pinned `cloudflare-os` `e50a9058`.
-This supports the authoritative [implementation plan](../plans/organisation-datastores.md).
+This supports the authoritative [implementation plan](../../plans/external_datastores/organisation-datastores.md).
 It supersedes the recommendations in [External API Plan A](external-api-plan-A.md) and
-[external records service](../plans/external-records-service.md). Those documents remain historical
+[external records service](../../plans/external_datastores/external-records-service.md). Those documents remain historical
 inputs, not parallel implementation instructions. No provider spike or deployed validation has
 been performed for this design.
 
@@ -37,22 +37,22 @@ the storage model for every domain.
 
 The relevant current sources are:
 
-- [`gatekeeper.ts`](../../cloudflare-os/packages/workshop-shared/src/gatekeeper.ts):
+- [`gatekeeper.ts`](../../../cloudflare-os/packages/workshop-shared/src/gatekeeper.ts):
   `AccountDescription.providesUi`, `GatekeeperUser.startAppUi`, resource configurators,
   `Gatekeeper.startSession`, `getAgentCatalog`, `addObserver` and action pre-approval contracts.
-- [`library-gatekeeper.ts`](../../cloudflare-os/packages/gatekeeper-context/src/library-gatekeeper.ts):
+- [`library-gatekeeper.ts`](../../../cloudflare-os/packages/gatekeeper-context/src/library-gatekeeper.ts):
   an existing management application, discovery catalog and observer implementation to study.
-- [`gatekeepers.tsx`](../../cloudflare-os/packages/workshop-frontend/src/routes/gatekeepers.tsx):
+- [`gatekeepers.tsx`](../../../cloudflare-os/packages/workshop-frontend/src/routes/gatekeepers.tsx):
   Connectors lists connected accounts/vendors; it is not an organisation dataset registry.
-- [`overseer.ts`](../../cloudflare-os/packages/workshop-backend/src/overseer.ts):
+- [`overseer.ts`](../../../cloudflare-os/packages/workshop-backend/src/overseer.ts):
   `GadgetClientImpl.getViewer`, `UseGadgetClientInterface.getViewer`, shared gadget connections,
   bindings and observer verification.
-- [Viewer identity research](gadget-viewer-identity.md) and
-  [the current trust-limit statement](../plans/collaborative-blueprints.md#viewer-identity-and-change-attribution):
+- [Viewer identity research](../gadget-viewer-identity.md) and
+  [the current trust-limit statement](../../plans/collaborative-blueprints.md#viewer-identity-and-change-attribution):
   `gadgetViewer` reaches the iframe, but the gadget server receives ordinary client arguments.
-- [Existing Supabase Gatekeeper](../../cloudflare-os/packages/gatekeeper-supabase/README.md):
+- [Existing Supabase Gatekeeper](../../../cloudflare-os/packages/gatekeeper-supabase/README.md):
   administrative SQL access with approved mutations, not the proposed domain records service.
-- [`scripts/deploy.ts`](../../scripts/deploy.ts): wrapper-generated Worker configuration, builds and
+- [`scripts/deploy.ts`](../../../scripts/deploy.ts): wrapper-generated Worker configuration, builds and
   service binding/deploy ordering. The Records package and configuration do not exist yet.
 
 Inference: management pages, resource selection, discovery metadata and action approvals can use

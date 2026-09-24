@@ -4,12 +4,12 @@ Written 2026-09-23 against starter `main` at `7d39f48`, the pinned `cloudflare-o
 submodule at `e50a9058`, and these proposals:
 
 - [`gadget-http-api-options.md`](gadget-http-api-options.md)
-- [`../plans/gadget-http-api.md`](../plans/gadget-http-api.md)
+- [`../plans/gadget-http-api.md`](../../plans/external_datastores/gadget-http-api.md)
 
 This is a design review, not an implementation status report. The feature remains unbuilt.
 
 Scope clarification (2026-09-23): these recommendations concern gadget-specific automation.
-For durable organisational records, follow the [Organisation datastores plan](../plans/organisation-datastores.md)
+For durable organisational records, follow the [Organisation datastores plan](../../plans/external_datastores/organisation-datastores.md)
 and [decision record](organisation-datastores-decisions.md), which use a domain service rather
 than routing business-record operations through a gadget hook.
 

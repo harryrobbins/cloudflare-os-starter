@@ -4,9 +4,9 @@
 > Retained as historical design input, not current implementation instructions. The replacement
 > selects a domain service, separates publication from provisioning, adds organisation ownership
 > and a registry, requires trusted caller identity, and corrects the outbox cursor design.
-> See [research and decisions](../research/organisation-datastores-decisions.md).
+> See [research and decisions](../../research/external_datastores/organisation-datastores-decisions.md).
 
-Written 2026-09-23 against starter `main` 3157780 and submodule e50a9058. Status: **proposal, nothing built**. This plan is an alternative to [`gadget-http-api.md`](gadget-http-api.md), which serves HTTP through a Gatekeeper hook and has been reviewed in [`../research/gadget-http-api-recommendations.md`](../research/gadget-http-api-recommendations.md). Evidence for the platform facts is in [`../research/gadget-http-api-options.md`](../research/gadget-http-api-options.md).
+Written 2026-09-23 against starter `main` 3157780 and submodule e50a9058. Status: **proposal, nothing built**. This plan is an alternative to [`gadget-http-api.md`](gadget-http-api.md), which serves HTTP through a Gatekeeper hook and has been reviewed in [`../research/gadget-http-api-recommendations.md`](../../research/external_datastores/gadget-http-api-recommendations.md). Evidence for the platform facts is in [`../research/gadget-http-api-options.md`](../../research/external_datastores/gadget-http-api-options.md).
 
 ## The idea in one picture
 

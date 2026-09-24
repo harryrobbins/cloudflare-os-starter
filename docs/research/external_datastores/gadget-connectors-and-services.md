@@ -7,9 +7,9 @@ Code trace and architecture analysis of inter-gadget communication, data sharing
 ## Headline
 
 1. **Can one gadget connect to another gadget's data as a connector?**
-   **Not directly today.** In the current runtime, attempting to bind a gadget directly to another gadget throws an explicit error: `Gadget-to-gadget bindings are not supported yet.` ([`packages/workshop-backend/src/overseer.ts:1832`](cloudflare-os/packages/workshop-backend/src/overseer.ts#L1832)). Furthermore, each gadget runs inside an isolated Durable Object facet with private DO storage (KV/SQLite), and gadget dynamic workers have `globalOutbound: null` with sandboxed iframes (`connect-src 'none'`), preventing direct peer-to-peer network calls.
+   **Not directly today.** In the current runtime, attempting to bind a gadget directly to another gadget throws an explicit error: `Gadget-to-gadget bindings are not supported yet.` ([`packages/workshop-backend/src/overseer.ts:1832`](../../../cloudflare-os/packages/workshop-backend/src/overseer.ts#L1832)). Furthermore, each gadget runs inside an isolated Durable Object facet with private DO storage (KV/SQLite), and gadget dynamic workers have `globalOutbound: null` with sandboxed iframes (`connect-src 'none'`), preventing direct peer-to-peer network calls.
    
-   However, the multi-gadget architecture plan ([`cloudflare-os/plans/multi-gadget.md:27`](cloudflare-os/plans/multi-gadget.md#L27)) was designed with a shared workpiece ID namespace specifically so that gadget-to-gadget bindings can be introduced in a future release.
+   However, the multi-gadget architecture plan ([`cloudflare-os/plans/multi-gadget.md:27`](../../../cloudflare-os/plans/multi-gadget.md#L27)) was designed with a shared workpiece ID namespace specifically so that gadget-to-gadget bindings can be introduced in a future release.
 
 2. **Can a gadget be essentially a service with an API that exposes functions other gadgets can call?**
    In Cloudflare OS, a service with an API that exposes callable functions to gadgets is **not a Gadget—it is a Gatekeeper**.
@@ -18,7 +18,7 @@ Code trace and architecture analysis of inter-gadget communication, data sharing
    * **Gadgets** = Applications / Processes (user-facing UI in an iframe, private DO state, internal business logic).
    * **Gatekeepers** = Services / Drivers / Connectors (typed RPC sessions, shared or external data access, observation auditing, action approval queues, and optional HTTP endpoints).
 
-To provide callable service functions and shared data across gadgets, you implement a **Gatekeeper** (such as [`packages/custom-gatekeeper`](packages/custom-gatekeeper)). Multiple gadgets in the workspace bind to the same Gatekeeper and invoke its methods as standard async RPC calls on `env.SERVICE_NAME`.
+To provide callable service functions and shared data across gadgets, you implement a **Gatekeeper** (such as [`packages/custom-gatekeeper`](../../../packages/custom-gatekeeper)). Multiple gadgets in the workspace bind to the same Gatekeeper and invoke its methods as standard async RPC calls on `env.SERVICE_NAME`.
 
 ---
 
@@ -27,14 +27,14 @@ To provide callable service functions and shared data across gadgets, you implem
 Every gadget in Cloudflare OS executes within a tightly restricted sandbox:
 
 ### Runtime sandbox
-* **Dynamic Worker Loader**: Gadgets run inside dynamic worker facets loaded via `this.env.LOADER.get(...)` ([`overseer.ts:2374-2422`](cloudflare-os/packages/workshop-backend/src/overseer.ts#L2374)).
-* **No Outbound Network**: Dynamic worker configurations specify `globalOutbound: null` ([`overseer.ts:2416`](cloudflare-os/packages/workshop-backend/src/overseer.ts#L2416)). Gadgets cannot make outbound `fetch()` requests or open external WebSockets.
-* **No Inbound HTTP Routes**: Incoming HTTP requests to the deployment hit the Router and Workshop Workers. Gadgets do not have public or private HTTP endpoints; they receive calls exclusively via RPC ([`docs/research/gadget-collaboration-runtime.md:192`](docs/research/gadget-collaboration-runtime.md#L192)).
-* **Facet-Scoped Storage**: State is backed by Durable Object storage inside the Overseer DO facet (`id: facetName`). One gadget cannot access another gadget's KV or SQLite DO storage ([`overseer.ts:2469-2476`](cloudflare-os/packages/workshop-backend/src/overseer.ts#L2469)).
+* **Dynamic Worker Loader**: Gadgets run inside dynamic worker facets loaded via `this.env.LOADER.get(...)` ([`overseer.ts:2374-2422`](../../../cloudflare-os/packages/workshop-backend/src/overseer.ts#L2374)).
+* **No Outbound Network**: Dynamic worker configurations specify `globalOutbound: null` ([`overseer.ts:2416`](../../../cloudflare-os/packages/workshop-backend/src/overseer.ts#L2416)). Gadgets cannot make outbound `fetch()` requests or open external WebSockets.
+* **No Inbound HTTP Routes**: Incoming HTTP requests to the deployment hit the Router and Workshop Workers. Gadgets do not have public or private HTTP endpoints; they receive calls exclusively via RPC ([`docs/research/gadget-collaboration-runtime.md:192`](../gadget-collaboration-runtime.md#L192)).
+* **Facet-Scoped Storage**: State is backed by Durable Object storage inside the Overseer DO facet (`id: facetName`). One gadget cannot access another gadget's KV or SQLite DO storage ([`overseer.ts:2469-2476`](../../../cloudflare-os/packages/workshop-backend/src/overseer.ts#L2469)).
 
 ### Client sandbox
 * Gadget frontends (`client.js`) run in an opaque-origin `srcDoc` iframe (`<iframe sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox">`).
-* Strict CSP: `connect-src 'none'; default-src 'none'; ...` ([`packages/workshop-frontend/src/GadgetUI.tsx:105-115`](cloudflare-os/packages/workshop-frontend/src/GadgetUI.tsx#L105)).
+* Strict CSP: `connect-src 'none'; default-src 'none'; ...` ([`packages/workshop-frontend/src/GadgetUI.tsx:105-115`](../../../cloudflare-os/packages/workshop-frontend/src/GadgetUI.tsx#L105)).
 * Communication occurs strictly over a Cap'n Web RPC session over `MessageChannel` connected to the parent frame and forwarded to the backend facet.
 
 ---
@@ -42,7 +42,7 @@ Every gadget in Cloudflare OS executes within a tightly restricted sandbox:
 ## 2. Gadget-to-Gadget Bindings: Current Limitations vs Architecture
 
 ### Current code limit
-When a binding is created on a gadget via `bindWorkpiece()` ([`overseer.ts:1812-1841`](cloudflare-os/packages/workshop-backend/src/overseer.ts#L1812)), the kernel explicitly verifies that the target is a gatekeeper:
+When a binding is created on a gadget via `bindWorkpiece()` ([`overseer.ts:1812-1841`](../../../cloudflare-os/packages/workshop-backend/src/overseer.ts#L1812)), the kernel explicitly verifies that the target is a gatekeeper:
 
 ```ts
 // packages/workshop-backend/src/overseer.ts:1830-1835
@@ -54,7 +54,7 @@ if (!this.storage.gatekeepers.get(target)) {
 }
 ```
 
-Similarly, when constructing the worker environment in `getEnvForLoader()` ([`overseer.ts:2142-2150`](cloudflare-os/packages/workshop-backend/src/overseer.ts#L2142)), visible bindings are hardcoded to create loopbacks of type `"gatekeeper"`:
+Similarly, when constructing the worker environment in `getEnvForLoader()` ([`overseer.ts:2142-2150`](../../../cloudflare-os/packages/workshop-backend/src/overseer.ts#L2142)), visible bindings are hardcoded to create loopbacks of type `"gatekeeper"`:
 
 ```ts
 // packages/workshop-backend/src/overseer.ts:2146-2148
@@ -64,10 +64,10 @@ for (let [name, edge] of this.visibleBindings(gadget, forChatId)) {
 ```
 
 ### Architecture and roadmap
-Under the multi-gadget architecture design ([`cloudflare-os/plans/multi-gadget.md`](cloudflare-os/plans/multi-gadget.md)):
+Under the multi-gadget architecture design ([`cloudflare-os/plans/multi-gadget.md`](../../../cloudflare-os/plans/multi-gadget.md)):
 1. **Unified Workpiece Namespace**: Both gadgets and gatekeepers share a single numeric ID counter (`WorkpieceId = number`), so references are unambiguous across types.
 2. **Binding Edges**: Gadget bindings are edge records stored on the gadget record (`bindings: Record<string, BindingRecord>`, where `BindingRecord = {target: WorkpieceId, blueprintAnnotation?}`).
-3. **Loopback Infrastructure Already Implemented**: The underlying loopback generator (`makeBindingLoopback` and `startGatekeeperSession` in [`overseer.ts:2772-2792`](cloudflare-os/packages/workshop-backend/src/overseer.ts#L2772)) already supports `{type: "gadget", id}` targets:
+3. **Loopback Infrastructure Already Implemented**: The underlying loopback generator (`makeBindingLoopback` and `startGatekeeperSession` in [`overseer.ts:2772-2792`](../../../cloudflare-os/packages/workshop-backend/src/overseer.ts#L2772)) already supports `{type: "gadget", id}` targets:
    ```ts
    case "gadget": {
      if (caller.from === "agent") {
@@ -104,7 +104,7 @@ In Cloudflare OS, if an entity needs to:
 
 ## 4. How a Service API Gatekeeper Works
 
-The starter repository provides an end-to-end template for this in [`packages/custom-gatekeeper/`](packages/custom-gatekeeper).
+The starter repository provides an end-to-end template for this in [`packages/custom-gatekeeper/`](../../../packages/custom-gatekeeper).
 
 ### Step 1: Define the RPC API Interface
 Create the TypeScript interface representing the API methods gadgets may call:

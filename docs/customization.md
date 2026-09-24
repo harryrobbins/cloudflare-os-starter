@@ -320,7 +320,7 @@ The agent's web tools follow the connection. In a workspace connected to Web Sea
 
 ### Organisation records
 
-Organisation records is a Postgres-backed service for data the organisation owns, rather than any one gadget or person: datastores that many gadgets and external systems share, with memberships, roles, audit history and change notifications. It is one Worker, `packages/gatekeeper-records`, and it is **off by default**. Design and status: [organisation datastores plan](plans/organisation-datastores.md).
+Organisation records is a Postgres-backed service for data the organisation owns, rather than any one gadget or person: datastores that many gadgets and external systems share, with memberships, roles, audit history and change notifications. It is one Worker, `packages/gatekeeper-records`, and it is **off by default**. Design and status: [organisation datastores plan](plans/external_datastores/organisation-datastores.md).
 
 ```jsonc
 "workers": { "records": { "name": "cfos-records" } },

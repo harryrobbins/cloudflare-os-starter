@@ -1,6 +1,6 @@
 # blueprint-project-report
 
-Source of the **Project Report** blueprint: a read-only report over an organisation Projects datastore. It shows counts by state, priority and assignee, recently updated issues, CSS bar charts with table views, and a CSV download of the current view. It is the second demonstration client in [organisation-datastores.md](../../docs/plans/organisation-datastores.md). The writable one is [`blueprint-project-board`](../blueprint-project-board).
+Source of the **Project Report** blueprint: a read-only report over an organisation Projects datastore. It shows counts by state, priority and assignee, recently updated issues, CSS bar charts with table views, and a CSV download of the current view. It is the second demonstration client in [organisation-datastores.md](../../docs/plans/external_datastores/organisation-datastores.md). The writable one is [`blueprint-project-board`](../blueprint-project-board).
 
 It requests only `projects.read` and `issues.read` (`src/service-requirement.json`). The gadget server (`src/server/proxy.js`) has **no write methods**, and never calls `$createViewerAssertion`. Tests assert both of these.
 

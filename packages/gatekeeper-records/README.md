@@ -1,7 +1,7 @@
 # Organisation records (`gatekeeper-records`)
 
 The Postgres-backed Records service and its Gatekeeper, implementing
-[docs/plans/organisation-datastores.md](../../docs/plans/organisation-datastores.md). It is
+[docs/plans/organisation-datastores.md](../../docs/plans/external_datastores/organisation-datastores.md). It is
 disabled by default in the template; this deployment runs it against Neon (see the plan's
 deployment record). Configuration keys are documented in
 [docs/customization.md](../../docs/customization.md#organisation-records).

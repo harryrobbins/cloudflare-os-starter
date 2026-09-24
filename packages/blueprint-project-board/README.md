@@ -1,6 +1,6 @@
 # blueprint-project-board
 
-Source of the **Project Board** blueprint: a writable board over an organisation Projects datastore, served by the Records service (`packages/gatekeeper-records`). It is one of the two demonstration clients in [organisation-datastores.md](../../docs/plans/organisation-datastores.md) §1 and §9 Phase 3. The other is [`blueprint-project-report`](../blueprint-project-report).
+Source of the **Project Board** blueprint: a writable board over an organisation Projects datastore, served by the Records service (`packages/gatekeeper-records`). It is one of the two demonstration clients in [organisation-datastores.md](../../docs/plans/external_datastores/organisation-datastores.md) §1 and §9 Phase 3. The other is [`blueprint-project-report`](../blueprint-project-report).
 
 The gadget's own user guide and RPC reference is [`src/README.md`](src/README.md). It ships inside the gadget as `README.md`.
 

@@ -1,6 +1,6 @@
 # External API Plan A: Postgres as the system of record
 
-> **Superseded (2026-09-23)** by [Organisation datastores: implementation plan](../plans/organisation-datastores.md)
+> **Superseded (2026-09-23)** by [Organisation datastores: implementation plan](../../plans/external_datastores/organisation-datastores.md)
 > and its [research and decisions](organisation-datastores-decisions.md). Retained as historical
 > analysis. The replacement develops this domain-service direction into an ownership, lifecycle,
 > permissions, UI, registry and safely parallelizable implementation plan.
@@ -9,7 +9,7 @@ Written 2026-09-23 against starter `main` at `7d39f48` and the pinned `cloudflar
 submodule at `e50a9058`. This is an alternative to publishing a gadget's Durable Object state and
 business logic directly through the HTTP API proposed in
 [`gadget-http-api-options.md`](gadget-http-api-options.md) and
-[`../plans/gadget-http-api.md`](../plans/gadget-http-api.md).
+[`../plans/gadget-http-api.md`](../../plans/external_datastores/gadget-http-api.md).
 
 ## Recommendation
 

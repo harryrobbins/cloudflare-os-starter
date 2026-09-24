@@ -1,6 +1,6 @@
 # Gadget HTTP API: a Gatekeeper that gives a gadget a REST endpoint
 
-Written 2026-09-23 against starter `main` 3157780 and the submodule at e50a9058 (fork, `starter-openrouter` + `feat/websafe`). Status: **planned, nothing built**. The evidence and rejected options are in [`../research/gadget-http-api-options.md`](../research/gadget-http-api-options.md). This remains a separate proposal for gadget-specific automation. For durable organisational business data, use the authoritative [Organisation datastores plan](organisation-datastores.md): Postgres behind a domain service with typed RPC and a versioned HTTP API. The earlier [records-service alternative](external-records-service.md) is superseded.
+Written 2026-09-23 against starter `main` 3157780 and the submodule at e50a9058 (fork, `starter-openrouter` + `feat/websafe`). Status: **planned, nothing built**. The evidence and rejected options are in [`../research/gadget-http-api-options.md`](../../research/external_datastores/gadget-http-api-options.md). This remains a separate proposal for gadget-specific automation. For durable organisational business data, use the authoritative [Organisation datastores plan](organisation-datastores.md): Postgres behind a domain service with typed RPC and a versioned HTTP API. The earlier [records-service alternative](external-records-service.md) is superseded.
 
 ## Goal
 

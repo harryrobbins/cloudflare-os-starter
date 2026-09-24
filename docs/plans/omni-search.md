@@ -13,7 +13,7 @@ about project X" ends with the agent reading them and using them in the workspac
 Product facts, limits, prices and dead ends are in
 [hybrid-search-on-cloudflare.md](../research/hybrid-search-on-cloudflare.md); this plan cites it rather
 than repeating figures. Platform constraints come from
-[gadget-connectors-and-services.md](../research/gadget-connectors-and-services.md),
+[gadget-connectors-and-services.md](../research/external_datastores/gadget-connectors-and-services.md),
 [gadget-viewer-identity.md](../research/gadget-viewer-identity.md) and
 [collaborative-blueprints.md](collaborative-blueprints.md#what-the-platform-does-not-give-us).
 

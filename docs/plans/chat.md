@@ -4,7 +4,7 @@ Written 2026-09-20 against the pinned submodule (fork branch `starter-openrouter
 
 Goal: a Slack-like chat for everyone who can sign in to this deployment. Channels, direct messages and threads; unread and mention tracking; search across everything; history and permalinks; image and file uploads; a chat pane reachable from any page; and system notifications that land you somewhere you can reply. The agent can read and post.
 
-Background: [gadget-collaboration-runtime.md](../research/gadget-collaboration-runtime.md), [gadget-connectors-and-services.md](../research/gadget-connectors-and-services.md), [gadget-viewer-identity.md](../research/gadget-viewer-identity.md), and the [master collaboration plan](collaborative-blueprints.md). The Wave (`packages/blueprint-wave`) is the closest thing built so far and explicitly scoped out attachments, notifications, cross-wave search and personal unread state because the gadget runtime cannot provide them.
+Background: [gadget-collaboration-runtime.md](../research/gadget-collaboration-runtime.md), [gadget-connectors-and-services.md](../research/external_datastores/gadget-connectors-and-services.md), [gadget-viewer-identity.md](../research/gadget-viewer-identity.md), and the [master collaboration plan](collaborative-blueprints.md). The Wave (`packages/blueprint-wave`) is the closest thing built so far and explicitly scoped out attachments, notifications, cross-wave search and personal unread state because the gadget runtime cannot provide them.
 
 ## The decision: a Chat Gatekeeper, not a gadget
 

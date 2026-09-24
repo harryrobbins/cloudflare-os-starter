@@ -5,15 +5,18 @@ Status (2026-09-24): **implemented and tested through Phase 3, and deployed to
 `cfos.surprisingly.ltd` against Neon, with the machine API switched off** (see the
 [deployment record](#12-deployment-record-2026-09-24)). Signed-in checks and Phase 4 are open.
 Phase 0 decisions and their evidence are in §9 of the
-[decisions record](../research/organisation-datastores-decisions.md#9-phase-0-decisions-and-evidence-2026-09-23).
+[decisions record](../../research/external_datastores/organisation-datastores-decisions.md#9-phase-0-decisions-and-evidence-2026-09-23).
 Open gates are marked `[~]` (partly done) or `[ ]` below. Code: `packages/records-contracts`,
 `packages/records-schema`, `packages/gatekeeper-records`, `packages/blueprint-project-{board,report}`,
 and fork commit `a687cbdf` (viewer assertions), pinned by the submodule.
+Next step (2026-09-24): the [canonical Postgres datastore](canonical-postgres-datastore.md) plan builds
+on this service. It adds a commit-ordered journal, RLS by principal, delegated tokens, optimistic sync,
+and a Jira-compatible surface. Everything below still holds.
 
 This is the authoritative implementation plan for durable organisational business data. It
 supersedes [external-records-service.md](external-records-service.md) and
-[External API Plan A](../research/external-api-plan-A.md). The supporting
-[research and decision record](../research/organisation-datastores-decisions.md) distinguishes
+[External API Plan A](../../research/external_datastores/external-api-plan-A.md). The supporting
+[research and decision record](../../research/external_datastores/organisation-datastores-decisions.md) distinguishes
 verified platform behaviour, design decisions and unresolved implementation gates.
 The [gadget HTTP API](gadget-http-api.md) remains a separate proposal for gadget-specific automation;
 it is not the enterprise records API.

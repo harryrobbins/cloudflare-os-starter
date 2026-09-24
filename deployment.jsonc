@@ -244,7 +244,7 @@
   //          "<organisation>" <admin e-mail> "<admin name>"
   //   8. Fill in the values below and set "enabled": true. No Worker secrets are needed: database
   //      credentials live in the Hyperdrive configurations.
-  // Plan: docs/plans/organisation-datastores.md
+  // Plan: docs/plans/external_datastores/organisation-datastores.md
   "records": {
     "enabled": true,
     // Hyperdrive configuration IDs (32 hex characters), distinct, both with caching disabled.
