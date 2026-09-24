@@ -305,6 +305,8 @@ export const ListIssuesInputSchema = z.object({
 export type ListIssuesInput = z.input<typeof ListIssuesInputSchema>;
 
 export const CreateIssueInputSchema = z.object({
+  /** Optional client-chosen ID, so an optimistic create keeps its identity once confirmed. */
+  id: UuidSchema.optional(),
   projectId: UuidSchema,
   title: z.string().trim().min(1).max(LIMITS.titleMax),
   description: z.string().max(LIMITS.descriptionMax).default(""),
@@ -339,6 +341,8 @@ export const TransitionIssueInputSchema = z.object({
 export type TransitionIssueInput = z.input<typeof TransitionIssueInputSchema>;
 
 export const AddCommentInputSchema = z.object({
+  /** Optional client-chosen ID, as for issues. */
+  id: UuidSchema.optional(),
   issueId: UuidSchema,
   body: z.string().trim().min(1).max(LIMITS.commentMax),
 });

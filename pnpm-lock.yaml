@@ -855,6 +855,9 @@ importers:
       '@types/node':
         specifier: 26.1.0
         version: 26.1.0
+      jira.js:
+        specifier: ^6.2.0
+        version: 6.2.0
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -3262,6 +3265,10 @@ packages:
 
   isomorphic.js@0.2.5:
     resolution: {integrity: sha512-PIeMbHqMt4DnUP3MA/Flc0HElYjMXArsw1qwJZcm9sqR8mq3l8NYizFMty0pWwE/tzIGH3EKK5+jes5mAr85yw==}
+
+  jira.js@6.2.0:
+    resolution: {integrity: sha512-tF6FUfByN0ezxR1SoA5iZ49FI0U/GdHLR+r3FDq4aqHO2MlVKE2VitAsnsa1ThFhdT82hTSCYXw8jT9zbeOIRw==}
+    engines: {node: '>=22'}
 
   jiti@2.7.0:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
@@ -6098,6 +6105,10 @@ snapshots:
   isbot@5.2.2: {}
 
   isomorphic.js@0.2.5: {}
+
+  jira.js@6.2.0:
+    dependencies:
+      zod: 4.4.3
 
   jiti@2.7.0: {}
 
