@@ -37,6 +37,8 @@
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^5.2.0",
     "embedded-postgres": "17.9.0-beta.17",
+    "esbuild": "0.28.1",
+    "jira.js": "6.2.0",
     "jsdom": "^26.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -46,7 +48,6 @@
     "vite": "catalog:",
     "vite-plugin-singlefile": "^2.3.3",
     "vitest": "catalog:",
-    "wrangler": "catalog:",
-    "esbuild": "0.28.1"
+    "wrangler": "catalog:"
   }
 }
