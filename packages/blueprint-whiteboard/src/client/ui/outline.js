@@ -5,16 +5,23 @@
 //
 // Like the Activity panel, it is a non-modal side panel (a complementary landmark): the board stays
 // usable beside it, Tab moves in and out of it freely, and Escape or the close button closes it.
+//
+// The list is virtualised (./virtual-list.js): every object is listed and counted, but only the
+// rows near the scrolled window are in the DOM. Rows carry aria-setsize/aria-posinset; Tab reaches
+// one row, the arrow keys move between rows. Select pans the object into view (without animation)
+// before focus moves to the style bar, so an off-screen object is on screen when its controls are.
 
 import { sortedObjects } from "../../shared/protocol.js";
 import { h, icon } from "./dom.js";
 import { typeLabel } from "./stylebar.js";
+import { createVirtualList } from "./virtual-list.js";
 
 /** @typedef {import("./app.js").App} App */
 /** @typedef {import("../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("../store-contract.js").ClientState} ClientState */
 
-const MAX_ROWS = 300;
+/** Row height before the first row is measured (kind line, excerpt line, padding). */
+const ROW_HEIGHT = 58;
 
 /**
  * @param {WhiteboardObject} o
@@ -36,6 +43,17 @@ function excerpt(text) {
   return t.length > 60 ? t.slice(0, 57) + "…" : t;
 }
 
+/**
+ * The rows the panel lists for filter `query`: top of the stack first.
+ * @param {Record<string, WhiteboardObject>} objects @param {string} query
+ */
+export function outlineRows(objects, query) {
+  const q = query.trim().toLowerCase();
+  const all = sortedObjects(objects).reverse();
+  const rows = q ? all.filter((o) => typeLabel(o.type).toLowerCase().includes(q) || String(o.text || "").toLowerCase().includes(q)) : all;
+  return { all: all.length, rows };
+}
+
 /** @param {App} app */
 export function createOutline(app) {
   const { store, canvas } = app;
@@ -45,7 +63,14 @@ export function createOutline(app) {
   let list = null;
   /** @type {HTMLInputElement|null} */
   let filter = null;
-  let key = "";
+  /** @type {ReturnType<typeof createVirtualList>|null} */
+  let vlist = null;
+  /** @type {WhiteboardObject[]} */
+  let rows = [];
+  /** @type {Record<string, WhiteboardObject>} */
+  let objects = {};
+  /** @type {Set<string>} */
+  let selection = new Set();
   /** @type {HTMLElement|null} */
   let returnFocus = null;
 
@@ -54,18 +79,27 @@ export function createOutline(app) {
     returnFocus = /** @type {HTMLElement|null} */ (document.activeElement);
     const closeBtn = h("button", { type: "button", class: "btn icon-only outline-close", "aria-label": "Close objects list", onclick: () => close() }, icon("close", 18));
     filter = /** @type {HTMLInputElement} */ (h("input", { type: "text", class: "outline-filter", placeholder: "Filter by text or type", "aria-label": "Filter objects", autocomplete: "off" }));
-    filter.addEventListener("input", () => { key = ""; render(store.getState()); });
-    list = h("ul", { class: "panel-list outline-list", "aria-label": "Objects" });
+    filter.addEventListener("input", () => { if (list) list.scrollTop = 0; render(store.getState()); });
+    const hint = h("p", { id: "outline-hint", class: "sr-only" }, "Up and down arrows move between objects; Home and End jump to the first and last.");
+    list = h("ul", { class: "panel-list outline-list", "aria-label": "Objects", "aria-describedby": "outline-hint", tabindex: "-1" });
     panel = h("aside", { class: "wb-panel outline-panel", "aria-label": "Objects", tabindex: "-1" },
       h("div", { class: "panel-head" }, h("h2", null, "Objects"), h("span", { class: "muted outline-count" }), closeBtn),
       h("div", { class: "panel-filter" }, filter),
+      hint,
       list);
     panel.addEventListener("keydown", (e) => {
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
     });
+    vlist = createVirtualList({
+      list,
+      rowHeight: ROW_HEIGHT,
+      rowKey: (i) => rows[i].id,
+      rowStamp: (i) => stampOf(rows[i]),
+      renderRow: (i) => rowFor(rows[i]),
+      fallbackFocus: () => filter,
+    });
     document.body.appendChild(panel);
     app.outlineOpen = true;
-    key = "";
     render(store.getState());
     filter.focus();
     app.refreshChrome();
@@ -78,6 +112,8 @@ export function createOutline(app) {
     panel = null;
     list = null;
     filter = null;
+    vlist = null;
+    rows = [];
     app.outlineOpen = false;
     app.refreshChrome();
     if (restoreFocus) {
@@ -86,55 +122,57 @@ export function createOutline(app) {
     }
   }
 
+  /** What a row shows: rebuild when it changes. @param {WhiteboardObject} o */
+  function stampOf(o) {
+    let s = `${o.version}:${selection.has(o.id) ? 1 : 0}`;
+    if (o.type === "connector") s += `:${o.from ? objects[o.from]?.version : ""}:${o.to ? objects[o.to]?.version : ""}`;
+    return s;
+  }
+
+  /** @param {WhiteboardObject} o */
+  function rowFor(o) {
+    const label = `${typeLabel(o.type)}: ${describeObject(o, objects)}`;
+    return h("li", { class: "outline-item", dataset: { id: o.id }, "aria-current": selection.has(o.id) ? "true" : null },
+      h("span", { class: "summary" },
+        h("span", { class: "kind" }, typeLabel(o.type)),
+        h("span", { class: "excerpt" }, describeObject(o, objects))),
+      h("button", {
+        type: "button", class: "btn small outline outline-show", "aria-label": "Show " + label,
+        onclick: () => canvas.focusObjects([o.id]),
+      }, "Show"),
+      h("button", {
+        type: "button", class: "btn small primary outline-select", "aria-label": "Select " + label,
+        onclick: () => {
+          canvas.setSelection([o.id]);
+          // Camera first (no animation), so the object is on screen before focus moves on.
+          canvas.focusObjects([o.id], { animate: false });
+          close(false);
+          app.announce(`Selected ${label}`);
+          // Straight to the selection's actions (style, move, delete).
+          app.focusStyleBar();
+        },
+      }, "Select"),
+    );
+  }
+
   /** @param {ClientState} state */
   function render(state) {
-    if (!panel || !list) return;
-    const q = (filter?.value ?? "").trim().toLowerCase();
-    const objects = state.board.objects;
-    const selection = new Set(canvas.getSelection());
-    const all = sortedObjects(objects).reverse(); // top of the stack first
-    const rows = all.filter((o) => !q || typeLabel(o.type).toLowerCase().includes(q) || String(o.text || "").toLowerCase().includes(q));
-    const shown = rows.slice(0, MAX_ROWS);
-    const k = q + "#" + shown.map((o) => `${o.id}:${o.version}:${selection.has(o.id) ? 1 : 0}`).join(",") + "#" + rows.length;
-    if (k === key) return;
-    key = k;
+    if (!panel || !list || !vlist) return;
+    objects = state.board.objects;
+    selection = new Set(canvas.getSelection());
+    const result = outlineRows(objects, filter?.value ?? "");
+    rows = result.rows;
     const countEl = panel.querySelector(".outline-count");
-    if (countEl) countEl.textContent = rows.length === all.length ? `${all.length}` : `${rows.length} of ${all.length}`;
-    const active = /** @type {HTMLElement|null} */ (document.activeElement);
-    const focusKey = active && list.contains(active) ? active.dataset.key ?? null : null;
-    if (!shown.length) {
-      list.replaceChildren(h("li", { class: "muted" }, all.length ? "No objects match." : "The whiteboard is empty."));
-    } else {
-      list.replaceChildren(...shown.map((o) => {
-        const label = `${typeLabel(o.type)}: ${describeObject(o, objects)}`;
-        return h("li", { class: "outline-item", dataset: { id: o.id }, "aria-current": selection.has(o.id) ? "true" : null },
-          h("span", { class: "summary" },
-            h("span", { class: "kind" }, typeLabel(o.type)),
-            h("span", { class: "excerpt" }, describeObject(o, objects))),
-          h("button", {
-            type: "button", class: "btn small outline outline-show", "aria-label": "Show " + label, dataset: { key: "show-" + o.id },
-            onclick: () => canvas.focusObjects([o.id]),
-          }, "Show"),
-          h("button", {
-            type: "button", class: "btn small primary outline-select", "aria-label": "Select " + label, dataset: { key: "select-" + o.id },
-            onclick: () => {
-              canvas.setSelection([o.id]);
-              canvas.focusObjects([o.id]);
-              close(false);
-              app.announce(`Selected ${label}`);
-              // Straight to the selection's actions (style, move, delete).
-              app.focusStyleBar();
-            },
-          }, "Select"),
-        );
-      }), rows.length > shown.length ? h("li", { class: "muted" }, `${rows.length - shown.length} more; filter to narrow down.`) : "");
-    }
-    if (focusKey) /** @type {HTMLElement|null} */ (list.querySelector(`[data-key="${focusKey}"]`))?.focus();
+    const text = rows.length === result.all ? `${result.all}` : `${rows.length} of ${result.all}`;
+    if (countEl && countEl.textContent !== text) countEl.textContent = text;
+    vlist.update(rows.length, rows.length ? null : h("li", { class: "muted" }, result.all ? "No objects match." : "The whiteboard is empty."));
   }
 
   return {
     toggle: () => (panel ? close() : open()),
     open, close, render,
     get isOpen() { return !!panel; },
+    /** The virtual list (tests). */
+    get list() { return vlist; },
   };
 }

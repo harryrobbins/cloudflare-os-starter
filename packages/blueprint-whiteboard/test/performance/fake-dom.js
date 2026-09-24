@@ -39,15 +39,24 @@ export class FakeElement {
     this.childNodes = [];
     /** @type {FakeElement|null} */
     this.parentNode = null;
-    /** @type {Record<string, string>} */
-    this.dataset = {};
+    /** data-* attributes, as in the DOM. @type {Record<string, string>} */
+    this.dataset = new Proxy({}, {
+      get: (_t, k) => (typeof k === "string" ? this.getAttribute(dataAttr(k)) ?? undefined : undefined),
+      set: (_t, k, v) => { this.setAttribute(dataAttr(String(k)), v); return true; },
+      deleteProperty: (_t, k) => { this.removeAttribute(dataAttr(String(k))); return true; },
+      has: (_t, k) => typeof k === "string" && this.hasAttribute(dataAttr(k)),
+      ownKeys: () => [...this.attributes.keys()].filter((a) => a.startsWith("data-")).map(camel),
+      getOwnPropertyDescriptor: (_t, k) => (typeof k === "string" && this.hasAttribute(dataAttr(k))
+        ? { enumerable: true, configurable: true, value: this.getAttribute(dataAttr(k)) } : undefined),
+    });
+    this.scrollTop = 0;
+    this.offsetHeight = 0;
     /** @type {Record<string, any>} */
     this.style = { setProperty() {}, removeProperty() {} };
     this.classList = new FakeClassList(this);
     this._text = "";
     this.clientWidth = 0;
     this.clientHeight = 0;
-    this.tabIndex = -1;
     this.hidden = false;
     /** @type {Map<string, Set<Function>>} */
     this.listeners = new Map();
@@ -105,17 +114,65 @@ export class FakeElement {
     if (!p) return;
     p.childNodes.splice(p.childNodes.indexOf(this), 1);
     this.parentNode = null;
+    this.#blurIfInside();
+  }
+  /** A removed subtree loses focus to <body>, as in the DOM. */
+  #blurIfInside() {
+    const doc = this.ownerDocument;
+    if (doc.activeElement !== doc.body && this.contains(doc.activeElement)) doc.activeElement = doc.body;
   }
   /** @param {any} other */
   contains(other) {
     for (let n = other; n; n = n.parentNode) if (n === this) return true;
     return false;
   }
-  /** @param {string} _sel */
-  closest(_sel) { return null; }
-  /** @param {string} _sel */
-  querySelector(_sel) { return null; }
-  focus() { this.ownerDocument.activeElement = this; }
+  get disabled() { return this.hasAttribute("disabled"); }
+  set disabled(v) { if (v) this.setAttribute("disabled", ""); else this.removeAttribute("disabled"); }
+  get tabIndex() { const v = this.getAttribute("tabindex"); return v === null ? -1 : Number(v); }
+  set tabIndex(v) { this.setAttribute("tabindex", String(v)); }
+  /** Simple selectors only: tag, .class, [attr], [attr="v"], compounds, and descendant chains. @param {string} sel */
+  matches(sel) {
+    const parts = sel.trim().split(/\s+/);
+    if (!matchCompound(this, /** @type {string} */ (parts.pop()))) return false;
+    /** @type {FakeElement|null} */
+    let n = this.parentNode;
+    while (parts.length && n) {
+      if (matchCompound(n, parts[parts.length - 1])) parts.pop();
+      n = n.parentNode;
+    }
+    return parts.length === 0;
+  }
+  /** @param {string} sel @returns {FakeElement|null} */
+  closest(sel) {
+    for (/** @type {FakeElement|null} */ let n = this; n; n = n.parentNode) if (n.tagName !== "#text" && n.matches(sel)) return n;
+    return null;
+  }
+  /** @param {string} sel @returns {FakeElement[]} */
+  querySelectorAll(sel) {
+    /** @type {FakeElement[]} */
+    const out = [];
+    const walk = (/** @type {FakeElement} */ n) => {
+      for (const c of n.childNodes) {
+        if (c.tagName !== "#text" && c.matches(sel)) out.push(c);
+        walk(c);
+      }
+    };
+    walk(this);
+    return out;
+  }
+  /** @param {string} sel */
+  querySelector(sel) { return this.querySelectorAll(sel)[0] ?? null; }
+  focus() {
+    if (!this.isConnected || this.disabled) return;
+    const doc = this.ownerDocument;
+    if (doc.activeElement === this) return;
+    doc.activeElement = this;
+    // focusin bubbles.
+    const event = { type: "focusin", target: this };
+    for (/** @type {FakeElement|null} */ let n = this; n; n = n.parentNode) {
+      for (const fn of n.listeners.get("focusin") ?? []) fn(event);
+    }
+  }
   blur() { if (this.ownerDocument.activeElement === this) this.ownerDocument.activeElement = this.ownerDocument.body; }
   getBoundingClientRect() {
     return { left: 0, top: 0, x: 0, y: 0, right: this.clientWidth, bottom: this.clientHeight, width: this.clientWidth, height: this.clientHeight };
@@ -155,9 +212,35 @@ export class FakeElement {
     return t;
   }
   #detachAll() {
+    const doc = this.ownerDocument;
+    const lost = doc.activeElement !== doc.body && this.childNodes.some((c) => c.contains(doc.activeElement));
     for (const c of this.childNodes) c.parentNode = null;
     this.childNodes = [];
+    if (lost) doc.activeElement = doc.body;
   }
+}
+
+/** @param {string} k camelCase dataset key */
+function dataAttr(k) {
+  return "data-" + k.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());
+}
+/** @param {string} a data-* attribute */
+function camel(a) {
+  return a.slice(5).replace(/-([a-z])/g, (_m, c) => c.toUpperCase());
+}
+/** @param {FakeElement} el @param {string} compound */
+function matchCompound(el, compound) {
+  const re = /([.#]?[\w-]+)|\[([\w-]+)(?:="([^"]*)")?\]/g;
+  let m;
+  while ((m = re.exec(compound))) {
+    if (m[1]) {
+      const t = m[1];
+      if (t[0] === ".") { if (!el.classList.contains(t.slice(1))) return false; }
+      else if (t[0] === "#") { if (el.getAttribute("id") !== t.slice(1)) return false; }
+      else if (el.tagName.toLowerCase() !== t.toLowerCase()) return false;
+    } else if (m[3] !== undefined ? el.getAttribute(m[2]) !== m[3] : !el.hasAttribute(m[2])) return false;
+  }
+  return true;
 }
 
 export class FakeDocument {
@@ -181,7 +264,10 @@ export class FakeDocument {
   createTextNode(text) { const t = new FakeElement("#text", this); t._text = String(text); return t; }
   addEventListener() {}
   removeEventListener() {}
-  querySelector() { return null; }
+  /** @param {string} sel */
+  querySelector(sel) { return this.body.querySelector(sel); }
+  /** @param {string} sel */
+  querySelectorAll(sel) { return this.body.querySelectorAll(sel); }
 }
 
 /**
@@ -212,8 +298,9 @@ export function installFakeDom() {
   const g = /** @type {any} */ (globalThis);
   const saved = {
     document: g.document, window: g.window, requestAnimationFrame: g.requestAnimationFrame,
-    cancelAnimationFrame: g.cancelAnimationFrame, matchMedia: g.matchMedia,
+    cancelAnimationFrame: g.cancelAnimationFrame, matchMedia: g.matchMedia, Node: g.Node,
   };
+  g.Node = FakeElement;
   g.document = doc;
   g.window = win;
   g.matchMedia = win.matchMedia;
