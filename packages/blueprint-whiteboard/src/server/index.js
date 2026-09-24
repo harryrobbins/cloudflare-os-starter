@@ -8,6 +8,7 @@ import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 import { createWhiteboard } from "../core/whiteboard.js";
 import { Hub } from "../core/hub.js";
 import { DoStorageRepository } from "./do-repository.js";
+import { exportData, importData } from "../core/backup.js";
 
 // ---------------------------------------------------------------------------------------------
 // Gadget: the whiteboard's authoritative coordinator
@@ -117,6 +118,18 @@ export class Gadget extends DurableObject {
     return { connector, errors };
   }
 
+  // --- Portable data (backup format, src/shared/backup.js) ---------------------------------
+
+  /** The board as a data-only backup document: title, background and objects. */
+  exportData() {
+    return exportData(this.#board);
+  }
+
+  /** @param {any} args {data, at?, structure?, by?} */
+  importData(args) {
+    return importData(this.#board, args);
+  }
+
   // --- Live updates and presence -------------------------------------------------------------
 
   /**
@@ -169,11 +182,22 @@ export class ExportHandler extends WorkerEntrypoint {
       { id: "svg", label: "SVG image", mode: "server", contentType: "image/svg+xml", fileExtension: ".svg" },
       { id: "html", label: "HTML", mode: "browser", contentType: "text/html", fileExtension: ".html" },
       { id: "pdf", label: "PDF", mode: "browser", contentType: "application/pdf", fileExtension: ".pdf" },
+      { id: "backup", label: "Whiteboard backup (JSON)", mode: "server", contentType: "application/json", fileExtension: ".json" },
     ];
   }
 
   /** @param {any} gadget @param {string} id */
   async export(gadget, id) {
+    if (id === "backup") {
+      /** @type {any} */
+      let data;
+      try {
+        data = await gadget.exportData();
+        return new Response(JSON.stringify(data, null, 2)).body;
+      } finally {
+        try { data?.[Symbol.dispose]?.(); } catch { /* ignore */ }
+      }
+    }
     if (id !== "svg") throw new Error(`Unknown server export format: ${id}`);
     /** @type {any} */
     let svg;

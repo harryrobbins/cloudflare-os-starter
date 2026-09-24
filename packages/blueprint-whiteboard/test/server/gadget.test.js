@@ -272,13 +272,39 @@ describe("live updates", () => {
 });
 
 describe("ExportHandler", () => {
-  it("lists SVG (server) and HTML/PDF (browser) formats", async () => {
+  it("lists SVG and JSON backup (server) and HTML/PDF (browser) formats", async () => {
     const { stub } = fresh();
     expect(await exports.ExportHandler.getExportFormats(stub)).toEqual([
       { id: "svg", label: "SVG image", mode: "server", contentType: "image/svg+xml", fileExtension: ".svg" },
       { id: "html", label: "HTML", mode: "browser", contentType: "text/html", fileExtension: ".html" },
       { id: "pdf", label: "PDF", mode: "browser", contentType: "application/pdf", fileExtension: ".pdf" },
+      { id: "backup", label: "Whiteboard backup (JSON)", mode: "server", contentType: "application/json", fileExtension: ".json" },
     ]);
+  });
+
+  it("exports a data-only JSON backup that importData() reads back into another board", async () => {
+    const { stub } = fresh();
+    await stub.applyOperation({ structure: { title: "Retro", background: "grid" } });
+    const { created } = await stub.addStickies({ stickies: ["one", "two"], by: "Ada" });
+    await stub.connectObjects({ from: created[0].id, to: created[1].id, label: "then" });
+    const text = await new Response(await exports.ExportHandler.export(stub, "backup")).text();
+    const doc = JSON.parse(text);
+    expect(doc).toMatchObject({ format: "cloudflare-os-whiteboard", version: 1, title: "Retro", background: "grid" });
+    expect(doc.objects).toHaveLength(3);
+    const objectsText = JSON.stringify(doc.objects);
+    for (const key of ["createdBy", "version", "createdAt", "updatedAt", "z"]) expect(objectsText).not.toContain(`"${key}"`);
+    expect(await stub.exportData()).toMatchObject({ objects: doc.objects });
+
+    const other = fresh().stub;
+    const result = await other.importData({ data: text, structure: true, by: "Grace" });
+    expect(result).toMatchObject({ created: 3, skipped: 0, errors: [] });
+    const board = await other.getBoard();
+    expect(board).toMatchObject({ title: "Retro", background: "grid" });
+    const objs = Object.values(board.objects);
+    expect(objs.every((o) => o.createdBy === "Grace" && !created.some((c) => c.id === o.id))).toBe(true);
+    const conn = objs.find((o) => o.type === "connector");
+    expect([board.objects[conn.from].text, board.objects[conn.to].text]).toEqual(["one", "two"]);
+    expect(await other.importData({ data: "{" })).toEqual({ error: expect.stringMatching(/not valid JSON/) });
   });
 
   it("exports the board as SVG with escaped text", async () => {
