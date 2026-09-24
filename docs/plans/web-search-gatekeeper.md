@@ -408,11 +408,20 @@ times, against live Jev.
   `surprisingly.ltd` is derived as a private domain.
 - **Tool names.** Release 2 keeps the stored `webFetch` tool-call type, so existing chat histories
   still replay. It adds `webSafe` ("Websafe (auto-mode)") and `webFetchUnsafe` ("Web fetch
-  (UNSAFE)"), which replace `webFetch` only in chats where the web search Gatekeeper is an ambient
-  binding. Deployments without it keep the upstream tool.
+  (UNSAFE)"), which replace `webFetch` only in chats whose env holds a connection to the web search
+  Gatekeeper. Deployments without it keep the upstream tool.
 - **Kernel changes.** The Workshop gains:
-  - `SeedBindingInfo.vendorId` for ambient entries;
   - an `AgentHooks.callGatekeeperSession` hook, which calls a session with the chat as caller, as
-    `executeCode` would. Approvals therefore suspend the turn in the usual way.
-- **Enabling it.** The connector is auto-provisioned in "optional" mode: each person opts in under
-  Connectors, or an admin sets it to "enabled" for everyone in `/admin`.
+    `executeCode` would. Approvals therefore suspend the turn in the usual way;
+  - `AgentHooks.gatekeeperVendorId`, which the tools use to find the chat binding whose target is a
+    connected `websearch` Gatekeeper (`workshop-backend/src/agent-web-tools.ts`);
+  - `AGENT_WEB_FETCH=off`, which withholds the unchecked built-in `webFetch`. The deploy sets it
+    whenever web search is enabled, unless `webSearch.builtinWebFetch` is `true`.
+- **Enabling it: an explicit connection per workspace.** The first build made the connector an agent
+  singleton. That put it in *every* workspace of anyone holding the account, whether or not anyone
+  wanted web access there. It is now a resource connector like Synthetic Data, with a single
+  resource, `websearch://web`. A workspace gets web access only once someone connects it there, and
+  loses it again when the connection is removed. The `/admin` mode ("optional" by default) still
+  decides whether each person adds the account themselves; it no longer grants access to any
+  workspace. Workspaces that had the old ambient capsule have it retired on their next open, with
+  its storage left in place. See [customization](../customization.md#web-search-and-jev).

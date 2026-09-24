@@ -17,6 +17,7 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",
     "@types/node": "26.1.0",
+    "esbuild": "0.28.1",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",

@@ -275,6 +275,33 @@ The chat **dock** — the drawer with the unread badge in the sidebar and in the
 
 To disable chat, set `"enabled": false`. The build, the deploy and both service bindings disappear, and `pnpm check` stops validating the rest of the block. The Worker, its Durable Object and its bucket are not deleted by disabling it, so re-enabling with the same names and bucket brings the history back.
 
+### Web search and Jev
+
+Two deployment-owned connectors reach outside the deployment: **Web Search** (`packages/gatekeeper-websearch`, Worker `workers.webSearch.name`) searches the web and fetches pages behind a privacy gate, and **Jev decisions** (`packages/gatekeeper-jev`, Worker `workers.jev.name`) asks TypeSafe's Jev decision model yes/no, choice and score questions. Both are RPC-only, bound to the Workshop as `GATEKEEPER_WEBSEARCH` and `GATEKEEPER_JEV`, and need an `OPENROUTER_API_KEY` secret on their own Worker.
+
+```jsonc
+"webSearch": { "enabled": true, "blockedTerms": [] },   // "builtinWebFetch": false
+"jev": { "enabled": true }
+```
+
+Deploying them does not hand them to every workspace. Like Synthetic Data and Notebook Python, each is a **connection** a workspace has to be given explicitly. Each has one resource: `websearch://web` (suggested binding `WEBSEARCH`) and `jev://decisions` (`JEV`).
+
+- **Turn it on for a workspace.** Open the workspace's connections, choose **Web Search** or **Jev decisions**, and connect it. The dialog explains what the connection grants and has nothing to fill in. Alternatively, the agent asks with `requestConnection` and you accept the request card in the chat. The connection then appears in the workspace's connection list beside the others, and Gadgets can bind it like any other resource.
+- **Turn it off again.** Remove the connection from that workspace. The agent loses the binding and, for Web Search, the `webSafe` and `webFetchUnsafe` tools on its next turn.
+- **Who can do it.** The same people who can connect any other connector to the workspace. There is no extra role.
+
+The agent's web tools follow the connection. In a workspace connected to Web Search, the agent gets **Websafe (auto-mode)** (`webSafe`) and **Web fetch (UNSAFE)** (`webFetchUnsafe`), both calling that workspace's session. The privacy gate, Jev review and approvals are unchanged, and an unchecked fetch still always waits for the user. In every other workspace, the agent has no web tool. With web search enabled, the deploy sets the Workshop's `AGENT_WEB_FETCH=off`, which withholds upstream's built-in `webFetch` (it fetches any public URL with no check). Set `webSearch.builtinWebFetch: true` only if you want unconnected workspaces to keep that unchecked tool. With web search disabled, the Workshop keeps `webFetch` as upstream ships it.
+
+`/admin` → Gatekeepers still lists both as auto-provisioned connectors, with the three-state mode that applies to Synthetic Data too. In every mode, access still needs a connection per workspace:
+
+| Mode | Effect |
+| --- | --- |
+| `optional` (the default) | Each person adds the connector's account under **Connectors**, or the connect dialog adds it for them. |
+| `enabled` | Every person has the account already. |
+| `disabled` | No account is provisioned for it, so people who have not added it yet cannot connect it. To withdraw it from existing connections too, set `enabled: false` for it in `deployment.jsonc`. |
+
+**Existing workspaces.** Before this change, both connectors were agent *singletons*, so every workspace of anyone holding the account got them automatically. On the first open after the upgrade, the Workshop re-reads the account's description, sees that it no longer provides a singleton, and retires those automatic capsules. The Web Search capsule's storage (its per-workspace query audit log) stays in the workspace Durable Object, but no agent or Gadget can reach it. No data or Durable Object is deleted, and no migration runs. Nothing is granted implicitly any more. A workspace that relied on web search or Jev needs one explicit connection (above). Chats started before then keep the old binding name, but it no longer resolves.
+
 ### Organisation records
 
 Organisation records is a Postgres-backed service for data the organisation owns, rather than any one gadget or person: datastores that many gadgets and external systems share, with memberships, roles, audit history and change notifications. It is one Worker, `packages/gatekeeper-records`, and it is **off by default**. Design and status: [organisation datastores plan](plans/organisation-datastores.md).

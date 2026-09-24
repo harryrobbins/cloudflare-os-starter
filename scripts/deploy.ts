@@ -797,6 +797,12 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
       };
     }
   }
+  // With web search deployed, the web is a connector like any other: an agent gets web tools only in
+  // a workspace explicitly connected to it, so the Workshop's unchecked built-in webFetch is
+  // withheld everywhere else unless webSearch.builtinWebFetch keeps it.
+  if (webSearch && config.webSearch?.builtinWebFetch !== true) {
+    workshop.vars.AGENT_WEB_FETCH = "off";
+  }
   // Unconditional: as well as being the AI Gateway transport, this binding is what webFetch's
   // toMarkdown() runs on.
   workshop.ai = { binding: "WORKERS_AI" };

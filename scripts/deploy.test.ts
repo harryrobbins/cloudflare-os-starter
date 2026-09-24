@@ -493,6 +493,8 @@ test("deploys web search only when enabled, privately, with its key required", a
   const off = generateConfigs(validConfig, bases);
   assert.equal(off.webSearch, undefined);
   assert.equal(off.workshop.services!.some((s) => s.binding === "GATEKEEPER_WEBSEARCH"), false);
+  // Without web search the Workshop keeps upstream's built-in webFetch.
+  assert.equal(off.workshop.vars!.AGENT_WEB_FETCH, undefined);
   assert.equal(deployOrder(validConfig).includes("webSearch"), false);
   assert.equal(buildCommands(validConfig).some(({ args }) => args.includes("gatekeeper-websearch")), false);
 
@@ -518,9 +520,21 @@ test("deploys web search only when enabled, privately, with its key required", a
     entrypoint: "GatekeeperVendor",
   });
   assert.equal(generated.router.services!.some((s) => s.service === "acme-cloudflare-os-websearch"), false);
+  // Web access is a connector: agents get web tools only where web search is connected, so the
+  // unchecked built-in webFetch is withheld from every other workspace.
+  assert.equal(generated.workshop.vars!.AGENT_WEB_FETCH, "off");
   const order = deployOrder(config);
   assert.ok(order.indexOf("webSearch") < order.indexOf("workshop"));
   assert.ok(buildCommands(config).some(({ args }) => args.includes("gatekeeper-websearch")));
+});
+
+test("keeps the built-in webFetch beside web search only when asked to", async () => {
+  const bases = await baseConfigs();
+  const config = validateConfig(variant((c) => {
+    c.workers.webSearch = { name: "acme-cloudflare-os-websearch" };
+    c.webSearch = { enabled: true, builtinWebFetch: true };
+  }));
+  assert.equal(generateConfigs(config, bases).workshop.vars!.AGENT_WEB_FETCH, undefined);
 });
 
 test("requires a web search Worker name only when web search is enabled", () => {
