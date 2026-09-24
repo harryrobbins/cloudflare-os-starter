@@ -876,4 +876,112 @@ describe("whiteboard harness", { concurrency: false }, () => {
       assert.equal(await tools.locator('button[tabindex="0"]').count(), 1, "still one Tab stop");
     });
   });
+
+  test("code block: add from the Add menu, type code, choose Python, highlighted for both panes and in the export", async () => {
+    await withHarness({ names: ["Alice", "Bob"] }, async ({ page, frames: { A, B } }) => {
+      await A.locator(SEL.addButton).click();
+      await A.locator(SEL.addItem("code")).click();
+      await A.locator("textarea.wb-editor-code").waitFor({ timeout: 3000 });
+      await page.keyboard.type("def greet(name):\nreturn f\"hi {name}\"  # say hi");
+      await page.keyboard.press("Escape");
+      const block = await h.until(async () => Object.values((await h.serverBoard(page)).objects).find((o) => o.type === "code" && o.text.includes("greet")),
+        { message: "code committed" });
+      assert.equal(block.language, "plain");
+      assert.ok(block.h > 80 && block.h < 120, `height fitted to two lines (${block.h})`);
+      // Choose Python in the style bar's searchable language list.
+      await A.locator(".wb-stylebar .code-language-btn").click();
+      await A.locator(".object-picker .picker-filter").waitFor();
+      await page.keyboard.type("pyth");
+      await page.keyboard.press("Enter");
+      await h.until(async () => (await h.serverBoard(page)).objects[block.id].language === "python", { message: "language saved" });
+      const keyword = "#cf222e";
+      for (const f of [A, B]) {
+        await f.locator(`${SEL.object(block.id)} text.wb-code-text tspan[fill="${keyword}"]`, { hasText: "def" }).first().waitFor({ timeout: 3000 });
+      }
+      assert.match(await A.locator(`${SEL.object(block.id)} .wb-code-head`).first().textContent(), /Python/);
+      // The canvas and the server's SVG export draw the same tokens with the same colours.
+      const tokens = (root) => [...root.querySelectorAll("text.wb-code-text > tspan > tspan")].map((t) => [t.getAttribute("fill"), t.textContent]);
+      const ui = await B.locator(SEL.object(block.id)).evaluate((el, src) => (0, eval)(src)(el), tokens.toString());
+      const exported = await page.evaluate(async ({ id, src }) => {
+        const svg = await window.harness.rpc("exportSvg", {});
+        const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+        return (0, eval)(src)(doc.querySelector(`[data-id="${id}"]`));
+      }, { id: block.id, src: tokens.toString() });
+      assert.ok(ui.length > 5, "tokens rendered");
+      assert.deepEqual(ui, exported);
+      await page.screenshot({ path: `${SHOTS}/code-block.png` });
+    });
+  });
+
+  test("code block, keyboard only: K, Tab and Shift+Tab indent, Enter keeps the indent, dark theme, Copy code; the peer sees it", async () => {
+    await withHarness({ names: ["Alice", "Bob"] }, async ({ page, frames: { A, B } }) => {
+      await h.inPane(A, (_, canvas) => canvas.element.focus());
+      await page.keyboard.press("k");
+      await A.locator("textarea.wb-editor-code").waitFor({ timeout: 3000 });
+      assert.match(await h.focusedClass(A), /wb-editor-code/, "the code editor has focus");
+      await page.keyboard.type("if (ok) {");
+      await page.keyboard.press("Enter");
+      await page.keyboard.press("Tab");
+      await page.keyboard.type("run();");
+      await page.keyboard.press("Enter"); // keeps the two-space indent
+      await page.keyboard.type("x();");
+      await page.keyboard.press("Enter");
+      await page.keyboard.press("Shift+Tab");
+      await page.keyboard.type("}");
+      await page.keyboard.press("Control+Enter");
+      const want = "if (ok) {\n  run();\n  x();\n}";
+      const block = await h.until(async () => Object.values((await h.serverBoard(page)).objects).find((o) => o.type === "code" && o.text === want),
+        { message: "indented code committed" });
+      await h.until(async () => /wb-canvas/.test(await h.focusedClass(A)), { message: "focus back on the canvas" });
+      // Style bar by keyboard: Tab from the canvas, then the Dark theme toggle.
+      await A.locator(".wb-stylebar .code-theme-btn").focus();
+      await page.keyboard.press("Enter");
+      await h.until(async () => (await h.serverBoard(page)).objects[block.id].theme === "dark", { message: "dark theme" });
+      await B.locator(`${SEL.object(block.id)} rect[fill="#0d1117"]`).waitFor({ timeout: 3000 });
+      await B.locator(SEL.object(block.id)).filter({ hasText: "run();" }).waitFor({ timeout: 3000 });
+      // Copy code: through a copy command (the frame cannot use navigator.clipboard).
+      await A.locator("body").evaluate(() => {
+        const orig = DataTransfer.prototype.setData;
+        DataTransfer.prototype.setData = function (type, value) { window.__copied = [type, value]; return orig.call(this, type, value); };
+      });
+      await A.locator(".wb-stylebar .code-copy-btn").focus();
+      await page.keyboard.press("Enter");
+      const copied = await A.locator("body").evaluate(() => window.__copied ?? null);
+      if (copied) assert.deepEqual(copied, ["text/plain", want]);
+      else assert.equal(await A.locator(".wb-code-copy-dialog textarea").inputValue(), want, "fallback dialog shows the code");
+    });
+  });
+
+  test("code block: agent addCode, pasting a fenced block, and language guessing on paste into an empty block", async () => {
+    await withHarness({ names: ["Alice", "Bob"] }, async ({ page, frames: { A, B } }) => {
+      const { block } = await page.evaluate(() => window.harness.rpc("addCode", { by: "Agent", code: "SELECT id FROM users;", title: "q.sql" }));
+      assert.equal(block.language, "sql");
+      await B.locator(`${SEL.object(block.id)} .wb-code-head`, { hasText: "q.sql" }).first().waitFor({ timeout: 3000 });
+      // A fenced Markdown block pasted onto the board becomes one Rust code block.
+      await A.locator("body").evaluate(() => {
+        const dt = new DataTransfer();
+        dt.setData("text/plain", "```rust\nfn main() {\n    println!(\"hi\");\n}\n```");
+        document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      });
+      const rust = await h.until(async () => Object.values((await h.serverBoard(page)).objects).find((o) => o.type === "code" && o.language === "rust"),
+        { message: "fenced paste created a code block" });
+      assert.equal(rust.text, "fn main() {\n    println!(\"hi\");\n}");
+      await B.locator(SEL.object(rust.id)).waitFor({ timeout: 3000 });
+      // Paste into a new empty block: the language is guessed.
+      await h.inPane(A, (_, canvas) => { canvas.setSelection([]); canvas.element.focus(); });
+      await page.keyboard.press("k");
+      const editor = A.locator("textarea.wb-editor-code");
+      await editor.waitFor({ timeout: 3000 });
+      await editor.evaluate((ta) => {
+        const dt = new DataTransfer();
+        dt.setData("text/plain", "import os\n\ndef main():\n    print(os.getcwd())\n");
+        ta.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      });
+      await h.until(async () => Object.values((await h.serverBoard(page)).objects).some((o) => o.type === "code" && o.language === "python"),
+        { message: "language guessed from the paste" });
+      await h.until(async () => (await A.locator(".wb-stylebar .code-language-btn").getAttribute("aria-label")) === "Language: Python",
+        { message: "the style bar shows the guessed language" });
+      await page.keyboard.press("Escape");
+    });
+  });
 });

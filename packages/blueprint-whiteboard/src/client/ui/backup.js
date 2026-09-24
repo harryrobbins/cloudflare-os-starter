@@ -27,6 +27,7 @@ const SHOW_TEXT_MAX = 200_000;
 const TYPE_NAMES = /** @type {Record<string, [string, string]>} */ ({
   sticky: ["sticky note", "sticky notes"], rect: ["rectangle", "rectangles"], ellipse: ["ellipse", "ellipses"],
   text: ["text label", "text labels"], frame: ["frame", "frames"], pen: ["drawing", "drawings"], connector: ["connector", "connectors"],
+  code: ["code block", "code blocks"],
 });
 
 /**

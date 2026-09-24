@@ -1,0 +1,380 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`lexers > highlights bash 1`] = `
+[
+  "comment:#!/usr/bin/env bash",
+  "function:set",
+  "keyword:for",
+  "keyword:in",
+  "keyword:do",
+  "function:echo",
+  "string:"$f \${HOME}"",
+  "function:grep",
+  "string:'#no'",
+  "comment:# real comment",
+  "keyword:done",
+]
+`;
+
+exports[`lexers > highlights c 1`] = `
+[
+  "meta:#include <stdio.h>",
+  "meta:#define MAX 10",
+  "type:int",
+  "function:main",
+  "type:void",
+  "type:char",
+  "string:"x\\n"",
+  "comment:/* c */",
+  "keyword:return",
+  "function:printf",
+  "string:"%d"",
+  "number:0",
+  "number:0",
+  "number:1",
+]
+`;
+
+exports[`lexers > highlights cpp 1`] = `
+[
+  "meta:#include <vector>",
+  "keyword:template",
+  "keyword:typename",
+  "keyword:class",
+  "type:Box",
+  "keyword:public",
+  "type:std",
+  "type:vector",
+  "type:bool",
+  "function:empty",
+  "keyword:const",
+  "keyword:return",
+  "function:size",
+  "number:0",
+]
+`;
+
+exports[`lexers > highlights csharp 1`] = `
+[
+  "keyword:using",
+  "type:System",
+  "meta:#region x",
+  "keyword:public",
+  "keyword:class",
+  "type:A",
+  "type:IDisposable",
+  "keyword:public",
+  "keyword:async",
+  "type:Task",
+  "type:int",
+  "function:Run",
+  "type:string",
+  "keyword:await",
+  "type:Task",
+  "function:FromResult",
+  "property:Length",
+  "number:0",
+]
+`;
+
+exports[`lexers > highlights css 1`] = `
+[
+  "keyword:@media",
+  "property:max-width",
+  "number:600px",
+  "type:.a",
+  "type:#b",
+  "meta::hover",
+  "tag:li",
+  "meta:::before",
+  "property:margin",
+  "number:0",
+  "constant:auto",
+  "keyword:!important",
+  "property:color",
+  "function:rgb",
+  "number:0",
+  "number:0",
+  "number:0",
+  "comment:/* end */",
+]
+`;
+
+exports[`lexers > highlights diff 1`] = `
+[
+  "meta:diff --git a/x b/x",
+  "meta:index 1..2 100644",
+  "meta:--- a/x",
+  "meta:+++ b/x",
+  "keyword:@@ -1,2 +1,2 @@",
+  "deleted:-old line",
+  "inserted:+new line",
+  "comment:\\ No newline at end of file",
+]
+`;
+
+exports[`lexers > highlights go 1`] = `
+[
+  "keyword:package",
+  "keyword:import",
+  "string:"fmt"",
+  "keyword:func",
+  "function:main",
+  "type:int",
+  "number:1",
+  "number:2",
+  "function:Println",
+  "function:len",
+  "constant:nil",
+  "string:\`raw
+string\`",
+]
+`;
+
+exports[`lexers > highlights html 1`] = `
+[
+  "comment:<!-- c -->",
+  "tag:<a",
+  "property:href",
+  "string:"/x?a=1&amp;b"",
+  "property:data-x",
+  "string:y",
+  "property:disabled",
+  "tag:>",
+  "constant:&lt;",
+  "constant:&gt;",
+  "tag:</a>",
+  "tag:<script>",
+  "keyword:if",
+  "function:alert",
+  "string:"</a>"",
+  "tag:</script><style>p",
+  "property:color",
+  "number:#fff",
+  "tag:</style>",
+]
+`;
+
+exports[`lexers > highlights java 1`] = `
+[
+  "meta:@Override",
+  "keyword:public",
+  "keyword:static",
+  "type:void",
+  "function:main",
+  "type:String",
+  "type:List",
+  "type:Integer",
+  "keyword:new",
+  "type:ArrayList",
+  "type:System",
+  "property:out",
+  "function:println",
+  "string:"hi"",
+  "number:42L",
+]
+`;
+
+exports[`lexers > highlights javascript 1`] = `
+[
+  "keyword:import",
+  "keyword:from",
+  "string:"b"",
+  "comment:// note",
+  "keyword:const",
+  "string:\`x \${y}\`",
+  "number:0x1f",
+  "number:1e-3",
+  "keyword:class",
+  "type:A",
+  "keyword:extends",
+  "function:m",
+  "keyword:return",
+  "variable:this",
+  "property:x",
+  "function:y",
+  "constant:null",
+  "comment:/* block
+comment */",
+]
+`;
+
+exports[`lexers > highlights json 1`] = `
+[
+  "property:"key"",
+  "string:"value"",
+  "property:"n"",
+  "number:-1.5e2",
+  "property:"ok"",
+  "constant:true",
+  "constant:false",
+  "constant:null",
+]
+`;
+
+exports[`lexers > highlights markdown 1`] = `
+[
+  "heading:# Heading",
+  "keyword:-",
+  "keyword:**bold**",
+  "type:_em_",
+  "string:\`code\`",
+  "property:link",
+  "string:https://example.com",
+  "comment:> quote",
+  "meta:\`\`\`js",
+  "keyword:const",
+  "number:1",
+  "meta:\`\`\`",
+  "keyword:1.",
+]
+`;
+
+exports[`lexers > highlights php 1`] = `
+[
+  "comment:// c",
+  "comment:# also c",
+  "variable:$name",
+  "string:"World"",
+  "keyword:echo",
+  "string:"Hello {$name}"",
+  "function:strtoupper",
+  "string:'x'",
+  "keyword:function",
+  "function:f",
+  "keyword:array",
+  "variable:$a",
+  "keyword:return",
+  "constant:null",
+]
+`;
+
+exports[`lexers > highlights plain 1`] = `[]`;
+
+exports[`lexers > highlights python 1`] = `
+[
+  "meta:@app.route",
+  "string:'/x'",
+  "keyword:async",
+  "keyword:def",
+  "function:f",
+  "variable:self",
+  "type:int",
+  "number:0",
+  "type:str",
+  "string:'''doc
+    string'''",
+  "string:rf"\\d{n}"",
+  "comment:# comment",
+  "keyword:return",
+  "constant:None",
+  "keyword:if",
+  "keyword:else",
+  "constant:True",
+]
+`;
+
+exports[`lexers > highlights ruby 1`] = `
+[
+  "keyword:require",
+  "string:'json'",
+  "keyword:class",
+  "type:A",
+  "keyword:attr_reader",
+  "constant::name",
+  "keyword:def",
+  "function:initialize",
+  "variable:@name",
+  "comment:# set",
+  "keyword:end",
+  "keyword:end",
+]
+`;
+
+exports[`lexers > highlights rust 1`] = `
+[
+  "function:derive",
+  "type:Debug",
+  "keyword:fn",
+  "function:longest",
+  "meta:'a",
+  "meta:'a",
+  "type:str",
+  "type:Option",
+  "type:String",
+  "keyword:let",
+  "string:'c'",
+  "function:println",
+  "string:"{}"",
+  "comment:// done",
+  "constant:None",
+]
+`;
+
+exports[`lexers > highlights sql 1`] = `
+[
+  "comment:-- report",
+  "keyword:SELECT",
+  "property:id",
+  "function:COUNT",
+  "keyword:AS",
+  "keyword:FROM",
+  "keyword:LEFT",
+  "keyword:JOIN",
+  "keyword:ON",
+  "property:id",
+  "property:id",
+  "keyword:WHERE",
+  "string:'O''Brien'",
+  "comment:/* x */",
+  "keyword:GROUP",
+  "keyword:BY",
+  "number:1",
+]
+`;
+
+exports[`lexers > highlights typescript 1`] = `
+[
+  "keyword:type",
+  "type:T",
+  "type:string",
+  "meta:@decorator",
+  "keyword:export",
+  "keyword:interface",
+  "type:I",
+  "keyword:extends",
+  "function:f",
+  "type:Promise",
+  "keyword:void",
+  "keyword:let",
+  "keyword:as",
+  "type:unknown",
+  "keyword:as",
+  "type:number",
+]
+`;
+
+exports[`lexers > highlights yaml 1`] = `
+[
+  "comment:# config",
+  "property:version",
+  "number:2",
+  "property:services",
+  "keyword:-",
+  "property:name",
+  "string:"web"",
+  "property:image",
+  "string:nginx:1.27",
+  "comment:# pinned",
+  "property:anchors",
+  "variable:&base",
+  "property:enabled",
+  "constant:true",
+  "property:script",
+  "keyword:|",
+  "string:  echo hi",
+  "string:  echo there",
+  "property:next",
+  "constant:~",
+]
+`;

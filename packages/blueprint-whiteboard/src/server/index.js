@@ -141,6 +141,12 @@ export class Gadget extends DurableObject {
     return { created, errors };
   }
 
+  /** @param {any} args {code, language?, at?, frame?, title?, filename?, theme?, lineNumbers?, wrap?, fontSize?, w?, by?} */
+  async addCode(args) {
+    const { block, errors } = await this.#board.addCode(args);
+    return { block, errors };
+  }
+
   // --- Live updates and presence -------------------------------------------------------------
 
   /**

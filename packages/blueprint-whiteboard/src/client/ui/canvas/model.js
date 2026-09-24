@@ -29,9 +29,9 @@ export const HIT_TOLERANCE_PX = 6;
 /** Objects move by this much when duplicated. */
 export const DUPLICATE_OFFSET = 20;
 /** Types whose text can be edited inline (icons only when their icon has a text box; see canEditText). */
-export const TEXT_EDITABLE = Object.freeze(["sticky", "rect", "ellipse", "text", "frame", "connector", "icon"]);
+export const TEXT_EDITABLE = Object.freeze(["sticky", "rect", "ellipse", "text", "frame", "connector", "icon", "code"]);
 /** Types that open the editor right after being created. */
-export const EDIT_ON_CREATE = Object.freeze(["sticky", "text"]);
+export const EDIT_ON_CREATE = Object.freeze(["sticky", "text", "code"]);
 
 /** @param {number} v */
 export const round2 = (v) => Math.round(v * 100) / 100 + 0;
@@ -329,6 +329,9 @@ export function buildDuplicates(objects, ids, newId, offset = DUPLICATE_OFFSET) 
       };
       if (o.type === "pen") c.points = [...(o.points ?? [])];
       if (o.type === "icon") { c.packId = o.packId; c.iconId = o.iconId; }
+      if (o.type === "code") {
+        c.language = o.language; c.theme = o.theme; c.lineNumbers = o.lineNumbers; c.wrap = o.wrap; c.filename = o.filename;
+      }
       if (o.type !== "frame") c.frameId = null;
       creates.push(c);
       copies[c.id] = { ...o, ...c };

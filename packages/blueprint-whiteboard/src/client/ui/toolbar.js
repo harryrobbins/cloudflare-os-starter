@@ -35,6 +35,7 @@ export const ADDABLE = /** @type {const} */ ([
   { type: "ellipse", label: "Ellipse" },
   { type: "text", label: "Text" },
   { type: "frame", label: "Frame" },
+  { type: "code", label: "Code block (K)" },
 ]);
 
 export const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);

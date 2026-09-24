@@ -344,3 +344,23 @@ describe("icons over RPC", () => {
     expect(bad.errors[0].code).toBe("invalid_ref");
   });
 });
+
+describe("code blocks over RPC", () => {
+  it("addCode creates a highlighted block in workerd; findObjects and the SVG export see it; bounded on hostile code", async () => {
+    const { stub } = fresh();
+    const { block, errors } = await stub.addCode({ by: "Agent", code: "def main():\n    return '</text><script>x</script>'\n", title: "main.py" });
+    expect(errors).toEqual([]);
+    expect(block).toMatchObject({ type: "code", language: "python", filename: "main.py", createdBy: "Agent" });
+    expect((await stub.findObjects({ type: "code" })).map((o) => o.id)).toEqual([block.id]);
+    const svg = await stub.exportSvg({});
+    expect(svg).toContain(">def</tspan>");
+    expect(svg).toContain(">main.py<");
+    expect(svg).not.toContain("<script");
+    // A block full of unterminated strings and comment openers still exports promptly.
+    const hostile = await stub.addCode({ code: "\"'`/*<!--[${".repeat(1500).slice(0, 20000), language: "html" });
+    expect(hostile.errors).toEqual([]);
+    const t0 = Date.now();
+    expect(await stub.exportSvg({})).toContain(hostile.block.id);
+    expect(Date.now() - t0).toBeLessThan(5000);
+  });
+});

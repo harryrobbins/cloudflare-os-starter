@@ -21,6 +21,8 @@ import {
   effectiveFrameId, isObject, isObjectType, normalizeNewObject,
 } from "./protocol.js";
 import { boardBounds, rotatedBounds, unionRects } from "./geometry.js";
+import { resolveLanguage } from "./code/languages.js";
+import { codeHeight } from "./code/layout.js";
 
 /** @typedef {import("./protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("./protocol.js").ObjectType} ObjectType */
@@ -66,6 +68,8 @@ export const TEXT_STICKY = Object.freeze({ size: 200, gap: 40 });
  * @property {string} [from] @property {string} [to]
  * @property {string} [fromSide] @property {string} [toSide] @property {string} [routing]
  * @property {string} [packId] @property {string} [iconId]
+ * @property {string} [language] @property {"light"|"dark"} [theme] @property {boolean} [lineNumbers]
+ * @property {boolean} [wrap] @property {string} [filename]
  */
 
 /**
@@ -104,6 +108,9 @@ export function toPortable(list, all) {
     }
     if (o.type === "pen") p.points = [...(o.points ?? [])];
     if (o.type === "icon") { p.packId = o.packId; p.iconId = o.iconId; }
+    if (o.type === "code") {
+      p.language = o.language; p.theme = o.theme; p.lineNumbers = o.lineNumbers; p.wrap = o.wrap; p.filename = o.filename;
+    }
     if (o.type === "connector") {
       p.from = o.from; p.to = o.to;
       p.fromSide = o.fromSide; p.toSide = o.toSide; p.routing = o.routing;
@@ -285,6 +292,7 @@ export function parseBackup(input) {
       id: PLACEHOLDER_ID, type: o.type, x: o.x, y: o.y, w: o.w, h: o.h, rot: o.rot, text: o.text,
       style: o.style, points: o.points, fromSide: o.fromSide, toSide: o.toSide, routing: o.routing,
       packId: o.packId, iconId: o.iconId,
+      language: o.language, theme: o.theme, lineNumbers: o.lineNumbers, wrap: o.wrap, filename: o.filename,
     }));
     if (!norm) return problem(`Object ${index + 1}: invalid.`);
     delete norm.id;
@@ -494,6 +502,35 @@ export function textToEntries(text, { max = BACKUP_LIMITS.textStickies } = {}) {
     },
   }));
   return { entries, truncated: Math.max(0, total - cells.length) };
+}
+
+/**
+ * A fenced Markdown code block (```lang ... ```), the whole of `text`, as one code-block entry;
+ * null when `text` is not exactly one fence. The language comes from the fence's info string, else
+ * `detect(code)`. Linear: no regular expression over the text.
+ * @param {string} text
+ * @param {(code: string) => string} [detect]
+ * @returns {Entry|null}
+ */
+export function codeFenceToEntry(text, detect = () => "plain") {
+  const src = String(text ?? "").replace(/\r\n?/g, "\n").trim();
+  if (src.length > LIMITS.codeText + 400 || !(src.startsWith("```") || src.startsWith("~~~"))) return null;
+  const mark = src.slice(0, 3);
+  const firstEnd = src.indexOf("\n");
+  if (firstEnd < 0 || !src.endsWith(mark)) return null;
+  const lastStart = src.lastIndexOf("\n");
+  if (lastStart <= firstEnd || src.slice(lastStart + 1).trim() !== mark) return null;
+  const info = src.slice(3, firstEnd).trim().split(" ")[0] ?? "";
+  const code = src.slice(firstEnd + 1, lastStart);
+  // Another fence inside means this is Markdown with several blocks, not one code block.
+  if (code.split("\n").some((l) => l.trimStart().startsWith(mark))) return null;
+  const norm = /** @type {Record<string, any>|null} */ (normalizeNewObject({
+    id: PLACEHOLDER_ID, type: "code", text: code, language: resolveLanguage(info) ?? detect(code),
+  }));
+  if (!norm) return null;
+  norm.h = Math.min(LIMITS.sizeMax, codeHeight(norm));
+  delete norm.id; delete norm.z; delete norm.frameId;
+  return { ref: "c0", index: 0, object: norm, frameRef: null, fromRef: null, toRef: null };
 }
 
 /**

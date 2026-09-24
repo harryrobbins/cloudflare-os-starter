@@ -46,6 +46,8 @@ import { isValidOrderKey, keyBetween } from "../shared/order.js";
 import { boardToSvg } from "../shared/render.js";
 import { boardBounds, rectsIntersect, objectBounds, rotatedBounds, unionRects } from "../shared/geometry.js";
 import { getIcon, getPack, iconDefaults, iconSummary, resolveIcon, searchIcons, sizeFor } from "../shared/icons/registry.js";
+import { codeHeight } from "../shared/code/layout.js";
+import { detectLanguage, languageLabel, resolveLanguage } from "../shared/code/languages.js";
 
 /** @typedef {import("../shared/protocol.js").BoardMeta} BoardMeta */
 /** @typedef {import("../shared/protocol.js").BoardSnapshot} BoardSnapshot */
@@ -63,14 +65,14 @@ export const ANONYMOUS = "Anonymous";
 const RECORD_MAX_BYTES = 16 * 1024;
 const MIB = 1024 * 1024;
 /** Fields compared to decide whether an update changed an object (and inverted by undo). */
-const FIELDS = /** @type {const} */ (["x", "y", "w", "h", "rot", "z", "frameId", "text", "style", "points", "from", "to", "fromSide", "toSide", "routing", "packId", "iconId"]);
+const FIELDS = /** @type {const} */ (["x", "y", "w", "h", "rot", "z", "frameId", "text", "style", "points", "from", "to", "fromSide", "toSide", "routing", "packId", "iconId", "language", "theme", "lineNumbers", "wrap", "filename"]);
 /** An update touching only these is a move: never refused for size, summarised as "Moved". */
 const MOVE_FIELDS = new Set(["x", "y", "frameId"]);
 /** Fields the convenience methods pass through from caller input. */
 const FRIENDLY_FIELDS = ["id", "type", ...FIELDS];
 const NOUNS = /** @type {Record<string, string>} */ ({
   sticky: "sticky note", rect: "rectangle", ellipse: "ellipse", text: "text label", frame: "frame",
-  pen: "pen stroke", connector: "connector", icon: "icon",
+  pen: "pen stroke", connector: "connector", icon: "icon", code: "code block",
 });
 const FILL_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame"]);
 /** Default placement spacing for the convenience methods. */
@@ -94,6 +96,7 @@ const withArticle = (type) => {
  * @param {WhiteboardObject} o
  */
 const objectNoun = (o) => {
+  if (o.type === "code" && o.language && o.language !== "plain") return `a ${languageLabel(o.language)} code block`;
   const icon = o.type === "icon" ? getIcon(o.packId, o.iconId) : null;
   if (!icon) return withArticle(o.type);
   const noun = `${icon.label.charAt(0).toLowerCase()}${icon.label.slice(1)} ${icon.kind === "stencil" ? "shape" : "icon"}`;
@@ -599,7 +602,7 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       if (!isObject(raw)) return void errors.push(opError(i, "invalid_op", "create needs an object"));
       if (!isId(raw.id)) return void errors.push(opError(i, "invalid_id", "object.id must look like o_1a2b3c4d5e6f"));
       if (!isObjectType(raw.type)) {
-        return void errors.push(opError(i, "invalid_op", "object.type must be sticky, rect, ellipse, text, frame, pen, connector or icon"));
+        return void errors.push(opError(i, "invalid_op", "object.type must be sticky, rect, ellipse, text, frame, pen, connector, icon or code"));
       }
       const id = /** @type {string} */ (raw.id);
       if (w.objects.has(id)) return void errors.push(opError(i, "exists", `Object ${id} already exists`));
@@ -618,6 +621,8 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       const obj = /** @type {any} */ (normalizeNewObject(source));
       if (!obj) return void errors.push(opError(i, "invalid_op", "Invalid object"));
       if (icon && !icon.textBox) obj.text = "";
+      // A code block created without a height fits its code.
+      if (obj.type === "code" && cleanSize(raw.h) === null) obj.h = Math.min(DEFAULT_LIMITS.sizeMax, codeHeight(obj));
       if (!isValidOrderKey(obj.z)) obj.z = "";
       if (obj.frameId !== null && !isFrame(obj.frameId)) {
         if (!force && w.objects.has(obj.frameId)) return void errors.push(opError(i, "invalid_ref", notAFrame(obj.frameId)));
@@ -1438,6 +1443,53 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
         created: objectOps.map((o) => byId.get(o.object.id)).filter((o) => o !== undefined),
         errors: result.errors, event,
       };
+    }),
+
+    /**
+     * One code block, placed like addIcons places a single icon: at `at` (top-left), else inside
+     * `frame`, else right of existing content. `language` may be an id, a label or an alias; omitted
+     * or "auto", it is guessed from the code. The height fits the code.
+     * @param {any} args {code, language?, at?, frame?, title?, filename?, theme?, lineNumbers?, wrap?,
+     *   fontSize?, w?, by?, senderId?}
+     * @returns {Promise<{block: WhiteboardObject|null, errors: OpError[], event: BoardEvent|null}>}
+     */
+    addCode: (args) => enqueue(async () => {
+      const s = await load();
+      const a = isObject(args) ? args : {};
+      /** @type {OpError[]} */
+      const errors = [];
+      if (typeof a.code !== "string") {
+        return { block: null, errors: [opError(-1, "invalid_op", "code must be a string")], event: null };
+      }
+      let language = "plain";
+      if (a.language === undefined || a.language === null || a.language === "auto") language = detectLanguage(a.code);
+      else {
+        const l = resolveLanguage(a.language);
+        if (!l) return { block: null, errors: [opError(-1, "invalid_op", `Unknown language ${String(a.language).slice(0, 40)}`)], event: null };
+        language = l;
+      }
+      /** @type {string|null} */
+      let frameId = null;
+      if (a.frame !== undefined && a.frame !== null) {
+        frameId = resolveFrame(s, a.frame);
+        if (!frameId) return { block: null, errors: [opError(-1, "invalid_ref", `No frame ${String(a.frame).slice(0, 80)}`)], event: null };
+      }
+      const frame = frameId ? s.objects.get(frameId) : undefined;
+      const at = cleanAt(a.at) ?? (frame ? { x: frame.x + PLACE_GAP, y: frame.y + PLACE_GAP } : besideContent(s));
+      const id = newId("object");
+      /** @type {Record<string, any>} */
+      const object = {
+        id, type: "code", x: at.x, y: at.y, text: a.code, language,
+        filename: typeof a.filename === "string" ? a.filename : typeof a.title === "string" ? a.title : "",
+        ...(a.theme !== undefined ? { theme: a.theme } : {}),
+        ...(a.lineNumbers !== undefined ? { lineNumbers: a.lineNumbers } : {}),
+        ...(a.wrap !== undefined ? { wrap: a.wrap } : {}),
+        ...(cleanSize(a.w) !== null ? { w: a.w } : {}),
+        ...(typeof a.fontSize === "number" ? { style: { fontSize: a.fontSize } } : {}),
+        ...(frameId ? { frameId } : {}),
+      };
+      const { result, event } = await applyMapped(a, [{ op: "create", object }], [0], errors);
+      return { block: result.upserts.find((o) => o.id === id) ?? null, errors: result.errors, event };
     }),
 
     /**

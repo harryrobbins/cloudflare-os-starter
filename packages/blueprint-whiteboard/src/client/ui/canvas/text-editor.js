@@ -9,8 +9,11 @@ import {
   textLayout, textObjectHeight, polylineMidpoint, textWidth, center, LINE_HEIGHT,
 } from "../../../shared/geometry.js";
 import { FONT_FAMILY } from "../../../shared/render.js";
-import { cleanLine, cleanText, LIMITS } from "../../../shared/protocol.js";
+import { cleanCode, cleanLine, cleanText, LIMITS } from "../../../shared/protocol.js";
 import { connectorPoints, canEditText } from "./model.js";
+import { codeHeight, codeMetrics, CODE_FONT_FAMILY, CODE_LINE_HEIGHT, TAB_WIDTH } from "../../../shared/code/layout.js";
+import { codeTheme } from "../../../shared/code/theme.js";
+import { applyEdit, indentEdit, indentUnitOf, newlineEdit } from "./code-editing.js";
 
 /** @typedef {import("../../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("../../../shared/protocol.js").ObjectPatch} ObjectPatch */
@@ -28,6 +31,8 @@ import { connectorPoints, canEditText } from "./model.js";
  * @property {"none"|"label"|"frame"} chrome
  * @property {string} color
  * @property {number} maxLength
+ * @property {{background: string, padLeft: number, pad: number, wrap: boolean, language: string}} [code]
+ *   code blocks: the editor covers the body (below the header) in the block's monospace font
  */
 
 /**
@@ -50,6 +55,16 @@ export function editorBox(o, resolve) {
     };
   }
   const c = center(o);
+  if (o.type === "code") {
+    const m = codeMetrics(o);
+    const th = codeTheme(o.theme);
+    return {
+      x: o.x, y: m.bodyY, w: o.w, h: Math.max(m.lineH + 2 * m.pad, o.y + o.h - m.bodyY), cx: c.x, cy: c.y, rot: 0, fontSize,
+      align: "left", singleLine: false, centerVertically: false, chrome: "none", color: th.tokens[""],
+      maxLength: LIMITS.codeText,
+      code: { background: th.background, padLeft: m.pad + m.gutterW, pad: m.pad, wrap: !!o.wrap, language: o.language ?? "plain" },
+    };
+  }
   if (o.type === "frame") {
     const layout = textLayout(o);
     return {
@@ -76,12 +91,17 @@ export function editorBox(o, resolve) {
 export function textPatch(o, value) {
   const text = o.type === "frame" ? cleanLine(value, LIMITS.frameName)
     : o.type === "connector" ? cleanLine(value, LIMITS.connectorLabel)
+    : o.type === "code" ? cleanCode(value)
     : cleanText(value, LIMITS.text);
   /** @type {ObjectPatch} */
   const patch = {};
   if (text !== o.text) patch.text = text;
   if (o.type === "text") {
     const h = textObjectHeight(text, o.w, o.style.fontSize);
+    if (h !== o.h) patch.h = h;
+  }
+  if (o.type === "code") {
+    const h = Math.min(LIMITS.sizeMax, codeHeight({ ...o, text }));
     if (h !== o.h) patch.h = h;
   }
   return Object.keys(patch).length ? patch : null;
@@ -95,6 +115,8 @@ export function textPatch(o, value) {
  * @property {() => Camera} getCamera
  * @property {(id: string, value: string) => void} onCommit
  * @property {(id: string) => void} onClose
+ * @property {(id: string, text: string) => string|null} [onCodePaste]  paste into an EMPTY code
+ *   block: may set its language and returns the text to insert instead (null: paste as is)
  */
 
 export class TextEditor {
@@ -124,8 +146,16 @@ export class TextEditor {
     if (!box) return false;
     const ta = document.createElement("textarea");
     ta.className = "wb-editor" + (box.chrome === "label" ? " wb-editor-label" : box.chrome === "frame" ? " wb-editor-frame" : "");
-    ta.setAttribute("aria-label", o.type === "frame" ? "Frame name" : o.type === "connector" ? "Connector label" : "Text");
-    ta.spellcheck = true;
+    ta.setAttribute("aria-label", o.type === "frame" ? "Frame name" : o.type === "connector" ? "Connector label" : o.type === "code" ? "Code" : "Text");
+    ta.spellcheck = !box.code;
+    if (box.code) {
+      ta.classList.add("wb-editor-code");
+      ta.setAttribute("wrap", box.code.wrap ? "soft" : "off");
+      ta.setAttribute("autocapitalize", "off");
+      ta.setAttribute("autocomplete", "off");
+      ta.setAttribute("aria-description", "Tab indents and Shift+Tab outdents. Press Escape or Ctrl+Enter to finish.");
+      ta.addEventListener("paste", (e) => this.onPaste(e));
+    }
     ta.maxLength = box.maxLength;
     ta.value = o.text || "";
     ta.rows = 1;
@@ -147,10 +177,37 @@ export class TextEditor {
     return true;
   }
 
+  /** @param {ClipboardEvent} e */
+  onPaste(e) {
+    const ta = this.textarea;
+    if (!ta || !this.id || ta.value !== "" || !this.deps.onCodePaste) return;
+    const text = e.clipboardData?.getData("text/plain") ?? "";
+    if (!text) return;
+    const replacement = this.deps.onCodePaste(this.id, text);
+    if (replacement === null || replacement === text) return;
+    e.preventDefault();
+    applyEdit(ta, { from: 0, to: ta.value.length, insert: replacement, selStart: replacement.length, selEnd: replacement.length });
+  }
+
   /** @param {KeyboardEvent} e */
   onKey(e) {
     e.stopPropagation();
     if (e.isComposing) return;
+    const ta = this.textarea;
+    const code = this.box?.code;
+    if (code && ta && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const edit = indentEdit(ta.value, ta.selectionStart, ta.selectionEnd, indentUnitOf(ta.value, code.language), e.shiftKey);
+        if (edit) applyEdit(ta, edit);
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        applyEdit(ta, newlineEdit(ta.value, ta.selectionStart, ta.selectionEnd));
+        return;
+      }
+    }
     if (e.key === "Escape") {
       e.preventDefault();
       this.commit();
@@ -177,6 +234,22 @@ export class TextEditor {
     const cam = this.deps.getCamera();
     const lineHeight = box.fontSize * LINE_HEIGHT;
     const o = this.deps.getObject(this.id);
+    if (box.code) {
+      const c = box.code;
+      Object.assign(ta.style, {
+        width: `${box.w}px`, boxSizing: "border-box", fontSize: `${box.fontSize}px`, lineHeight: String(CODE_LINE_HEIGHT),
+        fontFamily: CODE_FONT_FAMILY, fontWeight: "400", textAlign: "left", color: box.color, background: c.background,
+        padding: `${c.pad}px ${c.pad}px ${c.pad}px ${c.padLeft}px`, tabSize: String(TAB_WIDTH),
+        whiteSpace: c.wrap ? "pre-wrap" : "pre", overflowWrap: c.wrap ? "anywhere" : "normal", wordBreak: c.wrap ? "break-all" : "normal",
+        overflowX: c.wrap ? "hidden" : "auto", overflowY: "hidden", borderRadius: "0 0 6px 6px",
+      });
+      ta.style.height = "0px";
+      const height = Math.max(box.h, ta.scrollHeight);
+      ta.style.height = `${height}px`;
+      const sx = (box.cx - cam.x) * cam.zoom, sy = (box.cy - cam.y) * cam.zoom;
+      ta.style.transform = `translate(${sx}px, ${sy}px) scale(${cam.zoom}) translate(${box.x - box.cx}px, ${box.y - box.cy}px)`;
+      return;
+    }
     Object.assign(ta.style, {
       width: `${box.w}px`,
       fontSize: `${box.fontSize}px`,

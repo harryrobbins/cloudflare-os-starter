@@ -6,6 +6,8 @@
 import { fmt, center, connectorRoute, penWorldPoints, polylineMidpoint, strokePathD, textLayout, textWidth, fitCamera, boardBounds, rotatedBounds } from "./geometry.js";
 import { DEFAULT_TITLE, sortedObjects } from "./protocol.js";
 import { getIcon, iconPaths, iconPlacement, iconTextBox, DEFAULT_ICON_STROKE, DEFAULT_INK } from "./icons/registry.js";
+import { codeLayout, fitColumns, CODE_FONT_FAMILY, CODE_CHAR_EM } from "./code/layout.js";
+import { codeTheme } from "./code/theme.js";
 
 /** @typedef {import("./protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("./protocol.js").BoardSnapshot} BoardSnapshot */
@@ -44,7 +46,7 @@ export function h(tag, attrs, children) {
  * @returns {VNode|null}
  */
 export function textNode(o) {
-  if (!o.text || o.type === "pen" || o.type === "connector") return null;
+  if (!o.text || o.type === "pen" || o.type === "connector" || o.type === "code") return null;
   if (o.type === "icon" && !iconTextBox(o)) return null;
   const layout = textLayout(o);
   if (!layout.lines.length) return null;
@@ -93,6 +95,8 @@ function shapeNodes(o) {
       })];
     case "icon":
       return iconNodes(o);
+    case "code":
+      return codeNodes(o);
     default:
       return [];
   }
@@ -149,6 +153,67 @@ function iconNodes(o) {
       "stroke-linecap": stroked ? "round" : null, "stroke-linejoin": stroked ? "round" : null,
     }));
   }
+  return nodes;
+}
+
+/**
+ * A code block: body, header strip (file name and language), line numbers and highlighted code
+ * inside a nested <svg> that clips it to the body. Token text is only ever text content (escaped
+ * by serialize, textContent on the client), never markup.
+ * @param {WhiteboardObject} o
+ * @returns {VNode[]}
+ */
+function codeNodes(o) {
+  const L = codeLayout(o);
+  const { m } = L;
+  const th = codeTheme(o.theme);
+  const rx = Math.min(6, o.w / 2, o.h / 2);
+  /** @type {VNode[]} */
+  const nodes = [
+    h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, rx, fill: th.background, stroke: th.border, "stroke-width": 1 }),
+  ];
+  if (m.headerH > 0) {
+    const hh = m.headerH;
+    nodes.push(h("path", {
+      d: `M${fmt(o.x)} ${fmt(o.y + hh)}V${fmt(o.y + rx)}Q${fmt(o.x)} ${fmt(o.y)} ${fmt(o.x + rx)} ${fmt(o.y)}` +
+        `H${fmt(o.x + o.w - rx)}Q${fmt(o.x + o.w)} ${fmt(o.y)} ${fmt(o.x + o.w)} ${fmt(o.y + rx)}V${fmt(o.y + hh)}Z`,
+      fill: th.header, stroke: th.border, "stroke-width": 1,
+    }));
+    const headCol = m.headFont * CODE_CHAR_EM;
+    const baseline = o.y + hh / 2 + m.headFont * 0.35;
+    const room = Math.floor((o.w - 2 * m.pad) / headCol);
+    const aside = L.aside ? fitColumns(L.aside, Math.max(0, Math.floor(room / 3))) : "";
+    const label = fitColumns(L.label, Math.max(0, room - (aside ? aside.length + 2 : 0)));
+    const head = { "font-size": m.headFont, "font-family": CODE_FONT_FAMILY, fill: th.headerText, style: "white-space:pre", class: "wb-code-head" };
+    if (label) nodes.push(h("text", { x: o.x + m.pad, y: baseline, ...head, "font-weight": "600" }, [{ tag: "tspan", attrs: {}, text: label }]));
+    if (aside) nodes.push(h("text", { x: o.x + o.w - m.pad, y: baseline, ...head, "text-anchor": "end" }, [{ tag: "tspan", attrs: {}, text: aside }]));
+  }
+  const bodyH = o.y + o.h - m.bodyY;
+  if (bodyH <= 0 || !L.rows.length) return nodes;
+  /** @type {VNode[]} */
+  const clip = [];
+  const numbers = o.lineNumbers === false ? [] : L.rows.filter((r) => r.number !== null);
+  if (numbers.length) {
+    const nx = o.x + m.pad + m.gutterW - m.charW;
+    clip.push(h("text", {
+      "font-size": m.fontSize, "font-family": CODE_FONT_FAMILY, fill: th.gutter, "text-anchor": "end", "aria-hidden": "true",
+    }, numbers.map((r) => ({ tag: "tspan", attrs: { x: fmt(nx), y: fmt(r.y) }, text: String(r.number) }))));
+  }
+  const lines = L.rows.filter((r) => r.segs.length).map((r) => ({
+    tag: "tspan",
+    attrs: { x: fmt(m.textX), y: fmt(r.y) },
+    children: r.segs.map(([cls, text]) => (cls ? { tag: "tspan", attrs: { fill: th.tokens[cls] }, text } : { tag: "tspan", attrs: {}, text })),
+  }));
+  if (lines.length) {
+    clip.push(h("text", {
+      "font-size": m.fontSize, "font-family": CODE_FONT_FAMILY, fill: th.tokens[""], style: "white-space:pre",
+      "xml:space": "preserve", class: "wb-code-text",
+    }, lines));
+  }
+  nodes.push(h("svg", {
+    x: o.x, y: m.bodyY, width: o.w, height: bodyH,
+    viewBox: `${fmt(o.x)} ${fmt(m.bodyY)} ${fmt(o.w)} ${fmt(bodyH)}`, overflow: "hidden",
+  }, clip));
   return nodes;
 }
 

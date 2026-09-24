@@ -190,6 +190,7 @@ export function mountApp(root, store) {
     if (command === "addMenu") toolbar.openAddMenu();
     else if (command === "outline") outline.toggle();
     else if (command === "icons") iconPicker.toggle();
+    else if (command === "code") canvas.addAtCenter("code");
     else share.command(command);
   };
 

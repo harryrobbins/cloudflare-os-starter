@@ -9,13 +9,14 @@
 //                                             and strokes; memory only, never stored
 
 import { isValidOrderKey } from "./order.js";
+import { resolveLanguage } from "./code/languages.js";
 
 // ---------------------------------------------------------------------------------------------
 // Data model
 // ---------------------------------------------------------------------------------------------
 
 /**
- * @typedef {"sticky"|"rect"|"ellipse"|"text"|"frame"|"pen"|"connector"|"icon"} ObjectType
+ * @typedef {"sticky"|"rect"|"ellipse"|"text"|"frame"|"pen"|"connector"|"icon"|"code"} ObjectType
  */
 
 /**
@@ -75,6 +76,12 @@ import { isValidOrderKey } from "./order.js";
  * @property {string} [packId]     icon only: the icon pack, "<name>.<version>" (see
  *   src/shared/icons/registry.js); with iconId it names compiled geometry, never markup
  * @property {string} [iconId]     icon only: the icon within its pack
+ * @property {string} [language]   code only: a language id from src/shared/code/languages.js
+ *   ("plain", "python", ...); aliases ("py") are accepted on input and stored as the id
+ * @property {"light"|"dark"} [theme]  code only: highlighting palette
+ * @property {boolean} [lineNumbers]   code only: draw a line-number gutter
+ * @property {boolean} [wrap]      code only: wrap long lines at the box width (else clip them)
+ * @property {string} [filename]   code only: optional title shown in the header (LIMITS.codeFilename, one line)
  * @property {number} version      1 on create, bumped once per request that changes the object
  * @property {number} createdAt    epoch ms
  * @property {number} updatedAt    epoch ms
@@ -331,6 +338,10 @@ export const LIMITS = Object.freeze({
   /** Points (pairs) in a stored pen stroke. */
   penPoints: 2000,
   text: 4000,
+  /** Characters of code in one code block (its `text`), and its lines. */
+  codeText: 20_000,
+  codeLines: 1000,
+  codeFilename: 120,
   frameName: 80,
   connectorLabel: 200,
   boardTitle: 200,
@@ -382,7 +393,7 @@ export const ZOOM_MAX = 20;
 
 export const DEFAULT_TITLE = "Untitled whiteboard";
 
-export const OBJECT_TYPES = /** @type {const} */ (["sticky", "rect", "ellipse", "text", "frame", "pen", "connector", "icon"]);
+export const OBJECT_TYPES = /** @type {const} */ (["sticky", "rect", "ellipse", "text", "frame", "pen", "connector", "icon", "code"]);
 /** Types that rotate; every other type has rot 0. */
 export const ROTATABLE = /** @type {const} */ (["sticky", "rect", "ellipse", "text", "icon"]);
 export const SIDES = /** @type {const} */ (["auto", "top", "right", "bottom", "left"]);
@@ -401,6 +412,7 @@ export const EDITABLE_FIELDS = Object.freeze({
   pen: ["x", "y", "w", "h", "z", "frameId", "points", "style"],
   connector: ["z", "text", "style", "from", "to", "fromSide", "toSide", "routing"],
   icon: ["x", "y", "w", "h", "rot", "z", "frameId", "text", "style", "packId", "iconId"],
+  code: ["x", "y", "w", "h", "z", "frameId", "text", "style", "language", "theme", "lineNumbers", "wrap", "filename"],
 });
 
 /** Geometry fields a client rebases by delta when a concurrent change conflicts. */
@@ -430,7 +442,12 @@ export const TYPE_DEFAULTS = Object.freeze({
   connector: { w: 1, h: 1, text: "", routing: "straight", style: style({ fill: "none", stroke: "#1f2937", strokeWidth: 2, fontSize: 14, align: "center", arrowEnd: "arrow" }) },
   // A glyph's defaults; the board applies each icon's own size and style (registry iconDefaults).
   icon: { w: 96, h: 96, text: "", style: style({ fill: "none", stroke: "#1f2937", strokeWidth: 2, fontSize: 18, align: "center" }) },
+  // Colours come from the code theme (src/shared/code/theme.js); only fontSize is used.
+  code: { w: 480, h: 120, text: "", style: style({ fill: "none", stroke: "none", strokeWidth: 0, fontSize: 14, align: "left" }) },
 });
+
+/** Code-block fields a create takes when it does not give them. */
+export const CODE_DEFAULTS = Object.freeze({ language: "plain", theme: "light", lineNumbers: true, wrap: false, filename: "" });
 
 /** @param {Partial<Style>} s @returns {Style} */
 function style(s) {
@@ -516,6 +533,22 @@ export function cleanLine(value, max) {
 export function cleanText(value, max) {
   if (value == null) return "";
   return String(value).replace(/\r\n?/g, "\n").replace(CONTROL_RE, "").slice(0, max);
+}
+
+/**
+ * Code: multi-line text (tabs kept) cut to LIMITS.codeText characters and LIMITS.codeLines lines.
+ * @param {unknown} value
+ */
+export function cleanCode(value) {
+  let text = cleanText(value, LIMITS.codeText);
+  let at = -1;
+  for (let line = 1; line < LIMITS.codeLines; line++) {
+    at = text.indexOf("\n", at + 1);
+    if (at < 0) return text;
+  }
+  at = text.indexOf("\n", at + 1);
+  if (at >= 0) text = text.slice(0, at);
+  return text;
 }
 
 /** @param {unknown} name @param {string} fallback */
@@ -655,6 +688,7 @@ export function cleanObjectPatch(raw, type) {
       case "text":
         out.text = type === "frame" ? cleanLine(v, LIMITS.frameName)
           : type === "connector" ? cleanLine(v, LIMITS.connectorLabel)
+          : type === "code" ? cleanCode(v)
           : cleanText(v, LIMITS.text);
         break;
       case "style": { const s = cleanStylePatch(v, type); if (Object.keys(s).length) out.style = s; break; }
@@ -666,6 +700,10 @@ export function cleanObjectPatch(raw, type) {
       case "routing": if (v === "straight" || v === "elbow") out.routing = v; break;
       case "packId": if (typeof v === "string" && PACK_ID_RE.test(v)) out.packId = v; break;
       case "iconId": if (typeof v === "string" && ICON_ID_RE.test(v)) out.iconId = v; break;
+      case "language": { const l = resolveLanguage(v); if (l) out.language = l; break; }
+      case "theme": if (v === "light" || v === "dark") out.theme = v; break;
+      case "lineNumbers": case "wrap": if (typeof v === "boolean") out[key] = v; break;
+      case "filename": if (typeof v === "string") out.filename = cleanLine(v, LIMITS.codeFilename); break;
     }
   }
   return /** @type {ObjectPatch} */ (out);
@@ -710,6 +748,9 @@ export function normalizeNewObject(raw) {
   if (type === "icon") {
     obj.packId = patch.packId ?? "";
     obj.iconId = patch.iconId ?? "";
+  }
+  if (type === "code") {
+    for (const k of /** @type {const} */ (["language", "theme", "lineNumbers", "wrap", "filename"])) obj[k] = patch[k] ?? CODE_DEFAULTS[k];
   }
   return obj;
 }

@@ -16,6 +16,7 @@ import { openMenu } from "./dialogs.js";
 import { expandMoveIds, moveUpdates, resizeUpdates, rotateUpdates } from "./canvas/index.js";
 import { createArrange } from "./arrange.js";
 import { canEditText } from "./canvas/model.js";
+import { createCodeControls } from "./code-block.js";
 
 /** @typedef {import("./app.js").App} App */
 /** @typedef {import("../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
@@ -61,7 +62,7 @@ export function colorLabel(hex) {
 
 /** @param {ObjectType} type */
 export function typeLabel(type) {
-  return { sticky: "Sticky note", rect: "Rectangle", ellipse: "Ellipse", text: "Text", frame: "Frame", pen: "Drawing", connector: "Connector", icon: "Icon" }[type] ?? type;
+  return { sticky: "Sticky note", rect: "Rectangle", ellipse: "Ellipse", text: "Text", frame: "Frame", pen: "Drawing", connector: "Connector", icon: "Icon", code: "Code block" }[type] ?? type;
 }
 
 /** @param {App} app */
@@ -80,6 +81,7 @@ export function createStyleBar(app) {
   let popover = null;
   let renderKey = "";
   const arrange = createArrange(app);
+  const code = createCodeControls(app);
 
   /** @returns {WhiteboardObject[]} */
   function selected() {
@@ -391,6 +393,8 @@ export function createStyleBar(app) {
         ] : null,
       ));
     }
+    const codeGroup = code.group(objs, btn);
+    if (codeGroup) groups.push(codeGroup);
     groups.push(...arrange.groups(objs, btn));
     groups.push(h("div", { class: "style-group arrange-group", role: "group", "aria-label": "Arrange" },
       canConnect(objs)
@@ -462,6 +466,7 @@ export function createStyleBar(app) {
     if (objs.length) {
       if (objs.length === 1 && canEditText(objs[0])) items.push({ label: "Edit text", className: "ctx-edit", onSelect: editText });
       if (canConnect(objs)) items.push({ label: "Connect", className: "ctx-connect", onSelect: connect });
+      items.push(...code.menuItems(objs));
       items.push(...arrange.menuItems(objs, { x: at.x, y: at.y, returnFocus: canvas.element, avoid: at.rect ?? null, pointerType: at.pointerType }));
       items.push({ label: "Style…", className: "ctx-style", onSelect: () => focusFirst() });
       items.push({ label: "Duplicate", className: "ctx-duplicate", onSelect: duplicate });

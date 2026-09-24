@@ -14,6 +14,7 @@
 import { sortedObjects } from "../../shared/protocol.js";
 import { h, icon } from "./dom.js";
 import { typeLabel } from "./stylebar.js";
+import { languageLabel } from "../../shared/code/languages.js";
 import { getIcon } from "../../shared/icons/registry.js";
 import { createVirtualList } from "./virtual-list.js";
 
@@ -34,6 +35,11 @@ export function describeObject(o, objects) {
     const to = o.to ? objects[o.to] : null;
     const name = (/** @type {WhiteboardObject|null} */ x) => (x ? excerpt(x.text) || typeLabel(x.type).toLowerCase() : "?");
     return `${o.text ? excerpt(o.text) + ": " : ""}from ${name(from)} to ${name(to)}`;
+  }
+  if (o.type === "code") {
+    // "Python — def main():"
+    const first = String(o.text || "").split("\n").find((l) => l.trim()) ?? "";
+    return `${languageLabel(o.language ?? "plain")}${first ? " — " + excerpt(first) : ""}${o.filename ? ` (${excerpt(o.filename)})` : ""}`;
   }
   if (o.type === "icon") {
     // Named by its icon, so a list of icons reads "Database", "User: Customer", ...
@@ -57,7 +63,7 @@ export function outlineRows(objects, query) {
   const q = query.trim().toLowerCase();
   const all = sortedObjects(objects).reverse();
   const rows = q ? all.filter((o) => typeLabel(o.type).toLowerCase().includes(q) || String(o.text || "").toLowerCase().includes(q) ||
-    (o.type === "icon" && describeObject(o, objects).toLowerCase().includes(q))) : all;
+    ((o.type === "icon" || o.type === "code") && describeObject(o, objects).toLowerCase().includes(q))) : all;
   return { all: all.length, rows };
 }
 

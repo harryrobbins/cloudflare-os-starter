@@ -44,6 +44,8 @@ import { ObjectLayer, svgEl } from "./layers.js";
 import { Culler, connectorsOf } from "./culling.js";
 import { PresenceLayer } from "./presence-layer.js";
 import { TextEditor, textPatch } from "./text-editor.js";
+import { detectLanguage, languageLabel } from "../../../shared/code/languages.js";
+import { codeFenceToEntry } from "../../../shared/backup.js";
 import {
   panGesture, pinchGesture, objectPressGesture, handleGesture, marqueeGesture, createGesture,
   penGesture, connectGesture, endpointGesture,
@@ -571,6 +573,19 @@ export function createCanvas(store, options = {}) {
         return;
       }
       if (patch) store.updateObjects([{ id, patch }]);
+    },
+    onCodePaste(id, text) {
+      // Pasting into an empty code block: a fenced block gives its code and language; otherwise a
+      // plain-text block guesses the language. The text itself is kept verbatim.
+      const o = objects()[id];
+      if (!o || o.type !== "code") return null;
+      const fence = codeFenceToEntry(text, detectLanguage);
+      const language = fence ? fence.object.language : o.language === "plain" ? detectLanguage(text) : o.language;
+      if (language !== o.language) {
+        store.updateObjects([{ id, patch: { language } }]);
+        options.announce?.(`Language set to ${languageLabel(language)}`);
+      }
+      return fence ? fence.object.text : null;
     },
     onClose() {
       layer.setEditing(null);
@@ -1391,6 +1406,10 @@ function reducedMotion() {
 function describe(o) {
   const names = { sticky: "sticky note", rect: "rectangle", ellipse: "ellipse", text: "text", frame: "frame", pen: "drawing", connector: "connector" };
   const label = o.text ? `: ${o.text.slice(0, 40)}` : "";
+  if (o.type === "code") {
+    const first = o.text.split("\n").find((l) => l.trim())?.trim().slice(0, 40);
+    return `${o.language && o.language !== "plain" ? languageLabel(o.language) + " " : ""}code block${first ? ": " + first : ""}`;
+  }
   if (o.type === "icon") {
     const icon = getIcon(o.packId, o.iconId);
     return `${icon ? icon.label.toLowerCase() + (icon.kind === "stencil" ? " shape" : " icon") : "icon"}${label}`;

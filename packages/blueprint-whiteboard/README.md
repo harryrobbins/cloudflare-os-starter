@@ -41,6 +41,12 @@ Icons are compiled at build time, never fetched or parsed at runtime. `scripts/i
 
 Budget: the generated module must stay under 160 KiB (today about 101 KiB, 29 KiB gzipped, for 260 icons and shapes); it ships in both `client.js` and `server.js` (the server draws icons in `exportSvg`), which grows the packed archive from about 107 KiB to about 175 KiB. To add icons, list them in `packs.mjs` and rebuild. To change a published glyph (for example after a Tabler upgrade), add a new pack version instead and keep the old one.
 
+## Code highlighting
+
+Code blocks (`type: "code"`) are highlighted by small hand-written lexers in `src/shared/code/` (`lexer.js`; languages and the paste-time language guess in `languages.js`, layout in `layout.js`, WCAG-AA palettes in `theme.js`), not by Prism or highlight.js: those are regular-expression grammars, and one catastrophic-backtracking pattern cannot be interrupted once it runs, which would stall the Durable Object while it exports. The lexers use no regular expressions on the code, look at a bounded number of characters per step and consume what they look at, so they are linear; every scan is also counted, and a block past 8 units of work per character (plus 4,096) is drawn plain from that point on. Tokens are memoised by (language, text), so re-rendering an unchanged block never re-tokenizes. The renderer draws tokens as `<tspan>` text only (escaped on export, `textContent` in the canvas), so code can never become markup. No third-party code or data is involved, so there is nothing to add to `THIRD_PARTY_NOTICES.md`.
+
+Bundle growth: `dist/client.js` 564 KB → 633 KB (149 KB → 167 KB gzipped), `dist/server.js` 239 KB → 293 KB (65 KB → 79 KB gzipped); the server needs the lexers because `exportSvg` draws highlighted code. `test/shared/code.test.js` holds per-language snapshots, adversarial (ReDoS-style) inputs for every language with the work bound, the work-cap degradation, escaping and palette-contrast checks.
+
 ## Shipping
 
 - **With the deployment:** `deployment.jsonc` sets `"formatBlueprintsDir": "formats"`, so `pnpm deploy` installs the whiteboard as `format.whiteboard`. See [Bundled formats](../../docs/customization.md#bundled-formats).
@@ -51,8 +57,8 @@ Budget: the generated module must stay under 160 KiB (today about 101 KiB, 29 Ki
 | Axis | Current | Where |
 | --- | --- | --- |
 | Bundled archive revision | 6 | `gadget.lock.json`, `formats/whiteboard.json` |
-| Stored schema version | 1 (the `icon` type is additive; no migration) | `SCHEMA_VERSION` in `src/shared/protocol.js` |
-| Wire protocol | subscribe + `applyOperation` + presence, unchanged since revision 4; new RPCs are additive (`findIcons`, `addIcons`, `exportData`, `importData`) | `src/server/index.js` |
+| Stored schema version | 1 (the `icon` and `code` types are additive; no migration) | `SCHEMA_VERSION` in `src/shared/protocol.js` |
+| Wire protocol | subscribe + `applyOperation` + presence, unchanged since revision 4; new RPCs are additive (`findIcons`, `addIcons`, `exportData`, `importData`, `addCode`) | `src/server/index.js` |
 | Backup format | `cloudflare-os-whiteboard` version 1 (version 0 = a `getBoard()` result) | `src/shared/backup.js` |
 | Icon packs | `core.1`, `tabler.1` (Tabler Icons 3.48.0) | `scripts/icon-packs/published.json` |
 | Minimum host | any Cloudflare OS host that runs revision 5; no viewer-session or replaceable-connection API needed yet | — |

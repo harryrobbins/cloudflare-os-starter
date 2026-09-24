@@ -49,16 +49,19 @@ export function filterOptions(options, query) {
 let pickers = 0;
 
 /**
- * @param {{title: string, options: PickerOption[], returnFocus?: HTMLElement|null}} opts
+ * @param {{title: string, options: PickerOption[], returnFocus?: HTMLElement|null,
+ *   searchLabel?: string, placeholder?: string, empty?: string}} opts
+ *   searchLabel, placeholder, empty: the search field's name and hint and the no-match message
+ *   (default: worded for objects), so other lists (code languages) can reuse the picker
  * @returns {Promise<string|null>}  the chosen id, or null when cancelled
  */
-export function openObjectPicker({ title, options, returnFocus = null }) {
+export function openObjectPicker({ title, options, returnFocus = null, searchLabel = "Search objects", placeholder = "Search by text or type", empty = "No objects match." }) {
   const uid = ++pickers;
   return modal((close) => {
     const listId = `wb-picker-list-${uid}`;
     const input = /** @type {HTMLInputElement} */ (h("input", {
       type: "text", class: "picker-filter", role: "combobox", "aria-expanded": "true", "aria-controls": listId,
-      "aria-autocomplete": "list", "aria-label": "Search objects", placeholder: "Search by text or type",
+      "aria-autocomplete": "list", "aria-label": searchLabel, placeholder,
       autocomplete: "off", "data-autofocus": "",
     }));
     const list = h("ul", { id: listId, class: "panel-list picker-list", role: "listbox", "aria-label": title });
@@ -79,7 +82,7 @@ export function openObjectPicker({ title, options, returnFocus = null }) {
       }, o.label)));
       if (shown.length) input.setAttribute("aria-activedescendant", `${listId}-${active}`);
       else input.removeAttribute("aria-activedescendant");
-      status.textContent = !matches.length ? "No objects match."
+      status.textContent = !matches.length ? empty
         : matches.length > shown.length ? `${matches.length} matches; showing ${shown.length}. Type to narrow down.`
           : `${matches.length} ${matches.length === 1 ? "match" : "matches"}`;
     }

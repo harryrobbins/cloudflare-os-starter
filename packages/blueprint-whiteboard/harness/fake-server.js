@@ -46,6 +46,8 @@ export class FakeGadget {
   async addFrame(args) { const { frame, result } = await this.board.addFrame(args); return { frame, result }; }
   /** @param {any} args */
   async connectObjects(args) { const { connector, errors } = await this.board.connect(args); return { connector, errors }; }
+  /** @param {any} args */
+  async addCode(args) { const { block, errors } = await this.board.addCode(args); return { block, errors }; }
 
   /** @param {any} callback @param {any} client */
   async subscribe(callback, client) {
@@ -76,5 +78,5 @@ export class FakeGadget {
 export const RPC_METHODS = new Set([
   "getBoard", "getHistory", "findObjects", "getFrame", "exportSvg", "applyOperation", "undo",
   "addObjects", "addStickies", "updateObjects", "moveObjects", "arrangeGrid", "deleteObjects",
-  "addFrame", "connectObjects", "subscribe", "updatePresence", "leavePresence",
+  "addFrame", "connectObjects", "addCode", "subscribe", "updatePresence", "leavePresence",
 ]);
