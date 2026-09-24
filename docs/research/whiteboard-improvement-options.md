@@ -144,9 +144,9 @@ Recommended additions, in order of value and architectural fit:
 Add two pack classes behind one registry:
 
 - a small first-party diagram pack for process, decision, terminator, document, database, cloud, actor, container, and connector-related stencils;
-- one curated general-purpose pack selected from a pinned permissive source such as [Tabler Icons](https://github.com/tabler/tabler-icons) or [Lucide](https://github.com/lucide-icons/lucide), after a visual and bundle-size comparison.
+- a curated subset of [Tabler Icons](https://github.com/tabler/tabler-icons), pinned to an exact upstream version and shipped under its MIT licence, for general symbols such as people, devices, files, controls, networks, and cloud/infrastructure concepts.
 
-Do not initially bundle several overlapping general icon libraries. A compact, well-tagged subset is more usable and avoids turning every whiteboard load into an icon-catalogue download. The registry should support additional packs later, including reviewed organisation-specific packs.
+Tabler is the recommended initial general pack because its broad, consistent outline set fits diagramming. [Lucide](https://github.com/lucide-icons/lucide/blob/main/LICENSE) is a good ISC-licensed alternative if a small rendering and archive-size spike shows a better visual fit. Do not initially bundle both: a compact, well-tagged subset is more usable and avoids turning every whiteboard load into an icon-catalogue download. The registry should support additional packs later, including reviewed organisation-specific packs.
 
 An icon-pack build step should parse upstream SVG files and emit only the internal primitives used by the shared renderer. Permit bounded numeric geometry and ordinary fill/stroke/transform data for `path`, `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon`, and `g`. Reject scripts, event attributes, links, `foreignObject`, `image`, `use`, stylesheets, animation, filters, masks, patterns, and every URL-bearing value. Apply byte, element, path-command, coordinate, nesting, and bounding-box limits.
 
@@ -180,6 +180,8 @@ Use these policies:
 2. **User SVG import:** defer until a parser converts an allowlisted subset into inert board primitives and fuzz/adversarial tests cover it. As a simpler alternative, ingest it as an image or rasterise it; never use `innerHTML`, `DOMParser` followed by direct insertion, `<object>`, or inline raw SVG.
 3. **HTML paste/import:** extract explicitly supported data such as plain text or table cells and create ordinary board objects. Do not preserve raw HTML.
 4. **Export:** generate SVG/HTML only from the trusted renderer and escaped board data. Never round-trip source markup.
+
+If arbitrary HTML preview ever becomes a product requirement, give each preview a second, capability-free sandbox with no scripts, same-origin access, popups, forms, navigation, or network—not the gadget's script-enabled frame—and exclude the source from board exports. The current gadget CSP has `frame-src 'none'`, so this would require an explicit host design and security review rather than a whiteboard-only change.
 
 The sandbox changes the likely impact from “parent-origin compromise” to “board capability abuse, deceptive UI, resource exhaustion, and unsafe exported content.” That is a meaningful reduction, but still enough reason to reject active markup.
 

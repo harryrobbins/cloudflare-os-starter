@@ -259,7 +259,9 @@ Tests cover endpoint deletion races, self-links, connector targets, frame target
 Create a pack registry that supports multiple versioned sources while shipping only:
 
 - a first-party core diagram pack containing common flowchart and architecture stencils; and
-- one compact general icon subset chosen after comparing pinned [Tabler Icons](https://github.com/tabler/tabler-icons) and [Lucide](https://github.com/lucide-icons/lucide) sources for visual fit, licence/notice requirements, archive size, and rendering consistency.
+- a compact [Tabler Icons](https://github.com/tabler/tabler-icons) subset, pinned to an exact upstream version and content hash, covering people, devices, files/actions, data, network, and cloud/infrastructure categories.
+
+Tabler is the default because its broad, consistent outline set fits diagramming. Record its MIT licence in the notice manifest. A short spike may substitute [Lucide](https://github.com/lucide-icons/lucide/blob/main/LICENSE) if it materially wins on visual fit or archive/render cost, but do not ship both overlapping libraries in the initial release.
 
 Do not fetch packs at runtime. The gadget CSP has `connect-src 'none'`, and reproducible archives require the exact glyph set to be local.
 
@@ -295,6 +297,8 @@ Acceptance:
 - No icon insertion, rendering, or search performs a network request or parses raw SVG at runtime.
 
 Organisation-specific packs may later run through the same reviewed compiler during deployment. Do not add end-user pack upload until an isolated ingestion service can enforce ownership/licensing, compiler limits, quotas, and version retention.
+
+If the product later requires arbitrary HTML previews, design them as separate capability-free nested sandboxes with scripts, same-origin access, popups, forms, navigation, and network all disabled. The current gadget CSP blocks child frames, so this requires a host-level change and security review; it is not part of Phase 2. Never include the raw source in board export.
 
 ### 2.5 Clipboard and data-only backup
 
