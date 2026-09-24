@@ -24,8 +24,7 @@ import {
   Table,
   TD,
   TextField,
-  useAction,
-} from '../ui'
+  useAction, SandboxForm } from '../ui'
 
 function status(c: CredentialInfo): { label: string; tone: 'success' | 'neutral' | 'warning' } {
   if (c.revokedAt) return { label: 'Revoked', tone: 'neutral' }
@@ -189,14 +188,7 @@ function CreateCredentialDialog({
       {created ? (
         <SecretPanel created={created} datastoreId={ds.id} apiBase={apiBase} onDone={close} />
       ) : (
-        <form
-          noValidate
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault()
-            void submit()
-          }}
-        >
+        <SandboxForm className="space-y-4" onSubmit={() => void submit()}>
           <TextField label="Name" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Nightly BI export" maxLength={120} autoFocus />
           <fieldset>
             <legend className="mb-1.5 text-[12px] font-medium text-kumo-subtle">Scopes</legend>
@@ -232,11 +224,11 @@ function CreateCredentialDialog({
             <Btn onClick={close} disabled={action.busy}>
               Cancel
             </Btn>
-            <Btn tone="primary" type="submit" loading={action.busy}>
+            <Btn tone="primary" onClick={() => void submit()} loading={action.busy}>
               Create credential
             </Btn>
           </ModalFooter>
-        </form>
+        </SandboxForm>
       )}
     </Modal>
   )

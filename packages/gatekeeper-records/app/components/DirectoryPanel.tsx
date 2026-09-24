@@ -7,7 +7,7 @@ import type { DirectoryPerson, Whoami } from '../api'
 import { useDataApi } from '../bridge'
 import { validate } from '../errors'
 import { PrincipalPicker } from './PrincipalPicker'
-import { Btn, ConfirmDialog, ErrorNotice, Notice, SectionHeader, TextField, useAction } from './ui'
+import { Btn, ConfirmDialog, ErrorNotice, Notice, SectionHeader, TextField, useAction, SandboxForm } from './ui'
 
 const InviteSchema = InvitePrincipalInputSchema
 
@@ -50,14 +50,7 @@ function InviteForm() {
     }
   }
   return (
-    <form
-      noValidate
-      className="max-w-xl space-y-3"
-      onSubmit={(e) => {
-        e.preventDefault()
-        void submit()
-      }}
-    >
+    <SandboxForm className="max-w-xl space-y-3" onSubmit={() => void submit()}>
       <SectionHeader title="Add a person" />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <TextField label="E-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" hint="The address they sign in to the Workshop with." />
@@ -65,10 +58,10 @@ function InviteForm() {
       </div>
       <ErrorNotice error={action.error} />
       {added ? <Notice tone="success">Added {added} to the directory.</Notice> : null}
-      <Btn tone="primary" type="submit" loading={action.busy}>
+      <Btn tone="primary" onClick={() => void submit()} loading={action.busy}>
         Add person
       </Btn>
-    </form>
+    </SandboxForm>
   )
 }
 

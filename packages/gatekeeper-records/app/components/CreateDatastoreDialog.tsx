@@ -7,7 +7,7 @@ import type { DirectoryPerson, Whoami } from '../api'
 import { useDataApi } from '../bridge'
 import { validate } from '../errors'
 import { PrincipalPicker } from './PrincipalPicker'
-import { Btn, ErrorNotice, Modal, ModalFooter, TextAreaField, TextField, useAction } from './ui'
+import { Btn, ErrorNotice, Modal, ModalFooter, TextAreaField, TextField, useAction, SandboxForm } from './ui'
 
 export function CreateDatastoreDialog({
   open,
@@ -80,14 +80,7 @@ export function CreateDatastoreDialog({
       title="New datastore"
       description="A Projects datastore owned by the person you choose. Creating it does not give you access to its records."
     >
-      <form
-        noValidate
-        className="space-y-4"
-        onSubmit={(e) => {
-          e.preventDefault()
-          void submit()
-        }}
-      >
+      <SandboxForm className="space-y-4" onSubmit={() => void submit()}>
         <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required autoFocus />
         <TextAreaField label="Description" optional value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} />
         <div>
@@ -148,11 +141,11 @@ export function CreateDatastoreDialog({
           <Btn onClick={close} disabled={action.busy}>
             Cancel
           </Btn>
-          <Btn tone="primary" type="submit" loading={action.busy}>
+          <Btn tone="primary" onClick={() => void submit()} loading={action.busy}>
             Create datastore
           </Btn>
         </ModalFooter>
-      </form>
+      </SandboxForm>
     </Modal>
   )
 }
