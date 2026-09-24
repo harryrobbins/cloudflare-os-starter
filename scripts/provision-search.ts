@@ -96,10 +96,15 @@ async function main(argv: string[]): Promise<void> {
     }
   }
 
-  // Vectorize reads can lag a moment behind its writes, so a failure here says so rather than
-  // suggesting the creations did not happen.
-  const after = await readSearchState(spec, read);
-  const problems = searchProblems(spec, after);
+  // `create-metadata-index` only enqueues a mutation, and Vectorize applies them one after another:
+  // measured on 2026-09-24, six took well over the few seconds a single read lags. So poll for up to
+  // two minutes before calling anything missing.
+  let problems = searchProblems(spec, await readSearchState(spec, read));
+  for (let waited = 0; problems.length > 0 && waited < 120_000; waited += 5_000) {
+    console.log(`Waiting for Vectorize to report ${problems.length} pending resource(s)...`);
+    await new Promise((settle) => setTimeout(settle, 5_000));
+    problems = searchProblems(spec, await readSearchState(spec, read));
+  }
   if (problems.length) {
     throw new Error(
       `${searchProblemsMessage(problems)}\n(Vectorize can take a few seconds to report a new ` +
