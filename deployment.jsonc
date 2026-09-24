@@ -207,6 +207,10 @@
   // wait for the user's approval, and personal data, identifiers or secrets are refused.
   // Needs an OpenRouter key on its Worker, never in this file:
   //   CLOUDFLARE_ACCOUNT_ID=<id> pnpm exec wrangler secret put OPENROUTER_API_KEY --name cfos-websearch
+  // Deploying it grants nothing by itself: a workspace gets web tools only once someone connects
+  // Web Search to it (like Synthetic Data), and loses them when that connection is removed. While
+  // this is enabled, the Workshop's unchecked built-in webFetch is withheld from agents everywhere
+  // else; "builtinWebFetch": true keeps it. Reference: docs/customization.md#web-search-and-jev
   // Plan: docs/plans/web-search-gatekeeper.md
   "webSearch": {
     "enabled": true,
@@ -261,6 +265,7 @@
   // rather than chat completions, so it cannot be listed under aiGateway.models.
   // Needs an OpenRouter key on its Worker, never in this file:
   //   CLOUDFLARE_ACCOUNT_ID=<id> pnpm exec wrangler secret put OPENROUTER_API_KEY --name cfos-jev
+  // Like Web Search, it reaches only the workspaces someone explicitly connects it to.
   "jev": { "enabled": true },
 
   // Omni-search: one hybrid index (Vectorize for meaning, SQLite full-text for words and facets) over

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { createExecutionContext, env } from "cloudflare:test";
+import CONFIGURATOR_HTML from "../src/configurator-html.js";
 import typesSource from "../src/types.d.ts?raw";
 import TYPES_CODE from "../src/types-code.js";
 import {
@@ -7,6 +9,9 @@ import {
   DECISIONS_URL,
   describeJevAccount,
   describeJevVendor,
+  GatekeeperVendor,
+  JEV_RESOURCE,
+  JevAccount,
   JevSessionImpl,
   type JevBackend,
 } from "../src/jev.js";
@@ -54,9 +59,12 @@ describe("jev gatekeeper", () => {
     expect(TYPES_CODE).toBe(typesSource);
   });
 
-  it("describes an auto-provisioned singleton", () => {
+  it("is auto-provisioned but never an agent singleton, so it reaches no workspace by itself", () => {
     expect(describeJevVendor()).toMatchObject({ autoProvisionsAccount: true, providesAuth: false });
-    expect(describeJevAccount()).toMatchObject({ singleton: { tsType: "JevSession" } });
+    // A singleton account is installed by the Workshop into every workspace its owner has.
+    expect(describeJevAccount()).not.toHaveProperty("singleton");
+    expect(describeJevAccount()).not.toHaveProperty("providesUi");
+    expect(JevAccount.prototype).not.toHaveProperty("getSingletonGatekeeperClass");
   });
 
   it("accepts all three question types", () => {
@@ -143,5 +151,38 @@ describe("jev gatekeeper", () => {
     );
     await expect(session.decide({ state: "x", questions: {} })).rejects.toThrow(/questions/);
     expect(log).toEqual([]);
+  });
+});
+
+// A fake entrypoint context: records which Gatekeeper classes the account hands out.
+function entrypoint<T>(Entrypoint: new (ctx: ExecutionContext, env: Cloudflare.Env) => T) {
+  let made: unknown[] = [];
+  let ctx = createExecutionContext();
+  Object.defineProperty(ctx, "exports", {
+    value: { JevGatekeeper: (options: unknown) => { made.push(options); return "JevGatekeeper"; } },
+  });
+  return { instance: new Entrypoint(ctx, env as Cloudflare.Env), made };
+}
+
+describe("jev connections", () => {
+  it("offers one resource to connect, from the vendor and from the account", async () => {
+    expect(await entrypoint(GatekeeperVendor).instance.getSupportedResources()).toEqual([JEV_RESOURCE]);
+    expect(await entrypoint(JevAccount).instance.getSupportedResources()).toEqual([JEV_RESOURCE]);
+    expect(JEV_RESOURCE.urlPattern).toBe("jev://decisions");
+  });
+
+  it("hands out a Gatekeeper only for an explicit connection to its resource", async () => {
+    let { instance: account, made } = entrypoint(JevAccount);
+    expect(await account.getGatekeeperClassFor("jev://decisions")).toEqual({ class: "JevGatekeeper", resource: JEV_RESOURCE });
+    expect(made).toHaveLength(1);
+    await expect(account.getGatekeeperClassFor("websearch://web")).rejects.toThrow(/one resource/);
+    await expect(account.ensureResources(["jev://*"])).rejects.toThrow(/one resource/);
+  });
+
+  it("serves a configurator that selects the resource with nothing to fill in", async () => {
+    let account = entrypoint(JevAccount).instance;
+    expect((await account.startResourceConfigurator("jev://decisions")).iframeHtml).toBe(CONFIGURATOR_HTML);
+    expect(CONFIGURATOR_HTML).toContain('data-resource-url="jev://decisions"');
+    await expect(account.startResourceConfigurator("websearch://web")).rejects.toThrow(/one resource/);
   });
 });

@@ -163,6 +163,12 @@ export interface WebSearchConfig {
    * domain (`cfos.example.com` gives `example.com`); the public origin itself is always allowed.
    */
   privateDomains?: string[];
+  /**
+   * Whether agents keep the Workshop's built-in `webFetch` tool, which fetches any public URL with
+   * no check, in workspaces that are not connected to web search. Absent or false withholds it, so
+   * an agent reaches the web only in a workspace someone has explicitly connected to web search.
+   */
+  builtinWebFetch?: boolean;
 }
 
 /**
