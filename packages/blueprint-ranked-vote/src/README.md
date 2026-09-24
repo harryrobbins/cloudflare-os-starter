@@ -4,7 +4,7 @@ A group choice decided by single transferable vote with one winner (instant-runo
 
 ## How it works
 
-- **Options.** Anyone can propose one. A new option goes to the bottom of every existing ballot, marked "new", and clears everyone's Reveal. That way nobody is counted before they have seen every option. Only the proposer can rename or withdraw an option. A rename also clears Reveals.
+- **Options.** Anyone can propose one. A new option goes to the bottom of every existing ballot, marked "new", and clears everyone's Reveal. That way nobody is counted before they have seen every option. Only the proposer can rename or delete an option. A rename counts as a new suggestion: the option moves to the bottom of everyone else's ballot, marked new, and every Reveal clears.
 - **Fields.** Every option has a Description plus any fields people add, such as "Proposed URL", "Competition check" or "Companies House check". Each field is short text, long text or a web address. Anyone can fill them in.
 - **Ballots.** Each voter ranks every option. Voters start from their own shuffled order, and their first move saves the ballot. A ballot is visible only to its owner, before and after the count.
 - **Reveal.** Voters are the people who have saved a ballot. Clicking Reveal locks your order and undoing it unlocks it. When every voter has clicked Reveal, and there are at least the minimum number of voters (2 by default; set it to the group's size), the count runs and the vote closes. You can remove a colleague's ballot if it is not ready, for example when they are away. Removals are logged.

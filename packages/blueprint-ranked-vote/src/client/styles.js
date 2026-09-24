@@ -86,6 +86,7 @@ textarea.text { resize: vertical; min-height: 64px; }
 .opt-title:hover { text-decoration: underline; }
 .badge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; border-radius: 4px; padding: 1px 6px; background: var(--warn-soft); color: var(--warn); }
 .by { font-size: 12.5px; color: var(--text-3); }
+.own-actions { display: inline-flex; gap: 2px; margin-left: auto; }
 .summary { margin-top: 4px; display: grid; gap: 2px; font-size: 13px; color: var(--text-2); }
 .summary .desc { white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .facts { display: flex; flex-wrap: wrap; gap: 4px 12px; }
@@ -99,6 +100,9 @@ textarea.text { resize: vertical; min-height: 64px; }
 .details .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .locked .opt { box-shadow: none; }
 .add-option { display: grid; gap: 8px; }
+.new-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.new-fields label { display: grid; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--text-2); }
+.new-fields label.wide { grid-column: 1 / -1; }
 .list-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 4px 0 8px; }
 .list-head h2 { margin: 0; font-size: 16px; }
 

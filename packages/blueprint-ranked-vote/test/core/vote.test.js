@@ -111,7 +111,8 @@ describe("vote rules", () => {
     await svc.write("setReady", { by: bob, ready: true, ranking: [a, b] });
     await svc.write("updateOption", { by: alice, optionId: a, title: "Horse" });
     const vb = await svc.view(bob.id);
-    expect(vb.mine).toMatchObject({ ready: false, unseen: [a] });
+    expect(vb.mine).toEqual({ ranking: [b, a], unseen: [a], ready: false });
+    expect((await svc.view(alice.id)).mine).toBe(null);
 
     await svc.write("removeField", { by: cara, fieldId: f.field.id });
     o = (await svc.view(bob.id)).options.find((x) => x.id === a);

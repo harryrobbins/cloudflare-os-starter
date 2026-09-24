@@ -57,7 +57,7 @@ test("propose, add fields, rank privately, reveal and count", async () => {
   for (const [who, name, desc] of [[A, "Hoarse", "Rough or husky in the voice"], [B, "Lumen", ""], [C, "Tessel", ""]]) {
     const p = pane(/** @type {number} */ (who));
     await p.getByLabel("New option", { exact: true }).fill(/** @type {string} */ (name));
-    if (desc) await p.getByLabel("Description of the new option").fill(/** @type {string} */ (desc));
+    if (desc) await p.locator(".new-fields label", { hasText: "Description" }).locator("textarea").fill(/** @type {string} */ (desc));
     await p.getByRole("button", { name: "Add", exact: true }).first().click();
   }
   for (const i of [A, B, C]) await pane(i).locator(".ranking .opt").nth(2).waitFor();
@@ -68,7 +68,7 @@ test("propose, add fields, rank privately, reveal and count", async () => {
 
   // Bob fills in a field on Alice's option; Cara sees it.
   await pane(B).locator(".opt-title", { hasText: "Hoarse" }).click();
-  const urlField = pane(B).getByLabel("Proposed URL");
+  const urlField = pane(B).locator(".opt", { hasText: "Hoarse" }).locator(".details").getByLabel("Proposed URL");
   await urlField.fill("hoarse.co.uk");
   await urlField.press("Enter");
   await pane(C).locator(".opt", { hasText: "Hoarse" }).locator(".fact", { hasText: "hoarse.co.uk" }).waitFor();
@@ -141,4 +141,49 @@ test("recovers after a server restart leaves the stubs dead", async () => {
   await pane(A).getByLabel("New option", { exact: true }).fill("After restart");
   await pane(A).getByRole("button", { name: "Add", exact: true }).first().click();
   await pane(B).locator(".opt-title", { hasText: "After restart" }).waitFor({ timeout: 30_000 });
+});
+
+test("fields show up straight away, in the list and the propose form; own options can be edited and deleted", async () => {
+  await page.reload();
+  const a = pane(A);
+  const label = a.getByLabel("New field name");
+  await label.fill("Competition check");
+  await label.press("Enter");
+  // Focus stays in the box, and the new field is listed and in the propose form at once.
+  await a.locator(".fields-list li", { hasText: "Competition check" }).waitFor({ timeout: 3000 });
+  await a.locator(".new-fields label", { hasText: "Competition check" }).waitFor({ timeout: 3000 });
+  assert.equal(await a.getByLabel("New field name").evaluate((el) => el === document.activeElement), true);
+  // A half-typed option survives redraws caused by someone else's change.
+  await a.getByLabel("New option", { exact: true }).fill("Half typed");
+  await pane(B).getByLabel("New field name").fill("Trademark");
+  await pane(B).getByLabel("New field name").press("Enter");
+  await a.locator(".new-fields label", { hasText: "Trademark" }).waitFor();
+  assert.equal(await a.getByLabel("New option", { exact: true }).inputValue(), "Half typed");
+
+  await a.getByLabel("New option", { exact: true }).fill("Orrery");
+  await a.locator(".new-fields label", { hasText: "Competition check" }).locator("input").fill("Clear in UK");
+  await a.getByRole("button", { name: "Add", exact: true }).first().click();
+  await pane(C).locator(".opt", { hasText: "Orrery" }).locator(".fact", { hasText: "Clear in UK" }).waitFor();
+  assert.equal(await a.getByLabel("New option", { exact: true }).inputValue(), "");
+
+  await pane(C).getByLabel("New option", { exact: true }).fill("Quill");
+  await pane(C).getByRole("button", { name: "Add", exact: true }).first().click();
+  await pane(B).locator(".opt", { hasText: "Quill" }).waitFor();
+  // Bob moves Orrery to the top; Alice renames it; for Bob it drops to the bottom, marked new.
+  const bob = pane(B);
+  if ((await order(B))[0] === "Orrery") await bob.getByRole("button", { name: "Move Orrery down" }).click();
+  while ((await order(B))[0] !== "Orrery") await bob.getByRole("button", { name: "Move Orrery up" }).click();
+  await pane(A).locator(".opt", { hasText: "Orrery" }).getByRole("button", { name: "Edit" }).click();
+  const name = pane(A).locator(".opt", { hasText: "Orrery" }).locator(".details input").first();
+  await name.fill("Orrery Labs");
+  await name.press("Enter");
+  await bob.locator(".opt.is-new", { hasText: "Orrery Labs" }).waitFor();
+  assert.equal((await order(B)).at(-1), "Orrery Labs");
+  assert.equal(await bob.locator(".opt", { hasText: "Orrery Labs" }).getByRole("button", { name: "Edit" }).count(), 0);
+
+  const del = pane(A).locator(".opt", { hasText: "Orrery Labs" }).getByRole("button", { name: "Delete" });
+  await del.click();
+  await pane(A).locator(".opt", { hasText: "Orrery Labs" }).getByRole("button", { name: "Confirm delete" }).click();
+  await bob.locator(".opt", { hasText: "Orrery Labs" }).waitFor({ state: "detached" });
+  await shot("fields");
 });

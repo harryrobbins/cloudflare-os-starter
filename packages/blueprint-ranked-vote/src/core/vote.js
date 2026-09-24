@@ -307,7 +307,8 @@ export class Vote {
 
   /**
    * Edits an option's fields (anyone) or its name (only whoever proposed it). A new name counts as
-   * a new option for everyone else: it is marked unseen and readiness resets.
+   * a new suggestion for everyone else: it moves to the bottom of their ballot, marked unseen, and
+   * every Reveal resets. The proposer's own ballot keeps its place.
    * @param {{by: Actor, optionId: string, title?: string, values?: Record<string, unknown>}} args
    */
   updateOption({ by, optionId, title, values }) {
@@ -324,7 +325,10 @@ export class Vote {
         parts.push(`renamed “${o.title}” to “${t}”`);
         o.title = t;
         for (const [voterId, b] of Object.entries(this.s.ballots)) {
-          if (voterId !== who.id && !b.unseen.includes(o.id)) { b.unseen.push(o.id); this.dirty.add("ballots"); }
+          if (voterId === who.id) continue;
+          b.ranking = [...b.ranking.filter((id) => id !== o.id), o.id];
+          if (!b.unseen.includes(o.id)) b.unseen.push(o.id);
+          this.dirty.add("ballots");
         }
         const reset = this.#unready();
         if (reset) parts.push(`${reset} reveal${reset === 1 ? "" : "s"} reset`);

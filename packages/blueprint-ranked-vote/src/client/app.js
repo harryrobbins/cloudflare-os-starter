@@ -1,10 +1,12 @@
 // @ts-check
 // The Ranked Vote UI: plain DOM, no framework.
 //
-// Rendering is per section (header, notices, results, ranking, readiness, fields, activity). A
-// section holding the focused text box, or the ranking while an option is being dragged, is not
-// replaced; it is marked stale and redrawn when focus leaves or the drag ends. Buttons carry a
-// data-key so focus returns to the same control after a redraw.
+// Rendering is per section (header, notices, results, ranking, readiness, fields, activity), and
+// only when the view's revision changes. Controls carry a data-key: after a redraw, focus, caret
+// and the text of the focused box (or of any data-draft box, such as a half-typed new option)
+// carry over to the control with the same key. Text boxes that edit saved values save on blur
+// when their value differs from the saved one, so a redraw mid-edit loses nothing. The ranking
+// is not redrawn during a drag; it is marked stale and redrawn when the drag ends.
 //
 // Order: the list shows, in priority, the viewer's unsaved local order (a drag in flight), their
 // saved ballot, or a per-viewer shuffle the server suggests. The first drag saves a ballot.
@@ -65,14 +67,17 @@ function message(e) {
  * Two-step destructive button: the first click arms it for 4 s, the second acts.
  * @param {string} label @param {string} armed @param {string} key @param {() => void} act @param {string} [cls]
  */
+/** key -> when an armed two-step button disarms; module state so it survives redraws */
+const armedUntil = new Map();
+
 function twoStep(label, armed, key, act, cls = "btn link danger") {
-  /** @type {any} */
-  let timer = null;
-  const b = h("button", { class: cls, type: "button", text: label, dataset: { key } });
+  const isArmed = () => (armedUntil.get(key) ?? 0) > Date.now();
+  const b = h("button", { class: cls, type: "button", text: isArmed() ? armed : label, dataset: { key } });
   b.addEventListener("click", () => {
-    if (timer) { clearTimeout(timer); timer = null; act(); return; }
+    if (isArmed()) { armedUntil.delete(key); act(); return; }
+    armedUntil.set(key, Date.now() + 4000);
     b.textContent = armed;
-    timer = setTimeout(() => { timer = null; b.textContent = label; }, 4000);
+    setTimeout(() => { if (b.isConnected && !isArmed()) b.textContent = label; }, 4050);
   });
   return b;
 }
@@ -170,18 +175,28 @@ export function mountApp(root, { me, call, onRetry }) {
   /** @param {keyof typeof sections} name @param {() => (Node|string|null|false)[]} build */
   function paint(name, build) {
     const el = sections[name];
-    const active = document.activeElement;
-    const typing = active && el.contains(active) && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT");
-    if (typing || (name === "ranking" && dragging) || (name === "header" && editingQuestion)) { stale.add(name); return; }
+    if ((name === "ranking" && dragging) || (name === "header" && editingQuestion)) { stale.add(name); return; }
     stale.delete(name);
-    const key = active instanceof HTMLElement && el.contains(active) ? active.dataset.key : undefined;
+    const active = document.activeElement;
+    const focusKey = active instanceof HTMLElement && el.contains(active) ? active.dataset.key : undefined;
+    /** @type {Map<string, {value: string, start: number|null, end: number|null}>} */
+    const carry = new Map();
+    for (const input of /** @type {NodeListOf<HTMLInputElement>} */ (el.querySelectorAll("input[data-key], textarea[data-key], select[data-key]"))) {
+      const key = /** @type {string} */ (input.dataset.key);
+      if (key !== focusKey && input.dataset.draft === undefined) continue;
+      let start = null, end = null;
+      try { start = input.selectionStart; end = input.selectionEnd; } catch { /* not a text box */ }
+      carry.set(key, { value: input.value, start, end });
+    }
     el.replaceChildren(...build().filter((c) => c !== null && c !== false).map((c) => /** @type {Node|string} */ (c)));
-    if (key) /** @type {HTMLElement|null} */ (el.querySelector(`[data-key="${CSS.escape(key)}"]`))?.focus();
+    for (const [key, c] of carry) {
+      const input = /** @type {HTMLInputElement|null} */ (el.querySelector(`[data-key="${CSS.escape(key)}"]`));
+      if (!input) continue;
+      input.value = c.value;
+      if (key === focusKey && c.start !== null) try { input.setSelectionRange(c.start, c.end); } catch { /* not a text box */ }
+    }
+    if (focusKey) /** @type {HTMLElement|null} */ (el.querySelector(`[data-key="${CSS.escape(focusKey)}"]`))?.focus();
   }
-
-  root.addEventListener("focusout", () => {
-    setTimeout(() => { if (stale.size && view) render(); }, 0);
-  });
 
   function render() {
     paint("header", header);
@@ -329,25 +344,45 @@ export function mountApp(root, { me, call, onRetry }) {
 
   function addOption() {
     if (!view) return [];
-    if (view.phase !== "open") return [h("div", { class: "muted", text: "Voting is closed. Reopen it to propose more options." })];
-    const input = /** @type {HTMLInputElement} */ (h("input", { class: "text grow", placeholder: "Propose an option", maxlength: view.limits.title, "aria-label": "New option" }));
-    const desc = /** @type {HTMLTextAreaElement} */ (h("textarea", { class: "text", placeholder: "Description (optional)", rows: 2, maxlength: view.limits.value, "aria-label": "Description of the new option" }));
+    const v = view;
+    if (v.phase !== "open") return [h("div", { class: "muted", text: "Voting is closed. Reopen it to propose more options." })];
+    const box = sections.add;
+    /** @param {string} key */
+    const get = (key) => /** @type {HTMLInputElement|null} */ (box.querySelector(`[data-key="${CSS.escape(key)}"]`));
     const submit = async () => {
-      const title = input.value.trim();
-      if (!title) { input.focus(); return; }
+      const title = get("new:title")?.value.trim() ?? "";
+      if (!title) { get("new:title")?.focus(); return; }
+      /** @type {Record<string, string>} */
+      const values = {};
+      for (const f of v.fields) {
+        const value = get(`new:${f.id}`)?.value.trim();
+        if (value) values[f.id] = value;
+      }
       try {
-        const r = await act("addOption", { title, values: desc.value.trim() ? { description: desc.value } : {} });
-        input.value = ""; desc.value = "";
+        const r = await act("addOption", { title, values });
+        // Clear only what was submitted: the next option may already be half typed.
+        if (get("new:title")?.value.trim() === title) {
+          for (const input of /** @type {NodeListOf<HTMLInputElement>} */ (box.querySelectorAll("[data-draft]"))) input.value = "";
+        }
         announce(`Added ${r.option.title}. It is at the bottom of everyone's list.`);
-        input.focus();
       } catch { /* toast shown */ }
     };
-    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
-    desc.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); } });
+    const title = /** @type {HTMLInputElement} */ (h("input", { class: "text grow", placeholder: "Propose an option", maxlength: v.limits.title, "aria-label": "New option", dataset: { key: "new:title", draft: "" } }));
+    title.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
+    const inputs = v.fields.map((f) => {
+      const input = /** @type {HTMLInputElement} */ (f.kind === "long"
+        ? h("textarea", { class: "text", rows: 2, maxlength: v.limits.value, placeholder: "Optional", dataset: { key: `new:${f.id}`, draft: "" } })
+        : h("input", { class: "text", type: f.kind === "url" ? "url" : "text", maxlength: v.limits.value, placeholder: f.kind === "url" ? "example.co.uk (optional)" : "Optional", dataset: { key: `new:${f.id}`, draft: "" } }));
+      input.addEventListener("keydown", (e) => {
+        const k = /** @type {KeyboardEvent} */ (e);
+        if (k.key === "Enter" && (f.kind !== "long" || k.ctrlKey || k.metaKey)) { e.preventDefault(); submit(); }
+      });
+      return h("label", { class: f.kind === "long" ? "wide" : "" }, [f.label, input]);
+    });
     return [
-      h("div", { class: "row" }, [input, h("button", { class: "btn primary", type: "button", text: "Add", onclick: submit })]),
-      desc,
-      h("div", { class: "muted small", text: "Adding an option puts it at the bottom of everyone's list and resets any Reveals, so nobody is counted before they have seen it." }),
+      h("div", { class: "row" }, [title, h("button", { class: "btn primary", type: "button", text: "Add", onclick: submit })]),
+      h("div", { class: "new-fields" }, inputs),
+      h("div", { class: "muted small", text: "Adding an option puts it at the bottom of everyone's list and resets any Reveals, so nobody is counted before they have seen it. Fields can be filled in later too." }),
     ];
   }
 
@@ -403,6 +438,18 @@ export function mountApp(root, { me, call, onRetry }) {
         }),
         isNew ? h("span", { class: "badge", text: "New" }) : null,
         h("span", { class: "by", text: `proposed by ${o.by.id === me.id ? "you" : o.by.name}` }),
+        o.by.id === me.id && v.phase === "open" ? h("span", { class: "own-actions" }, [
+          h("button", {
+            class: "btn link small", type: "button", text: open ? "Done" : "Edit", dataset: { key: `e:${o.id}` },
+            onclick: () => {
+              if (open) { expanded.delete(o.id); render(); return; }
+              expanded.add(o.id);
+              render();
+              /** @type {HTMLElement|null} */ (sections.ranking.querySelector(`[data-key="${CSS.escape(`name:${o.id}`)}"]`))?.focus();
+            },
+          }),
+          twoStep("Delete", "Confirm delete", `w:${o.id}`, () => act("withdrawOption", { optionId: o.id }).catch(() => {}), "btn link danger small"),
+        ]) : null,
       ]),
       (o.values.description || facts.length) && !open ? h("div", { class: "summary" }, [
         o.values.description ? h("div", { class: "desc", text: o.values.description }) : null,
@@ -425,22 +472,25 @@ export function mountApp(root, { me, call, onRetry }) {
     const mine = o.by.id === me.id;
     const box = h("div", { class: "details" });
     if (mine && open) {
-      const t = /** @type {HTMLInputElement} */ (h("input", { class: "text", value: o.title, maxlength: v.limits.title }));
+      const t = /** @type {HTMLInputElement} */ (h("input", { class: "text", value: o.title, maxlength: v.limits.title, dataset: { key: `name:${o.id}` } }));
       t.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); t.blur(); } });
-      t.addEventListener("change", () => {
+      t.addEventListener("blur", () => {
+        // A redraw replaces the box (carrying its text over); only a real blur saves.
+        if (!t.isConnected) return;
         if (t.value.trim() && t.value.trim() !== o.title) act("updateOption", { optionId: o.id, title: t.value }).catch(() => { t.value = o.title; });
       });
-      box.append(h("label", {}, ["Name (renaming resets everyone's Reveal)", t]));
+      box.append(h("label", {}, ["Name (renaming counts as a new suggestion: it moves to the bottom of everyone's list and Reveals reset)", t]));
     }
     for (const f of v.fields) {
       const value = o.values[f.id] ?? "";
       const saved = h("span", { class: "saved", "aria-live": "polite" });
       const input = /** @type {HTMLInputElement|HTMLTextAreaElement} */ (f.kind === "long"
-        ? h("textarea", { class: "text", rows: 3, maxlength: v.limits.value, disabled: !open })
-        : h("input", { class: "text", type: f.kind === "url" ? "url" : "text", maxlength: v.limits.value, disabled: !open, placeholder: f.kind === "url" ? "example.co.uk" : "" }));
+        ? h("textarea", { class: "text", rows: 3, maxlength: v.limits.value, disabled: !open, dataset: { key: `v:${o.id}:${f.id}` } })
+        : h("input", { class: "text", type: f.kind === "url" ? "url" : "text", maxlength: v.limits.value, disabled: !open, placeholder: f.kind === "url" ? "example.co.uk" : "", dataset: { key: `v:${o.id}:${f.id}` } }));
       input.value = value;
       if (f.kind !== "long") input.addEventListener("keydown", (e) => { if (/** @type {KeyboardEvent} */ (e).key === "Enter") { e.preventDefault(); /** @type {HTMLElement} */ (input).blur(); } });
-      input.addEventListener("change", async () => {
+      input.addEventListener("blur", async () => {
+        if (!input.isConnected || input.value === value) return;
         try {
           await act("updateOption", { optionId: o.id, values: { [f.id]: input.value } });
           saved.textContent = "Saved";
@@ -451,9 +501,6 @@ export function mountApp(root, { me, call, onRetry }) {
     }
     const edited = o.editedBy ? ` · last edited by ${o.editedBy.name} ${when(o.editedAt)}` : "";
     box.append(h("div", { class: "muted small", text: `Proposed by ${o.by.name} ${when(o.at)}${edited}. Anyone can fill in the fields.` }));
-    if (mine && open) {
-      box.append(h("div", { class: "actions" }, [twoStep("Withdraw this option", "Click again to withdraw", `w:${o.id}`, () => act("withdrawOption", { optionId: o.id }).catch(() => {}))]));
-    }
     return box;
   }
 
@@ -483,9 +530,12 @@ export function mountApp(root, { me, call, onRetry }) {
       }
     }
     if (v.phase === "open") {
-      const min = /** @type {HTMLInputElement} */ (h("input", { class: "text", type: "number", min: 1, max: v.limits.voters, value: String(v.minVoters), style: "width:70px", "aria-label": "Minimum number of voters" }));
+      const min = /** @type {HTMLInputElement} */ (h("input", { class: "text", type: "number", min: 1, max: v.limits.voters, value: String(v.minVoters), style: "width:70px", "aria-label": "Minimum number of voters", dataset: { key: "min-voters" } }));
       min.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); min.blur(); } });
-      min.addEventListener("change", () => act("setMinVoters", { minVoters: Number(min.value) }).catch(() => { min.value = String(v.minVoters); }));
+      min.addEventListener("blur", () => {
+        if (!min.isConnected || Number(min.value) === v.minVoters) return;
+        act("setMinVoters", { minVoters: Number(min.value) }).catch(() => { min.value = String(v.minVoters); });
+      });
       const short = Math.max(0, v.minVoters - v.voters.length);
       out.push(h("div", { class: "row small", style: "margin-top:8px" }, [
         h("label", { class: "grow", text: "The count waits for at least", for: "min-voters" }), min, h("span", { text: "voters" }),
@@ -513,12 +563,25 @@ export function mountApp(root, { me, call, onRetry }) {
     if (!view) return [];
     const v = view;
     const kinds = { text: "Short text", long: "Long text", url: "Web address" };
-    const label = /** @type {HTMLInputElement} */ (h("input", { class: "text grow", placeholder: "e.g. Companies House check", maxlength: v.limits.fieldLabel, "aria-label": "New field name" }));
-    const kind = /** @type {HTMLSelectElement} */ (h("select", { class: "text", "aria-label": "New field type", style: "width:auto" },
+    const label = /** @type {HTMLInputElement} */ (h("input", { class: "text grow", placeholder: "e.g. Companies House check", maxlength: v.limits.fieldLabel, "aria-label": "New field name", dataset: { key: "field:label", draft: "" } }));
+    const kind = /** @type {HTMLSelectElement} */ (h("select", { class: "text", "aria-label": "New field type", style: "width:auto", dataset: { key: "field:kind", draft: "" } },
       Object.entries(kinds).map(([k, t]) => h("option", { value: k, text: t }))));
+    // Read the live controls: a redraw may have replaced these ones since they were built.
+    const control = (/** @type {string} */ key) => /** @type {HTMLInputElement|null} */ (sections.fields.querySelector(`[data-key="${key}"]`));
     const add = async () => {
-      if (!label.value.trim()) { label.focus(); return; }
-      try { await act("addField", { label: label.value, kind: kind.value }); label.value = ""; kind.value = "text"; label.focus(); } catch { /* toast */ }
+      const l = control("field:label"), k = control("field:kind");
+      if (!l || !k) return;
+      if (!l.value.trim()) { l.focus(); return; }
+      const submitted = l.value;
+      try {
+        await act("addField", { label: submitted, kind: k.value });
+        // Clear only what was submitted: the next name may already be half typed.
+        const l2 = control("field:label"), k2 = control("field:kind");
+        if (l2 && l2.value === submitted) {
+          l2.value = "";
+          if (k2) k2.value = "text";
+        }
+      } catch { /* toast */ }
     };
     label.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); add(); } });
     return [
@@ -648,7 +711,7 @@ export function mountApp(root, { me, call, onRetry }) {
   return {
     /** @param {View} next */
     setView(next) {
-      if (view && next.revision < view.revision) return;
+      if (view && next.revision <= view.revision) return;
       const wasClosed = view?.phase === "closed";
       view = next;
       if (!wasClosed && next.phase === "closed" && next.results[0]) {
