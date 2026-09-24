@@ -163,7 +163,7 @@ if (exportFormatId !== undefined) {
     const now = Date.now();
     const state = store?.getState();
     const action = recoveryAction({
-      pendingCount: state?.pendingCount ?? 0,
+      pendingCount: (state?.pendingCount ?? 0) + (state?.busy ? 1 : 0),
       heldForMs: recovery ? now - recovery.since : 0,
       recentReloads: readCarried().reloads.filter((t) => now - t < AUTO_RELOAD_WINDOW_MS).length,
       maxReloads: MAX_AUTO_RELOADS,
@@ -193,7 +193,7 @@ if (exportFormatId !== undefined) {
         return;
       }
       if (change.kind === "connection" || change.kind === "objects" || change.kind === "snapshot") screen.update(s);
-      if (s.pendingCount === 0) onUnrecoverable(); // nothing left to lose: reload is safe now
+      if (s.pendingCount === 0 && !s.busy) onUnrecoverable(); // nothing left to lose: reload is safe now
     });
     recovery = { screen, since: now, unsubscribe, timer: setTimeout(onUnrecoverable, TERMINAL_RECOVERY_MS) };
   };

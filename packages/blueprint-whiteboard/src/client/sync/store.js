@@ -235,6 +235,7 @@ export async function createStore(options) {
     connection: "connecting",
     pending: 0,
     pendingCount: 0,
+    busy: false,
     oldestPendingAt: null,
     lastAcknowledgedRevision: 0,
     riskOfLoss: false,
@@ -316,6 +317,7 @@ export async function createStore(options) {
     const risk = riskOfLoss({ state: connection, pendingCount, oldestPendingAt, now });
     state.pending = pendingCount;
     state.pendingCount = pendingCount;
+    state.busy = directPending > 0;
     state.oldestPendingAt = oldestPendingAt;
     state.lastAcknowledgedRevision = lastRevision;
     if (riskTimer && (!pendingCount || risk)) {
@@ -1555,8 +1557,18 @@ export async function createStore(options) {
     },
 
     async undoHistory(historyId) {
+      // Counted as saving until it settles, but never for longer than REQUEST_TIMEOUT_MS: a call
+      // on a dead stub may never settle, and "saving" must not stick. A late result still applies.
       directPending++;
       syncStatus();
+      let counted = true;
+      const settle = () => {
+        if (!counted) return;
+        counted = false;
+        directPending--;
+        syncStatus();
+      };
+      const timer = timers.setTimeout(settle, REQUEST_TIMEOUT_MS);
       /** @type {OperationResult} */
       let result;
       try {
@@ -1564,8 +1576,8 @@ export async function createStore(options) {
           senderId: clientId, by: viewer.name, historyId, requestId: nextRequestId(),
         });
       } finally {
-        directPending--;
-        syncStatus();
+        timers.clearTimeout(timer);
+        settle();
       }
       if (disposed || !result) return;
       if (result.duplicate !== true) {

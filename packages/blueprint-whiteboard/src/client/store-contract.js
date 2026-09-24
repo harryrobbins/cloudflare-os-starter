@@ -47,6 +47,8 @@
  * @property {ConnectionState} connection
  * @property {number} pending          local ops not yet acknowledged (same as pendingCount; kept for callers)
  * @property {number} pendingCount     local ops not yet acknowledged
+ * @property {boolean} [busy]          a direct call (Activity undo) is unresolved, for at most
+ *   REQUEST_TIMEOUT_MS; the frame must not reload on its own meanwhile
  * @property {number|null} oldestPendingAt  local clock ms when the oldest of them was made; null when none
  * @property {number} lastAcknowledgedRevision  board revision up to which this client has seen every
  *   change confirmed (snapshots, events and its own acknowledged requests)

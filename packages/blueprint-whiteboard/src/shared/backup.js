@@ -226,7 +226,9 @@ export function migrateBackup(raw) {
  */
 
 /** @param {unknown} v */
-const cleanRef = (v) => (typeof v === "string" && v.length > 0 && v.length <= BACKUP_LIMITS.refLength ? v : null);
+// A NUL-prefixed ref is reserved for objects saved without an id (see parseBackup), so a real id
+// can never collide with one.
+const cleanRef = (v) => (typeof v === "string" && v.length > 0 && v.length <= BACKUP_LIMITS.refLength && v[0] !== "\u0000" ? v : null);
 
 /** Placeholder id so normalizeNewObject accepts an entry; replaced on placement. */
 const PLACEHOLDER_ID = "o_000000000000";
@@ -275,7 +277,7 @@ export function parseBackup(input) {
     if (!isObject(item)) return problem(`Object ${index + 1}: not an object.`);
     const o = /** @type {Record<string, any>} */ (item);
     if (!isObjectType(o.type)) return problem(`Object ${index + 1}: unknown type.`);
-    const ref = cleanRef(o.id) ?? `#${index}`;
+    const ref = cleanRef(o.id) ?? `\u0000${index}`;
     if (byRef.has(ref)) return problem(`Object ${index + 1}: duplicate id.`);
     // Only known fields reach the normaliser; it drops everything else (versions, timestamps,
     // createdBy, z) and clamps what it keeps.
@@ -422,11 +424,26 @@ export function importOffset(entries, objects, at) {
   if (!b) return { dx: 0, dy: 0 };
   if (isObject(at) && Number.isFinite(/** @type {any} */ (at).x) && Number.isFinite(/** @type {any} */ (at).y)) {
     const a = /** @type {{x: number, y: number}} */ (at);
-    return { dx: a.x - b.x, dy: a.y - b.y };
+    return keepInside(b, a.x - b.x, a.y - b.y);
   }
   const existing = boardBounds(objects);
   if (!existing) return { dx: 0, dy: 0 };
-  return { dx: existing.x + existing.w + IMPORT_GAP - b.x, dy: existing.y - b.y };
+  return keepInside(b, existing.x + existing.w + IMPORT_GAP - b.x, existing.y - b.y);
+}
+
+/**
+ * Limits an offset so the moved group stays within ±LIMITS.coord as a whole; clamping each
+ * coordinate on its own would pile everything up on the edge and lose the layout.
+ * @param {{x: number, y: number, w: number, h: number}} b
+ * @param {number} dx @param {number} dy
+ */
+function keepInside(b, dx, dy) {
+  const axis = (/** @type {number} */ lo, /** @type {number} */ size, /** @type {number} */ d) => {
+    const min = -LIMITS.coord - lo;
+    const max = LIMITS.coord - (lo + size);
+    return min > max ? d : Math.min(max, Math.max(min, d));
+  };
+  return { dx: axis(b.x, b.w, dx), dy: axis(b.y, b.h, dy) };
 }
 
 // ---------------------------------------------------------------------------------------------

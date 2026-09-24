@@ -172,6 +172,21 @@ describe("placing", () => {
   });
 });
 
+describe("review regressions", () => {
+  it("never lets an id-less object collide with a real id", () => {
+    const parsed = parseBackup({ version: 1, objects: [{ type: "sticky", text: "no id" }, { id: "#0", type: "sticky", text: "real" }] });
+    expect(parsed.entries).toHaveLength(2);
+  });
+
+  it("keeps the layout when `at` is near the coordinate limit", () => {
+    const parsed = parseBackup({ version: 1, objects: [{ id: "a", type: "sticky", x: 0, y: 0 }, { id: "b", type: "sticky", x: 400, y: 0 }] });
+    const { dx, dy } = importOffset(parsed.entries, {}, { x: LIMITS.coord, y: LIMITS.coord });
+    const { creates } = planCreates(parsed.entries, { newId: () => newId("object"), dx, dy });
+    expect(creates[1].x - creates[0].x).toBe(400);
+    for (const c of creates) expect(c.x + c.w).toBeLessThanOrEqual(LIMITS.coord);
+  });
+});
+
 describe("icons", () => {
   it("round-trips packId and iconId through backup and placement", () => {
     const icon = obj("icon", { packId: "core.1", iconId: "process", w: 160, h: 100, text: "Step" });

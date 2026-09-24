@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeServer, settle, startStore } from "./helpers.js";
 import { SLOW_SAVE_MS } from "../../src/client/sync/connection.js";
-import { UNRECOVERABLE_AFTER_MS } from "../../src/client/sync/store.js";
+import { REQUEST_TIMEOUT_MS, UNRECOVERABLE_AFTER_MS } from "../../src/client/sync/store.js";
 
 beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.useRealTimers(); });
@@ -128,6 +128,18 @@ describe("status fields", () => {
     await p;
     expect(a.store.getState().connection).toBe("live");
     expect(server.objects[noteId].x).toBe(100);
+  });
+
+  it("stops counting an undo that never settles as saving after the request timeout", async () => {
+    const { server, noteId, a, first } = await setup();
+    a.store.updateObjects([{ id: noteId, patch: { x: 300 } }]);
+    await settle(200);
+    first.gadget.undo = () => new Promise(() => {}); // a dead stub: the call never settles
+    void a.store.undoHistory(server.history.at(-1).id);
+    await settle(10);
+    expect(a.store.getState()).toMatchObject({ connection: "saving", busy: true });
+    await settle(REQUEST_TIMEOUT_MS + 100);
+    expect(a.store.getState()).toMatchObject({ connection: "live", busy: false });
   });
 });
 
