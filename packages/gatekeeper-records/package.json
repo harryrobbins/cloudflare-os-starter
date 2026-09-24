@@ -14,6 +14,9 @@
   "dependencies": {
     "@gadgets/workshop-shared": "workspace:*",
     "@records/contracts": "workspace:*",
+    "@records/core": "workspace:*",
+    "@records/identity": "workspace:*",
+    "@records/jira": "workspace:*",
     "capnweb": "catalog:",
     "capnweb-validate": "catalog:",
     "jose": "catalog:",

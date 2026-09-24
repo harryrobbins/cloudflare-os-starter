@@ -4,3 +4,5 @@ export * from "./errors.js";
 export * from "./events.js";
 export * from "./manifest.js";
 export * from "./caller.js";
+export * from "./sync.js";
+export * from "./identity.js";

@@ -1,0 +1,28 @@
+{
+  "name": "@records/core",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Portable datastore core: command bus, journal, clock, module handlers. No Cloudflare imports.",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "types:check": "tsc --noEmit",
+    "test:run": "vitest run"
+  },
+  "dependencies": {
+    "@records/contracts": "workspace:*",
+    "postgres": "^3.4.7",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@records/schema": "workspace:*",
+    "embedded-postgres": "17.9.0-beta.17",
+    "@types/node": "26.1.0",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

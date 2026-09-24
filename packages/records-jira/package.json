@@ -1,0 +1,25 @@
+{
+  "name": "@records/jira",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Jira-compatible surface for the Projects module: JQL subset, ADF conversion, DTO mapping, routes.",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "types:check": "tsc --noEmit",
+    "test:run": "vitest run"
+  },
+  "dependencies": {
+    "@records/contracts": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.0",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}
