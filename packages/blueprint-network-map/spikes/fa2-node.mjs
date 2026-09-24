@@ -1,0 +1,15 @@
+import Graph from "graphology";
+import fa2 from "graphology-layout-forceatlas2";
+import { graphToByteArrays } from "graphology-layout-forceatlas2/helpers.js";
+import iterate from "graphology-layout-forceatlas2/iterate.js";
+const [N, M, bh, rngKind, iters] = [Number(process.argv[2]), Number(process.argv[3]), process.argv[4] === "bh", process.argv[5], Number(process.argv[6] || 5)];
+let s = 42; const lcg = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+const r = rngKind === "lcg" ? lcg : Math.random;
+const g = new Graph({ multi: true, type: "mixed" });
+for (let i = 0; i < N; i++) g.addNode("n" + i, { x: r() * 1000, y: r() * 1000, size: 3 });
+for (let j = 0; j < M; j++) g.addUndirectedEdge("n" + Math.floor(r() * N), "n" + Math.floor(Math.pow(r(), 2) * N));
+const settings = { ...fa2.inferSettings(g), barnesHutOptimize: bh };
+const m = graphToByteArrays(g, () => 1);
+const t = performance.now();
+for (let i = 0; i < iters; i++) iterate(settings, m.nodes, m.edges);
+console.log(N, M, bh ? "BH" : "exact", rngKind, "ms/iter", ((performance.now() - t) / iters).toFixed(1));

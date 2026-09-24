@@ -1,0 +1,17 @@
+{
+  "blueprintId": "format.network-map",
+  "title": "Network Map",
+  "description": "Map people, organisations and ideas as elements and connections, like Kumu: typed fields, feedback loops, views that colour, size, filter and focus, reviewed spreadsheet imports, and live collaboration.",
+  "output": {
+    "id": "network-map",
+    "noun": "Map",
+    "plural": "Maps",
+    "icon": "gridNine"
+  },
+  "author": {
+    "type": "user",
+    "name": "Surprisingly Ltd",
+    "id": "harryrobbins@gmail.com"
+  },
+  "revision": 1
+}

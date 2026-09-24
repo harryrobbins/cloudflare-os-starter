@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Network map harness</title>
+  <style>
+    html, body { margin: 0; height: 100%; font: 13px system-ui, sans-serif; }
+    body { display: flex; flex-direction: column; }
+    header { display: flex; gap: 10px; align-items: center; padding: 6px 12px; background: #f3f3f3; border-bottom: 1px solid #ddd; flex-wrap: wrap; }
+    #panes { flex: 1; min-height: 0; display: flex; gap: 4px; background: #999; }
+    #panes iframe { flex: 1; min-width: 0; height: 100%; border: none; background: #fff; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Network map harness</strong>
+    <span id="status">starting...</span>
+    <button id="restart" type="button">Restart facet</button>
+    <button id="reset" type="button">Reset storage</button>
+    <a href="?panes=1">1 pane</a> <a href="?panes=2">2 panes</a> <a href="?panes=2&latency=150">2 panes, 150 ms</a> <a href="?panes=1&blank=1">blank map</a>
+  </header>
+  <div id="panes"></div>
+  <script type="module" src="/harness/parent.js"></script>
+</body>
+</html>
