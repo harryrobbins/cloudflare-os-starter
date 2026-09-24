@@ -1,0 +1,15 @@
+{
+  "extends": "../../cloudflare-os/tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ESNext"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["./worker-configuration.d.ts", "@cloudflare/vitest-pool-workers/types"],
+    "noEmit": true
+  },
+  // app/ has its own tsconfig with the DOM lib. Paths are anchored with `./` so the
+  // capnweb-validate copy under .wrangler/validate is not type-checked twice.
+  "include": ["./src/**/*.ts", "./__tests__/**/*.ts"],
+  "exclude": ["app", "node_modules", ".wrangler"]
+}

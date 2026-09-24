@@ -1,0 +1,87 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+
+  // Placeholder. `scripts/deploy.ts` generates `wrangler.prod.jsonc` from `deployment.jsonc`
+  // (`workers.search.name`, normally `cfos-search`) and overrides the name, the Vectorize index,
+  // the queue names and every var below. Nothing here is deployed as-is.
+  "name": "cfos-search",
+
+  // capnweb-validate rewrites `src/` into `.wrangler/validate/src/` so the RPC surfaces get their
+  // argument validators, exactly as packages/gatekeeper-chat does it.
+  "main": ".wrangler/validate/src/index.ts",
+  "build": {
+    "command": "pnpm exec capnweb-validate build --out .wrangler/validate",
+    "watch_dir": "src"
+  },
+
+  "compatibility_date": "2026-08-04",
+  "compatibility_flags": ["allow_irrevocable_stub_storage", "nodejs_compat"],
+
+  "migrations": [
+    {
+      "tag": "v0",
+      "new_sqlite_classes": ["SearchIndex", "SearchGatekeeper"]
+    }
+  ],
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SEARCH_INDEX",
+        "class_name": "SearchIndex"
+      }
+    ]
+  },
+
+  // The dense half. Wrangler cannot create an index from config: `pnpm search:provision` creates
+  // it (768 dimensions, cosine) and its six metadata indexes before the first deploy.
+  "vectorize": [
+    {
+      "binding": "VECTORS",
+      "index_name": "cfos-search"
+    }
+  ],
+
+  // Embeddings (@cf/baai/bge-base-en-v1.5) and the optional reranker.
+  "ai": { "binding": "AI" },
+
+  // Work the search Worker gives itself: embedding, backfill and re-embedding after an edit.
+  // Sources never see this queue; they call `SearchService.ingest()` over a service binding.
+  "queues": {
+    "producers": [{ "binding": "EMBED", "queue": "cfos-search-embed" }],
+    "consumers": [
+      {
+        "queue": "cfos-search-embed",
+        "max_batch_size": 10,
+        "max_batch_timeout": 2,
+        "max_retries": 5,
+        "dead_letter_queue": "cfos-search-embed-dlq"
+      }
+    ]
+  },
+
+  // `run_worker_first` so the Access check runs before the SPA shell is served.
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./app/dist",
+    "run_worker_first": true
+  },
+
+  // Placeholders; deploy.ts substitutes the real values.
+  "vars": {
+    "CF_ACCESS_ISS": "https://example.cloudflareaccess.com",
+    "CF_ACCESS_AUD": "replace-with-the-access-application-aud",
+    "ADMINS": "[]",
+    "PUBLIC_BASE_URL": "https://example.invalid",
+    // The deployment's AI Gateway, for embedding cost logging. Empty calls Workers AI directly.
+    "AI_GATEWAY": "",
+    // "1" turns on the bge-reranker-base pass over the fused top 30. Off by default.
+    "RERANK": "0"
+  },
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": { "invocation_logs": false }
+  }
+}
