@@ -59,7 +59,8 @@
  * @property {(clientId: string|null) => void} follow  follow a peer's viewport, or stop
  * @property {() => string|null} getFollowing
  * @property {(ids: string[]) => void} duplicate     copies of the objects offset by 20 units, selected
- * @property {(ids: string[]) => void} focusObjects  pans (and zooms out if needed) so the objects are visible
+ * @property {(ids: string[], opts?: {animate?: boolean}) => void} focusObjects  pans (and zooms out if needed) so the
+ *   objects are visible; animated unless `animate: false` (then the camera moves before it returns)
  * @property {(mode: "left"|"center"|"right"|"top"|"middle"|"bottom") => number} align
  *   aligns the selection (2+ movable units; a selected frame brings its members) in ONE update, so
  *   one undo reverses it; returns how many objects moved
