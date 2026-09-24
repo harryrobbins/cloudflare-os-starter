@@ -6,7 +6,7 @@ This gadget is built from `packages/blueprint-whiteboard` in the deployment's st
 
 ## Using the whiteboard
 
-Everyone with the whiteboard open is shown at the top right. When you first open it, you are asked for a name and colour so others can recognise your cursor; nothing is stored, so you are asked again on the next visit.
+Everyone with the whiteboard open is shown at the top right, under their account's display name and a colour, so others can recognise their cursor. Nobody is asked for a name.
 
 - **Tools** (left toolbar; a bottom bar on phones, where Add, Objects and Activity come first): Select (`V`), Hand to pan (`H`), Sticky note (`N`), Rectangle (`R`), Ellipse (`O`), Text (`T`), Frame (`F`), Connector (`C`) and Pen (`P`). Click on the canvas to create an object at its default size, or drag to size it. After one object the tool returns to Select (the Pen stays on for more strokes); double-click a tool button to keep it on until you pick another. New objects use the fill, line and text colours you last chose for that kind of object. A text label left empty is removed when you finish editing. The toolbar is one `Tab` stop: use the arrow keys to move between its buttons. When it does not fit, a shadow at its edge shows that it scrolls.
 - **Add without dragging**: the **+** button (or `A`) opens a menu that adds a sticky note, rectangle, ellipse, text or frame in the middle of the view. Sticky notes and text open for typing straight away.

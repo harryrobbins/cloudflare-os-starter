@@ -1,16 +1,18 @@
 // @ts-check
 // Empty-board onboarding: when the whiteboard has no objects, a small card offers three ways to
 // start (add a sticky note, paste text, choose a template). It does not block the canvas and
-// disappears as soon as anything is on the board. "Not now" hides it for this visit.
+// disappears as soon as anything is on the board. "Not now" hides it for this visit, and so does
+// picking a creation tool or pressing on the canvas: the user has started, and the card would
+// otherwise sit under the pointer in the middle of the board.
 
 import { h, icon } from "./dom.js";
 
 /**
  * Whether the card shows. Pure.
- * @param {{objectCount: number, live: boolean, dismissed: boolean, presenting: boolean}} s
+ * @param {{objectCount: number, live: boolean, dismissed: boolean, presenting: boolean, tool?: string}} s
  */
-export function shouldShowOnboarding({ objectCount, live, dismissed, presenting }) {
-  return live && objectCount === 0 && !dismissed && !presenting;
+export function shouldShowOnboarding({ objectCount, live, dismissed, presenting, tool = "select" }) {
+  return live && objectCount === 0 && !dismissed && !presenting && (tool === "select" || tool === "hand");
 }
 
 /**
@@ -38,12 +40,16 @@ export function createOnboarding(app, actions) {
     }, "Not now"),
   );
   app.root.appendChild(el);
+  // Pressing on the canvas means the user has started: stop offering the card for this visit.
+  app.canvas.element.addEventListener("pointerdown", () => { if (!dismissed) { dismissed = true; render(); } });
+  app.canvas.on((event) => { if (event.kind === "tool") render(); });
 
   function render() {
     const state = app.store.getState();
     if (state.connection === "live") seenLive = true;
     const show = shouldShowOnboarding({
       objectCount: Object.keys(state.board.objects).length, live: seenLive, dismissed, presenting: actions.isPresenting(),
+      tool: app.canvas.getTool(),
     });
     if (el.hidden === !show) return;
     const hadFocus = el.contains(document.activeElement);

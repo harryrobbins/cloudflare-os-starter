@@ -162,6 +162,8 @@ describe("onboarding, backup naming and templates", () => {
     const base = { objectCount: 0, live: true, dismissed: false, presenting: false };
     expect(shouldShowOnboarding(base)).toBe(true);
     expect(shouldShowOnboarding({ ...base, objectCount: 1 })).toBe(false);
+    expect(shouldShowOnboarding({ ...base, tool: "pen" })).toBe(false);
+    expect(shouldShowOnboarding({ ...base, tool: "hand" })).toBe(true);
     expect(shouldShowOnboarding({ ...base, live: false })).toBe(false);
     expect(shouldShowOnboarding({ ...base, dismissed: true })).toBe(false);
     expect(shouldShowOnboarding({ ...base, presenting: true })).toBe(false);
