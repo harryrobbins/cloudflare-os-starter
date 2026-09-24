@@ -876,4 +876,122 @@ describe("whiteboard harness", { concurrency: false }, () => {
       assert.equal(await tools.locator('button[tabindex="0"]').count(), 1, "still one Tab stop");
     });
   });
+  test("emoji picker: ARIA tabs, search, Enter adds a text object, skin tone, and the tab is remembered", async () => {
+    await withHarness({ names: ["Alice", "Bob"] }, async ({ page, frames: { A, B } }) => {
+      await h.inPane(A, (_, canvas) => canvas.element.focus());
+      await page.keyboard.press("i");
+      const picker = A.locator(".icon-picker");
+      await picker.waitFor({ timeout: 3000 });
+      const tabs = picker.locator('[role="tablist"] [role="tab"]');
+      assert.equal(await tabs.count(), 2);
+      assert.equal(await tabs.nth(0).getAttribute("aria-selected"), "true", "icons first in a fresh session");
+      assert.equal(await tabs.nth(1).getAttribute("tabindex"), "-1", "one Tab stop for the tabs");
+      assert.ok(await picker.locator(".icon-search").evaluate((el) => el === document.activeElement), "search focused on open");
+      // Shift+Tab reaches the selected tab; the arrow key moves to (and shows) the other one.
+      await page.keyboard.press("Shift+Tab");
+      assert.equal(await h.focusedClass(A), "picker-tab");
+      await page.keyboard.press("ArrowRight");
+      assert.equal(await tabs.nth(1).getAttribute("aria-selected"), "true");
+      assert.equal(await tabs.nth(0).getAttribute("aria-selected"), "false");
+      assert.ok(await tabs.nth(1).evaluate((el) => el === document.activeElement), "focus follows the arrow key");
+      const panel = picker.locator("#wb-picker-panel-unicode");
+      assert.equal(await panel.getAttribute("role"), "tabpanel");
+      assert.equal(await panel.getAttribute("aria-labelledby"), "wb-picker-tab-unicode");
+      assert.equal(await tabs.nth(1).getAttribute("aria-controls"), "wb-picker-panel-unicode");
+      assert.ok(await panel.isVisible() && !(await picker.locator("#wb-picker-panel-icons").isVisible()), "only the selected panel shows");
+      await page.keyboard.press("Home");
+      assert.equal(await tabs.nth(0).getAttribute("aria-selected"), "true", "Home goes to the first tab");
+      await page.keyboard.press("End");
+      assert.equal(await tabs.nth(1).getAttribute("aria-selected"), "true", "End goes to the last tab");
+
+      // Search and add with Enter: a text object sized for the emoji, in the middle of the view.
+      await panel.locator(".char-search").focus();
+      await page.keyboard.type("grinning face");
+      assert.equal(await panel.locator(".char-pick").first().getAttribute("aria-label"), "Grinning face emoji");
+      await page.keyboard.press("Enter");
+      const grin = await h.until(async () => Object.values((await h.serverBoard(page)).objects).find((o) => o.text === "\u{1F600}"),
+        { message: "emoji added" });
+      assert.equal(grin.type, "text");
+      assert.equal(grin.style.fontSize, 64);
+      assert.equal(grin.style.align, "center");
+      assert.ok(grin.w >= 64 && grin.w <= 100 && grin.h === 80, `box fitted to the glyph (${grin.w} x ${grin.h})`);
+      await B.locator(SEL.object(grin.id)).waitFor({ timeout: 3000 });
+      await h.until(async () => /Added grinning face/.test(await h.liveText(A)), { message: "insert announced" });
+
+      // A skin tone applies to emoji that take one; arrow keys move in the results grid.
+      await panel.locator(".skin-tone").selectOption("3");
+      await panel.locator(".char-search").fill("thumbs up");
+      await panel.locator(".char-search").press("ArrowDown");
+      assert.equal(await h.focusedClass(A), "btn char-pick");
+      await page.keyboard.press("Enter");
+      await h.until(async () => Object.values((await h.serverBoard(page)).objects).some((o) => o.text === "\u{1F44D}\u{1F3FD}"),
+        { message: "toned emoji added" });
+
+      // Closing and reopening keeps the tab and the tone for the session.
+      await page.keyboard.press("Escape");
+      await picker.waitFor({ state: "detached" });
+      await h.inPane(A, (_, canvas) => canvas.element.focus());
+      await page.keyboard.press("i");
+      await picker.waitFor();
+      assert.equal(await tabs.nth(1).getAttribute("aria-selected"), "true", "reopens on Emoji & symbols");
+      assert.equal(await panel.locator(".skin-tone").inputValue(), "3");
+      assert.ok(await panel.locator(".char-search").evaluate((el) => el === document.activeElement));
+      // Recently used comes first.
+      assert.equal(await panel.locator(".char-grid h3").first().textContent(), "Recently used");
+      await page.screenshot({ path: `${SHOTS}/emoji-picker.png` });
+    });
+  });
+
+  test("emoji picker inserts into an active text edit at the caret (keyboard and click)", async () => {
+    await withHarness({ names: ["Alice", "Bob"] }, async ({ page, frames: { A, B } }) => {
+      await A.locator(SEL.addButton).click();
+      await A.locator(SEL.addItem("sticky")).click();
+      await page.keyboard.type("Hello world");
+      for (let i = 0; i < 6; i++) await page.keyboard.press("ArrowLeft");
+      // Ctrl+. while typing opens Emoji & symbols without ending the edit.
+      await page.keyboard.press("Control+.");
+      const picker = A.locator(".icon-picker");
+      await picker.waitFor({ timeout: 3000 });
+      const panel = picker.locator("#wb-picker-panel-unicode");
+      assert.ok(await panel.locator(".char-search").evaluate((el) => el === document.activeElement), "search focused");
+      assert.equal(await A.locator("textarea.wb-editor").count(), 1, "the edit stays open");
+      await page.keyboard.type("rocket");
+      await page.keyboard.press("Enter");
+      await h.until(async () => (await A.locator("textarea.wb-editor").inputValue()) === "Hello\u{1F680} world", { message: "inserted at the caret" });
+      assert.equal(Object.values((await h.serverBoard(page)).objects).filter((o) => o.type === "text").length, 0, "no text object");
+      // A symbol from a symbol group, by its Unicode name, goes in after it.
+      await panel.locator(".char-search").fill("");
+      await panel.locator(".char-filter").selectOption("symbol:arrows");
+      await panel.locator(".char-search").fill("rightwards double arrow");
+      await page.keyboard.press("Enter");
+      await h.until(async () => (await A.locator("textarea.wb-editor").inputValue()) === "Hello\u{1F680}\u21D2 world", { message: "second insert after the first" });
+      // Escape closes the picker and returns to typing; Escape again saves.
+      await page.keyboard.press("Escape");
+      await picker.waitFor({ state: "detached" });
+      assert.ok(await A.locator("textarea.wb-editor").evaluate((el) => el === document.activeElement), "back in the editor");
+      await page.keyboard.type("!");
+      await page.keyboard.press("Escape");
+      const sticky = await h.until(async () => Object.values((await h.serverBoard(page)).objects).find((o) => o.type === "sticky" && o.text.startsWith("Hello")),
+        { message: "committed" });
+      assert.equal(sticky.text, "Hello\u{1F680}\u21D2! world");
+      await h.until(async () => (await paneObject(B, sticky.id))?.text === sticky.text, { message: "B has the text" });
+
+      // With the picker already open, clicking a result while typing keeps the caret and the edit.
+      await h.inPane(A, (_, canvas) => canvas.element.focus());
+      await page.keyboard.press("i");
+      await picker.waitFor();
+      await panel.locator(".char-search").fill("red heart");
+      await h.inPane(A, (_, canvas, id) => canvas.editText(id), sticky.id);
+      await A.locator("textarea.wb-editor").waitFor();
+      await page.keyboard.press("End");
+      await panel.locator(".char-pick").first().click();
+      await h.until(async () => (await A.locator("textarea.wb-editor").inputValue()).endsWith("world\u2764\uFE0F"), { message: "clicked emoji at the caret" });
+      assert.ok(await A.locator("textarea.wb-editor").evaluate((el) => el === document.activeElement), "a click goes back to typing");
+      // Clicking the canvas ends the edit as usual.
+      const empty = await h.panePoint(page, "A", 200, 200);
+      await page.mouse.click(empty.x, empty.y);
+      await h.until(async () => (await h.serverBoard(page)).objects[sticky.id].text.endsWith("\u2764\uFE0F"), { message: "saved" });
+      await page.screenshot({ path: `${SHOTS}/emoji-caret.png` });
+    });
+  });
 });

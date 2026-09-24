@@ -4,6 +4,10 @@
 // Commits on blur, Escape or Ctrl/Cmd+Enter; Enter inserts a newline except in single-line fields
 // (frame names and connector labels), where it commits. A remote update to the object being edited
 // repositions the editor but never replaces what the user is typing.
+//
+// Focus moving into an element marked `data-wb-keeps-editor` (the icon picker's panel) does not
+// commit: the editor stays open with its caret, so a picked emoji or symbol is inserted there
+// (insert()). Whoever moved focus away is then responsible for commit() or focus().
 
 import {
   textLayout, textObjectHeight, polylineMidpoint, textWidth, center, LINE_HEIGHT,
@@ -11,6 +15,7 @@ import {
 import { FONT_FAMILY } from "../../../shared/render.js";
 import { cleanLine, cleanText, LIMITS } from "../../../shared/protocol.js";
 import { connectorPoints, canEditText } from "./model.js";
+import { keyAction } from "./keymap.js";
 
 /** @typedef {import("../../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("../../../shared/protocol.js").ObjectPatch} ObjectPatch */
@@ -95,6 +100,10 @@ export function textPatch(o, value) {
  * @property {() => Camera} getCamera
  * @property {(id: string, value: string) => void} onCommit
  * @property {(id: string) => void} onClose
+ * @property {(target: EventTarget|null) => boolean} [keepOpen]  focus moving to `target` keeps
+ *   the editor open (with its caret) instead of committing
+ * @property {(command: string) => void} [onCommand]  a shell command pressed while typing
+ *   (keymap.js rows with scope "text")
  */
 
 export class TextEditor {
@@ -131,7 +140,7 @@ export class TextEditor {
     ta.rows = 1;
     ta.addEventListener("keydown", (e) => this.onKey(e));
     ta.addEventListener("input", () => this.position());
-    ta.addEventListener("blur", () => { if (this.id) this.commit(); });
+    ta.addEventListener("blur", (e) => { if (this.id && !this.deps.keepOpen?.(e.relatedTarget)) this.commit(); });
     // Pointer and wheel events inside the editor are for the textarea, not the canvas.
     for (const type of ["pointerdown", "pointermove", "pointerup", "dblclick", "contextmenu"]) {
       ta.addEventListener(type, (e) => e.stopPropagation());
@@ -151,6 +160,12 @@ export class TextEditor {
   onKey(e) {
     e.stopPropagation();
     if (e.isComposing) return;
+    const action = keyAction(e, "text");
+    if (action?.type === "command") {
+      e.preventDefault();
+      this.deps.onCommand?.(action.command);
+      return;
+    }
     if (e.key === "Escape") {
       e.preventDefault();
       this.commit();
@@ -158,6 +173,27 @@ export class TextEditor {
       e.preventDefault();
       this.commit();
     }
+  }
+
+  /**
+   * Inserts `text` at the caret, replacing any selected text, and leaves the caret after it.
+   * False (and nothing changes) when the result would pass the field's length limit.
+   * @param {string} text
+   */
+  insert(text) {
+    const ta = this.textarea;
+    if (!ta || !this.box || !text) return false;
+    const start = ta.selectionStart ?? ta.value.length;
+    const end = ta.selectionEnd ?? start;
+    if (ta.value.length - (end - start) + text.length > this.box.maxLength) return false;
+    ta.setRangeText(text, start, end, "end");
+    this.position();
+    return true;
+  }
+
+  /** Moves focus back into the open editor (its caret is where it was). */
+  focus() {
+    this.textarea?.focus({ preventScroll: true });
   }
 
   /** Re-applies geometry (camera moved, object changed remotely). Closes if the object is gone. */

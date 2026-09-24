@@ -5,6 +5,7 @@
 // server and in every browser, which is what keeps an SVG export identical to the board.
 
 import { iconTextBox } from "./icons/registry.js";
+import { graphemes, isExtender, isRegionalIndicator } from "./graphemes.js";
 
 /** @typedef {import("./protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("./protocol.js").Side} Side */
@@ -355,7 +356,7 @@ export const TEXT_PAD_EM = 0.6;
 
 const NARROW = " il.,:;'|!ftjI";
 const WIDE = "mwMW@";
-/** Widths of the ASCII range, precomputed (same values as the rules in charWidth). */
+/** Widths of the ASCII range, precomputed (same values as the rules in codeWidth). */
 const ASCII_WIDTH = Array.from({ length: 128 }, (_, code) => {
   const ch = String.fromCharCode(code);
   if (NARROW.includes(ch)) return 0.32;
@@ -367,16 +368,38 @@ const ASCII_WIDTH = Array.from({ length: 128 }, (_, code) => {
 /** @param {number} code a code point */
 function codeWidth(code) {
   if (code < 128) return ASCII_WIDTH[code];
-  // CJK, Hangul, fullwidth forms and emoji are roughly square.
+  // CJK, Hangul, fullwidth forms and emoji (including the emoji-heavy symbol and dingbat blocks)
+  // are roughly square.
   if ((code >= 0x1100 && code <= 0x115f) || (code >= 0x2e80 && code <= 0xa4cf) ||
       (code >= 0xac00 && code <= 0xd7a3) || (code >= 0xf900 && code <= 0xfaff) ||
-      (code >= 0xff00 && code <= 0xff60) || code >= 0x1f300) return 1;
+      (code >= 0xff00 && code <= 0xff60) || (code >= 0x2600 && code <= 0x27bf) ||
+      (code >= 0x2b00 && code <= 0x2bff) || code >= 0x1f000) return 1;
   return CHAR_WIDTH_EM;
 }
 
-/** @param {string} ch one code point */
-function charWidth(ch) {
-  return codeWidth(ch.codePointAt(0) ?? 0);
+/**
+ * Width of a code point after `prev` (the code point before it, or 0): joiners, variation
+ * selectors, skin tones, tags and combining marks take no room, nor does anything joined on by a
+ * ZERO WIDTH JOINER (a family emoji is one glyph); each half of a flag takes half.
+ * @param {number} prev @param {number} code
+ */
+function glyphWidth(prev, code) {
+  if (code < 128 && prev !== 0x200d) return ASCII_WIDTH[code];
+  if (prev === 0x200d || isExtender(code)) return 0;
+  if (isRegionalIndicator(code)) return 0.5;
+  return codeWidth(code);
+}
+
+/** @param {string} cluster one grapheme cluster */
+function clusterWidth(cluster) {
+  let w = 0, prev = 0;
+  for (let i = 0; i < cluster.length; i++) {
+    const code = /** @type {number} */ (cluster.codePointAt(i));
+    if (code > 0xffff) i++;
+    w += glyphWidth(prev, code);
+    prev = code;
+  }
+  return w;
 }
 
 /**
@@ -384,11 +407,12 @@ function charWidth(ch) {
  * @param {string} text @param {number} fontSize
  */
 export function textWidth(text, fontSize) {
-  let w = 0;
+  let w = 0, prev = 0;
   for (let i = 0; i < text.length; i++) {
     const code = /** @type {number} */ (text.codePointAt(i));
     if (code > 0xffff) i++;
-    w += codeWidth(code);
+    w += glyphWidth(prev, code);
+    prev = code;
   }
   return w * fontSize;
 }
@@ -416,7 +440,7 @@ export function wrapText(text, maxWidth, fontSize, maxLines = Infinity) {
   const full = () => lines.length > maxLines;
   paragraphs: for (const para of String(text).split("\n")) {
     let line = "";
-    let lineUnits = 0; // sum of charWidth over `line`, in order
+    let lineUnits = 0; // sum of glyphWidth over `line`, in order
     // split with a capture group alternates words (even indexes) and whitespace runs (odd).
     const tokens = para.split(/(\s+)/);
     for (let t = 0; t < tokens.length; t++) {
@@ -425,19 +449,22 @@ export function wrapText(text, maxWidth, fontSize, maxLines = Infinity) {
       if (t % 2 === 1) {
         if (line !== "") {
           line += token;
+          let prev = 0;
           for (let i = 0; i < token.length; i++) {
             const code = /** @type {number} */ (token.codePointAt(i));
             if (code > 0xffff) i++;
-            lineUnits += codeWidth(code);
+            lineUnits += glyphWidth(prev, code);
+            prev = code;
           }
         }
         continue;
       }
-      let joined = lineUnits, alone = 0;
+      let joined = lineUnits, alone = 0, prev = 0;
       for (let i = 0; i < token.length; i++) {
         const code = /** @type {number} */ (token.codePointAt(i));
         if (code > 0xffff) i++;
-        const cw = codeWidth(code);
+        const cw = glyphWidth(prev, code);
+        prev = code;
         joined += cw;
         alone += cw;
       }
@@ -457,9 +484,9 @@ export function wrapText(text, maxWidth, fontSize, maxLines = Infinity) {
         lineUnits = alone;
         continue;
       }
-      // A single word wider than the line: break it by character.
-      for (const ch of token) {
-        const cw = charWidth(ch);
+      // A single word wider than the line: break it by character (never inside an emoji).
+      for (const ch of graphemes(token)) {
+        const cw = clusterWidth(ch);
         if (line && (lineUnits + cw) * fontSize > width) {
           lines.push(line);
           if (full()) break paragraphs;
