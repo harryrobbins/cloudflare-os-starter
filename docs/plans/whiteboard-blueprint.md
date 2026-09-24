@@ -2,7 +2,7 @@
 
 Part of the [master plan](collaborative-blueprints.md). Built after the [kanban board](kanban-blueprint.md), from a copy of its package.
 
-**Status: built and deployed (2026-09-16).** The source is [`packages/blueprint-whiteboard`](../../packages/blueprint-whiteboard/README.md). It ships as the bundled format `format.whiteboard` (revision 4) on cfos.surprisingly.ltd, from [`formats/whiteboard.json`](../../formats/whiteboard.json). The same `pnpm deploy` shipped Board revision 5. This page describes the whiteboard as built. The delivery record below lists every departure from the original plan.
+**Status: built and deployed (2026-09-16).** The source is [`packages/blueprint-whiteboard`](../../packages/blueprint-whiteboard/README.md). It ships as the bundled format `format.whiteboard` (revision 4 at first; revision 6, from [whiteboard-improvements.md](whiteboard-improvements.md), is current, see [`gadget.lock.json`](../../packages/blueprint-whiteboard/gadget.lock.json)) on cfos.surprisingly.ltd, from [`formats/whiteboard.json`](../../formats/whiteboard.json). The same `pnpm deploy` shipped Board revision 5. This page describes the whiteboard as built. The delivery record below lists every departure from the original plan.
 
 **The authoritative RPC and storage reference** is the gadget's own [`src/README.md`](../../packages/blueprint-whiteboard/src/README.md). Where this page and that file disagree, the file wins.
 

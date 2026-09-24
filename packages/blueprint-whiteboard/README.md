@@ -46,6 +46,17 @@ Budget: the generated module must stay under 160 KiB (today about 101 KiB, 29 Ki
 - **With the deployment:** `deployment.jsonc` sets `"formatBlueprintsDir": "formats"`, so `pnpm deploy` installs the whiteboard as `format.whiteboard`. See [Bundled formats](../../docs/customization.md#bundled-formats).
 - **Without a deploy:** upload `formats/whiteboard.gadget` at Home → Blueprints → Upload .gadget, open `/blueprint/<id>`, publish it, and promote it in `/admin` → Formats.
 
+### Compatibility
+
+| Axis | Current | Where |
+| --- | --- | --- |
+| Bundled archive revision | 6 | `gadget.lock.json`, `formats/whiteboard.json` |
+| Stored schema version | 1 (the `icon` type is additive; no migration) | `SCHEMA_VERSION` in `src/shared/protocol.js` |
+| Wire protocol | subscribe + `applyOperation` + presence, unchanged since revision 4; new RPCs are additive (`findIcons`, `addIcons`, `exportData`, `importData`) | `src/server/index.js` |
+| Backup format | `cloudflare-os-whiteboard` version 1 (version 0 = a `getBoard()` result) | `src/shared/backup.js` |
+| Icon packs | `core.1`, `tabler.1` (Tabler Icons 3.48.0) | `scripts/icon-packs/published.json` |
+| Minimum host | any Cloudflare OS host that runs revision 5; no viewer-session or replaceable-connection API needed yet | — |
+
 **A new revision only changes what new whiteboards get.** Existing whiteboards keep the code they were created from. The `schemaVersion` in `meta` plus the `migrate` hook in `src/core/whiteboard.js` are how newer code upgrades older data.
 
 **Never change `blueprintId`** (`format.whiteboard`).

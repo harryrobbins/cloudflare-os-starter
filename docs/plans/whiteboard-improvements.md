@@ -1,6 +1,6 @@
 # Plan: Whiteboard improvements
 
-**Status:** Proposed
+**Status:** Milestones A and B delivered as revision 6 (2026-09-24); Phase 4, 5.2 and 6 (except templates) await the decisions below. See [Delivery record](#delivery-record).
 
 **Date:** 2026-09-24
 
@@ -734,3 +734,32 @@ No deployment is part of this plan document.
 - Icon packs are reproducibly generated from pinned sources, retain stable IDs, and include complete third-party notices.
 - No new Worker, binding, route, secret, R2 bucket, or external database is required unless its phase explicitly adds it and the operator approves that deployment boundary.
 - Production verification uses two real identities and records the exact blueprint revision tested.
+
+## Delivery record
+
+**2026-09-24 — revision 6** (`format.whiteboard`, packed archive 225 KB; `gadget.lock.json` content hash `0ef7dc41…`). Built in five parallel streams and merged on `feat/whiteboard-improvements`. Node 504, workerd 17 and harness E2E 29/29 pass.
+
+| Plan item | State | Notes |
+| --- | --- | --- |
+| 0.1 Baseline docs | Done | Compatibility table in the package README; revision drift and the stale name-prompt sentence fixed. |
+| 0.2 Performance harness | Done | `test/performance/`, `scripts/benchmark.mjs`, baseline in `test/performance/baseline.md`. CI asserts counts and bytes, never timings. |
+| 0.3 Policy decisions | **Open** | Roles, audit, target editors, existing-instance upgrades, comment notifications, zero-setup images. These block Phase 4, 6.1, 6.3, live view-only links. |
+| 1.1 Connection states | Done | `src/client/sync/connection.js`; "Saved" only when acknowledged. |
+| 1.2 Host connection seam | Interim | `store.replaceTarget()` exists and is tested. The platform cannot hand the frame a fresh stub yet (host fork change), so the frame still reloads, but never while changes are unsaved. Instead it shows a recovery screen with download / show-as-text for up to 5 minutes. |
+| 1.3 Recovery tests | Done | Includes a real bug fixed: an unsent update queued across a resubscribe overwrote concurrent edits. |
+| 2.1–2.3 Snapping, align/distribute, connector endpoints | Done | Hold `Alt` to bypass snapping; keyboard path for reconnect via a searchable picker. |
+| 2.4 Icon and stencil packs | Done | `core.1` (27 stencils) and `tabler.1` (233 Tabler 3.48.0 icons), strict build-time compiler, published-ID ledger, `THIRD_PARTY_NOTICES.md`. New `icon` type is additive (no schema bump). `I` opens the picker. |
+| 2.5 Clipboard and backup | Done | Native copy/cut/paste events plus in-frame fallback (the iframe cannot read the clipboard); backup dialog falls back to copyable text (no `allow-downloads`). |
+| 2.6 Help, onboarding, deep links | Done | Deep links work only where the host page keeps its `#…` fragment (the frame is `about:srcdoc`); a host API would be the proper fix. |
+| 3.1 Module refactor | **Deferred** | Deliberately not mixed with five parallel feature streams. Do it as characterisation-only commits next; no archive change needed. |
+| 3.2–3.4 Spatial index, culling, virtual lists | Done | 5,000 objects: 96 rendered groups instead of 5,000; hit tests examine ~3.5 objects. Culling starts at 300 objects. |
+| 3.5 Adaptive presence | Done | Idle heartbeats are still fanned out by the hub to every viewer (50 idle viewers ≈ 193 deliveries/s); a hub change would cut that. |
+| 3.6 Snapshot/delta gate | **No-go** | 5,000 objects: 3.0 MiB snapshot, parse+stringify p95 33 ms, core cold load p95 112 ms, all well inside the interim budgets recorded in the baseline. |
+| 4 Verified identity and roles | **Not started** | Needs 0.3 decisions and a reviewed Cloudflare OS fork change. |
+| 5.1 Presentation | Done | No real fullscreen (the frame lacks `allow=fullscreen`). |
+| 5.2 Static published snapshots | **Not started** | Needs a separate publish capability and approval of a new deployment boundary. |
+| 5.3 Data portability | Done | Backup format version 1 with its own migration registry; `exportData()` / `importData()` RPCs. |
+| 6.2 Templates | Done | Brainstorm, retrospective, journey map, architecture sketch. |
+| 6.1, 6.3, 6.4 Comments, images, checkpoints | **Not started** | Blocked on Phase 4 and policy decisions. |
+
+Existing whiteboards keep the code they were created from; only whiteboards created after the deploy get revision 6.
