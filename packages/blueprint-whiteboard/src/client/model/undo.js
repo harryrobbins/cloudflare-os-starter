@@ -67,7 +67,8 @@ export function previousValues(obj, patch) {
       for (const k of Object.keys(/** @type {any} */ (patch).style)) style[k] = /** @type {any} */ (obj.style)[k];
       out.style = style;
     } else {
-      out[key] = o[key] ?? (key === "frameId" ? null : o[key]);
+      // Fields older objects lack read as their defaults, so undo restores "no edits".
+      out[key] = o[key] ?? (key === "frameId" ? null : key === "segments" ? [] : key === "curve" ? null : o[key]);
     }
   }
   return /** @type {ObjectPatch} */ (out);

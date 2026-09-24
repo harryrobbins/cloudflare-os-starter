@@ -15,6 +15,7 @@ import {
   keyboardEdit, straightThroughLines,
 } from "../../src/client/ui/canvas/route-edit.js";
 import { keyAction } from "../../src/client/ui/canvas/keymap.js";
+import { previousValues } from "../../src/client/model/undo.js";
 import { canvasRig } from "../performance/canvas-rig.js";
 
 let seq = 0;
@@ -268,6 +269,11 @@ describe("route edit helpers", () => {
     expect(p.transforms[0]).toMatchObject({ id: "o_000000000001", segments: [1.23, 1_000_000, 5], fromSide: "top", curve: null });
     expect(p.transforms[1].segments).toBeUndefined();
     expect(p.transforms[2].segments).toBeUndefined();
+  });
+
+  it("local undo of a first route edit restores \"no edits\" on connectors without the fields", () => {
+    const old = obj("connector", { from: a.id, to: b.id, routing: "elbow" });
+    expect(previousValues(old, { segments: [10], curve: [0.5, 0.5] })).toEqual({ segments: [], curve: null });
   });
 
   it("E starts route editing; route keys only apply in the route scope", () => {
