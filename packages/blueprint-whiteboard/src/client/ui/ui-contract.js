@@ -27,10 +27,12 @@
 
 /**
  * @typedef {object} CanvasEvents
- * @property {"tool"|"camera"|"selection"|"editing"|"follow"} kind
+ * @property {"tool"|"camera"|"selection"|"editing"|"follow"|"command"} kind
  *   tool: the active tool changed. camera: pan or zoom (fired at most once per animation frame).
  *   selection: the selected ids changed. editing: inline text editing started or stopped.
  *   follow: following stopped or started (the user panning stops it).
+ *   command: a shortcut that belongs to the shell (keymap.js ShellCommand) was pressed on the
+ *   canvas; carries {command}.
  *   The "tool" event also carries {tool, locked}.
  *
  * The canvas element also dispatches a bubbling CustomEvent "wb-contextmenu" with detail
@@ -70,6 +72,11 @@
  *   of the connector is kept. False when nothing changed or the target is not valid
  * @property {() => import("../model/spatial-index.js").SpatialQuery} getSpatialIndex
  *   read-only spatial queries over every object's effective world bounds (culling, minimap)
+ * @property {(ids: string[], opts?: {padding?: number, animate?: boolean}) => boolean} fitObjects
+ *   fits the view to the objects (zooming in or out; animated unless reduced motion is asked for);
+ *   false when none of them exists
+ * @property {() => {x: number, y: number}|null} getPointer  world position of the pointer while it
+ *   is over the canvas, else null
  * @property {(listener: (event: CanvasEvents) => void) => () => void} on
  * @property {() => void} destroy
  */

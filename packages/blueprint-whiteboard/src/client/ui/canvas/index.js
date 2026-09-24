@@ -167,6 +167,8 @@ export function createCanvas(store, options = {}) {
   let lastClick = null;
   /** @type {{sx: number, sy: number, pointerType: string}|null} */
   let hoverPoint = null;
+  /** World position of the pointer while it is over the canvas (paste goes there). @type {{x: number, y: number}|null} */
+  let pointerWorld = null;
   /** The last pointer type pressed on the canvas: sizes handle hit areas. */
   let lastPointerType = "mouse";
   let lastPointerDownAt = -Infinity;
@@ -780,6 +782,7 @@ export function createCanvas(store, options = {}) {
     }
     const p = sample(e);
     if (!exportMode && p.sx >= 0 && p.sy >= 0 && p.sx <= size.w && p.sy <= size.h) {
+      pointerWorld = { x: p.x, y: p.y };
       store.setPresence({ cursor: { x: round2(p.x), y: round2(p.y) } });
     }
     if (ignoredPointers.has(e.pointerId)) return;
@@ -818,6 +821,7 @@ export function createCanvas(store, options = {}) {
 
   function onPointerLeave() {
     hoverPoint = null;
+    pointerWorld = null;
     if (!gesture && !exportMode) store.setPresence({ cursor: null });
   }
 
@@ -960,6 +964,7 @@ export function createCanvas(store, options = {}) {
       case "zoomOut": api.zoomBy(1 / ZOOM_STEP); break;
       case "fit": api.zoomToFit(); break;
       case "zoomReset": api.zoomBy(1 / camera.zoom); break;
+      case "command": emit({ kind: "command", command: action.command }); break;
     }
   }
 
@@ -1199,6 +1204,20 @@ export function createCanvas(store, options = {}) {
       if (!creates.length) return;
       store.createObjects(creates);
       setSelectionInternal(newIds, { announce: true });
+    },
+    getPointer: () => (pointerWorld ? { ...pointerWorld } : null),
+    fitObjects(ids, { padding = 40, animate = true } = {}) {
+      if (!cameraReady) measure();
+      const rects = [];
+      for (const id of ids) {
+        const o = resolve(id);
+        const b = o && boundsOf(o, resolve);
+        if (b) rects.push(b);
+      }
+      const u = unionRects(rects);
+      if (!u) return false;
+      moveCamera(fitRect(u, size.w, size.h, { padding }), { animate });
+      return true;
     },
     focusObjects(ids) {
       if (!cameraReady) measure();

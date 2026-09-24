@@ -16,6 +16,8 @@ import { createOutline } from "./outline.js";
 import { createActivity } from "./activity.js";
 import { showToast, ensureToastHost, closeMenu } from "./dialogs.js";
 import { ConnectionAnnouncer, statusText } from "../sync/connection.js";
+import { keyAction } from "./canvas/keymap.js";
+import { mountShare, SHARE_CSS } from "./share.js";
 
 /** @typedef {import("../store-contract.js").Store} Store */
 /** @typedef {import("../store-contract.js").ClientState} ClientState */
@@ -39,6 +41,8 @@ import { ConnectionAnnouncer, statusText } from "../sync/connection.js";
  * @property {(type: import("../../shared/protocol.js").ObjectType) => Partial<import("../../shared/protocol.js").Style>} toolStyle
  *   colours new objects of `type` get: the last fill / line / text colour chosen for that type
  * @property {(types: Set<string>, colours: Partial<import("../../shared/protocol.js").Style>) => void} rememberStyle
+ * @property {(objs: import("../../shared/protocol.js").WhiteboardObject[]) => {label: string, onSelect: () => void, danger?: boolean, className?: string}[]} [contextItems]
+ *   extra context-menu items (copy, cut, paste, links, present) from ./share.js
  */
 
 /** Gap between announcements of other people's changes. */
@@ -48,7 +52,7 @@ const OWN_HISTORY_WINDOW_MS = 15000;
 
 export function injectStyles() {
   if (document.getElementById("wb-styles")) return;
-  document.head.appendChild(h("style", { id: "wb-styles" }, SHELL_CSS + "\n" + (CANVAS_CSS ?? "")));
+  document.head.appendChild(h("style", { id: "wb-styles" }, SHELL_CSS + "\n" + (CANVAS_CSS ?? "") + "\n" + SHARE_CSS));
 }
 
 /**
@@ -173,6 +177,16 @@ export function mountApp(root, store) {
   appEl.append(canvasHost, styleBar.el, topbar, toolbar.el, toolbar.history, people.el, people.chip, minimap.el, minimap.zoom);
   root.replaceChildren(appEl);
 
+  // Clipboard, backup, templates, help, onboarding, deep links, presentation (./share.js).
+  const share = mountShare(app, { topbar });
+  app.contextItems = share.contextItems;
+  /** @param {string} command a keymap.js ShellCommand */
+  const runCommand = (command) => {
+    if (command === "addMenu") toolbar.openAddMenu();
+    else if (command === "outline") outline.toggle();
+    else share.command(command);
+  };
+
   // ---- canvas events
   canvas.on((event) => {
     switch (event.kind) {
@@ -193,6 +207,9 @@ export function mountApp(root, store) {
       case "follow":
         people.render(uiStore.getState());
         break;
+      case "command":
+        runCommand(/** @type {any} */ (event).command);
+        break;
     }
   });
   // Long-press on touch (and right-click) opens the selection's actions as a menu.
@@ -208,13 +225,11 @@ export function mountApp(root, store) {
     if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
     const t = /** @type {HTMLElement|null} */ (e.target);
     if (t && (t.closest("input, textarea, select, [contenteditable=''], [contenteditable='true']") || t.closest(".modal-scrim"))) return;
-    if (e.shiftKey && (e.key === "O" || e.key === "o")) {
-      e.preventDefault();
-      outline.toggle();
-    } else if (!e.shiftKey && (e.key === "a" || e.key === "A") && !t?.closest(".menu")) {
-      e.preventDefault();
-      toolbar.openAddMenu();
-    }
+    // The shell's commands come from the same table as the canvas's keys (keymap.js).
+    const action = keyAction(e);
+    if (action?.type !== "command" || t?.closest(".menu")) return;
+    e.preventDefault();
+    runCommand(action.command);
   });
 
   // ---- store changes
@@ -332,6 +347,7 @@ export function mountApp(root, store) {
       lastErrorShown = state.lastError;
     }
     if (!state.lastError) lastErrorShown = null;
+    share.onChange(state, change);
   }
 
   const initial = uiStore.getState();
@@ -340,6 +356,7 @@ export function mountApp(root, store) {
   people.render(initial);
   minimap.renderZoom();
   minimap.invalidate();
+  share.render();
   const unsubscribe = uiStore.subscribe(onChange);
 
   // Leave presence promptly when the iframe goes away.
