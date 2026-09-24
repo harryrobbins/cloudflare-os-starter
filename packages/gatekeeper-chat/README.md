@@ -47,7 +47,8 @@ the hibernation callbacks and `alarm`. Everything else is a plain function over 
 | `src/do/channels.ts` | the rail, creation with dm deduplication, settings, join/leave/archive, read cursors |
 | `src/do/messages.ts` | paging, idempotent send, edit, delete, reactions, threads, system messages |
 | `src/do/unread.ts` | the badge summary: three queries, none of which walks a message twice |
-| `src/do/search.ts` | the qualifier parser, the escaped FTS5 MATCH string, the membership filter |
+| `src/do/search.ts` | the qualifier parser, the escaped FTS5 MATCH string, the membership filter, omni-search fusion |
+| `src/do/search-sync.ts` | the omni-search outbox, its backfill and the document mapping (see [Omni-search](#omni-search)) |
 | `src/do/files.ts` | the streaming byte cap, magic-number sniffing, the attach, the sweep |
 | `src/do/sockets.ts` | accept, fan-out, the four commands, presence |
 | `src/do/limits.ts` | per-user budgets in SQLite (messages, uploads, searches, questions to the Agent), and the typing throttle in memory |
@@ -404,6 +405,46 @@ between two Workers that already exist, and chat then deploys first (as it alway
 once creates it) and an AI model configured in it (the providers page, or a deployment catalog model
 chosen as preferred). Until then their question fails with the Workshop's own message saying which is
 missing, and Retry works once it is fixed.
+
+## Omni-search
+
+Phase 1 of [docs/plans/omni-search.md](../../docs/plans/omni-search.md). All of it is behind one
+optional service binding, `SEARCH`, to the search Worker's `SearchService` entrypoint with
+`props: { source: "chat" }`. Without it chat behaves exactly as before: no outbox rows, no backfill,
+lexical search only. The contract shapes chat uses are copied into `src/search-client.ts`; the source
+of truth is `packages/gatekeeper-search/src/shared/contract.ts`.
+
+**Pushing.** Every write that changes what search should know queues a *reference* in the object's own
+SQLite (`search_outbox`, migration 4), in the same code path as the write: messages on send, reply,
+edit, delete and system notices; channels on create, rename, topic, archive and for any non-public
+membership change (create, DM/group creation, implicit join, leave). The alarm the upload sweep and
+the agent outbox already share flushes it in `ingest()` batches of at most 100 documents, reading each
+row as it is at flush time, so an edit storm is one push and a deleted message becomes a delete. A
+failing search backs off (5 s, 20 s, 1 min, 3 min, then every 10 min) and retries the same rows; a
+batch search refuses as invalid input is dropped and counted. A user's write never waits on search.
+
+**Mapping.** One document per message: `chat:<messageId>`, kind `message`, title `#channel · Author`
+(participants' names for a DM or group), the permalink as `url`, scope `chat:<channelId>`, the text
+plus attachment file names as `body`. A public channel is `vis: "all"` with no principals; anything
+else is `vis: "scoped"` and its principals are *replaced* with the member ids whenever membership may
+have changed. A channel whose row is gone is sent as `dropScopes`. A rename re-titles every message
+in the channel. A changed display name does not re-title old messages until they are next pushed.
+
+**Backfill.** The first request with `SEARCH` bound queues the whole corpus -- channels, then messages
+by rowid -- a page at a time while the outbox is short, with the cursor in `search_sync`, so an
+eviction resumes where it stopped. An admin restarts it with `POST /gatekeeper/chat/api/admin/search-reindex`
+and reads the outbox and backfill state with `GET` on the same path.
+
+**Fusion.** A search with free text calls `denseRecall()` (1.5 s timeout) over the channels the caller
+may search, after `in:`, alongside the FTS5 query, and fuses the two with reciprocal rank fusion
+(k = 60): the top 100 lexical hits plus the dense hits, then the rest in lexical order, so offset paging
+stays stable. A dense hit survives only if its message passes the same `WHERE` the lexical query uses
+(visible channel, not deleted, every qualifier), so chat's ACL stays the authority. A dense-only hit
+gets a plain snippet with no marks. `SearchHit.score` becomes the negated fused score (still lower is
+better). Any failure, timeout or non-`ok` status, and every qualifier-only search, is lexical only.
+
+**Tests.** `__tests__/omni-search/` runs as its own vitest project with `SEARCH` bound to a mock
+(`__tests__/aux/search-service.js`); every other suite runs with no binding.
 
 ## Agent access
 

@@ -17,6 +17,7 @@ import { GENERAL_CHANNEL_ID, type ChannelId, type UserId } from "../shared/proto
 import { allow, firstRow, placeholders, refuse, type Ctx, type Outcome } from "./context.js";
 import { hashId, logDenial } from "./logs.js";
 import type { ChannelRow, CountRow, MembershipRow } from "./rows.js";
+import { queueSearchChannel } from "./search-sync.js";
 
 export interface ChannelAccess {
   readonly channel: ChannelRow;
@@ -85,6 +86,9 @@ export function joinChannelRow(ctx: Ctx, channel: ChannelRow, userId: UserId): v
     ctx.now(),
     channel.last_seq,
   );
+  // Omni-search principals mirror membership for everything but a public channel, which is
+  // `vis: "all"` and has none.
+  if (channel.kind !== "public") queueSearchChannel(ctx, channel.id);
 }
 
 /** Channel ids the caller may search and browse: every public channel plus their own memberships. */

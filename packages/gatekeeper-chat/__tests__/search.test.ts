@@ -5,11 +5,12 @@ import {
   GENERAL_CHANNEL_ID,
   type ChannelResponse,
   type SearchResult,
+  type SearchSyncStatus,
   type SendMessageResponse,
 } from "../src/shared/protocol.js";
 import { apiPath } from "../src/shared/routes.js";
 import { mentionToken } from "../src/shared/validate.js";
-import { client, freshWorkspace, identity, type Client } from "./helpers.js";
+import { ADMIN_IDENTITY, client, freshWorkspace, identity, type Client } from "./helpers.js";
 
 function searchPath(q: string, extra = ""): string {
   return `${apiPath("search")}?q=${encodeURIComponent(q)}${extra}`;
@@ -218,5 +219,17 @@ describe("the top section and paging", () => {
     expect(await alice.error("GET", searchPath("repeated", "&cursor=nonsense"))).toMatchObject({
       status: 400,
     });
+  });
+});
+
+describe("omni-search off", () => {
+  it("reports search sync as disabled to an admin and refuses a reindex", async () => {
+    const workspace = freshWorkspace("search-admin-off");
+    const admin = client(workspace, ADMIN_IDENTITY);
+    const alice = client(workspace, identity("alice", "Alice"));
+    const status = await admin.get<SearchSyncStatus>(apiPath("searchIndexStatus"));
+    expect(status).toMatchObject({ enabled: false, backfill: { phase: null }, outbox: { messages: 0, channels: 0 } });
+    expect(await admin.error("POST", apiPath("searchReindex"))).toMatchObject({ status: 409, code: "conflict" });
+    expect(await alice.error("GET", apiPath("searchIndexStatus"))).toMatchObject({ status: 403, code: "forbidden" });
   });
 });

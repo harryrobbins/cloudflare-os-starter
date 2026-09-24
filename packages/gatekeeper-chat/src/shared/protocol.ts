@@ -578,9 +578,17 @@ export interface SearchQuery {
 export interface SearchHit {
   readonly message: Message;
   readonly channelId: ChannelId;
-  /** FTS5 `snippet()` output, with the marks the client's renderer expects. */
+  /**
+   * FTS5 `snippet()` output, with the marks the client's renderer expects: raw text whose only markup
+   * is `<mark>`/`</mark>`, which the client escapes around. A hit only omni-search's dense recall
+   * found has no marks -- just the opening of the message, with any literal mark tags removed.
+   */
   readonly snippet: string;
-  /** FTS5 `bm25()`; lower is a better match. */
+  /**
+   * Lower is a better match, in either mode. Lexical only: FTS5 `bm25()` (0 for a qualifier-only
+   * search). With omni-search fusion: the negated reciprocal-rank-fusion score, so still lower-is-
+   * better, but not comparable with a `bm25()` value.
+   */
   readonly score: number;
   /** The thread root when the hit is a reply, so the result can show its context. */
   readonly root: Message | null;
@@ -594,6 +602,40 @@ export interface SearchResult {
   readonly channels: readonly Channel[];
   readonly users: readonly User[];
   readonly cursor: string | null;
+}
+
+/**
+ * `GET /api/admin/search-reindex` (and the answer to `POST`, which restarts the backfill): the
+ * omni-search outbox and backfill, for admins only. See src/do/search-sync.ts.
+ */
+export interface SearchSyncStatus {
+  /** False when the deployment has no SEARCH binding; the rest is then as last recorded. */
+  readonly enabled: boolean;
+  readonly outbox: {
+    readonly messages: number;
+    readonly channels: number;
+    readonly oldestQueuedAt: Timestamp | null;
+  };
+  readonly backfill: {
+    /** Null until SEARCH was first seen bound. */
+    readonly phase: "channels" | "messages" | "done" | null;
+    /** The last channel id (channels phase) or messages rowid (messages phase) queued. */
+    readonly cursor: string;
+    /** References queued by this backfill so far. */
+    readonly queued: number;
+    readonly startedAt: Timestamp | null;
+    readonly finishedAt: Timestamp | null;
+  };
+  /** Consecutive failed `ingest()` calls; 0 after a success. */
+  readonly attempts: number;
+  readonly nextAttemptAt: Timestamp | null;
+  readonly lastError: string | null;
+  readonly lastErrorAt: Timestamp | null;
+  readonly lastSuccessAt: Timestamp | null;
+  /** Documents (upserts plus deletes) search has accepted from this object. */
+  readonly pushedDocuments: number;
+  /** Outbox rows discarded because search refused their batch as invalid input. */
+  readonly dropped: number;
 }
 
 // ---------------------------------------------------------------------------

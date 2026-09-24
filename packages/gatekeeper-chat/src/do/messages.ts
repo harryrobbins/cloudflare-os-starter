@@ -53,6 +53,7 @@ import { newMessageId } from "./ids.js";
 import { consume } from "./limits.js";
 import { hashId, logEvent } from "./logs.js";
 import { asMessageKind, toUser, type MessageRow, type UserRow } from "./rows.js";
+import { queueSearchMessage } from "./search-sync.js";
 import { badgeSummary, otherReadCursors, unreadReplies } from "./unread.js";
 import { existingUserIds, loadUsers } from "./users.js";
 
@@ -393,6 +394,9 @@ export async function sendMessage(
         channelId,
         author.id,
       );
+      // Omni-search: a reference in the same transaction, pushed later from the alarm. A no-op when
+      // the deployment has no SEARCH binding.
+      queueSearchMessage(ctx, id);
       inserted = loadMessage(ctx, id)!;
     });
   } catch {
@@ -446,6 +450,7 @@ export function postSystemMessage(ctx: Ctx, channelId: ChannelId, body: string):
       body,
       now,
     );
+    queueSearchMessage(ctx, id);
   });
   const message = hydrateMessage(ctx, loadMessage(ctx, id)!);
   ctx.bus.toChannel(channelId, { t: "msg", message });
@@ -536,6 +541,7 @@ export function editMessage(
     );
     ctx.sql.exec(`DELETE FROM mentions WHERE message_id = ?`, messageId);
     writeMentions(ctx, messageId, mentionIds);
+    queueSearchMessage(ctx, messageId);
   });
 
   const message = hydrateMessage(ctx, loadMessage(ctx, messageId)!);
@@ -577,6 +583,8 @@ export async function deleteMessage(
     // A withdrawn question is not answered: an answer arriving later finds no row and is dropped.
     forgetAgentRequest(ctx, messageId);
     ctx.sql.exec(`DELETE FROM reactions WHERE message_id = ?`, messageId);
+    // Tombstoned or removed, the flush finds nothing left to index and pushes a delete.
+    queueSearchMessage(ctx, messageId);
     if (keepTombstone) {
       ctx.sql.exec(
         `UPDATE messages SET body = '', deleted_at = ?, has_image = 0, has_file = 0, has_link = 0

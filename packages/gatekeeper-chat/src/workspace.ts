@@ -18,9 +18,10 @@ import type { Broadcaster, Ctx } from "./do/context.js";
 import { sweepPending } from "./do/files.js";
 import { logEvent } from "./do/logs.js";
 import { route } from "./do/router.js";
+import { ensureSearchStarted, runSearchOutbox, searchSyncStatus } from "./do/search-sync.js";
 import { createBroadcaster, handleFrame, readAttachment, socketClosed } from "./do/sockets.js";
 import { touchUser } from "./do/users.js";
-import { IDENTITY_HEADER, type ChatIdentity } from "./shared/protocol.js";
+import { IDENTITY_HEADER, type ChatIdentity, type SearchSyncStatus } from "./shared/protocol.js";
 import { isRecord } from "./shared/validate.js";
 
 /**
@@ -36,6 +37,10 @@ export class ChatWorkspace extends DurableObject<ChatEnv> {
   readonly #bus: Broadcaster;
   readonly #ctx: Ctx;
   #outbox: Promise<unknown> = Promise.resolve();
+  #searchRun: Promise<unknown> = Promise.resolve();
+  /** The alarm wake a search write asked for, awaited before the response leaves. */
+  #searchKick: Promise<void> | null = null;
+  #searchChecked = false;
 
   constructor(ctx: DurableObjectState, env: ChatEnv) {
     super(ctx, env);
@@ -55,6 +60,7 @@ export class ChatWorkspace extends DurableObject<ChatEnv> {
       armSweep: () => this.#wakeAt(Date.now() + SWEEP_INTERVAL_MS),
       wakeAt: (at) => this.#wakeAt(at),
       agentGateway: workshopGateway(ctx, env),
+      searchChanged: () => this.#kickSearch(),
     };
   }
 
@@ -66,8 +72,11 @@ export class ChatWorkspace extends DurableObject<ChatEnv> {
       return unauthenticated("The workspace was reached without a verified identity.");
     }
     try {
+      this.#startSearchOnce();
       const user = touchUser(this.#ctx, identity);
-      return await route(this.#ctx, this.ctx, request, new URL(request.url), user, identity);
+      const response = await route(this.#ctx, this.ctx, request, new URL(request.url), user, identity);
+      await this.#settleSearchKick();
+      return response;
     } catch (error) {
       // Anything reaching here is a bug in this object, not a client mistake. The client still gets
       // the one error envelope the contract defines: the runtime's own 500 carries a stack trace, and
@@ -94,14 +103,16 @@ export class ChatWorkspace extends DurableObject<ChatEnv> {
   }
 
   /**
-   * The one alarm, shared by the pending-upload sweep and the agent outbox. Each half says when it
-   * next needs to run; the earlier of the two is set. A throw leaves the runtime to retry the alarm,
-   * which is what a failed outbox write should get.
+   * The one alarm, shared by the pending-upload sweep, the agent outbox and the omni-search outbox.
+   * Each part says when it next needs to run; the earliest is set. A throw leaves the runtime to retry
+   * the alarm, which is what a failed agent outbox write should get -- the search part never throws,
+   * so a search outage cannot cause that retry.
    */
   override async alarm(): Promise<void> {
     const remaining = await sweepPending(this.#ctx);
     const agentNext = await this.#runOutbox();
-    const wakes = [remaining > 0 ? Date.now() + SWEEP_INTERVAL_MS : null, agentNext].filter(
+    const searchNext = await this.#runSearch();
+    const wakes = [remaining > 0 ? Date.now() + SWEEP_INTERVAL_MS : null, agentNext, searchNext].filter(
       (at): at is number => at !== null,
     );
     if (wakes.length > 0) await this.#wakeAt(Math.min(...wakes));
@@ -115,6 +126,58 @@ export class ChatWorkspace extends DurableObject<ChatEnv> {
   /** Test and operations seam: runs the agent outbox now instead of waiting for the alarm. */
   async runAgentOutbox(): Promise<number | null> {
     return this.#runOutbox();
+  }
+
+  /** Test and operations seam: flushes the omni-search outbox now instead of waiting for the alarm. */
+  async runSearchOutbox(): Promise<number | null> {
+    return this.#runSearch();
+  }
+
+  /** Operations seam: the omni-search outbox and backfill state, as `GET /api/admin/search-reindex`. */
+  searchStatus(): SearchSyncStatus {
+    return searchSyncStatus(this.#ctx);
+  }
+
+  /**
+   * One search flush at a time, for the same reason as the agent outbox below: two overlapping runs
+   * would push the same rows twice. Never rejects -- the alarm it shares must not fail because of
+   * search -- so an unexpected bug is logged and retried in a minute.
+   */
+  #runSearch(): Promise<number | null> {
+    const run = this.#searchRun.then(() => runSearchOutbox(this.#ctx));
+    this.#searchRun = run.catch(() => undefined);
+    return run.catch((error: unknown) => {
+      logEvent("chat.search.error", {
+        message: (error instanceof Error ? error.message : String(error)).slice(0, 200),
+      });
+      return Date.now() + 60_000;
+    });
+  }
+
+  /** The first request an instance serves with SEARCH bound starts the backfill if it never ran. */
+  #startSearchOnce(): void {
+    if (this.#searchChecked) return;
+    this.#searchChecked = true;
+    if (ensureSearchStarted(this.#ctx)) this.#kickSearch();
+  }
+
+  /**
+   * Asks for the alarm now, without making the write that queued search work wait for it. The wake
+   * is awaited once the handler is done ({@link #settleSearchKick}) so it is durable before the
+   * response leaves; a failure to set it is harmless, because the next write or alarm sets it again.
+   */
+  #kickSearch(): void {
+    if (this.env.SEARCH === undefined || this.#searchKick !== null) return;
+    const kick: Promise<void> = this.#wakeAt(Date.now())
+      .catch(() => undefined)
+      .finally(() => {
+        if (this.#searchKick === kick) this.#searchKick = null;
+      });
+    this.#searchKick = kick;
+  }
+
+  async #settleSearchKick(): Promise<void> {
+    if (this.#searchKick !== null) await this.#searchKick;
   }
 
   /**
