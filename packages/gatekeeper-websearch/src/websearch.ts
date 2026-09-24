@@ -103,6 +103,20 @@ export function describeWebSearchAccount(): AccountDescription {
 
 class FixedResourceConfigurator extends RpcTarget {}
 
+/**
+ * Refuses a Gatekeeper that was not made for an explicit connection. Before connections were
+ * explicit, the Workshop installed this class in every workspace as an ambient capsule, created
+ * without props; such an instance may still exist until the Workshop retires it, and must stay
+ * inert -- no sessions, and no pending action applied -- whatever the Workshop does.
+ */
+export function assertExplicitConnection(props: unknown): void {
+  let url = (props as { resourceUrl?: unknown } | undefined)?.resourceUrl;
+  if (url !== WEB_RESOURCE.urlPattern) {
+    throw new Error(
+      "Web Search is now connected per workspace. Connect it to this workspace to use it here.");
+  }
+}
+
 /** What the session needs from its Durable Object; narrow so tests can supply a fake. */
 export interface WebSearchBackend {
   gate(request: PendingRequest): Promise<GateDecision>;
@@ -253,6 +267,8 @@ export class WebSearchGatekeeper extends DurableObject<Cloudflare.Env> implement
       url: "websearch://web",
       title: "Web search",
       snippet: "Privacy-gated web search and page fetches.",
+      // Usable only while a gadget binds it or a chat that accepted it still holds it.
+      revocable: true,
       suggestedBindingName: "WEBSEARCH",
       tsType: "WebSearchSession",
     };
@@ -268,6 +284,7 @@ export class WebSearchGatekeeper extends DurableObject<Cloudflare.Env> implement
   }
 
   async startSession(queue: RpcStub<ApprovalQueue>): Promise<WebSearchSession> {
+    assertExplicitConnection(this.ctx.props);
     return new WebSearchSessionImpl(queue.dup(), this);
   }
 
@@ -275,6 +292,7 @@ export class WebSearchGatekeeper extends DurableObject<Cloudflare.Env> implement
   async removeObserver(_id: string): Promise<void> {}
 
   async applyAction(action: number): Promise<void> {
+    assertExplicitConnection(this.ctx.props);
     let row = this.ctx.storage.sql.exec<{ request: string }>("SELECT request FROM pending WHERE action = ?", action).toArray()[0];
     if (!row) throw new Error(`No pending web request #${action}.`);
     let request = JSON.parse(row.request) as PendingRequest;
@@ -437,7 +455,9 @@ export class WebSearchAccount extends WorkerEntrypoint<Cloudflare.Env> implement
   }> {
     parseWebResourceUrl(url);
     // One Gatekeeper per connection, so each workspace keeps its own audit log and approvals.
-    return { class: this.ctx.exports.WebSearchGatekeeper({}), resource: WEB_RESOURCE };
+    return { class: this.ctx.exports.WebSearchGatekeeper({ props: { resourceUrl: WEB_RESOURCE.urlPattern } }),
+      resource: WEB_RESOURCE,
+    };
   }
 
   async startResourceConfigurator(pattern: string): Promise<ResourceConfiguratorFrame> {

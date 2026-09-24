@@ -4,6 +4,7 @@ import CONFIGURATOR_HTML from "../src/configurator-html.js";
 import typesSource from "../src/types.d.ts?raw";
 import TYPES_CODE from "../src/types-code.js";
 import {
+  assertExplicitConnection,
   askJev,
   checkRequest,
   DECISIONS_URL,
@@ -174,7 +175,7 @@ describe("jev connections", () => {
   it("hands out a Gatekeeper only for an explicit connection to its resource", async () => {
     let { instance: account, made } = entrypoint(JevAccount);
     expect(await account.getGatekeeperClassFor("jev://decisions")).toEqual({ class: "JevGatekeeper", resource: JEV_RESOURCE });
-    expect(made).toHaveLength(1);
+    expect(made).toEqual([{ props: { resourceUrl: "jev://decisions" } }]);
     await expect(account.getGatekeeperClassFor("websearch://web")).rejects.toThrow(/one resource/);
     await expect(account.ensureResources(["jev://*"])).rejects.toThrow(/one resource/);
   });
@@ -184,5 +185,14 @@ describe("jev connections", () => {
     expect((await account.startResourceConfigurator("jev://decisions")).iframeHtml).toBe(CONFIGURATOR_HTML);
     expect(CONFIGURATOR_HTML).toContain('data-resource-url="jev://decisions"');
     await expect(account.startResourceConfigurator("websearch://web")).rejects.toThrow(/one resource/);
+  });
+});
+
+describe("gatekeepers from before connections were explicit", () => {
+  it("stay inert: an ambient capsule, created without props, gets no session and applies nothing", () => {
+    expect(() => assertExplicitConnection({})).toThrow(/connected per workspace/);
+    expect(() => assertExplicitConnection(undefined)).toThrow(/connected per workspace/);
+    expect(() => assertExplicitConnection({ resourceUrl: "websearch://web" })).toThrow(/connected per workspace/);
+    expect(() => assertExplicitConnection({ resourceUrl: "jev://decisions" })).not.toThrow();
   });
 });
