@@ -6,7 +6,8 @@
 // A board of `n` objects (n <= LIMITS.objects) mixes, roughly:
 //   frames      1 per 100 objects (at most LIMITS.frames), laid out on a grid, each holding the
 //               objects placed inside it
-//   stickies    55%, some with long text (hundreds of characters)
+//   stickies    50%, some with long text (hundreds of characters)
+//   icons       5%, from the bundled packs, some labelled
 //   rect/ellipse 15%
 //   text        5%, half of them long (up to ~1,500 characters)
 //   pen strokes 10%, 40 to 200 points each
@@ -19,6 +20,7 @@
 import { InMemoryRepository } from "../../src/core/repository.js";
 import { createWhiteboard } from "../../src/core/whiteboard.js";
 import { LIMITS } from "../../src/shared/protocol.js";
+import { allIcons } from "../../src/shared/icons/registry.js";
 
 /** Board sizes the plan asks for. */
 export const SIZES = /** @type {const} */ ([500, 2000, 5000]);
@@ -63,7 +65,8 @@ export function fixtureOps(n, { seed = 1 } = {}) {
   let next = 0;
   const side = Math.ceil(Math.sqrt(total)) * 260;
   /** @type {Record<string, number>} */
-  const counts = { frame: 0, sticky: 0, rect: 0, ellipse: 0, text: 0, pen: 0, connector: 0 };
+  const counts = { frame: 0, sticky: 0, icon: 0, rect: 0, ellipse: 0, text: 0, pen: 0, connector: 0 };
+  const icons = allIcons();
   /** @type {any[]} */
   const frames = [];
   /** @type {any[]} */
@@ -89,7 +92,7 @@ export function fixtureOps(n, { seed = 1 } = {}) {
   for (let i = 0; i < shapeCount; i++) {
     const id = fixtureId(next++);
     const r = rng();
-    const type = r < 0.647 ? "sticky" : r < 0.765 ? "rect" : r < 0.824 ? "ellipse" : r < 0.883 ? "text" : "pen";
+    const type = r < 0.588 ? "sticky" : r < 0.647 ? "icon" : r < 0.765 ? "rect" : r < 0.824 ? "ellipse" : r < 0.883 ? "text" : "pen";
     let x = Math.round(rng() * side), y = Math.round(rng() * side);
     /** @type {string|null} */
     let frameId = null;
@@ -105,6 +108,11 @@ export function fixtureOps(n, { seed = 1 } = {}) {
     if (frameId) object.frameId = frameId;
     if (type === "sticky") object.text = rng() < 0.1 ? sentence(rng, 60) : sentence(rng, 3 + Math.floor(rng() * 8));
     else if (type === "rect" || type === "ellipse") object.text = rng() < 0.5 ? sentence(rng, 2) : "";
+    else if (type === "icon") {
+      const icon = icons[Math.floor(rng() * icons.length)];
+      Object.assign(object, { packId: icon.pack.id, iconId: icon.id, w: 96, h: 96 });
+      if (rng() < 0.3) object.text = sentence(rng, 2);
+    }
     else if (type === "text") {
       object.text = rng() < 0.5 ? sentence(rng, 150 + Math.floor(rng() * 100)) : sentence(rng, 6);
       object.w = 360;

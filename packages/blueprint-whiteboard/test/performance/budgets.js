@@ -4,8 +4,8 @@
 // `node scripts/benchmark.mjs` instead (see baseline.md).
 //
 // Values are the baseline measurements (baseline.md, 2026-09-24) plus headroom. A change that
-// needs a higher number should say why in its commit; phase 3.5 (adaptive presence) is expected
-// to LOWER the presence budgets.
+// needs a higher number should say why in its commit. Presence budgets are for the adaptive
+// client presence session (phase 3.5, src/client/sync/presence.js).
 
 export const BUDGETS = Object.freeze({
   /** Snapshot JSON bytes per fixture size (the board cap, LIMITS.boardBytes, is 8 MiB). */
@@ -33,8 +33,8 @@ export const BUDGETS = Object.freeze({
   },
   presence: {
     /** 50 viewers, 20% moving their pointer: hub deliveries and estimated bytes per second. */
-    active50: { deliveriesPerSecond: 1_700, bytesPerSecond: 11_000_000 },
-    /** 50 idle viewers (heartbeats only). */
-    idle50: { deliveriesPerSecond: 250, bytesPerSecond: 420_000 },
+    active50: { deliveriesPerSecond: 500, bytesPerSecond: 2_000_000 },
+    /** 50 idle viewers (heartbeats only), over 8 s (two heartbeat periods). */
+    idle50: { deliveriesPerSecond: 250, bytesPerSecond: 400_000 },
   },
 });

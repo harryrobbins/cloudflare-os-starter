@@ -1,10 +1,11 @@
 // @ts-check
 // Presence traffic simulation: N viewers on one board, through the real hub (src/core/hub.js) with
-// a simulated clock, counting what crosses the Durable Object boundary. Each viewer behaves like
-// the current client (src/client/sync/store.js): an active viewer (moving its pointer) sends at
-// most one updatePresence per PRESENCE_SEND_MS; every viewer heartbeats every PRESENCE_HEARTBEAT_MS.
-// The hub coalesces, rate-limits and fans out as in production; deliveries settle at once (a fast
-// network), so this is the hub's own cost, not backpressure.
+// a simulated clock, counting what crosses the Durable Object boundary. Each viewer runs the real
+// client presence session (src/client/sync/presence.js: adaptive movement gap by peer count,
+// deduplication, heartbeat skipping, one call in flight); an active viewer's pointer moves at
+// 60 Hz, and every viewer's heartbeat timer fires every PRESENCE_HEARTBEAT_MS. The hub coalesces,
+// rate-limits and fans out as in production; deliveries settle at once (a fast network), so this
+// is the protocol's own cost, not backpressure.
 //
 // Counted (per simulated second, after everyone has joined):
 //   inbound   updatePresence calls into the hub
@@ -12,7 +13,11 @@
 //             (the hub's own presenceBytes estimate of each event's JSON)
 
 import { Hub, presenceBytes } from "../../src/core/hub.js";
-import { PRESENCE_HEARTBEAT_MS, PRESENCE_SEND_MS } from "../../src/shared/protocol.js";
+import { PRESENCE_HEARTBEAT_MS } from "../../src/shared/protocol.js";
+import { createPresenceSession } from "../../src/client/sync/presence.js";
+
+/** Pointer events per second while a viewer moves. */
+const POINTER_HZ = 60;
 
 /**
  * @param {{viewers: number, activeShare?: number, seconds?: number, warmupMs?: number}} opts
@@ -56,23 +61,34 @@ export async function simulatePresence({ viewers, activeShare = 0.2, seconds = 5
     clients.push({ clientId, session });
   }
   const active = activeShare > 0 ? Math.max(1, Math.round(viewers * activeShare)) : 0;
+  const clock = { ...timers, now: () => now };
   clients.forEach((c, i) => {
     const vp = { x: i * 50, y: 0, w: 1400, h: 900 };
-    const send = (/** @type {any} */ fields) => {
-      if (measuring) counters.inbound++;
-      hub.updatePresence({ clientId: c.clientId, session: c.session, ...fields });
-    };
-    // Heartbeat, staggered.
-    const beat = () => { send({}); push(now + PRESENCE_HEARTBEAT_MS, beat); };
+    const session = createPresenceSession({
+      timers: clock,
+      call: async (payload) => {
+        if (measuring) counters.inbound++;
+        return hub.updatePresence(payload);
+      },
+      identity: () => ({ clientId: c.clientId, session: c.session, name: `Viewer ${i + 1}`, color: "#2563eb" }),
+      canSend: () => true,
+      generation: () => 0,
+      onResult: () => true,
+      onDead: () => {},
+    });
+    session.setPeerCount(viewers - 1);
+    session.set({ viewport: vp });
+    // Heartbeat timer, staggered.
+    const beat = () => { session.heartbeat(); push(now + PRESENCE_HEARTBEAT_MS, beat); };
     push((i * 997) % PRESENCE_HEARTBEAT_MS, beat);
     if (i < active) {
       let step = 0;
       const move = () => {
         step++;
-        send({ cursor: { x: vp.x + (step * 7) % vp.w, y: vp.y + (step * 5) % vp.h }, viewport: vp });
-        push(now + PRESENCE_SEND_MS, move);
+        session.set({ cursor: { x: vp.x + (step * 7) % vp.w, y: vp.y + (step * 5) % vp.h } });
+        push(now + 1000 / POINTER_HZ, move);
       };
-      push(i % PRESENCE_SEND_MS, move);
+      push(i % 16, move);
     }
   });
   push(warmupMs, () => { measuring = true; });

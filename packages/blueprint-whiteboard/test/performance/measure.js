@@ -161,6 +161,12 @@ export async function canvasMetrics(objects, side, { timings = false } = {}) {
     rig.setCamera(fit);
     const atFit = { groups: rig.groups(), elements: rig.nodes() };
     rig.setCamera(middle);
+    // A remote single-object update in view.
+    const before = globalThis.window.__wbRenderStats.objectRenders;
+    const inView = rig.canvas.getSpatialIndex().query(rig.canvas.getViewport()).find((id) => objects[id].type === "sticky")
+      ?? rig.canvas.getSpatialIndex().query(rig.canvas.getViewport()).find((id) => objects[id].type !== "connector");
+    if (inView) rig.store.updateObjects([{ id: inView, patch: { x: objects[inView].x + 1 } }]);
+    const updateRenders = globalThis.window.__wbRenderStats.objectRenders - before;
     // Pan sweep: 60 steps of 150 screen px at 100%.
     const inserts0 = rig.dom.document.inserts;
     const created0 = rig.dom.document.created;
@@ -173,11 +179,6 @@ export async function canvasMetrics(objects, side, { timings = false } = {}) {
       maxGroups = Math.max(maxGroups, rig.groups());
     }
     const panMs = panTotal / 60;
-    // A remote single-object update in view.
-    const before = globalThis.window.__wbRenderStats.objectRenders;
-    const inView = rig.canvas.getSpatialIndex().query(rig.canvas.getViewport()).find((id) => objects[id].type === "sticky");
-    if (inView) rig.store.updateObjects([{ id: inView, patch: { x: objects[inView].x + 1 } }]);
-    const updateRenders = globalThis.window.__wbRenderStats.objectRenders - before;
     rig.destroy();
     out[label] = {
       zoom1, atFit, pan: { maxGroups, elementsCreatedPerStep: r3((rig.dom.document.created - created0) / 60), insertsPerStep: r3((rig.dom.document.inserts - inserts0) / 60) },
@@ -192,7 +193,7 @@ export async function canvasMetrics(objects, side, { timings = false } = {}) {
  * Presence traffic for 1, 10, 50 and 200 viewers, idle and with 20% moving their pointer.
  * @param {number[]} [counts] @param {number} [seconds]
  */
-export async function presenceMetrics(counts = [1, 10, 50, 200], seconds = 5) {
+export async function presenceMetrics(counts = [1, 10, 50, 200], seconds = 8) {
   const out = [];
   for (const viewers of counts) {
     for (const activeShare of [0, 0.2]) out.push(await simulatePresence({ viewers, activeShare, seconds }));

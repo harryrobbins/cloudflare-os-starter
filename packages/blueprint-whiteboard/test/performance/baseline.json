@@ -1,0 +1,464 @@
+{
+  "generatedAt": "2026-09-24T00:41:15.273Z",
+  "environment": {
+    "node": "v24.21.0",
+    "platform": "linux x64",
+    "cpus": 11,
+    "cpu": "Intel(R) Core(TM) Ultra 7 155H"
+  },
+  "sizes": {
+    "500": {
+      "objects": 500,
+      "composition": {
+        "frame": 5,
+        "sticky": 257,
+        "icon": 24,
+        "rect": 50,
+        "ellipse": 23,
+        "text": 29,
+        "pen": 38,
+        "connector": 74
+      },
+      "snapshot": {
+        "bytes": 296714,
+        "objects": 500,
+        "stringifyMs": {
+          "median": 1.499,
+          "p95": 1.893
+        },
+        "parseMs": {
+          "median": 1.085,
+          "p95": 2.118
+        },
+        "structuredCloneMs": {
+          "median": 2.905,
+          "p95": 3.364
+        }
+      },
+      "model": {
+        "indexed": 500,
+        "cells": 498,
+        "large": 0,
+        "indexBuildMs": {
+          "median": 1.327,
+          "p95": 2.826
+        },
+        "sortMs": {
+          "median": 0.032,
+          "p95": 0.062
+        }
+      },
+      "queries": {
+        "hitMismatches": 0,
+        "hitScannedPerQuery": 3.147,
+        "viewportScannedPerQuery": 25.52,
+        "viewportFoundPerQuery": 18.67,
+        "bruteScannedPerQuery": 500,
+        "hitIndexedUs": 1.477,
+        "hitBruteUs": 91.07,
+        "viewportQueryUs": 4.04
+      },
+      "canvas": {
+        "culled": {
+          "zoom1": {
+            "groups": 84,
+            "elements": 714
+          },
+          "atFit": {
+            "groups": 500,
+            "elements": 3909
+          },
+          "pan": {
+            "maxGroups": 88,
+            "elementsCreatedPerStep": 6.117,
+            "insertsPerStep": 6.933,
+            "msPerStep": 0.064
+          },
+          "remoteUpdateRenders": 1,
+          "buildMs": 15.69
+        },
+        "unculled": {
+          "zoom1": {
+            "groups": 500,
+            "elements": 3909
+          },
+          "atFit": {
+            "groups": 500,
+            "elements": 3909
+          },
+          "pan": {
+            "maxGroups": 500,
+            "elementsCreatedPerStep": 0,
+            "insertsPerStep": 0,
+            "msPerStep": 0.024
+          },
+          "remoteUpdateRenders": 1,
+          "buildMs": 32.399
+        }
+      },
+      "load": {
+        "coldMs": {
+          "median": 11.328,
+          "p95": 12.226
+        },
+        "warmMs": {
+          "median": 2.844,
+          "p95": 4.753
+        }
+      },
+      "ops": {
+        "single": {
+          "median": 0.163,
+          "p95": 0.277
+        },
+        "hundred": {
+          "median": 5.065,
+          "p95": 7.975
+        }
+      }
+    },
+    "2000": {
+      "objects": 2000,
+      "composition": {
+        "frame": 20,
+        "sticky": 1044,
+        "icon": 86,
+        "rect": 181,
+        "ellipse": 101,
+        "text": 93,
+        "pen": 178,
+        "connector": 297
+      },
+      "snapshot": {
+        "bytes": 1209848,
+        "objects": 2000,
+        "stringifyMs": {
+          "median": 7.786,
+          "p95": 7.803
+        },
+        "parseMs": {
+          "median": 5.125,
+          "p95": 11.793
+        },
+        "structuredCloneMs": {
+          "median": 11.332,
+          "p95": 17.156
+        }
+      },
+      "model": {
+        "indexed": 2000,
+        "cells": 1943,
+        "large": 0,
+        "indexBuildMs": {
+          "median": 2.674,
+          "p95": 9.381
+        },
+        "sortMs": {
+          "median": 0.401,
+          "p95": 1.23
+        }
+      },
+      "queries": {
+        "hitMismatches": 0,
+        "hitScannedPerQuery": 3.568,
+        "viewportScannedPerQuery": 33.31,
+        "viewportFoundPerQuery": 23.17,
+        "bruteScannedPerQuery": 2000,
+        "hitIndexedUs": 1.195,
+        "hitBruteUs": 337.325,
+        "viewportQueryUs": 9.89
+      },
+      "canvas": {
+        "culled": {
+          "zoom1": {
+            "groups": 99,
+            "elements": 668
+          },
+          "atFit": {
+            "groups": 2000,
+            "elements": 14798
+          },
+          "pan": {
+            "maxGroups": 119,
+            "elementsCreatedPerStep": 23.283,
+            "insertsPerStep": 26.533,
+            "msPerStep": 0.212
+          },
+          "remoteUpdateRenders": 1,
+          "buildMs": 19.316
+        },
+        "unculled": {
+          "zoom1": {
+            "groups": 2000,
+            "elements": 14798
+          },
+          "atFit": {
+            "groups": 2000,
+            "elements": 14798
+          },
+          "pan": {
+            "maxGroups": 2000,
+            "elementsCreatedPerStep": 0,
+            "insertsPerStep": 0,
+            "msPerStep": 0.07
+          },
+          "remoteUpdateRenders": 1,
+          "buildMs": 88.403
+        }
+      },
+      "load": {
+        "coldMs": {
+          "median": 43.832,
+          "p95": 47.496
+        },
+        "warmMs": {
+          "median": 13.325,
+          "p95": 14.079
+        }
+      },
+      "ops": {
+        "single": {
+          "median": 0.499,
+          "p95": 5.123
+        },
+        "hundred": {
+          "median": 4.812,
+          "p95": 6.156
+        }
+      }
+    },
+    "5000": {
+      "objects": 5000,
+      "composition": {
+        "frame": 50,
+        "sticky": 2529,
+        "icon": 234,
+        "rect": 478,
+        "ellipse": 251,
+        "text": 223,
+        "pen": 492,
+        "connector": 743
+      },
+      "snapshot": {
+        "bytes": 3072175,
+        "objects": 5000,
+        "stringifyMs": {
+          "median": 17.094,
+          "p95": 18.464
+        },
+        "parseMs": {
+          "median": 12.989,
+          "p95": 14.915
+        },
+        "structuredCloneMs": {
+          "median": 32.869,
+          "p95": 36.38
+        }
+      },
+      "model": {
+        "indexed": 5000,
+        "cells": 4713,
+        "large": 0,
+        "indexBuildMs": {
+          "median": 8.688,
+          "p95": 9.392
+        },
+        "sortMs": {
+          "median": 1.594,
+          "p95": 7.321
+        }
+      },
+      "queries": {
+        "hitMismatches": 0,
+        "hitScannedPerQuery": 3.448,
+        "viewportScannedPerQuery": 31.17,
+        "viewportFoundPerQuery": 22.1,
+        "bruteScannedPerQuery": 5000,
+        "hitIndexedUs": 2.026,
+        "hitBruteUs": 841.265,
+        "viewportQueryUs": 9.86
+      },
+      "canvas": {
+        "culled": {
+          "zoom1": {
+            "groups": 96,
+            "elements": 734
+          },
+          "atFit": {
+            "groups": 5000,
+            "elements": 36863
+          },
+          "pan": {
+            "maxGroups": 153,
+            "elementsCreatedPerStep": 46.633,
+            "insertsPerStep": 52.75,
+            "msPerStep": 0.408
+          },
+          "remoteUpdateRenders": 1,
+          "buildMs": 47.452
+        },
+        "unculled": {
+          "zoom1": {
+            "groups": 5000,
+            "elements": 36863
+          },
+          "atFit": {
+            "groups": 5000,
+            "elements": 36863
+          },
+          "pan": {
+            "maxGroups": 5000,
+            "elementsCreatedPerStep": 0,
+            "insertsPerStep": 0,
+            "msPerStep": 0.078
+          },
+          "remoteUpdateRenders": 1,
+          "buildMs": 219.123
+        }
+      },
+      "load": {
+        "coldMs": {
+          "median": 108.665,
+          "p95": 111.677
+        },
+        "warmMs": {
+          "median": 32.322,
+          "p95": 36.644
+        }
+      },
+      "ops": {
+        "single": {
+          "median": 1.18,
+          "p95": 1.612
+        },
+        "hundred": {
+          "median": 4.847,
+          "p95": 8.672
+        }
+      }
+    }
+  },
+  "presence": [
+    {
+      "viewers": 1,
+      "active": 0,
+      "seconds": 8,
+      "inboundPerSecond": 0.3,
+      "deliveriesPerSecond": 0,
+      "eventsPerSecond": 0,
+      "bytesPerSecond": 0,
+      "perViewer": {
+        "deliveriesPerSecond": 0,
+        "bytesPerSecond": 0
+      },
+      "maxEventsPerDelivery": 0,
+      "warmupEvents": 0
+    },
+    {
+      "viewers": 1,
+      "active": 1,
+      "seconds": 8,
+      "inboundPerSecond": 20.1,
+      "deliveriesPerSecond": 0,
+      "eventsPerSecond": 0,
+      "bytesPerSecond": 0,
+      "perViewer": {
+        "deliveriesPerSecond": 0,
+        "bytesPerSecond": 0
+      },
+      "maxEventsPerDelivery": 0,
+      "warmupEvents": 0
+    },
+    {
+      "viewers": 10,
+      "active": 0,
+      "seconds": 8,
+      "inboundPerSecond": 2.3,
+      "deliveriesPerSecond": 7.5,
+      "eventsPerSecond": 16.9,
+      "bytesPerSecond": 10800,
+      "perViewer": {
+        "deliveriesPerSecond": 0.8,
+        "bytesPerSecond": 1080
+      },
+      "maxEventsPerDelivery": 3,
+      "warmupEvents": 90
+    },
+    {
+      "viewers": 10,
+      "active": 2,
+      "seconds": 8,
+      "inboundPerSecond": 41.9,
+      "deliveriesPerSecond": 200,
+      "eventsPerSecond": 374.6,
+      "bytesPerSecond": 239760,
+      "perViewer": {
+        "deliveriesPerSecond": 20,
+        "bytesPerSecond": 23976
+      },
+      "maxEventsPerDelivery": 3,
+      "warmupEvents": 432
+    },
+    {
+      "viewers": 50,
+      "active": 0,
+      "seconds": 8,
+      "inboundPerSecond": 11,
+      "deliveriesPerSecond": 193.4,
+      "eventsPerSecond": 532.9,
+      "bytesPerSecond": 341040,
+      "perViewer": {
+        "deliveriesPerSecond": 3.9,
+        "bytesPerSecond": 6821
+      },
+      "maxEventsPerDelivery": 3,
+      "warmupEvents": 2450
+    },
+    {
+      "viewers": 50,
+      "active": 10,
+      "seconds": 8,
+      "inboundPerSecond": 58.9,
+      "deliveriesPerSecond": 424.3,
+      "eventsPerSecond": 2878.8,
+      "bytesPerSecond": 1842400,
+      "perViewer": {
+        "deliveriesPerSecond": 8.5,
+        "bytesPerSecond": 36848
+      },
+      "maxEventsPerDelivery": 10,
+      "warmupEvents": 4410
+    },
+    {
+      "viewers": 200,
+      "active": 0,
+      "seconds": 8,
+      "inboundPerSecond": 43.8,
+      "deliveriesPerSecond": 2950,
+      "eventsPerSecond": 8656.5,
+      "bytesPerSecond": 5540160,
+      "perViewer": {
+        "deliveriesPerSecond": 14.8,
+        "bytesPerSecond": 27701
+      },
+      "maxEventsPerDelivery": 3,
+      "warmupEvents": 39800
+    },
+    {
+      "viewers": 200,
+      "active": 40,
+      "seconds": 8,
+      "inboundPerSecond": 135,
+      "deliveriesPerSecond": 2674.4,
+      "eventsPerSecond": 26865,
+      "bytesPerSecond": 17193600,
+      "perViewer": {
+        "deliveriesPerSecond": 13.4,
+        "bytesPerSecond": 85968
+      },
+      "maxEventsPerDelivery": 43,
+      "warmupEvents": 55720
+    }
+  ],
+  "durationMs": 11478
+}

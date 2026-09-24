@@ -19,7 +19,7 @@ describe("fixtures", () => {
     expect(JSON.stringify(fixtureOps(2000, { seed: 2 }).ops)).not.toBe(a);
     const { snapshot, counts } = await buildFixture(500);
     expect(Object.keys(snapshot.objects)).toHaveLength(500);
-    for (const type of ["frame", "sticky", "rect", "ellipse", "text", "pen", "connector"]) expect(counts[type]).toBeGreaterThan(0);
+    for (const type of ["frame", "sticky", "icon", "rect", "ellipse", "text", "pen", "connector"]) expect(counts[type]).toBeGreaterThan(0);
     const texts = Object.values(snapshot.objects).map((o) => o.text.length);
     expect(Math.max(...texts)).toBeGreaterThan(800); // long text
     const pens = Object.values(snapshot.objects).filter((o) => o.type === "pen");
@@ -50,6 +50,7 @@ describe.each(SIZES)("%i objects", (n) => {
     expect(c.culled.zoom1.elements).toBeLessThanOrEqual(BUDGETS.canvas.elementsAtZoom1);
     expect(c.culled.pan.maxGroups).toBeLessThanOrEqual(BUDGETS.canvas.panMaxGroups);
     expect(c.culled.remoteUpdateRenders).toBeLessThanOrEqual(BUDGETS.canvas.remoteUpdateRenders);
+    expect(c.culled.remoteUpdateRenders).toBeGreaterThanOrEqual(1);
     // Fit to content shows everything: culling must not drop anything there.
     expect(c.culled.atFit.groups).toBe(n);
     // Without culling every object is in the DOM at any zoom.

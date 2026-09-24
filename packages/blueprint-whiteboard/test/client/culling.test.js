@@ -9,6 +9,7 @@ import { rectsIntersect } from "../../src/shared/geometry.js";
 import { SpatialIndex } from "../../src/client/model/spatial-index.js";
 import { Culler, connectorsOf, expandRect, OVERSCAN, MIN_OBJECTS } from "../../src/client/ui/canvas/culling.js";
 import { viewportOf } from "../../src/client/ui/canvas/camera.js";
+import { allIcons } from "../../src/shared/icons/registry.js";
 import { canvasRig } from "../performance/canvas-rig.js";
 import { simpleObjects, fixtureId } from "../performance/fixtures.js";
 
@@ -178,6 +179,14 @@ describe("canvas culling", () => {
     const before = window.__wbRenderStats.objectRenders;
     rig.store.updateObjects([{ id: Object.keys(objects)[60], patch: { text: "x" } }]);
     expect(window.__wbRenderStats.objectRenders).toBe(before);
+  });
+
+  it("culls icons like any other box object", () => {
+    const [first] = allIcons();
+    const near = obj("icon", { x: 300, y: 300, w: 96, h: 96, packId: first.pack.id, iconId: first.id });
+    const far = obj("icon", { x: 150_000, y: 150_000, w: 96, h: 96, packId: first.pack.id, iconId: first.id });
+    rig = canvasRig({ ...offscreen(), [near.id]: near, [far.id]: far });
+    expect(rig.renderedIds()).toEqual(new Set([near.id]));
   });
 
   it("keeps small boards and export mode fully rendered", () => {
