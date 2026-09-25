@@ -57,5 +57,11 @@ export default defineConfig({
     include: ["__tests__/workerd/*.test.ts"],
     globalSetup: ["./__tests__/workerd-teardown.ts"],
     testTimeout: 30_000,
+    // postgres.js's workerd socket read loop rejects with "Stream was cancelled." when a test's
+    // facet is torn down while its Hyperdrive connection is still open. Every assertion has already
+    // run by then; only that teardown artefact is ignored, and any other unhandled error still fails.
+    onUnhandledError(error) {
+      return !(error.message === "Stream was cancelled." && error.stack?.includes("/postgres/cf/polyfills.js"));
+    },
   },
 });
