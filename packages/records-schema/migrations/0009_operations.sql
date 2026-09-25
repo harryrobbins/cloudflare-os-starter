@@ -14,7 +14,7 @@
 -- The journal's append-only trigger (0003) exempted the table owner outright. It is tightened here:
 -- the owner may still DELETE and TRUNCATE (partition maintenance and retention), but an UPDATE is
 -- refused to every role, the owner included, unless it runs inside records_ops.redact, which sets
--- `records.journal_redaction` for its own duration, and changes only `after` and `before`. Any role
+-- `records.journal_redaction` around its journal UPDATE, and changes only `after` and `before`. Any role
 -- can set that setting; it only matters for the owner, who could drop the trigger anyway. The
 -- guard stops accidents and every non-owner path, not a malicious owner.
 
@@ -132,7 +132,7 @@ CREATE FUNCTION records_ops.redact(
   p_datastore uuid, p_entity_type text, p_entity_id uuid, p_fields text[], p_reason text, p_actor uuid,
   p_marker text DEFAULT '[redacted]'
 ) RETURNS TABLE (seq bigint, journal_entries int, idempotency_rows int)
-  LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, records SET records.journal_redaction = 'on' AS $$
+  LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, records AS $$
 #variable_conflict use_column
 DECLARE
   v_allowed text[] := records_ops.redactable_fields(p_entity_type);
@@ -176,13 +176,17 @@ BEGIN
     RAISE EXCEPTION 'no % % in datastore %', p_entity_type, p_entity_id, p_datastore USING ERRCODE = 'no_data_found';
   END IF;
 
-  -- Past entries first, so the redact entry written below is not itself rewritten.
+  -- Past entries first, so the redact entry written below is not itself rewritten. The trigger's
+  -- exemption is switched on around this one statement: set_config, not a function-level SET clause,
+  -- because attaching a custom setting to a function needs superuser on managed Postgres (Neon).
+  PERFORM set_config('records.journal_redaction', 'on', true);
   UPDATE records.journal j
      SET after = records_ops.mask_keys(j.after, v_fields, p_marker),
          before = CASE WHEN j.before IS NULL THEN NULL ELSE records_ops.mask_keys(j.before, v_fields, p_marker) END
    WHERE j.datastore_id = p_datastore AND j.entity_id = p_entity_id
      AND (j.after ?| v_fields OR coalesce(j.before ?| v_fields, false));
   GET DIAGNOSTICS v_entries = ROW_COUNT;
+  PERFORM set_config('records.journal_redaction', 'off', true);
 
   UPDATE records.idempotency_keys k
      SET outcome = records_ops.mask_record(k.outcome, p_entity_id::text, v_fields, p_marker)

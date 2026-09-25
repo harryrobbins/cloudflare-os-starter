@@ -14,6 +14,19 @@ import postgres from "postgres";
 
 import { migrate } from "./migrate.ts";
 
+// embedded-postgres registers async-exit-hook, which answers `beforeExit` with process.exit(0). vitest
+// reports a failed run through process.exitCode, so that call turned every failing suite in a process
+// that loads this module into exit 0, and `pnpm check` passed over it. Remember a failure code at
+// `beforeExit` and put it back on `exit`: Node exits with process.exitCode as the `exit` listeners
+// leave it. __tests__/exit-code.test.ts holds this.
+let failureExitCode: number | undefined;
+process.on("beforeExit", () => {
+  if (process.exitCode) failureExitCode ??= Number(process.exitCode);
+});
+process.on("exit", () => {
+  if (failureExitCode && !process.exitCode) process.exitCode = failureExitCode;
+});
+
 export const TEST_PASSWORD = "records-test-only";
 
 async function freePort(): Promise<number> {

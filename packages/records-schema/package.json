@@ -15,6 +15,7 @@
     "test:run": "vitest run",
     "db:status": "node src/cli.ts status",
     "db:migrate": "node src/cli.ts migrate",
+    "db:migrate:bastion": "scripts/migrate-via-bastion.sh",
     "db:manifest": "node src/cli.ts manifest",
     "db:bootstrap": "node src/cli.ts bootstrap"
   },
