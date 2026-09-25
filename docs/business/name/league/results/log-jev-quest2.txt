@@ -1,0 +1,26 @@
+round 1: 100 new; best new Caveat beats Countermand 55%; top-10 new 50%; all new 33%; leader Caveat; flips 12%; $0.133
+round 2: 74 new; best new Precept beats Countermand 58%; top-10 new 51%; all new 33%; leader Precept; flips 11%; $0.228
+round 3: 60 new; best new Permissa beats Countermand 54%; top-10 new 51%; all new 34%; leader Precept; flips 12%; $0.304
+round 4: 48 new; best new Binnacle beats Countermand 53%; top-10 new 46%; all new 32%; leader Precept; flips 11%; $0.407
+round 5: 38 new; best new Cautela beats Countermand 52%; top-10 new 46%; all new 33%; leader Precept; flips 10%; $0.503
+top 20:
+  Precept                      beats Countermand 57%  r2  British legal, constitutional or parliam
+  Phylax                       beats Countermand 54%  r2  Latin or Greek borrowings
+  Tutela                       beats Countermand 54%  r2  Latin or Greek borrowings
+  Permissa                     beats Countermand 54%  r3  coined words (invented, pronounceable, w
+  Mandatum                     beats Countermand 53%  r1  Latin or Greek borrowings
+  Signet                       beats Countermand 53%  r3  heraldry, guild and craft vocabulary
+  Caveat                       beats Countermand 53%  r1  British legal, constitutional or parliam
+  Wardence                     beats Countermand 53%  r3  coined words (invented, pronounceable, w
+  Binnacle                     beats Countermand 52%  r4  nautical and navigation terms
+  Selden                       beats Countermand 52%  r1  places, people or events from British hi
+  Helm                         beats Countermand 52%  r3  nautical and navigation terms
+  Cautela                      beats Countermand 52%  r5  Latin or Greek borrowings
+  Custos                       beats Countermand 51%  r3  Latin or Greek borrowings
+  Proviso                      beats Countermand 51%  r1  British legal, constitutional or parliam
+  Capstan                      beats Countermand 51%  r5  nautical and navigation terms
+  Warder                       beats Countermand 51%  r3  Old or Middle English words and archaic 
+  Arbiter                      beats Countermand 50%  r3  Latin or Greek borrowings
+  Countermand                  beats Countermand 50%  r0  anchor
+  Custodia                     beats Countermand 50%  r3  Latin or Greek borrowings
+  Limen                        beats Countermand 50%  r1  Latin or Greek borrowings

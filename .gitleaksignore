@@ -1,0 +1,12 @@
+# gitleaks false positives: JSON fields literally named "key" holding slugs (e.g. redhat-uk-2025),
+# and one prose phrase in website-content-plan.md. Fingerprints are <file>:<rule>:<line>; re-check after edits.
+docs/business/claude/website-content-plan.md:generic-api-key:76
+docs/business/data/surveys.json:generic-api-key:72
+docs/business/data/surveys.json:generic-api-key:218
+docs/business/data/pricing.json:generic-api-key:173
+docs/business/data/sectors.json:generic-api-key:173
+docs/business/excelcion-atlas.html:generic-api-key:261
+docs/business/excelcion-atlas.html:generic-api-key:261
+docs/business/excelcion-atlas.html:generic-api-key:261
+docs/business/excelcion-atlas.html:generic-api-key:297
+docs/business/excelcion-atlas.html:generic-api-key:395

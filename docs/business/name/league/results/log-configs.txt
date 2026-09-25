@@ -1,0 +1,8 @@
+persona-1: 10 ballots, failed none, $0.189
+base-1: 10 ballots, failed none, $0.158
+temp-1: 9 ballots, failed ['claude-sonnet-5'], $0.111
+persona_temp-1: 9 ballots, failed ['claude-sonnet-5'], $0.109
+base-2: 10 ballots, failed none, $0.174
+temp-2: 10 ballots, failed none, $0.162
+persona-2: 10 ballots, failed none, $0.158
+persona_temp-2: 10 ballots, failed none, $0.166

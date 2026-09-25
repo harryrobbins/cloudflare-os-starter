@@ -1,0 +1,18 @@
+  C1 round 1: 31 -> 16; top Countermand Labs 7.73; failed none; $0.1312
+  B1 round 1: 31 -> 16; top Countermand Labs 8.03; failed none; $0.1601
+  B1 round 2: 16 -> 8; top Countermand Labs 8.47; failed none; $0.2703
+  A1 round 1: 31 -> 16; top Countermand Labs 8.41; failed ['gpt-oss-120b']; $0.1739
+  C1 round 2: 16 -> 8; top Countermand Labs 8.42; failed none; $0.2556
+  B1 round 3: 8 -> 4; top Countermand Labs 8.44; failed none; $0.3657
+  C1 round 3: 8 -> 4; top Countermand Labs 8.54; failed none; $0.3497
+  A1 round 2: 16 -> 8; top Countermand Labs 8.79; failed none; $0.3462
+  B1 round 4: 4 -> 2; top Countermand Labs 8.65; failed none; $0.4106
+  C1 round 4: 4 -> 2; top Claustra Labs 8.71; failed none; $0.3971
+  B1 round 5: 2 -> 1; top Countermand Labs 8.66; failed none; $0.4332
+B1: winner C15 Countermand Labs (by deepseek-v4-pro); $0.4332, 84 calls
+  A1 round 3: 8 -> 4; top Countermand Labs 8.77; failed none; $0.4067
+  C1 round 5: 2 -> 1; top Claustra Labs 8.42; failed none; $0.4346
+C1: winner C24 Claustra Labs (by nemotron-ultra); $0.4346, 74 calls
+  A1 round 4: 4 -> 2; top Countermand Labs 8.61; failed none; $0.4601
+  A1 round 5: 2 -> 1; top Countermand Labs 8.60; failed none; $0.4887
+A1: winner C15 Countermand Labs (by deepseek-v4-pro); $0.4887, 76 calls

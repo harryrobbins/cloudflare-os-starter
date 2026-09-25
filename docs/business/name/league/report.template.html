@@ -1,0 +1,581 @@
+<title>Naming League</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --ground: #f3f5f7;
+  --panel: #ffffff;
+  --ink: #17212c;
+  --ink-2: #4b5967;
+  --ink-3: #7b8896;
+  --rule: #d9dfe5;
+  --rule-2: #e9edf1;
+  --accent: #1f5f73;
+  --accent-soft: #dcebef;
+  --win: #8a5a00;
+  --win-soft: #f6ead0;
+  --out: #b9c2cb;
+  --va: #3a55a4;
+  --vb: #a35f10;
+  --vc: #56697b;
+  --good: #2f7a4a;
+  --bad: #a3392f;
+  --serif: "Spectral", Georgia, "Times New Roman", serif;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0f151b; --panel: #161e26; --ink: #e4eaef; --ink-2: #a9b6c2; --ink-3: #7d8b98;
+    --rule: #2a3642; --rule-2: #1f2a34; --accent: #6fb3c6; --accent-soft: #1b3440;
+    --win: #e2b458; --win-soft: #3a2e14; --out: #3b4753;
+    --va: #8ea3e6; --vb: #e0a35a; --vc: #9fb0c0; --good: #6cc08b; --bad: #e0857b;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0f151b; --panel: #161e26; --ink: #e4eaef; --ink-2: #a9b6c2; --ink-3: #7d8b98;
+  --rule: #2a3642; --rule-2: #1f2a34; --accent: #6fb3c6; --accent-soft: #1b3440;
+  --win: #e2b458; --win-soft: #3a2e14; --out: #3b4753;
+  --va: #8ea3e6; --vb: #e0a35a; --vc: #9fb0c0; --good: #6cc08b; --bad: #e0857b;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font: 15px/1.55 var(--sans); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 32px 64px; display: grid; gap: 48px; }
+h1, h2, h3 { font-family: var(--serif); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(34px, 5vw, 52px); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 26px; font-weight: 700; }
+h3 { font-size: 18px; font-weight: 500; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.lede { font-size: 17px; color: var(--ink-2); }
+section { display: grid; gap: 16px; }
+.section-head { display: grid; gap: 6px; }
+.muted { color: var(--ink-2); }
+.small { font-size: 13px; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header { display: grid; gap: 14px; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 22px; font: 13px var(--mono); color: var(--ink-2); }
+.facts b { color: var(--ink); font-weight: 500; }
+
+/* Verdict: one column per rule set */
+.verdicts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.verdict { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; display: grid; gap: 10px; align-content: start; border-top: 4px solid var(--vcol); }
+.verdict .rule { font: 500 12px var(--mono); color: var(--vcol); letter-spacing: 0.06em; text-transform: uppercase; }
+.verdict .champ { font: 700 28px/1.1 var(--serif); }
+.verdict .by { font-size: 13px; color: var(--ink-2); }
+.tally { display: grid; gap: 4px; font-size: 13px; }
+.tally div { display: flex; justify-content: space-between; gap: 12px; }
+
+/* Tabs */
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tabs button { font: 500 13px var(--sans); border: 1px solid var(--rule); background: var(--panel); color: var(--ink-2); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.tabs button[aria-pressed="true"] { background: var(--ink); color: var(--ground); border-color: var(--ink); }
+
+/* Ladder */
+.ladder-scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--panel); }
+.ladder { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(190px, 1fr); gap: 0; min-width: min-content; }
+.round { padding: 14px 12px; border-right: 1px solid var(--rule-2); display: grid; gap: 6px; align-content: start; }
+.round:last-child { border-right: 0; }
+.round h4 { margin: 0 0 4px; font: 500 12px var(--mono); color: var(--ink-3); letter-spacing: 0.06em; text-transform: uppercase; }
+.chip { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 6px 8px; border-radius: 4px; font-size: 13px; background: var(--rule-2); position: relative; }
+.chip.kept { background: var(--accent-soft); }
+.chip.gone { background: transparent; color: var(--ink-3); border: 1px dashed var(--rule); }
+.chip.champ { background: var(--win-soft); color: var(--ink); box-shadow: inset 0 0 0 1px var(--win); }
+.chip.control .nm::after { content: " (control)"; color: var(--bad); font-size: 11px; }
+.chip .sc { font: 12px var(--mono); font-variant-numeric: tabular-nums; }
+.chip .bar { grid-column: 1 / -1; height: 3px; background: var(--rule); border-radius: 2px; overflow: hidden; }
+.chip .bar i { display: block; height: 100%; background: var(--accent); }
+.chip.champ .bar i { background: var(--win); }
+.chip.gone .bar i { background: var(--out); }
+.chip .jv { font: 11px var(--mono); color: var(--vb); grid-column: 1 / -1; }
+.ladder-note { font-size: 13px; color: var(--ink-2); }
+
+/* Round by round */
+.rounds-detail { display: grid; gap: 14px; }
+.rd { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; display: grid; gap: 10px; }
+.rd-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+.rd-head h3 { font-size: 19px; }
+.rd-head .num { font-size: 12.5px; color: var(--ink-3); }
+.rd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 22px; }
+.rd-grid > div { display: grid; gap: 4px; align-content: start; }
+.rd .lbl { font: 500 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.rd p, .rd li { font-size: 13.5px; }
+.rd ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+.rd q { quotes: "\201C" "\201D"; color: var(--ink-2); }
+.cutline { font: 12.5px var(--mono); color: var(--ink-2); border-left: 3px solid var(--accent); padding-left: 10px; }
+
+/* Reviews */
+.reviews { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.review { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; display: grid; gap: 10px; }
+.review h3 { font-size: 20px; }
+.review h4 { margin: 6px 0 0; font: 600 13px var(--sans); color: var(--accent); }
+.review p, .review li { font-size: 13.5px; max-width: none; }
+.review ul, .review ol { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.review code { font: 12.5px var(--mono); }
+
+/* Tables */
+.table-scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule-2); vertical-align: top; }
+th { font: 500 11.5px var(--mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); background: var(--panel); position: sticky; top: 0; }
+td.n, th.n { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+.pill { display: inline-block; font: 500 11px var(--mono); padding: 2px 7px; border-radius: 999px; background: var(--rule-2); color: var(--ink-2); white-space: nowrap; }
+.pill.clear { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+.pill.blocked { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
+.pill.risk { background: var(--win-soft); color: var(--win); }
+.vtag { font: 600 11px var(--mono); color: var(--vcol); }
+
+/* Backing grid */
+.backing { display: grid; gap: 4px; font-size: 12.5px; }
+.brow { display: grid; grid-template-columns: 150px repeat(var(--nr), minmax(92px, 1fr)); gap: 4px; align-items: center; }
+.brow > span:first-child { color: var(--ink-2); }
+.pick { font: 12px var(--mono); padding: 4px 6px; border-radius: 3px; background: var(--rule-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick.hit { background: var(--win-soft); color: var(--win); box-shadow: inset 0 0 0 1px var(--win); }
+.pick.none { color: var(--ink-3); background: transparent; }
+
+/* Findings */
+.findings { display: grid; gap: 12px; counter-reset: f; }
+.finding { display: grid; grid-template-columns: 28px 1fr; gap: 10px; }
+.finding::before { counter-increment: f; content: counter(f); font: 500 13px var(--mono); color: var(--accent); padding-top: 2px; }
+
+/* Flow diagram */
+.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+.step { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; min-width: 150px; flex: 1 1 150px; display: grid; gap: 4px; }
+.step b { font: 600 13px var(--sans); }
+.step span { font-size: 12.5px; color: var(--ink-2); }
+.step.loop { border-style: dashed; }
+.arrow { align-self: center; color: var(--ink-3); font-family: var(--mono); }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.recs { display: grid; gap: 10px; margin: 0; padding-left: 20px; }
+.recs li { max-width: 72ch; }
+.recs li b { font-weight: 600; }
+.dossier-row td:nth-child(5) { min-width: 260px; }
+input[type="search"] { font: 14px var(--sans); padding: 8px 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--panel); color: var(--ink); width: min(360px, 100%); }
+details summary { cursor: pointer; color: var(--accent); font-size: 13px; }
+@media (max-width: 560px) {
+  .brow { grid-template-columns: 110px repeat(var(--nr), minmax(84px, 1fr)); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .chip .bar i { transition: width .4s ease; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Company-name tournament · 24 September 2026</span>
+    <h1>Naming League</h1>
+    <p class="lede" id="lede"></p>
+    <div class="facts" id="facts"></div>
+  </header>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">Key findings</span>
+      <h2>What the experiment showed</h2>
+    </div>
+    <div class="findings" id="findings"></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">Result</span>
+      <h2>Winners under each rule set</h2>
+      <p class="muted" id="verdict-note"></p>
+    </div>
+    <div class="verdicts" id="verdicts"></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">Rounds</span>
+      <h2>How the field narrowed</h2>
+      <p class="muted">Each column is one round. Names are sorted by weighted score out of 10. The top half go through; faded names went out. In variant B the score is half panel, half Jev.</p>
+    </div>
+    <div class="tabs" id="run-tabs" role="group" aria-label="Choose a run"></div>
+    <div class="ladder-scroll"><div class="ladder" id="ladder"></div></div>
+    <p class="ladder-note" id="ladder-note"></p>
+    <div class="rounds-detail" id="rounds-detail"></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">Comparison</span>
+      <h2>What the rules changed</h2>
+      <p class="muted">Averages over every run of each variant. Herding is how many points a judge moved towards last round's shared mean when it rescored the same name. Self-preference is a judge's blind score for its own name minus the other judges' mean. Effective judges is the panel size discounted by how closely the judges agree.</p>
+    </div>
+    <div class="table-scroll"><table id="variant-table"></table></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">Models</span>
+      <h2>Model league table</h2>
+      <p class="muted">Proposer points: 1 for each round one of the model's names survives, plus 5 if it wins. Backing points (variants A and B only): 16, 8, 4, 2 and 1 for each round the model backed the eventual winner. Judge accuracy is the correlation between the model's round-1 scores and the final order. Cost is the model's total across the whole experiment.</p>
+    </div>
+    <div class="table-scroll"><table id="model-table"></table></div>
+  </section>
+
+  <section id="backing-section">
+    <div class="section-head">
+      <span class="eyebrow">Predictions</span>
+      <h2>Who backed the winner, and when</h2>
+      <p class="muted">Each model's pick to win the league, round by round. Highlighted picks are the eventual winner.</p>
+    </div>
+    <div class="tabs" id="backing-tabs" role="group" aria-label="Choose a run"></div>
+    <div class="table-scroll" style="padding:12px"><div class="backing" id="backing"></div></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">Candidates</span>
+      <h2>Every name, with the research the judges saw</h2>
+      <p class="muted">The judges saw every name with this research, gathered the same way for each: Companies House and domain checks by script, then a web search for meaning, existing companies and associations. None of the judges knew who proposed which name.</p>
+    </div>
+    <input type="search" id="filter" placeholder="Filter names or research" aria-label="Filter candidates">
+    <div class="table-scroll"><table id="cand-table"></table></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">Method</span>
+      <h2>How the league runs</h2>
+    </div>
+    <div class="flow">
+      <div class="step"><b>Propose</b><span>Each of the 10 models offers 3 names with a 20-word pitch. A bland control name is planted.</span></div>
+      <span class="arrow">→</span>
+      <div class="step"><b>Research</b><span>Claude checks every name the same way: Companies House, domains, web search for clashes and meaning.</span></div>
+      <span class="arrow">→</span>
+      <div class="step loop"><b>Advocate</b><span>From round 2, a randomly chosen model that did not propose each name argues for it.</span></div>
+      <span class="arrow">→</span>
+      <div class="step loop"><b>Panel</b><span>All 10 judges score every name blind on the rubric. Each judge sees the names in its own shuffled order.</span></div>
+      <span class="arrow">→</span>
+      <div class="step loop" style="border-color:var(--vb)"><b>Jev (B only)</b><span>Jev scores every criterion; its score counts as much as the whole panel's.</span></div>
+      <span class="arrow">→</span>
+      <div class="step"><b>Cut</b><span>The top half go through. Scores and critiques are shared, then the next round starts.</span></div>
+    </div>
+    <div class="two">
+      <div class="table-scroll"><table id="rubric-table"></table></div>
+      <div style="display:grid; gap:10px">
+        <p class="small muted"><b>A: incentive.</b> Judges also back the name they expect to win; an early correct pick earns more.</p>
+        <p class="small muted"><b>B: incentive + Jev.</b> As A, with TypeSafe's Jev decision model (via OpenRouter) as the third stage of every round.</p>
+        <p class="small muted"><b>C: panel only.</b> No backing, no points and no Jev. The control.</p>
+        <p class="small muted">Own names are never revealed. A judge's scores for its own names are dropped from the tally and kept only to measure self-preference. Every call went through the LiteLLM proxy on a capped key, and each call's tokens and cost were logged.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">For scientific use</span>
+      <h2>Making an adversarial panel trustworthy</h2>
+      <p class="muted">A literature review of LLM judges, debate and tournaments (co-scientist, PoLL, Chatbot Arena, herding studies), and what this experiment adds. The list is ranked by expected benefit for the cost.</p>
+    </div>
+    <ol class="recs" id="recs"></ol>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">Cost</span>
+      <h2>Spend by model</h2>
+      <p class="muted" id="cost-note"></p>
+    </div>
+    <div class="table-scroll"><table id="cost-table"></table></div>
+  </section>
+
+  <section id="v2">
+    <div class="section-head">
+      <span class="eyebrow">League v2</span>
+      <h2>A better process, tested cheaply</h2>
+      <p class="muted">What we changed after the reviews and a second literature review (PeerRank, PRD, PiCO, Language Model Council, ChatEval, tournament design), and what four small experiments showed. The experiments cost $1.63 in total.</p>
+    </div>
+    <div class="findings" id="v2-findings"></div>
+    <h3>The v2 design</h3>
+    <ol class="recs">
+      <li><b>Screen ownability, don't score it.</b> Check the bare word and the suffixed form mechanically; blocked names or names with no usable domain are out before judging. The dossier the judges see holds facts only (registry, domains, meaning, existing uses), with no evaluative wording.</li>
+      <li><b>Diversify judges by lens, not temperature.</b> Give each judge a functional persona (CFO, CISO, brand strategist, trade-mark attorney, journalist, linguist, investor, procurement, operations, COO), rotated across models so persona and model effects can be separated. Leave temperature at the provider default: the test below and the literature find it adds noise, not independence.</li>
+      <li><b>Exclude own and same-family names</b> from each judge's ballot. In v1, only a judge's own names were dropped.</li>
+      <li><b>Weight judges, and publish the unweighted result beside it.</b> PeerRank gives more voting power to judges whose own proposals the others rate highly (damping 0.85). The alternative is reliability weighting: agreement with the other judges, damping 0.4, capped at 2/N. The next step is gold anchor names with a known order, which the literature recommends over both.</li>
+      <li><b>Score absolutely to filter, then rank pairwise.</b> One absolute round cuts the field to six to eight. Then every pair is judged in both orders and fitted with Bradley–Terry, with Copeland as a check. A verdict that flips when the order is swapped counts as a tie.</li>
+      <li><b>Pay predictions with a proper scoring rule.</b> Before the finals, each judge gives a probability for each finalist, scored with log and Brier rules, plus a "surprisingly popular" flag. This replaces the flat reward for backing the leader.</li>
+      <li><b>Report reliability, not just a winner:</b> effective judges, flip rate, position bias, bootstrap P(top-1), and how much weighting moved the ranking.</li>
+    </ol>
+    <h3>Test 1: personas and temperature</h3>
+    <p class="small muted">One blind absolute round over all 31 names, with the facts-only dossier (bare forms included), run twice per configuration. Stability is the Kendall τ between the two repeats; "vs base" is τ against the base ranking.</p>
+    <div class="table-scroll"><table id="v2-configs"></table></div>
+    <h3>Test 2: PeerRank and reliability weights</h3>
+    <p class="small muted">Average judge weight across the eight test rounds (equal weight would be 0.100). PeerRank favours judges whose own names scored well; reliability weighting favours judges who agree with the rest.</p>
+    <div class="table-scroll"><table id="v2-weights"></table></div>
+    <h3>Test 3: pairwise finals</h3>
+    <p class="small muted" id="v2-finals-note"></p>
+    <div class="table-scroll"><table id="v2-finals"></table></div>
+    <h3>Test 4: Jev's favourite name</h3>
+    <p class="small muted" id="v2-quest-note"></p>
+    <div class="two">
+      <div class="table-scroll"><table id="v2-quest-rounds"></table></div>
+      <div class="table-scroll"><table id="v2-league-jev"></table></div>
+    </div>
+    <div class="table-scroll"><table id="v2-quest-top"></table></div>
+    <h3>Test 5: Jev's favourite, pairwise, with thinking and diverse styles</h3>
+    <p class="small muted" id="v2-q2-note"></p>
+    <div class="table-scroll"><table id="v2-q2-rounds"></table></div>
+    <div class="table-scroll"><table id="v2-q2-top"></table></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">Second opinions</span>
+      <h2>Three Claude reviewers on the result</h2>
+      <p class="muted">Claude Sonnet, Opus and Fable each read the full output (method, all 15 runs, the measures and every candidate's research) and were asked, separately and with the same brief, for their verdict on the chosen name, other names they like, and how well the process worked.</p>
+    </div>
+    <div class="reviews" id="reviews"></div>
+    <p class="small muted">Note: Opus and Fable say bare "Countermand" was never checked. The review pack left it out, but it was checked during the session: clear at Companies House, with <code>countermand.co.uk</code>, <code>.ai</code>, <code>.io</code> and <code>.dev</code> free and <code>.com</code> taken. No trade-mark search has been done.</p>
+  </section>
+</div>
+
+<script>
+const DATA = /*DATA*/null;
+const RECS = /*RECS*/null;
+const VCOL = { A: "var(--va)", B: "var(--vb)", C: "var(--vc)" };
+const VNAME = { A: "A · incentive", B: "B · incentive + Jev", C: "C · panel only" };
+const cand = Object.fromEntries(DATA.candidates.map(c => [c.id, c]));
+const esc = s => String(s ?? "").replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+const f = (x, d = 2) => x == null || Number.isNaN(x) ? "–" : Number(x).toFixed(d);
+const usd = x => "$" + Number(x || 0).toFixed(x < 0.1 ? 4 : 2);
+const GBP = 0.75;
+
+// Header
+const nRuns = DATA.runs.length;
+const models = Object.keys(DATA.models);
+document.getElementById("lede").textContent =
+  `Ten cost-efficient models proposed ${DATA.candidates.length - 1} names for the company, judged each other blind across ${nRuns} runs under three rule sets, and halved the field each round until one name was left.`;
+document.getElementById("facts").innerHTML = [
+  ["models", models.length], ["names", DATA.candidates.length], ["runs", nRuns],
+  ["total spend", `${usd(DATA.total_cost)} (≈ £${(DATA.total_cost * GBP).toFixed(2)})`],
+].map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
+
+// Verdicts
+const vs = DATA.variants;
+document.getElementById("verdicts").innerHTML = Object.entries(vs).map(([v, s]) => {
+  const wins = Object.entries(s.wins).sort((a, b) => b[1] - a[1]);
+  const [topId, topN] = wins[0];
+  const c = cand[topId];
+  return `<div class="verdict" style="--vcol:${VCOL[v]}">
+    <span class="rule">${VNAME[v]}</span>
+    <span class="champ">${esc(c.name)}</span>
+    <span class="by">Won ${topN} of ${s.runs} run${s.runs > 1 ? "s" : ""} · proposed by ${esc(c.owners.join(", ") || "nobody (control)")}</span>
+    <div class="tally">${wins.map(([id, n]) => `<div><span>${esc(cand[id].name)}</span><span class="num">${n}×</span></div>`).join("")}</div>
+  </div>`;
+}).join("");
+const allWinners = new Set(DATA.runs.map(r => r.winner));
+document.getElementById("verdict-note").textContent = allWinners.size === 1
+  ? `Every run of every rule set picked the same name.`
+  : `${allWinners.size} different names won across the ${nRuns} runs.`;
+
+// Ladder
+function renderLadder(run) {
+  const html = run.trajectory.map((r, i) => {
+    const ids = Object.keys(r.scores);
+    const chips = ids.map((id, k) => {
+      const s = r.scores[id], c = cand[id];
+      const kept = k < r.keep;
+      const champ = i === run.trajectory.length - 1 && k === 0;
+      const cls = champ ? "champ" : kept ? "kept" : "gone";
+      const jv = s.jev != null ? `<span class="jv">panel ${f(s.panel, 1)} · Jev ${f(s.jev, 1)}</span>` : "";
+      return `<div class="chip ${cls} ${c.control ? "control" : ""}" title="${esc(c.pitch)}">
+        <span class="nm">${esc(c.name)}</span><span class="sc">${f(s.score, 2)}</span>
+        ${jv}<span class="bar"><i style="width:${Math.max(0, Math.min(100, s.score * 10))}%"></i></span></div>`;
+    }).join("");
+    return `<div class="round"><h4>Round ${r.round} · ${ids.length} → ${r.keep}</h4>${chips}</div>`;
+  }).join("");
+  document.getElementById("ladder").innerHTML = html;
+  renderRounds(run);
+  const control = DATA.candidates.find(c => c.control);
+  document.getElementById("ladder-note").textContent =
+    `Run ${run.run}: ${run.winner_name} won after ${run.rounds} rounds. The control, ${control.name}, went out in round ${run.control_out_round}. ${run.failed_ballots} ballot${run.failed_ballots === 1 ? "" : "s"} failed to parse and were skipped. Cost ${usd(run.cost)}.`;
+}
+function renderRounds(run) {
+  const out = run.trajectory.map((r, i) => {
+    const ids = Object.keys(r.scores);
+    const kept = ids.slice(0, r.keep), gone = ids.slice(r.keep);
+    const nm = id => esc(cand[id].name);
+    const sc = id => f(r.scores[id].score, 2);
+    const last = kept[kept.length - 1], first = gone[0];
+    const cut = first ? `Cut line: ${nm(last)} ${sc(last)} went through; ${nm(first)} ${sc(first)} went out, a margin of ${f(r.scores[last].score - r.scores[first].score, 2)}.` : "";
+    const lead = ids[0];
+    const crit = r.critiques[lead] || [];
+    const critHtml = crit.length ? `<li>Harshest: <q>${esc(crit[0])}</q></li>${crit.length > 1 ? `<li>Kindest: <q>${esc(crit[crit.length - 1])}</q></li>` : ""}` : "<li>No critiques recorded.</li>";
+    const cases = r.cases || {};
+    const caseIds = [lead, last, first].filter((x, k, a) => x && cases[x] && a.indexOf(x) === k);
+    const caseHtml = caseIds.length ? `<div><span class="lbl">Advocates' cases</span><ul>${caseIds.map(id => `<li><b>${nm(id)}:</b> <q>${esc(cases[id])}</q></li>`).join("")}</ul></div>` : "";
+    let jevHtml = "";
+    if (run.variant === "B") {
+      const diffs = ids.filter(id => r.scores[id].jev != null).map(id => [id, r.scores[id].jev - r.scores[id].panel]).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 2);
+      if (diffs.length) jevHtml = `<div><span class="lbl">Jev against the panel</span><ul>${diffs.map(([id, d]) => `<li>${nm(id)}: Jev ${f(r.scores[id].jev, 1)} vs panel ${f(r.scores[id].panel, 1)} (${d > 0 ? "+" : ""}${f(d, 1)})</li>`).join("")}</ul></div>`;
+    }
+    let backHtml = "";
+    const picks = Object.values(r.backings || {}).filter(Boolean);
+    if (picks.length) {
+      const tally = {}; picks.forEach(p => tally[p] = (tally[p] || 0) + 1);
+      backHtml = `<div><span class="lbl">Backing to win</span><ul>${Object.entries(tally).sort((a, b) => b[1] - a[1]).map(([id, n]) => `<li>${nm(id)}: ${n} of ${picks.length} judges</li>`).join("")}</ul></div>`;
+    }
+    return `<article class="rd">
+      <div class="rd-head"><h3>Round ${r.round}: ${ids.length} names → ${r.keep}</h3><span class="num">leader ${nm(lead)} ${sc(lead)}</span></div>
+      ${cut ? `<p class="cutline">${cut}</p>` : ""}
+      <div class="rd-grid">
+        <div><span class="lbl">Went through</span><p>${kept.map(id => `${nm(id)} <span class="num">${sc(id)}</span>`).join(" · ")}</p></div>
+        ${gone.length ? `<div><span class="lbl">Went out</span><p class="muted">${gone.map(nm).join(" · ")}</p></div>` : ""}
+        <div><span class="lbl">Judges on the leader</span><ul>${critHtml}</ul></div>
+        ${caseHtml}${jevHtml}${backHtml}
+      </div>
+    </article>`;
+  }).join("");
+  document.getElementById("rounds-detail").innerHTML = out;
+}
+function tabs(el, runs, onPick) {
+  el.innerHTML = runs.map((r, i) => `<button type="button" aria-pressed="${i === 0}" data-run="${r.run}" style="--vcol:${VCOL[r.variant]}">${VNAME[r.variant].split(" · ")[0]} · run ${r.run.slice(1)}</button>`).join("");
+  el.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    el.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    onPick(runs.find(r => r.run === b.dataset.run));
+  });
+  onPick(runs[0]);
+}
+tabs(document.getElementById("run-tabs"), DATA.runs, renderLadder);
+
+// Variant comparison
+const rows = [
+  ["Runs", s => s.runs, 0],
+  ["Distinct winners", (s, v) => Object.keys(s.wins).length, 0],
+  ["Herding towards shared mean (points)", s => s.herding_toward_mean, 2],
+  ["Mean rescore move (points)", s => s.mean_rescore_move, 2],
+  ["Self-preference on own names (points)", s => s.self_pref_mean, 2],
+  ["Mean judge correlation, round 1", s => s.judge_corr_mean, 2],
+  ["Effective independent judges (of 10)", s => s.effective_judges, 1],
+  ["Judge correlation, Companies-House-clear names only", s => s.judge_corr_clear, 2],
+  ["Effective judges on clear names (of 10)", s => s.effective_judges_clear, 1],
+  ["Jev vs panel correlation", s => s.jev_panel_corr, 2],
+  ["Control eliminated in round", s => s.control_out_round, 1],
+  ["Cost", s => s.cost, -1],
+];
+const vkeys = Object.keys(vs);
+document.getElementById("variant-table").innerHTML =
+  `<thead><tr><th>Measure</th>${vkeys.map(v => `<th class="n" style="color:${VCOL[v]}">${VNAME[v]}</th>`).join("")}</tr></thead><tbody>` +
+  rows.map(([label, fn, d]) => `<tr><td>${label}</td>${vkeys.map(v => {
+    const x = fn(vs[v], v); return `<td class="n">${d === -1 ? usd(x) : f(x, d)}</td>`;
+  }).join("")}</tr>`).join("") + "</tbody>";
+document.getElementById("findings").innerHTML = (DATA.findings || []).map(t => `<div class="finding"><p>${t}</p></div>`).join("");
+
+// Model table
+const usage = DATA.usage;
+const mrows = models.map(m => ({ m, ...DATA.models[m], cost: usage[m]?.cost || 0, calls: usage[m]?.calls || 0, failed: usage[m]?.failed || 0 }))
+  .sort((a, b) => b.total - a.total);
+document.getElementById("model-table").innerHTML =
+  `<thead><tr><th>Model</th><th class="n">Proposer</th><th class="n">Backing</th><th class="n">Total</th><th class="n">Judge accuracy</th><th class="n">Self-pref.</th><th class="n">Calls</th><th class="n">Failed</th><th class="n">Cost</th></tr></thead><tbody>` +
+  mrows.map(r => `<tr><td>${esc(r.m)}</td><td class="n">${r.proposer}</td><td class="n">${r.backing}</td><td class="n"><b>${r.total}</b></td><td class="n">${f(r.accuracy)}</td><td class="n">${f(r.self_pref)}</td><td class="n">${r.calls}</td><td class="n">${r.failed}</td><td class="n">${usd(r.cost)}</td></tr>`).join("") + "</tbody>";
+
+// Backing
+const brRuns = DATA.runs.filter(r => r.variant !== "C");
+if (!brRuns.length) document.getElementById("backing-section").hidden = true;
+else tabs(document.getElementById("backing-tabs"), brRuns, run => {
+  const nr = run.rounds;
+  const head = `<div class="brow" style="--nr:${nr}"><span></span>${Array.from({ length: nr }, (_, i) => `<span class="eyebrow">Round ${i + 1}</span>`).join("")}</div>`;
+  const body = Object.entries(run.backing).map(([m, b]) => `<div class="brow" style="--nr:${nr}"><span>${esc(m)}</span>${
+    Array.from({ length: nr }, (_, i) => { const p = b.picks[i];
+      return p ? `<span class="pick ${p === run.winner ? "hit" : ""}" title="${esc(cand[p]?.name)}">${esc(cand[p]?.name)}</span>` : `<span class="pick none">no pick</span>`; }).join("")}</div>`).join("");
+  document.getElementById("backing").innerHTML = head + body;
+});
+
+// Candidates
+const best = {};
+for (const run of DATA.runs) {
+  run.trajectory.forEach((r, i) => Object.keys(r.scores).forEach((id, k) => {
+    const reached = k < r.keep ? i + 2 : i + 1;
+    best[id] = Math.max(best[id] || 0, reached);
+  }));
+}
+const wins = {}; DATA.runs.forEach(r => wins[r.winner] = (wins[r.winner] || 0) + 1);
+const facts = DATA.dossier_facts || {};
+function pill(v) { const cls = v === "clear" ? "clear" : v === "blocked" ? "blocked" : v === "at risk" ? "risk" : ""; return `<span class="pill ${cls}">${esc(v)}</span>`; }
+function renderCands(q = "") {
+  const ql = q.toLowerCase();
+  const list = DATA.candidates.filter(c => !ql || (c.name + " " + (DATA.dossier[c.id] || "")).toLowerCase().includes(ql))
+    .sort((a, b) => (wins[b.id] || 0) - (wins[a.id] || 0) || (best[b.id] || 0) - (best[a.id] || 0));
+  document.getElementById("cand-table").innerHTML =
+    `<thead><tr><th>Name</th><th>Proposed by</th><th class="n">Wins</th><th class="n">Best round</th><th>Research</th></tr></thead><tbody>` +
+    list.map(c => { const fx = facts[c.id] || {};
+      return `<tr class="dossier-row"><td><b>${esc(c.name)}</b><br><span class="small muted">${esc(c.pitch)}</span></td>
+      <td class="small">${esc(c.owners.join(", ") || "control")}</td>
+      <td class="n">${wins[c.id] || 0}</td><td class="n">${best[c.id] ? (best[c.id] > DATA.runs[0].rounds ? "won" : best[c.id]) : "–"}</td>
+      <td class="small">${fx.companies_house ? pill(fx.companies_house) + " " : ""}${esc(fx.free_domains?.length ? fx.free_domains.filter(d => !d.includes("-")).slice(0, 4).join(", ") || fx.free_domains.slice(0, 2).join(", ") : "no free .com/.co.uk/.ai/.io")}
+      <br>${esc(fx.clashes || "")}${fx.associations ? `<br><span class="muted">${esc(fx.associations)}</span>` : ""}</td></tr>`; }).join("") + "</tbody>";
+}
+renderCands();
+document.getElementById("filter").addEventListener("input", e => renderCands(e.target.value));
+
+// Rubric
+document.getElementById("rubric-table").innerHTML = `<thead><tr><th>Criterion</th><th class="n">Weight</th><th>What judges score</th></tr></thead><tbody>` +
+  DATA.rubric.map(([k, w, t]) => `<tr><td>${esc(k)}</td><td class="n">${Math.round(w * 100)}%</td><td class="small">${esc(t.split(": ").slice(1).join(": "))}</td></tr>`).join("") + "</tbody>";
+
+// Recommendations
+document.getElementById("recs").innerHTML = RECS.map(r => `<li><b>${esc(r.title)}.</b> ${esc(r.body)} ${r.sources.map((s, i) => `<a href="${esc(s[1])}" target="_blank" rel="noopener">${esc(s[0])}</a>`).join(", ")}</li>`).join("");
+
+
+// League v2
+if (DATA.v2) {
+  const V = DATA.v2;
+  const cfgName = { base: "Base", persona: "Personas", temp: "Temperatures", persona_temp: "Personas + temperatures" };
+  document.getElementById("v2-findings").innerHTML = (DATA.v2_findings || []).map(t => `<div class="finding"><p>${t}</p></div>`).join("");
+  const order = ["base", "persona", "temp", "persona_temp"].filter(k => V.configs[k]);
+  document.getElementById("v2-configs").innerHTML = `<thead><tr><th>Configuration</th><th class="n">Judge corr.</th><th class="n">Corr., clear names</th><th class="n">Effective judges (clear)</th><th class="n">Stability τ</th><th class="n">τ vs base</th><th>Top name, each repeat</th><th class="n">Cost</th></tr></thead><tbody>` +
+    order.map(k => { const c = V.configs[k]; return `<tr><td>${cfgName[k]}</td><td class="n">${f(c.corr)}</td><td class="n">${f(c.corr_clear)}</td><td class="n">${f(c.n_eff_clear, 2)}</td><td class="n">${f(c.repeat_stability_tau)}</td><td class="n">${f(c.tau_vs_base)}</td><td class="small">${c.top1.map(esc).join(" · ")}</td><td class="n">${usd(c.cost)}</td></tr>`; }).join("") + "</tbody>";
+  const avgW = {}, avgR = {};
+  V.runs.forEach(r => { for (const [m, w] of Object.entries(r.weights)) (avgW[m] ||= []).push(w); for (const [m, w] of Object.entries(r.reliability_weights || {})) (avgR[m] ||= []).push(w); });
+  const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+  const wm = Object.keys(avgW).sort((a, b) => mean(avgW[b]) - mean(avgW[a]));
+  const tauP = mean(V.runs.map(r => r.tau_mean_vs_peerrank)), tauR = mean(V.runs.map(r => r.tau_mean_vs_reliability));
+  document.getElementById("v2-weights").innerHTML = `<thead><tr><th>Judge</th><th class="n">PeerRank weight</th><th class="n">Reliability weight</th></tr></thead><tbody>` +
+    wm.map(m => `<tr><td>${esc(m)}</td><td class="n">${f(mean(avgW[m]), 3)}</td><td class="n">${avgR[m] ? f(mean(avgR[m]), 3) : "–"}</td></tr>`).join("") +
+    `<tr><td class="small muted">Ranking change vs unweighted (Kendall τ)</td><td class="n">${f(tauP, 3)}</td><td class="n">${f(tauR, 3)}</td></tr></tbody>`;
+  const fin = Object.values(V.finals || {})[0];
+  if (fin) {
+    const cop = Object.fromEntries(fin.copeland);
+    document.getElementById("v2-finals-note").textContent = `The top six from the persona rounds, every pair judged by all ten judges in both orders (${fin.judgements} judgements, ${usd(fin.cost)}). ${Math.round(fin.flip_rate * 100)}% of a judge's verdicts flipped when the two names swapped places; the average lean towards whichever name was shown first was ${f(fin.position_bias, 3)}.`;
+    document.getElementById("v2-finals").innerHTML = `<thead><tr><th>Name</th><th class="n">Bradley–Terry strength</th><th class="n">Copeland points</th></tr></thead><tbody>` +
+      fin.ranking.map(([n, st]) => `<tr><td>${esc(n)}</td><td class="n">${f(st, 3)}</td><td class="n">${f(cop[n], 1)}</td></tr>`).join("") + "</tbody>";
+  }
+  const Q = V.quest;
+  document.getElementById("v2-quest-note").textContent = `Claude Sonnet 5, with thinking switched off, proposed 100 names; Jev scored each on five criteria (fit, gravitas, distinctiveness, ease of saying and spelling, wit). Sonnet then saw the best and worst scores and tried to beat them, for five rounds: ${Q.total} distinct names, ${usd(Q.cost)} in total. Jev sees only the brief and the name, so it cannot judge availability.`;
+  document.getElementById("v2-quest-rounds").innerHTML = `<thead><tr><th>Round</th><th class="n">Names</th><th class="n">Mean</th><th class="n">Best</th><th>Best name</th></tr></thead><tbody>` +
+    Q.rounds.map(r => `<tr><td>${r.round}</td><td class="n">${r.n}</td><td class="n">${f(r.mean)}</td><td class="n">${f(r.max)}</td><td>${esc(r.best)}</td></tr>`).join("") + "</tbody>";
+  document.getElementById("v2-league-jev").innerHTML = `<thead><tr><th>League name, scored by Jev</th><th class="n">Jev score</th></tr></thead><tbody>` +
+    V.league_jev.map(([n, s]) => `<tr><td>${esc(n)}</td><td class="n">${f(s.total)}</td></tr>`).join("") + "</tbody>";
+  document.getElementById("v2-quest-top").innerHTML = `<thead><tr><th>Jev's top names</th><th class="n">Score</th><th class="n">Round</th><th class="n">Fit</th><th class="n">Gravitas</th><th class="n">Distinct</th><th class="n">Ease</th><th class="n">Wit</th><th>Companies House</th><th>Free domains</th></tr></thead><tbody>` +
+    Q.top.map(([n, s, chv, dom]) => `<tr><td>${esc(n)}</td><td class="n">${f(s.total)}</td><td class="n">${s.round}</td><td class="n">${f(s.fit, 1)}</td><td class="n">${f(s.gravitas, 1)}</td><td class="n">${f(s.distinct, 1)}</td><td class="n">${f(s.ease, 1)}</td><td class="n">${f(s.wit, 1)}</td><td>${chv ? pill(chv) : '<span class="small muted">not checked</span>'}</td><td class="small">${dom ? esc(dom.join(", ") || "none of the four") : "–"}</td></tr>`).join("") + "</tbody>";
+}
+if (DATA.v2 && DATA.v2.quest2) {
+  const Q2 = DATA.v2.quest2;
+  document.getElementById("v2-q2-note").textContent = `Sonnet 5 with thinking on wrote 10 names in each of 10 styles per round, with feedback on how each style fared. Jev answered one question per pair ("is A the better name?") in both orders; every new name met six opponents from the leaders and fixed anchors, and the top 12 played each other. A Bradley–Terry fit over all ${Q2.judgements.toLocaleString()} judgements gives each name's chance of beating Countermand head to head. ${Q2.total} names, ${usd(Q2.cost)} in total.`;
+  document.getElementById("v2-q2-rounds").innerHTML = `<thead><tr><th>Round</th><th class="n">New names</th><th>Best new name</th><th class="n">Its chance vs Countermand</th><th class="n">Top-10 new, mean</th><th class="n">All new, mean</th><th class="n">Order flips</th></tr></thead><tbody>` +
+    Q2.rounds.map(r => `<tr><td>${r.round}</td><td class="n">${r.new}</td><td>${esc(r.best_new)}</td><td class="n">${Math.round(r.best_new_beats_yardstick * 100)}%</td><td class="n">${Math.round(r.top10_new_mean_beats * 100)}%</td><td class="n">${Math.round(r.mean_new_beats * 100)}%</td><td class="n">${Math.round(r.flip_rate * 100)}%</td></tr>`).join("") + "</tbody>";
+  document.getElementById("v2-q2-top").innerHTML = `<thead><tr><th>Name</th><th>Style</th><th class="n">Round</th><th class="n">Chance vs Countermand</th><th>Companies House</th><th>Free domains</th></tr></thead><tbody>` +
+    Q2.top.map(t => `<tr><td>${esc(t.name)}</td><td class="small">${esc(t.style)}</td><td class="n">${t.round}</td><td class="n">${Math.round(t.beats_yardstick * 100)}%</td><td>${t.ch ? pill(t.ch) : '<span class="small muted">–</span>'}</td><td class="small">${t.dom ? esc(t.dom.join(", ") || "none of the four") : "–"}</td></tr>`).join("") + "</tbody>";
+}
+// Reviews
+document.getElementById("reviews").innerHTML = (DATA.reviews || []).map(r =>
+  `<article class="review"><span class="eyebrow">${esc(r.model)}</span><h3>${esc(r.title)}</h3>${r.html}</article>`).join("") ||
+  `<p class="muted">Reviews pending.</p>`;
+
+// Cost
+const urows = Object.entries(usage).sort((a, b) => b[1].cost - a[1].cost);
+document.getElementById("cost-table").innerHTML = `<thead><tr><th>Model</th><th class="n">Calls</th><th class="n">Input tokens</th><th class="n">Output tokens</th><th class="n">Cost</th></tr></thead><tbody>` +
+  urows.map(([m, u]) => `<tr><td>${esc(m)}</td><td class="n">${u.calls}</td><td class="n">${u.prompt_tokens.toLocaleString()}</td><td class="n">${u.completion_tokens.toLocaleString()}</td><td class="n">${usd(u.cost)}</td></tr>`).join("") + "</tbody>";
+document.getElementById("cost-note").textContent =
+  `Total ${usd(DATA.total_cost)} (about £${(DATA.total_cost * GBP).toFixed(2)}) against a £10 budget, including proposals and failed attempts. Nemotron and Gemma ran on free tiers and report no cost. Claude's research for the dossier ran in this session and is not included.`;
+</script>

@@ -1,0 +1,589 @@
+{
+  "meta": {
+    "gathered": "2026-08-26",
+    "scope": "UK per-user-per-month list prices, ex VAT. GBP where a UK price is published; otherwise USD converted at 1 USD = 0.78 GBP and EUR at 1 EUR = 0.855 GBP (August 2026 approximations) and flagged in currency_note.",
+    "fx": {
+      "usd_gbp": 0.78,
+      "eur_gbp": 0.855
+    },
+    "grade_key": {
+      "A": "vendor list price or first-party document",
+      "B": "reputable partner/analyst secondary source, consistent across sources",
+      "C": "single secondary source, reported/negotiated, or own estimate"
+    },
+    "token_spend_estimates": [
+      {
+        "source": "ibl.ai Enterprise AI Cost Statistics 2026",
+        "url": "https://ibl.ai/resources/ai-cost-statistics",
+        "finding": "Assumes 4,000 input + 500 output tokens per turn at Claude Sonnet rates ($3/$15 per M) = ~$0.0195 per turn. At 100 turns/user/month that is ~$1.95 (~GBP 1.50) per user; break-even with a $30 seat is ~1,540 turns/user/month.",
+        "grade": "C"
+      },
+      {
+        "source": "iternal.ai Token Usage Guide 2026",
+        "url": "https://iternal.ai/token-usage-guide",
+        "finding": "Typical internal-assistant usage 2-5 requests/day, 1,500-3,000 tokens per conversation => roughly 150k-450k tokens per user per month. Unoptimised frontier-model deployments run $50-100+/user/month; after caching/routing target is low single digits to ~$15/user/month (~GBP 4-12).",
+        "grade": "C"
+      },
+      {
+        "source": "Coworker.ai Gemini Enterprise pricing (partner estimates)",
+        "url": "https://coworker.ai/blog/gemini-enterprise-pricing",
+        "finding": "Google partners estimate $15-40 per active power user per month in metered usage on top of Gemini Enterprise Plus seats.",
+        "grade": "C"
+      },
+      {
+        "source": "Databricks Genie pricing change, July 2026",
+        "url": "https://blog.devgenius.io/databricks-genie-pricing-what-actually-changes-in-july-2026-0f3558f26d61",
+        "finding": "Databricks gives each identified user 150 DBUs (~$10.50) of free LLM usage per month across Genie/Genie Code, implying Databricks sizes typical analyst-assistant consumption at roughly $10/user/month.",
+        "grade": "B"
+      },
+      {
+        "source": "Microsoft Copilot Studio credit model (CloudZero)",
+        "url": "https://www.cloudzero.com/blog/copilot-studio-pricing/",
+        "finding": "Generative answer = 2 credits ($0.02), tenant-graph-grounded answer = 10 credits ($0.10), autonomous action = 5 credits. 100 grounded answers per user per month = $10 (~GBP 8); the same agent can cost $8 or $800/month depending on build.",
+        "grade": "B"
+      }
+    ],
+    "sources": [
+      {
+        "name": "ExpertSure UK Copilot pricing (Mar/May 2026)",
+        "url": "https://www.expertsure.com/uk/ai-tools/microsoft-copilot-review/"
+      },
+      {
+        "name": "Cloudswitched UK M365 July 2026 price rise",
+        "url": "https://www.cloudswitched.com/news/microsoft-365-price-increase-july-2026-copilot-uk-guide"
+      },
+      {
+        "name": "EPC Group Copilot SKUs after 1 Jul 2026",
+        "url": "https://www.epcgroup.net/answers/microsoft-copilot-pricing-july-2026"
+      },
+      {
+        "name": "Coworker.ai M365 E3/E5 + Copilot",
+        "url": "https://coworker.ai/blog/microsoft-copilot-enterprise-pricing"
+      },
+      {
+        "name": "Microsoft Tech Community - Copilot Business bundles promo",
+        "url": "https://techcommunity.microsoft.com/blog/microsoft365copilotblog/act-now-lock-in-current-pricing-on-microsoft-365-copilot-business-bundles/4502628"
+      },
+      {
+        "name": "CloudZero Copilot Studio credits",
+        "url": "https://www.cloudzero.com/blog/copilot-studio-pricing/"
+      },
+      {
+        "name": "PowerTech365 UK Power Platform licensing",
+        "url": "https://powertech365.co.uk/insights/power-platform-licensing-costs-explained/"
+      },
+      {
+        "name": "CloudZero ChatGPT pricing (Aug 2026)",
+        "url": "https://www.cloudzero.com/blog/how-much-does-chatgpt-cost/"
+      },
+      {
+        "name": "ExploreAgentic Claude Team/Enterprise (Aug 2026)",
+        "url": "https://www.exploreagentic.ai/insights/claude-team-enterprise-seat-pricing/"
+      },
+      {
+        "name": "Refractiv UK Google Workspace prices (May 2026)",
+        "url": "https://refractiv.co.uk/news/google-workspace-cost-uk-pricing/"
+      },
+      {
+        "name": "Coworker.ai Gemini Enterprise",
+        "url": "https://coworker.ai/blog/gemini-enterprise-pricing"
+      },
+      {
+        "name": "Automation Atlas Retool pricing (Jul 2026)",
+        "url": "https://automationatlas.io/answers/retool-pricing-explained-2026/"
+      },
+      {
+        "name": "Coworker.ai Glean pricing",
+        "url": "https://coworker.ai/blog/glean-pricing"
+      },
+      {
+        "name": "Jet Admin Appsmith pricing (Jul 2026)",
+        "url": "https://www.jetadmin.io/blog/appsmith-pricing-2026-guide-to-plans-limits-and-total-cost-with-jet-admin-comparison/"
+      },
+      {
+        "name": "Jet Admin Budibase pricing (Jul 2026)",
+        "url": "https://www.jetadmin.io/blog/untitled-39/"
+      },
+      {
+        "name": "Jet Admin ToolJet pricing (Jul 2026)",
+        "url": "https://www.jetadmin.io/blog/tooljet-pricing-and-best-alternatives-july-2026-guide/"
+      },
+      {
+        "name": "Windmill pricing page",
+        "url": "https://www.windmill.dev/pricing"
+      },
+      {
+        "name": "Grist pricing page",
+        "url": "https://www.getgrist.com/pricing/"
+      },
+      {
+        "name": "Directus pricing 2026 (Nayan Kyada)",
+        "url": "https://nayankyada.com/blog/directus-pricing-2026-self-hosted-costs-cloud-tiers-license-thresholds"
+      },
+      {
+        "name": "Nextcloud Enterprise pricing page",
+        "url": "https://nextcloud.com/pricing/"
+      },
+      {
+        "name": "Cloudflare Workers AI pricing",
+        "url": "https://developers.cloudflare.com/workers-ai/platform/pricing/"
+      },
+      {
+        "name": "Cloudflare AI Gateway pricing",
+        "url": "https://developers.cloudflare.com/ai-gateway/reference/pricing/"
+      },
+      {
+        "name": "Finout Snowflake Cortex pricing (Jul 2026)",
+        "url": "https://www.finout.io/blog/snowflake-cortex-pricing"
+      },
+      {
+        "name": "Faculty Frontier G-Cloud listing",
+        "url": "https://www.applytosupply.digitalmarketplace.service.gov.uk/g-cloud/services/833092345267794"
+      }
+    ]
+  },
+  "products": [
+    {
+      "key": "m365-copilot-chat",
+      "vendor": "Microsoft",
+      "label": "Copilot Chat (free tier)",
+      "category": "assistant",
+      "gbp_low": 0,
+      "gbp_typical": 0,
+      "currency_note": "GBP",
+      "includes_model_usage": true,
+      "notes": "Web-grounded chat included with eligible M365 subscriptions; no Graph grounding. From 15 Apr 2026 in-app Copilot in Word/Excel/PowerPoint restricted to paid tiers. Agent use is metered via Copilot Studio credits.",
+      "source": "https://www.expertsure.com/uk/ai-tools/microsoft-copilot-review/",
+      "grade": "B"
+    },
+    {
+      "key": "m365-copilot-business",
+      "vendor": "Microsoft",
+      "label": "Microsoft 365 Copilot Business add-on (<=300 seats)",
+      "category": "assistant",
+      "gbp_low": 13.8,
+      "gbp_typical": 16.1,
+      "currency_note": "GBP (UK partner list); USD list $21, promo $18",
+      "includes_model_usage": true,
+      "notes": "Promo GBP 13.80 until 30 Sep 2026; list GBP 16.10. Bundles: Business Standard + Copilot $23.50, Business Premium + Copilot $32 (USD). Microsoft signalled late-2026 restructuring with Copilot bundled into higher tiers.",
+      "source": "https://www.expertsure.com/uk/ai-tools/microsoft-copilot-review/",
+      "grade": "B"
+    },
+    {
+      "key": "m365-copilot-enterprise",
+      "vendor": "Microsoft",
+      "label": "Microsoft 365 Copilot add-on (Enterprise)",
+      "category": "assistant",
+      "gbp_low": 23.4,
+      "gbp_typical": 23.4,
+      "currency_note": "USD $30 converted; UK list historically ~GBP 23.10",
+      "includes_model_usage": true,
+      "notes": "$30/user/month annual commitment, unchanged at 1 Jul 2026. Planned bundling: Microsoft 365 E7 'Frontier Suite' at $99 (E5 + Copilot + Agent 365 + Entra Suite) available from 1 Jul 2026. All-in E3+Copilot $69, E5+Copilot $90.",
+      "source": "https://www.epcgroup.net/answers/microsoft-copilot-pricing-july-2026",
+      "grade": "B"
+    },
+    {
+      "key": "m365-e7",
+      "vendor": "Microsoft",
+      "label": "Microsoft 365 E7 Frontier Suite (E5 + Copilot + Agent 365)",
+      "category": "base-suite",
+      "gbp_low": 77.2,
+      "gbp_typical": 77.2,
+      "currency_note": "USD $99 converted",
+      "includes_model_usage": true,
+      "notes": "New bundle from 1 Jul 2026; the direction of travel for Copilot bundling.",
+      "source": "https://www.epcgroup.net/answers/microsoft-copilot-pricing-july-2026",
+      "grade": "B"
+    },
+    {
+      "key": "m365-business-basic",
+      "vendor": "Microsoft",
+      "label": "M365 Business Basic",
+      "category": "base-suite",
+      "gbp_low": 5.4,
+      "gbp_typical": 5.4,
+      "currency_note": "GBP (from 1 Jul 2026; was 4.60)",
+      "includes_model_usage": false,
+      "notes": "Annual commitment. Copilot Chat included.",
+      "source": "https://www.cloudswitched.com/news/microsoft-365-price-increase-july-2026-copilot-uk-guide",
+      "grade": "B"
+    },
+    {
+      "key": "m365-business-standard",
+      "vendor": "Microsoft",
+      "label": "M365 Business Standard",
+      "category": "base-suite",
+      "gbp_low": 10.5,
+      "gbp_typical": 10.5,
+      "currency_note": "GBP (from 1 Jul 2026; was 9.40)",
+      "includes_model_usage": false,
+      "notes": "All-in with Copilot Business list: ~GBP 26.60.",
+      "source": "https://www.cloudswitched.com/news/microsoft-365-price-increase-july-2026-copilot-uk-guide",
+      "grade": "B"
+    },
+    {
+      "key": "m365-business-premium",
+      "vendor": "Microsoft",
+      "label": "M365 Business Premium",
+      "category": "base-suite",
+      "gbp_low": 17.6,
+      "gbp_typical": 17.6,
+      "currency_note": "GBP (unchanged Jul 2026)",
+      "includes_model_usage": false,
+      "notes": "All-in with Copilot Business list: ~GBP 33.70.",
+      "source": "https://www.cloudswitched.com/news/microsoft-365-price-increase-july-2026-copilot-uk-guide",
+      "grade": "B"
+    },
+    {
+      "key": "m365-e3",
+      "vendor": "Microsoft",
+      "label": "M365 E3",
+      "category": "base-suite",
+      "gbp_low": 30.2,
+      "gbp_typical": 32.7,
+      "currency_note": "GBP (32.70 from 1 Jul 2026; was 30.20). USD $39 with Teams",
+      "includes_model_usage": false,
+      "notes": "All-in E3 + Copilot Enterprise: ~GBP 56.",
+      "source": "https://www.cloudswitched.com/news/microsoft-365-price-increase-july-2026-copilot-uk-guide",
+      "grade": "B"
+    },
+    {
+      "key": "m365-e5",
+      "vendor": "Microsoft",
+      "label": "M365 E5",
+      "category": "base-suite",
+      "gbp_low": 46.8,
+      "gbp_typical": 49,
+      "currency_note": "USD $60 converted; UK GBP list not captured (est. 47-50)",
+      "includes_model_usage": false,
+      "notes": "All-in E5 + Copilot Enterprise: ~GBP 70; E7 bundle GBP ~77 includes Copilot.",
+      "source": "https://coworker.ai/blog/microsoft-copilot-enterprise-pricing",
+      "grade": "C"
+    },
+    {
+      "key": "copilot-studio",
+      "vendor": "Microsoft",
+      "label": "Copilot Studio (credit metered)",
+      "category": "builder-platform",
+      "gbp_low": 1.6,
+      "gbp_typical": 8,
+      "currency_note": "USD consumption meters converted; per-user figure is own estimate",
+      "includes_model_usage": true,
+      "notes": "PAYG $0.01/credit; prepaid pack $200/month for 25,000 credits (~$0.008/credit, ~GBP 156 tenant floor). 1 credit = classic answer; 2 = generative answer; 5 = agent action; 10 = tenant-graph-grounded answer; 100 per 10 reasoning-model responses. Low = 100 generative answers/user/month; typical = 100 grounded answers. Zero incremental credits for users holding an M365 Copilot licence (internal agents).",
+      "source": "https://www.cloudzero.com/blog/copilot-studio-pricing/",
+      "grade": "B"
+    },
+    {
+      "key": "power-apps-premium",
+      "vendor": "Microsoft",
+      "label": "Power Apps Premium (per user)",
+      "category": "builder-platform",
+      "gbp_low": 9.2,
+      "gbp_typical": 15.4,
+      "currency_note": "GBP UK list",
+      "includes_model_usage": false,
+      "notes": "GBP 15.40 annual; GBP 9.20 at 2,000+ seat volume tier. AI/Copilot features metered separately in USD.",
+      "source": "https://powertech365.co.uk/insights/power-platform-licensing-costs-explained/",
+      "grade": "B"
+    },
+    {
+      "key": "power-apps-per-app",
+      "vendor": "Microsoft",
+      "label": "Power Apps per app (retired)",
+      "category": "builder-platform",
+      "gbp_low": 3.9,
+      "gbp_typical": 3.9,
+      "currency_note": "USD $5 converted; legacy",
+      "includes_model_usage": false,
+      "notes": "Withdrawn from new sale 14 Jan 2026; existing CSP customers may renew. Included here for the historical floor.",
+      "source": "https://powertech365.co.uk/insights/power-platform-licensing-costs-explained/",
+      "grade": "B"
+    },
+    {
+      "key": "chatgpt-business",
+      "vendor": "OpenAI",
+      "label": "ChatGPT Business (was Team)",
+      "category": "assistant",
+      "gbp_low": 15.6,
+      "gbp_typical": 19.5,
+      "currency_note": "USD $20 annual / $25 monthly converted",
+      "includes_model_usage": true,
+      "notes": "Price cut by $5 on 2 Apr 2026; min 2 seats. Usage caps per seat.",
+      "source": "https://www.cloudzero.com/blog/how-much-does-chatgpt-cost/",
+      "grade": "B"
+    },
+    {
+      "key": "chatgpt-enterprise",
+      "vendor": "OpenAI",
+      "label": "ChatGPT Enterprise (reported)",
+      "category": "assistant",
+      "gbp_low": 35.1,
+      "gbp_typical": 46.8,
+      "currency_note": "USD $45-75 reported, converted; quote-based",
+      "includes_model_usage": true,
+      "notes": "No public rate card; billed annually; historically 150-seat minimum. Range from ibl.ai and other reported deals.",
+      "source": "https://ibl.ai/resources/ai-cost-statistics",
+      "grade": "C"
+    },
+    {
+      "key": "claude-team",
+      "vendor": "Anthropic",
+      "label": "Claude Team (standard seat)",
+      "category": "assistant",
+      "gbp_low": 15.6,
+      "gbp_typical": 19.5,
+      "currency_note": "USD $20 annual / $25 monthly converted; premium seat $100/$125",
+      "includes_model_usage": true,
+      "notes": "Min 2, max 150 seats; standard seat ~1.25x Pro usage, premium seat ~6.25x Pro plus Claude Code.",
+      "source": "https://www.exploreagentic.ai/insights/claude-team-enterprise-seat-pricing/",
+      "grade": "B"
+    },
+    {
+      "key": "claude-enterprise",
+      "vendor": "Anthropic",
+      "label": "Claude Enterprise (reported)",
+      "category": "assistant",
+      "gbp_low": 15.6,
+      "gbp_typical": 46.8,
+      "currency_note": "USD converted; reports conflict ($20 seat + metered tokens vs ~$60 all-in); quote-based",
+      "includes_model_usage": false,
+      "notes": "One Aug 2026 report gives $20/seat (annual, 20-seat self-serve / 50-seat sales minimum) with tokens billed at API rates; earlier reports put all-in around $60. Treat as opaque.",
+      "source": "https://www.exploreagentic.ai/insights/claude-team-enterprise-seat-pricing/",
+      "grade": "C"
+    },
+    {
+      "key": "gws-business-standard",
+      "vendor": "Google",
+      "label": "Google Workspace Business Standard (Gemini included)",
+      "category": "base-suite",
+      "gbp_low": 11.8,
+      "gbp_typical": 14,
+      "currency_note": "GBP UK partner list (annual / flexible)",
+      "includes_model_usage": true,
+      "notes": "Gemini folded into all Workspace plans Mar 2025. Business Starter GBP 5.90/7.00; Business Plus GBP 18.40/22.00.",
+      "source": "https://refractiv.co.uk/news/google-workspace-cost-uk-pricing/",
+      "grade": "B"
+    },
+    {
+      "key": "gws-enterprise-standard",
+      "vendor": "Google",
+      "label": "Google Workspace Enterprise Standard / Plus",
+      "category": "base-suite",
+      "gbp_low": 22.6,
+      "gbp_typical": 29.5,
+      "currency_note": "GBP UK partner list (annual): Std 22.60, Plus 29.50",
+      "includes_model_usage": true,
+      "notes": "AI Expanded Access add-on GBP 13.20/user/month; AI Ultra GBP 184.99.",
+      "source": "https://refractiv.co.uk/news/google-workspace-cost-uk-pricing/",
+      "grade": "B"
+    },
+    {
+      "key": "gemini-enterprise",
+      "vendor": "Google",
+      "label": "Gemini Enterprise (ex-Agentspace) agent platform",
+      "category": "builder-platform",
+      "gbp_low": 16.4,
+      "gbp_typical": 23.4,
+      "currency_note": "USD converted: Business $21 (<=300), Standard $30, Plus $50-60 reported",
+      "includes_model_usage": true,
+      "notes": "Consumption overage beyond quota; partners estimate $15-40 metered per active power user on Plus.",
+      "source": "https://coworker.ai/blog/gemini-enterprise-pricing",
+      "grade": "B"
+    },
+    {
+      "key": "retool-team",
+      "vendor": "Retool",
+      "label": "Retool Team",
+      "category": "builder-platform",
+      "gbp_low": 3.9,
+      "gbp_typical": 7.8,
+      "currency_note": "USD converted: ~$10/standard user, ~$5/end user",
+      "includes_model_usage": true,
+      "notes": "Bundled AI credits (finite). Cloud only; self-host only on Enterprise.",
+      "source": "https://automationatlas.io/answers/retool-pricing-explained-2026/",
+      "grade": "B"
+    },
+    {
+      "key": "retool-business",
+      "vendor": "Retool",
+      "label": "Retool Business",
+      "category": "builder-platform",
+      "gbp_low": 39,
+      "gbp_typical": 50.7,
+      "currency_note": "USD converted: $50 annual / $65 monthly per builder; end users volume-tiered ~$5-10",
+      "includes_model_usage": true,
+      "notes": "SSO, granular permissions, expanded AI credits and Agent hours. Retool opened a London office.",
+      "source": "https://automationatlas.io/answers/retool-pricing-explained-2026/",
+      "grade": "B"
+    },
+    {
+      "key": "glean",
+      "vendor": "Glean",
+      "label": "Glean (reported)",
+      "category": "assistant",
+      "gbp_low": 39,
+      "gbp_typical": 50.7,
+      "currency_note": "USD converted: $50+ base, +~$15 each for generative/agent add-ons; typical $100k+/yr minimum",
+      "includes_model_usage": true,
+      "notes": "No public rate card; negotiated. Glean Technologies UK Ltd incorporated 2025.",
+      "source": "https://coworker.ai/blog/glean-pricing",
+      "grade": "C"
+    },
+    {
+      "key": "palantir-aip",
+      "vendor": "Palantir",
+      "label": "Palantir AIP / Foundry",
+      "category": "builder-platform",
+      "gbp_low": null,
+      "gbp_typical": null,
+      "currency_note": "No public per-seat price",
+      "includes_model_usage": false,
+      "notes": "Enterprise contracts only. UK reference point: NHS Federated Data Platform GBP 330m over 7 years (~GBP 47m/yr), break clause 2027 under government review.",
+      "source": "https://thenextweb.com/news/uk-nhs-palantir-contract-review-break-clause",
+      "grade": "C"
+    },
+    {
+      "key": "appsmith-business",
+      "vendor": "Appsmith",
+      "label": "Appsmith Business / Enterprise",
+      "category": "open-source-platform",
+      "gbp_low": 11.7,
+      "gbp_typical": 19.5,
+      "currency_note": "USD converted: Business $15/user (<=99 users); Enterprise from $2,500/mo for 100 users (~$25)",
+      "includes_model_usage": false,
+      "notes": "Free self-hosted community edition; Business licence keys work self-hosted.",
+      "source": "https://www.jetadmin.io/blog/appsmith-pricing-2026-guide-to-plans-limits-and-total-cost-with-jet-admin-comparison/",
+      "grade": "B"
+    },
+    {
+      "key": "budibase",
+      "vendor": "Budibase",
+      "label": "Budibase Premium / Business",
+      "category": "open-source-platform",
+      "gbp_low": 3.9,
+      "gbp_typical": 7.8,
+      "currency_note": "USD converted: app users $5, creators $50 (annual); plans $49 / $299 per month incl. 1-3 creators",
+      "includes_model_usage": false,
+      "notes": "Self-hosted free with unlimited apps/agents; typical = blended 1 creator per 10 users. UK-founded (Belfast).",
+      "source": "https://www.jetadmin.io/blog/untitled-39/",
+      "grade": "B"
+    },
+    {
+      "key": "tooljet",
+      "vendor": "ToolJet",
+      "label": "ToolJet Starter / Pro (per builder)",
+      "category": "open-source-platform",
+      "gbp_low": 18.7,
+      "gbp_typical": 77.2,
+      "currency_note": "USD converted: Starter $24, Pro $99, Team $249 per builder; end users capped/unlimited by tier",
+      "includes_model_usage": false,
+      "notes": "Community edition free self-hosted; ~20% annual discount.",
+      "source": "https://www.jetadmin.io/blog/tooljet-pricing-and-best-alternatives-july-2026-guide/",
+      "grade": "B"
+    },
+    {
+      "key": "windmill",
+      "vendor": "Windmill",
+      "label": "Windmill Enterprise (cloud or self-hosted)",
+      "category": "open-source-platform",
+      "gbp_low": 7.8,
+      "gbp_typical": 15.6,
+      "currency_note": "USD converted: developer seat $20, operator seat $10, plus $120/mo base and compute units (~$50/CU)",
+      "includes_model_usage": false,
+      "notes": "Free/open-source tier up to 10 SSO users / 50 users.",
+      "source": "https://www.windmill.dev/pricing",
+      "grade": "A"
+    },
+    {
+      "key": "grist",
+      "vendor": "Grist",
+      "label": "Grist Pro / Business (self-hosted Enterprise on quote)",
+      "category": "open-source-platform",
+      "gbp_low": 6.2,
+      "gbp_typical": 18.7,
+      "currency_note": "USD converted: Pro $8 annual/$10 monthly; Business $24/$30 (min 5)",
+      "includes_model_usage": true,
+      "notes": "AI assistant credits included (100/mo Pro, 2,000/mo Business). Self-hosted Enterprise: contact sales, min 50 users; free activation for orgs under $1m revenue.",
+      "source": "https://www.getgrist.com/pricing/",
+      "grade": "A"
+    },
+    {
+      "key": "directus-cloud",
+      "vendor": "Directus",
+      "label": "Directus Cloud",
+      "category": "open-source-platform",
+      "gbp_low": 2.3,
+      "gbp_typical": 3.1,
+      "currency_note": "USD converted per-user equivalents: Starter $15/mo for 5 users; Standard $99/mo for 25 users; Professional $299/mo unlimited users",
+      "includes_model_usage": false,
+      "notes": "Self-hosted BSL: free under $5m revenue, sponsor from $1,500/yr above.",
+      "source": "https://nayankyada.com/blog/directus-pricing-2026-self-hosted-costs-cloud-tiers-license-thresholds",
+      "grade": "B"
+    },
+    {
+      "key": "nextcloud-enterprise",
+      "vendor": "Nextcloud",
+      "label": "Nextcloud Enterprise (Standard to Ultimate)",
+      "category": "open-source-platform",
+      "gbp_low": 3.8,
+      "gbp_typical": 5.1,
+      "currency_note": "EUR converted: Standard EUR 71.29/user/yr at 100 users (EUR 53.17 at 200); Ultimate EUR 204.75/yr (~GBP 14.60/mo) includes Nextcloud Assistant",
+      "includes_model_usage": false,
+      "notes": "Local AI assistant only in Ultimate; framework agreements to millions of users.",
+      "source": "https://nextcloud.com/pricing/",
+      "grade": "A"
+    },
+    {
+      "key": "cloudflare-workers-ai",
+      "vendor": "Cloudflare",
+      "label": "Cloudflare Workers AI + AI Gateway (usage)",
+      "category": "builder-platform",
+      "gbp_low": 0,
+      "gbp_typical": 0.5,
+      "currency_note": "USD usage converted; per-user figure is own estimate at 300k tokens/user/month on Llama 3.3 70B",
+      "includes_model_usage": true,
+      "notes": "Workers AI: 10,000 neurons/day free, then $0.011 per 1,000 neurons; Llama 3.3 70B $0.293 in / $2.253 out per M tokens. AI Gateway core (analytics, caching, rate limiting, DLP) free; unified billing 5% fee; Workers Paid plan $5/mo base. Cloudflare OS itself is Apache-2.0 with no price yet.",
+      "source": "https://developers.cloudflare.com/workers-ai/platform/pricing/",
+      "grade": "A"
+    },
+    {
+      "key": "snowflake-cortex",
+      "vendor": "Snowflake",
+      "label": "Snowflake Cortex / Intelligence (usage)",
+      "category": "builder-platform",
+      "gbp_low": 1.6,
+      "gbp_typical": 6.2,
+      "currency_note": "USD usage converted; own per-user estimate from $2-5.10/M tokens; no seat fee",
+      "includes_model_usage": true,
+      "notes": "AI Credits $2.00 ($2.20 regional routing); frontier models up to $5.10/M tokens; example moderate agent workload ~$2,012/month.",
+      "source": "https://www.finout.io/blog/snowflake-cortex-pricing",
+      "grade": "C"
+    },
+    {
+      "key": "databricks-genie",
+      "vendor": "Databricks",
+      "label": "Databricks Genie / Genie Code (usage)",
+      "category": "builder-platform",
+      "gbp_low": 0,
+      "gbp_typical": 8.2,
+      "currency_note": "USD converted; 150 DBU (~$10.50) free per identified user per month from 6 Jul 2026, then PAYG DBUs",
+      "includes_model_usage": true,
+      "notes": "No seat fees; compute billed separately; Agent Bricks pricing not captured.",
+      "source": "https://blog.devgenius.io/databricks-genie-pricing-what-actually-changes-in-july-2026-0f3558f26d61",
+      "grade": "B"
+    },
+    {
+      "key": "faculty-frontier",
+      "vendor": "Faculty (Accenture)",
+      "label": "Faculty Frontier (G-Cloud)",
+      "category": "builder-platform",
+      "gbp_low": null,
+      "gbp_typical": null,
+      "currency_note": "GBP 1,000 to 250,000 per unit per month (G-Cloud); not per-user",
+      "includes_model_usage": false,
+      "notes": "Enterprise deployment pricing only; included for UK public-sector reference.",
+      "source": "https://www.applytosupply.digitalmarketplace.service.gov.uk/g-cloud/services/833092345267794",
+      "grade": "A"
+    }
+  ]
+}

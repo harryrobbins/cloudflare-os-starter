@@ -1,0 +1,297 @@
+{
+  "meta": {
+    "compiled": "2026-08-26",
+    "scope": "UK-focused exit benchmarks for a 10-100 person product-led consultancy / small SaaS: IT services multiples, SaaS ARR multiples, EOT and BADR rules, comparable SI acquisitions",
+    "grading": "A = primary/official or data-provider source read directly; B = reputable secondary (advisor blog, trade press) read directly; C = inferred/derived",
+    "caveats": [
+      "Equiteq, Hampleton, Cavendish, BDO, Grant Thornton, ICAEW and Beauhurst reports are gated PDFs; their headline multiples could not be read directly in this pass and are not included.",
+      "MarktoMarket publishes only an all-sector 'All-Cap' median (deals under GBP 250m) on its public pages; sector (TMT) multiples are in the paid executive report.",
+      "Aventis Advisors IT-services and SaaS multiples are global M&A medians (with Europe and deal-size cuts), not UK-only.",
+      "Public SaaS index medians (Clouded Judgement) are EV / NTM revenue for US-listed cloud companies; small private UK SaaS typically trades at a large discount to these."
+    ]
+  },
+  "multiples": [
+    {
+      "segment": "uk-all-sector-smid-cap (EV<GBP250m)",
+      "year": 2024,
+      "ev_revenue_low": null,
+      "ev_revenue_high": null,
+      "ev_ebitda_low": 6.5,
+      "ev_ebitda_high": 6.5,
+      "note": "median EV/EBITDA ex-outliers, full-year 2024",
+      "source": "https://marktomarket.io/uk-ma-valuation-indices-h1-2025/",
+      "grade": "A"
+    },
+    {
+      "segment": "uk-all-sector-smid-cap (EV<GBP250m)",
+      "year": 2025,
+      "ev_revenue_low": null,
+      "ev_revenue_high": null,
+      "ev_ebitda_low": 6.2,
+      "ev_ebitda_high": 6.2,
+      "note": "H1 2025 median 6.2x (in line with H1 2024 6.2x); FY2025 median 6.2x",
+      "source": "https://marktomarket.io/ma-valuation-indices-h1-2026/",
+      "grade": "A"
+    },
+    {
+      "segment": "uk-all-sector-smid-cap (EV<GBP250m)",
+      "year": 2026,
+      "ev_revenue_low": null,
+      "ev_revenue_high": null,
+      "ev_ebitda_low": 6,
+      "ev_ebitda_high": 6,
+      "note": "H1 2026 median 6.0x; Nano-cap (<GBP2.5m) 3.7x (FY2025 3.6x). MarktoMarket notes TMT 'historically commanded higher multiples' but gives no public TMT figure",
+      "source": "https://marktomarket.io/ma-valuation-indices-h1-2026/",
+      "grade": "A"
+    },
+    {
+      "segment": "global-it-services-m&a (median)",
+      "year": 2022,
+      "ev_revenue_low": 1.4,
+      "ev_revenue_high": 1.4,
+      "ev_ebitda_low": 12.7,
+      "ev_ebitda_high": 12.7,
+      "source": "https://aventis-advisors.com/it-services-valuation-multiples/",
+      "grade": "B"
+    },
+    {
+      "segment": "global-it-services-m&a (median)",
+      "year": 2023,
+      "ev_revenue_low": 1.2,
+      "ev_revenue_high": 1.2,
+      "ev_ebitda_low": 13.6,
+      "ev_ebitda_high": 13.6,
+      "source": "https://aventis-advisors.com/it-services-valuation-multiples/",
+      "grade": "B"
+    },
+    {
+      "segment": "global-it-services-m&a (median)",
+      "year": 2025,
+      "ev_revenue_low": 1.3,
+      "ev_revenue_high": 1.3,
+      "ev_ebitda_low": 8.8,
+      "ev_ebitda_high": 8.8,
+      "note": "EV/EBITDA as of Q4 2025; revenue multiple 1.3x for 2025",
+      "source": "https://aventis-advisors.com/it-services-valuation-multiples/",
+      "grade": "B"
+    },
+    {
+      "segment": "it-services-m&a by deal size, 2015-2026 pooled (EV<$50m)",
+      "year": 2025,
+      "ev_revenue_low": 0.6,
+      "ev_revenue_high": 1.3,
+      "ev_ebitda_low": 6.7,
+      "ev_ebitda_high": 10,
+      "note": "<$5m: 0.6x rev / 6.7x EBITDA; $5-20m: 1.0x / 7.9x; $20-50m: 1.3x / 10.0x. Europe pooled: 1.1x rev / 10.0x EBITDA",
+      "source": "https://aventis-advisors.com/it-services-valuation-multiples/",
+      "grade": "B"
+    },
+    {
+      "segment": "uk-it-services-large-deal-datapoint (BJSS/CGI)",
+      "year": 2025,
+      "ev_revenue_low": 2.3,
+      "ev_revenue_high": 2.3,
+      "ev_ebitda_low": 12.5,
+      "ev_ebitda_high": 12.5,
+      "note": "Implied 2024 multiples reported by mainsights.io for CGI's acquisition of BJSS (2,400 staff) - upper bound for a scaled, well-regarded UK engineering consultancy",
+      "source": "https://www.mainsights.io/ma-news/cgi-acquires-uk-based-bjss-at-2024-evebitda-125x-and-evsales-23x",
+      "grade": "B"
+    },
+    {
+      "segment": "private-saas-m&a (global median EV/revenue)",
+      "year": 2021,
+      "ev_revenue_low": 6.4,
+      "ev_revenue_high": 6.4,
+      "ev_ebitda_low": null,
+      "ev_ebitda_high": null,
+      "source": "https://aventis-advisors.com/saas-valuation-multiples/",
+      "grade": "B"
+    },
+    {
+      "segment": "private-saas-m&a (global median EV/revenue)",
+      "year": 2023,
+      "ev_revenue_low": 3.3,
+      "ev_revenue_high": 3.3,
+      "ev_ebitda_low": null,
+      "ev_ebitda_high": null,
+      "source": "https://aventis-advisors.com/saas-valuation-multiples/",
+      "grade": "B"
+    },
+    {
+      "segment": "private-saas-m&a (global median EV/revenue)",
+      "year": 2024,
+      "ev_revenue_low": 2.9,
+      "ev_revenue_high": 2.9,
+      "ev_ebitda_low": null,
+      "ev_ebitda_high": null,
+      "source": "https://aventis-advisors.com/saas-valuation-multiples/",
+      "grade": "B"
+    },
+    {
+      "segment": "private-saas-m&a (global median EV/revenue)",
+      "year": 2025,
+      "ev_revenue_low": 3.8,
+      "ev_revenue_high": 3.8,
+      "ev_ebitda_low": null,
+      "ev_ebitda_high": null,
+      "source": "https://aventis-advisors.com/saas-valuation-multiples/",
+      "grade": "B"
+    },
+    {
+      "segment": "private-saas-m&a (global median EV/revenue)",
+      "year": 2026,
+      "ev_revenue_low": 3.1,
+      "ev_revenue_high": 3.1,
+      "ev_ebitda_low": null,
+      "ev_ebitda_high": null,
+      "note": "to March 2026; deals $0-5m average 3.3x vs $500m+ 6.2x; 2015-2026 pooled median 4.5x",
+      "source": "https://aventis-advisors.com/saas-valuation-multiples/",
+      "grade": "B"
+    },
+    {
+      "segment": "public-saas-index (EV/NTM revenue median)",
+      "year": 2023,
+      "ev_revenue_low": 6.7,
+      "ev_revenue_high": 6.7,
+      "ev_ebitda_low": null,
+      "ev_ebitda_high": null,
+      "source": "https://aventis-advisors.com/saas-valuation-multiples/",
+      "grade": "B"
+    },
+    {
+      "segment": "public-saas-index (EV/NTM revenue median)",
+      "year": 2025,
+      "ev_revenue_low": 6,
+      "ev_revenue_high": 6,
+      "ev_ebitda_low": null,
+      "ev_ebitda_high": null,
+      "note": "July 2025 approx",
+      "source": "https://aventis-advisors.com/saas-valuation-multiples/",
+      "grade": "B"
+    },
+    {
+      "segment": "public-saas-index (EV/NTM revenue median)",
+      "year": 2026,
+      "ev_revenue_low": 3.1,
+      "ev_revenue_high": 12.4,
+      "ev_ebitda_low": null,
+      "ev_ebitda_high": null,
+      "note": "Clouded Judgement 30 Jan 2026: overall median 4.1x ('lowest in 10 years'); low-growth 3.1x, mid-growth 7.0x, high-growth 12.4x, top-5 19.4x. Aventis: 3.4x March 2026",
+      "source": "https://cloudedjudgement.substack.com/p/clouded-judgement-13026-software",
+      "grade": "A"
+    }
+  ],
+  "eot": {
+    "cgt_relief": "Sale of a controlling interest to a qualifying Employee Ownership Trust: 100% CGT exemption for disposals before 26 Nov 2025; reduced to 50% of the gain exempt for disposals on or after 26 November 2025 (Autumn Budget 2025). Remaining 50% taxed at the main CGT rate (24% higher rate), giving an effective ~12% on the whole gain. BADR / Investors' Relief cannot be claimed on the taxable half.",
+    "conditions": [
+      "Company must be a trading company or principal company of a trading group",
+      "EOT must acquire and retain a controlling interest: >50% of ordinary share capital, voting power and rights to profits/assets",
+      "All-employee benefit requirement: trust must benefit all eligible employees on the same terms (equality requirement; can vary by remuneration, hours, length of service); 5%+ shareholders and connected persons excluded from benefit",
+      "Limited participation: number of continuing 5%+ shareholders who are employees/directors must not exceed 2/5 of total employees",
+      "Finance Act 2025 (announced 30 Oct 2024 Budget): trustees must be UK resident; former owners and persons connected with them cannot form a majority of the trustee board (independence requirement)",
+      "Finance Act 2025: trustees must take reasonable steps to ensure the price paid does not exceed market value (and interest on deferred consideration must not exceed a reasonable commercial rate)",
+      "Finance Act 2025: clawback extended - a disqualifying event before the end of the fourth tax year following the tax year of disposal reverses the vendor's relief (previously the end of the following tax year)",
+      "Vendors must claim the relief in their return and provide additional information (number of employees, consideration, etc.)",
+      "Income-tax-free bonuses of up to GBP 3,600 per employee per year remain available to EOT-owned companies"
+    ],
+    "loan_note_norms": "Typically the EOT pays a modest initial cash amount (often funded by the company's surplus cash and/or bank debt) and the balance as deferred consideration / vendor loan notes, fixed at completion and repaid out of post-tax profits contributed by the company to the trust over several years (commonly 3-8 years). Loan notes may carry interest at a commercial rate (now capped at a reasonable commercial rate by FA 2025). CGT can be paid as instalments are received where the statutory instalment rules apply (up to 8 years). Founders therefore carry company performance risk; sale price is normally at a discount to third-party trade value because it is funded from the company's own cash flows.",
+    "badr_rate_2026": "18% from 6 April 2026 (was 10% to 5 April 2025, 14% from 6 April 2025). Main CGT rates 18% basic / 24% higher, so BADR benefit from April 2026 is 6 points, max saving GBP 60,000.",
+    "badr_lifetime_limit": "GBP 1,000,000 lifetime limit of qualifying gains (unchanged). Conditions: at least 5% of ordinary shares/votes and 5% of profits or proceeds, officer or employee, trading company, all for 2 years to disposal.",
+    "sources": [
+      "https://taxscape.deloitte.com/measures-autumn-budget-2025/cgt-relief-on-employee-ownership-trusts.aspx",
+      "https://www.brabners.com/insights/corporate/autumn-budget-2025-employee-ownership-trust-capital-gains-tax-changes-explained",
+      "https://www.lewissilkin.com/insights/2026/04/27/employee-ownership-trusts-a-different-business-model",
+      "https://brodies.com/insights/wills-and-estate-planning/business-asset-disposal-relief-badr-what-is-changing-on-6-april-2026/",
+      "https://researchbriefings.files.parliament.uk/documents/CBP-10437/CBP-10437.pdf"
+    ],
+    "grade": "A/B (Deloitte, Brodies, Lewis Silkin read directly; parliament briefing listed but not read)"
+  },
+  "deals": [
+    {
+      "year": 2019,
+      "target": "Contino (London; DevOps/cloud consultancy)",
+      "acquirer": "Cognizant",
+      "target_size": "~350 staff (UK, US, Australia)",
+      "price": "Undisclosed",
+      "source": "https://www.consultancy.org/firms/cognizant/news/consulting/ma-in-consulting",
+      "grade": "B",
+      "note": "Pre-window; included as the archetype product-led consultancy exit"
+    },
+    {
+      "year": 2021,
+      "target": "Infinity Works (Leeds; cloud engineering consultancy)",
+      "acquirer": "Accenture",
+      "target_size": "Offices Leeds, Manchester, Edinburgh, London (headcount not in source; widely reported ~500)",
+      "price": "Undisclosed",
+      "source": "https://www.nasdaq.com/articles/accenture-acquires-infinity-works-quick-facts-2021-02-16",
+      "grade": "B"
+    },
+    {
+      "year": 2022,
+      "target": "Cloudreach (London; cloud services)",
+      "acquirer": "Atos (later Eviden)",
+      "target_size": "~600 staff",
+      "price": "Undisclosed",
+      "source": "https://www.consultancy.uk/news/29820/atos-buys-600-strong-cloud-services-company-cloudreach",
+      "grade": "B",
+      "note": "Headline from search result title; article not opened"
+    },
+    {
+      "year": 2023,
+      "target": "Mobica (Manchester; IoT software engineering)",
+      "acquirer": "Cognizant",
+      "target_size": "Not stated",
+      "price": "Undisclosed",
+      "source": "https://www.consultancy.org/firms/cognizant/news/consulting/ma-in-consulting",
+      "grade": "B"
+    },
+    {
+      "year": 2023,
+      "target": "6point6 (London/Manchester; government digital, cyber, cloud)",
+      "acquirer": "Accenture",
+      "target_size": "~400 staff",
+      "price": "Undisclosed",
+      "source": "https://newsroom.accenture.com/news/2023/accenture-to-expand-government-transformation-capabilities-in-the-uk-with-acquisition-of-6point6",
+      "grade": "A"
+    },
+    {
+      "year": 2023,
+      "target": "Redkite (London; full-stack data consultancy)",
+      "acquirer": "Accenture",
+      "target_size": "230+ staff",
+      "price": "Undisclosed",
+      "source": "https://newsroom.accenture.com/news/2023/accenture-acquires-data-consultancy-redkite",
+      "grade": "A"
+    },
+    {
+      "year": 2025,
+      "target": "BJSS (Leeds; engineering/AI/cloud consultancy)",
+      "acquirer": "CGI",
+      "target_size": "2,400+ staff",
+      "price": "Undisclosed; implied 2024 EV/EBITDA 12.5x, EV/Sales 2.3x (mainsights.io)",
+      "source": "https://www.mainsights.io/ma-news/cgi-acquires-uk-based-bjss-at-2024-evebitda-125x-and-evsales-23x",
+      "grade": "B",
+      "note": "Announced 30 Jan 2025, completed Feb 2025"
+    },
+    {
+      "year": 2025,
+      "target": "Mesh-AI (London; data & AI consultancy)",
+      "acquirer": "Indicium (merger, rebranded Indicium AI Q1 2026)",
+      "target_size": "Not stated",
+      "price": "Undisclosed",
+      "source": "https://www.channelinsider.com/channel-business/mergers-and-acquisitions/indicium-mesh-ai-merger-global-ai-consultancy/",
+      "grade": "B",
+      "note": "Announced 4 Nov 2025; ex-Mesh-AI CEO becomes CEO Europe"
+    },
+    {
+      "year": 2026,
+      "target": "CreateFuture, formerly xDesign (Edinburgh/Leeds; digital & AI consultancy)",
+      "acquirer": "Version 1",
+      "target_size": "550 staff",
+      "price": "Undisclosed",
+      "source": "https://www.consultancy.uk/news/43997/version-1-acquires-500-person-digital-consultancy-createfuture",
+      "grade": "B",
+      "note": "6 May 2026"
+    }
+  ]
+}

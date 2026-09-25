@@ -1,0 +1,3958 @@
+{
+ "rounds": [
+  {
+   "round": 1,
+   "n": 100,
+   "mean": 5.76772,
+   "max": 6.988,
+   "p90": 6.55,
+   "best": "Franklin Gate",
+   "cost_so_far": 0.012437951999999997
+  },
+  {
+   "round": 2,
+   "n": 98,
+   "mean": 5.762408163265306,
+   "max": 6.604,
+   "p90": 6.448,
+   "best": "Grantcraft",
+   "cost_so_far": 0.028462127999999996
+  },
+  {
+   "round": 3,
+   "n": 89,
+   "mean": 5.894921348314607,
+   "max": 6.646,
+   "p90": 6.393999999999999,
+   "best": "Assentgate",
+   "cost_so_far": 0.04399192199999999
+  },
+  {
+   "round": 4,
+   "n": 80,
+   "mean": 5.84185,
+   "max": 6.741999999999999,
+   "p90": 6.3999999999999995,
+   "best": "Onlyhand",
+   "cost_so_far": 0.060179877999999985
+  },
+  {
+   "round": 5,
+   "n": 67,
+   "mean": 5.699253731343283,
+   "max": 6.664000000000001,
+   "p90": 6.37,
+   "best": "Gatehold",
+   "cost_so_far": 0.07551979800000001
+  }
+ ],
+ "names": {
+  "Franklin Gate": {
+   "fit": 6.580000000000001,
+   "gravitas": 6.64,
+   "distinct": 6.28,
+   "ease": 8.89,
+   "wit": 6.550000000000001,
+   "total": 6.988,
+   "round": 1
+  },
+  "Keyhold": {
+   "fit": 6.79,
+   "gravitas": 6.069999999999999,
+   "distinct": 6.489999999999999,
+   "ease": 8.739999999999998,
+   "wit": 6.7299999999999995,
+   "total": 6.9639999999999995,
+   "round": 1
+  },
+  "Latchkey": {
+   "fit": 6.669999999999999,
+   "gravitas": 4.48,
+   "distinct": 7.329999999999999,
+   "ease": 7.84,
+   "wit": 7.6000000000000005,
+   "total": 6.784,
+   "round": 1
+  },
+  "Quietgate": {
+   "fit": 6.28,
+   "gravitas": 5.92,
+   "distinct": 6.19,
+   "ease": 8.350000000000001,
+   "wit": 7.09,
+   "total": 6.766,
+   "round": 1
+  },
+  "Bridle AI": {
+   "fit": 6.97,
+   "gravitas": 5.17,
+   "distinct": 6.069999999999999,
+   "ease": 8.32,
+   "wit": 7.300000000000001,
+   "total": 6.766,
+   "round": 1
+  },
+  "Onlyhand": {
+   "fit": 6.46,
+   "gravitas": 4.0,
+   "distinct": 7.09,
+   "ease": 8.529999999999998,
+   "wit": 7.63,
+   "total": 6.741999999999999,
+   "round": 4
+  },
+  "Warden Works": {
+   "fit": 6.669999999999999,
+   "gravitas": 6.28,
+   "distinct": 5.2299999999999995,
+   "ease": 9.01,
+   "wit": 6.25,
+   "total": 6.688,
+   "round": 1
+  },
+  "Gatehold": {
+   "fit": 7.0,
+   "gravitas": 6.31,
+   "distinct": 5.680000000000001,
+   "ease": 8.14,
+   "wit": 6.19,
+   "total": 6.664000000000001,
+   "round": 5
+  },
+  "Assentgate": {
+   "fit": 7.449999999999999,
+   "gravitas": 6.13,
+   "distinct": 5.71,
+   "ease": 6.489999999999999,
+   "wit": 7.449999999999999,
+   "total": 6.646,
+   "round": 3
+  },
+  "Least Privilege Ltd": {
+   "fit": 7.300000000000001,
+   "gravitas": 5.2,
+   "distinct": 4.99,
+   "ease": 7.7799999999999985,
+   "wit": 7.93,
+   "total": 6.64,
+   "round": 1
+  },
+  "Stillhold": {
+   "fit": 6.16,
+   "gravitas": 6.43,
+   "distinct": 6.28,
+   "ease": 7.510000000000001,
+   "wit": 6.760000000000001,
+   "total": 6.628,
+   "round": 3
+  },
+  "Waitgrant": {
+   "fit": 7.6000000000000005,
+   "gravitas": 3.46,
+   "distinct": 6.43,
+   "ease": 7.21,
+   "wit": 8.41,
+   "total": 6.622,
+   "round": 5
+  },
+  "Tollgate Systems": {
+   "fit": 7.21,
+   "gravitas": 5.62,
+   "distinct": 5.05,
+   "ease": 8.170000000000002,
+   "wit": 7.0,
+   "total": 6.61,
+   "round": 1
+  },
+  "Bounded Labs": {
+   "fit": 6.5200000000000005,
+   "gravitas": 6.489999999999999,
+   "distinct": 4.869999999999999,
+   "ease": 8.5,
+   "wit": 6.669999999999999,
+   "total": 6.609999999999999,
+   "round": 1
+  },
+  "Grantcraft": {
+   "fit": 6.699999999999999,
+   "gravitas": 4.66,
+   "distinct": 5.8,
+   "ease": 8.260000000000002,
+   "wit": 7.6000000000000005,
+   "total": 6.604,
+   "round": 2
+  },
+  "Consentgate": {
+   "fit": 7.510000000000001,
+   "gravitas": 5.17,
+   "distinct": 5.41,
+   "ease": 8.05,
+   "wit": 6.8500000000000005,
+   "total": 6.598000000000001,
+   "round": 4
+  },
+  "Permitcraft": {
+   "fit": 7.0299999999999985,
+   "gravitas": 4.6899999999999995,
+   "distinct": 5.89,
+   "ease": 7.8999999999999995,
+   "wit": 7.449999999999999,
+   "total": 6.592,
+   "round": 2
+  },
+  "Vouchhold": {
+   "fit": 6.91,
+   "gravitas": 5.7700000000000005,
+   "distinct": 5.56,
+   "ease": 8.05,
+   "wit": 6.669999999999999,
+   "total": 6.592,
+   "round": 4
+  },
+  "Deedhold": {
+   "fit": 6.28,
+   "gravitas": 6.1,
+   "distinct": 6.37,
+   "ease": 7.239999999999999,
+   "wit": 6.94,
+   "total": 6.586,
+   "round": 3
+  },
+  "Grantport": {
+   "fit": 6.580000000000001,
+   "gravitas": 5.89,
+   "distinct": 5.29,
+   "ease": 8.559999999999999,
+   "wit": 6.46,
+   "total": 6.556,
+   "round": 2
+  },
+  "Chaperone Systems": {
+   "fit": 6.97,
+   "gravitas": 6.069999999999999,
+   "distinct": 5.92,
+   "ease": 6.22,
+   "wit": 7.57,
+   "total": 6.55,
+   "round": 1
+  },
+  "Trothhold": {
+   "fit": 6.61,
+   "gravitas": 5.14,
+   "distinct": 8.079999999999998,
+   "ease": 4.630000000000001,
+   "wit": 8.29,
+   "total": 6.55,
+   "round": 2
+  },
+  "Grantkeep": {
+   "fit": 6.91,
+   "gravitas": 5.2299999999999995,
+   "distinct": 5.680000000000001,
+   "ease": 8.260000000000002,
+   "wit": 6.61,
+   "total": 6.538,
+   "round": 2
+  },
+  "Permitted": {
+   "fit": 7.0299999999999985,
+   "gravitas": 4.960000000000001,
+   "distinct": 4.33,
+   "ease": 9.67,
+   "wit": 6.64,
+   "total": 6.526,
+   "round": 2
+  },
+  "Deedgate": {
+   "fit": 6.94,
+   "gravitas": 5.65,
+   "distinct": 5.38,
+   "ease": 7.7200000000000015,
+   "wit": 6.91,
+   "total": 6.5200000000000005,
+   "round": 3
+  },
+  "Wardgate": {
+   "fit": 6.580000000000001,
+   "gravitas": 6.22,
+   "distinct": 5.2,
+   "ease": 8.23,
+   "wit": 6.37,
+   "total": 6.5200000000000005,
+   "round": 5
+  },
+  "Assenthold": {
+   "fit": 6.97,
+   "gravitas": 6.22,
+   "distinct": 6.34,
+   "ease": 5.7700000000000005,
+   "wit": 7.27,
+   "total": 6.514,
+   "round": 3
+  },
+  "Grantstone": {
+   "fit": 6.13,
+   "gravitas": 6.489999999999999,
+   "distinct": 5.59,
+   "ease": 8.2,
+   "wit": 6.13,
+   "total": 6.508,
+   "round": 2
+  },
+  "Stillgate": {
+   "fit": 6.19,
+   "gravitas": 6.31,
+   "distinct": 5.9799999999999995,
+   "ease": 7.48,
+   "wit": 6.580000000000001,
+   "total": 6.508,
+   "round": 3
+  },
+  "Tollbooth AI": {
+   "fit": 7.329999999999999,
+   "gravitas": 2.26,
+   "distinct": 6.8500000000000005,
+   "ease": 7.989999999999999,
+   "wit": 8.02,
+   "total": 6.489999999999999,
+   "round": 1
+  },
+  "Assentward": {
+   "fit": 7.09,
+   "gravitas": 6.1,
+   "distinct": 6.22,
+   "ease": 5.89,
+   "wit": 7.1499999999999995,
+   "total": 6.489999999999999,
+   "round": 3
+  },
+  "Warrantkeep": {
+   "fit": 7.1499999999999995,
+   "gravitas": 5.8,
+   "distinct": 6.46,
+   "ease": 5.680000000000001,
+   "wit": 7.329999999999999,
+   "total": 6.484,
+   "round": 4
+  },
+  "Turnstile Systems": {
+   "fit": 7.300000000000001,
+   "gravitas": 6.1,
+   "distinct": 5.86,
+   "ease": 6.28,
+   "wit": 6.8500000000000005,
+   "total": 6.478000000000001,
+   "round": 4
+  },
+  "Handkeep": {
+   "fit": 6.61,
+   "gravitas": 5.08,
+   "distinct": 5.92,
+   "ease": 7.7799999999999985,
+   "wit": 7.0,
+   "total": 6.478,
+   "round": 4
+  },
+  "Wardstone": {
+   "fit": 5.53,
+   "gravitas": 6.61,
+   "distinct": 6.16,
+   "ease": 7.63,
+   "wit": 6.43,
+   "total": 6.472,
+   "round": 1
+  },
+  "Fairhold": {
+   "fit": 5.86,
+   "gravitas": 6.5200000000000005,
+   "distinct": 5.14,
+   "ease": 8.98,
+   "wit": 5.86,
+   "total": 6.472,
+   "round": 2
+  },
+  "Holdcraft": {
+   "fit": 6.64,
+   "gravitas": 4.48,
+   "distinct": 5.74,
+   "ease": 8.14,
+   "wit": 7.329999999999999,
+   "total": 6.466,
+   "round": 2
+  },
+  "Assize": {
+   "fit": 5.89,
+   "gravitas": 6.7299999999999995,
+   "distinct": 7.329999999999999,
+   "ease": 4.57,
+   "wit": 7.7799999999999985,
+   "total": 6.459999999999999,
+   "round": 1
+  },
+  "Holdmark": {
+   "fit": 6.550000000000001,
+   "gravitas": 6.04,
+   "distinct": 5.14,
+   "ease": 8.170000000000002,
+   "wit": 6.34,
+   "total": 6.448,
+   "round": 2
+  },
+  "Keeperhold": {
+   "fit": 6.37,
+   "gravitas": 5.89,
+   "distinct": 5.62,
+   "ease": 7.8999999999999995,
+   "wit": 6.46,
+   "total": 6.4479999999999995,
+   "round": 5
+  },
+  "Fairgate": {
+   "fit": 6.069999999999999,
+   "gravitas": 5.62,
+   "distinct": 5.11,
+   "ease": 9.040000000000001,
+   "wit": 6.34,
+   "total": 6.436,
+   "round": 5
+  },
+  "Withheld AI": {
+   "fit": 6.97,
+   "gravitas": 3.82,
+   "distinct": 5.8,
+   "ease": 8.02,
+   "wit": 7.57,
+   "total": 6.436,
+   "round": 5
+  },
+  "Caveat Systems": {
+   "fit": 6.64,
+   "gravitas": 6.43,
+   "distinct": 5.7700000000000005,
+   "ease": 5.59,
+   "wit": 7.7200000000000015,
+   "total": 6.430000000000001,
+   "round": 1
+  },
+  "Fencehold": {
+   "fit": 6.25,
+   "gravitas": 5.08,
+   "distinct": 5.95,
+   "ease": 8.260000000000002,
+   "wit": 6.61,
+   "total": 6.430000000000001,
+   "round": 4
+  },
+  "Byhand Systems": {
+   "fit": 6.37,
+   "gravitas": 4.6899999999999995,
+   "distinct": 5.0200000000000005,
+   "ease": 8.920000000000002,
+   "wit": 7.09,
+   "total": 6.418,
+   "round": 2
+  },
+  "Wayleave": {
+   "fit": 7.18,
+   "gravitas": 5.44,
+   "distinct": 7.09,
+   "ease": 4.42,
+   "wit": 7.93,
+   "total": 6.412,
+   "round": 1
+  },
+  "Consenthold": {
+   "fit": 7.06,
+   "gravitas": 5.86,
+   "distinct": 5.47,
+   "ease": 7.239999999999999,
+   "wit": 6.37,
+   "total": 6.3999999999999995,
+   "round": 4
+  },
+  "Vouchward": {
+   "fit": 6.669999999999999,
+   "gravitas": 5.9799999999999995,
+   "distinct": 5.53,
+   "ease": 7.06,
+   "wit": 6.760000000000001,
+   "total": 6.3999999999999995,
+   "round": 4
+  },
+  "Covenant Works": {
+   "fit": 6.580000000000001,
+   "gravitas": 6.43,
+   "distinct": 5.29,
+   "ease": 7.0299999999999985,
+   "wit": 6.64,
+   "total": 6.394,
+   "round": 1
+  },
+  "Latchgrant": {
+   "fit": 7.420000000000001,
+   "gravitas": 4.66,
+   "distinct": 6.34,
+   "ease": 6.01,
+   "wit": 7.54,
+   "total": 6.394,
+   "round": 3
+  },
+  "Limithold": {
+   "fit": 6.669999999999999,
+   "gravitas": 5.95,
+   "distinct": 4.9,
+   "ease": 8.559999999999999,
+   "wit": 5.89,
+   "total": 6.393999999999999,
+   "round": 3
+  },
+  "Vouchgate": {
+   "fit": 7.1499999999999995,
+   "gravitas": 4.6,
+   "distinct": 5.56,
+   "ease": 7.7799999999999985,
+   "wit": 6.88,
+   "total": 6.393999999999999,
+   "round": 4
+  },
+  "Signoff Labs": {
+   "fit": 6.97,
+   "gravitas": 5.11,
+   "distinct": 4.15,
+   "ease": 9.4,
+   "wit": 6.31,
+   "total": 6.388,
+   "round": 4
+  },
+  "Grantwise": {
+   "fit": 6.61,
+   "gravitas": 5.2299999999999995,
+   "distinct": 4.33,
+   "ease": 8.95,
+   "wit": 6.79,
+   "total": 6.382,
+   "round": 2
+  },
+  "Assentmark": {
+   "fit": 6.94,
+   "gravitas": 5.86,
+   "distinct": 5.47,
+   "ease": 6.760000000000001,
+   "wit": 6.8500000000000005,
+   "total": 6.376,
+   "round": 2
+  },
+  "Grantsworth": {
+   "fit": 6.5200000000000005,
+   "gravitas": 5.8,
+   "distinct": 5.41,
+   "ease": 7.36,
+   "wit": 6.79,
+   "total": 6.376,
+   "round": 4
+  },
+  "Grantwatch": {
+   "fit": 6.97,
+   "gravitas": 4.6899999999999995,
+   "distinct": 4.6899999999999995,
+   "ease": 8.8,
+   "wit": 6.7299999999999995,
+   "total": 6.3759999999999994,
+   "round": 2
+  },
+  "Latchmark": {
+   "fit": 6.28,
+   "gravitas": 5.2,
+   "distinct": 6.82,
+   "ease": 6.31,
+   "wit": 7.239999999999999,
+   "total": 6.37,
+   "round": 2
+  },
+  "Keystead": {
+   "fit": 5.86,
+   "gravitas": 6.37,
+   "distinct": 5.9799999999999995,
+   "ease": 7.27,
+   "wit": 6.37,
+   "total": 6.37,
+   "round": 5
+  },
+  "Holdstead": {
+   "fit": 6.069999999999999,
+   "gravitas": 6.31,
+   "distinct": 5.680000000000001,
+   "ease": 7.09,
+   "wit": 6.699999999999999,
+   "total": 6.37,
+   "round": 5
+  },
+  "Consentward": {
+   "fit": 7.0299999999999985,
+   "gravitas": 5.86,
+   "distinct": 5.29,
+   "ease": 7.06,
+   "wit": 6.580000000000001,
+   "total": 6.364,
+   "round": 4
+  },
+  "Sallyport": {
+   "fit": 5.95,
+   "gravitas": 6.04,
+   "distinct": 7.18,
+   "ease": 5.44,
+   "wit": 7.18,
+   "total": 6.358,
+   "round": 1
+  },
+  "Waitwell": {
+   "fit": 6.04,
+   "gravitas": 3.25,
+   "distinct": 6.28,
+   "ease": 8.379999999999999,
+   "wit": 7.81,
+   "total": 6.351999999999999,
+   "round": 2
+  },
+  "Curtain Wall": {
+   "fit": 5.74,
+   "gravitas": 5.14,
+   "distinct": 5.71,
+   "ease": 8.14,
+   "wit": 7.0,
+   "total": 6.346,
+   "round": 1
+  },
+  "Quietkey": {
+   "fit": 5.83,
+   "gravitas": 4.6,
+   "distinct": 5.65,
+   "ease": 8.920000000000002,
+   "wit": 6.7299999999999995,
+   "total": 6.346,
+   "round": 3
+  },
+  "Clearhold": {
+   "fit": 5.71,
+   "gravitas": 6.7299999999999995,
+   "distinct": 4.300000000000001,
+   "ease": 9.4,
+   "wit": 5.53,
+   "total": 6.3340000000000005,
+   "round": 2
+  },
+  "Gateward": {
+   "fit": 6.61,
+   "gravitas": 6.16,
+   "distinct": 4.75,
+   "ease": 7.96,
+   "wit": 6.19,
+   "total": 6.3340000000000005,
+   "round": 3
+  },
+  "Grantside": {
+   "fit": 6.31,
+   "gravitas": 5.2,
+   "distinct": 5.26,
+   "ease": 8.079999999999998,
+   "wit": 6.82,
+   "total": 6.334,
+   "round": 2
+  },
+  "Waitingroom AI": {
+   "fit": 6.489999999999999,
+   "gravitas": 1.8400000000000003,
+   "distinct": 6.46,
+   "ease": 9.16,
+   "wit": 7.69,
+   "total": 6.328,
+   "round": 4
+  },
+  "Permitline": {
+   "fit": 7.0,
+   "gravitas": 4.9,
+   "distinct": 4.9,
+   "ease": 8.11,
+   "wit": 6.64,
+   "total": 6.31,
+   "round": 2
+  },
+  "Wardright": {
+   "fit": 5.89,
+   "gravitas": 6.34,
+   "distinct": 5.74,
+   "ease": 6.8500000000000005,
+   "wit": 6.7299999999999995,
+   "total": 6.31,
+   "round": 5
+  },
+  "Steadhold": {
+   "fit": 5.95,
+   "gravitas": 6.760000000000001,
+   "distinct": 4.66,
+   "ease": 8.71,
+   "wit": 5.44,
+   "total": 6.304,
+   "round": 4
+  },
+  "Permission Works": {
+   "fit": 7.06,
+   "gravitas": 5.5,
+   "distinct": 3.46,
+   "ease": 9.58,
+   "wit": 5.86,
+   "total": 6.292,
+   "round": 2
+  },
+  "Tetherwell": {
+   "fit": 6.37,
+   "gravitas": 5.11,
+   "distinct": 6.46,
+   "ease": 6.46,
+   "wit": 7.0299999999999985,
+   "total": 6.286,
+   "round": 1
+  },
+  "Trothgate": {
+   "fit": 6.7299999999999995,
+   "gravitas": 5.2299999999999995,
+   "distinct": 7.1499999999999995,
+   "ease": 4.57,
+   "wit": 7.75,
+   "total": 6.286,
+   "round": 2
+  },
+  "Warrantwell": {
+   "fit": 6.97,
+   "gravitas": 5.5,
+   "distinct": 5.71,
+   "ease": 6.04,
+   "wit": 7.21,
+   "total": 6.286,
+   "round": 2
+  },
+  "Keep & Ward": {
+   "fit": 6.069999999999999,
+   "gravitas": 5.08,
+   "distinct": 5.29,
+   "ease": 8.260000000000002,
+   "wit": 6.699999999999999,
+   "total": 6.28,
+   "round": 1
+  },
+  "Gracehold": {
+   "fit": 5.7700000000000005,
+   "gravitas": 6.069999999999999,
+   "distinct": 5.26,
+   "ease": 8.170000000000002,
+   "wit": 6.13,
+   "total": 6.28,
+   "round": 3
+  },
+  "Holdward": {
+   "fit": 5.95,
+   "gravitas": 6.28,
+   "distinct": 5.9799999999999995,
+   "ease": 6.580000000000001,
+   "wit": 6.580000000000001,
+   "total": 6.274,
+   "round": 3
+  },
+  "Warranthold": {
+   "fit": 7.0,
+   "gravitas": 5.71,
+   "distinct": 5.83,
+   "ease": 6.16,
+   "wit": 6.669999999999999,
+   "total": 6.274,
+   "round": 4
+  },
+  "Mandate Works": {
+   "fit": 6.88,
+   "gravitas": 6.1,
+   "distinct": 4.0600000000000005,
+   "ease": 8.529999999999998,
+   "wit": 5.8,
+   "total": 6.273999999999999,
+   "round": 2
+  },
+  "Fenceward": {
+   "fit": 6.01,
+   "gravitas": 5.86,
+   "distinct": 5.92,
+   "ease": 6.79,
+   "wit": 6.760000000000001,
+   "total": 6.268,
+   "round": 3
+  },
+  "Boundgate": {
+   "fit": 6.3999999999999995,
+   "gravitas": 5.319999999999999,
+   "distinct": 5.26,
+   "ease": 8.02,
+   "wit": 6.31,
+   "total": 6.262,
+   "round": 3
+  },
+  "Grantfold": {
+   "fit": 6.46,
+   "gravitas": 4.779999999999999,
+   "distinct": 6.43,
+   "ease": 6.3999999999999995,
+   "wit": 7.239999999999999,
+   "total": 6.262,
+   "round": 4
+  },
+  "Indenture": {
+   "fit": 6.489999999999999,
+   "gravitas": 5.14,
+   "distinct": 7.0,
+   "ease": 4.84,
+   "wit": 7.7799999999999985,
+   "total": 6.249999999999999,
+   "round": 1
+  },
+  "Holdwatch": {
+   "fit": 6.489999999999999,
+   "gravitas": 5.0200000000000005,
+   "distinct": 4.6899999999999995,
+   "ease": 8.649999999999999,
+   "wit": 6.37,
+   "total": 6.244,
+   "round": 2
+  },
+  "Gatewell": {
+   "fit": 6.19,
+   "gravitas": 5.56,
+   "distinct": 4.8100000000000005,
+   "ease": 8.559999999999999,
+   "wit": 6.1,
+   "total": 6.244,
+   "round": 5
+  },
+  "Tollmark": {
+   "fit": 5.71,
+   "gravitas": 5.680000000000001,
+   "distinct": 5.74,
+   "ease": 7.6000000000000005,
+   "wit": 6.46,
+   "total": 6.238,
+   "round": 2
+  },
+  "Grantstead": {
+   "fit": 6.37,
+   "gravitas": 6.13,
+   "distinct": 5.83,
+   "ease": 6.34,
+   "wit": 6.5200000000000005,
+   "total": 6.238,
+   "round": 5
+  },
+  "Tollward": {
+   "fit": 6.25,
+   "gravitas": 5.59,
+   "distinct": 6.19,
+   "ease": 6.13,
+   "wit": 7.0299999999999985,
+   "total": 6.2379999999999995,
+   "round": 3
+  },
+  "Signoff Gate": {
+   "fit": 7.6000000000000005,
+   "gravitas": 3.82,
+   "distinct": 4.27,
+   "ease": 9.01,
+   "wit": 6.489999999999999,
+   "total": 6.2379999999999995,
+   "round": 5
+  },
+  "Mandatehold": {
+   "fit": 6.94,
+   "gravitas": 6.22,
+   "distinct": 5.05,
+   "ease": 7.0,
+   "wit": 5.95,
+   "total": 6.232,
+   "round": 3
+  },
+  "Bondhold": {
+   "fit": 5.89,
+   "gravitas": 5.26,
+   "distinct": 5.29,
+   "ease": 8.14,
+   "wit": 6.550000000000001,
+   "total": 6.226,
+   "round": 3
+  },
+  "Keyside": {
+   "fit": 5.71,
+   "gravitas": 5.11,
+   "distinct": 5.14,
+   "ease": 8.739999999999998,
+   "wit": 6.3999999999999995,
+   "total": 6.22,
+   "round": 2
+  },
+  "Charterward": {
+   "fit": 6.34,
+   "gravitas": 6.580000000000001,
+   "distinct": 5.8,
+   "ease": 5.92,
+   "wit": 6.46,
+   "total": 6.22,
+   "round": 3
+  },
+  "Turnstile Labs": {
+   "fit": 7.0,
+   "gravitas": 5.29,
+   "distinct": 5.7700000000000005,
+   "ease": 6.069999999999999,
+   "wit": 6.94,
+   "total": 6.214,
+   "round": 4
+  },
+  "Bastion Grove": {
+   "fit": 5.11,
+   "gravitas": 6.46,
+   "distinct": 5.92,
+   "ease": 7.420000000000001,
+   "wit": 6.13,
+   "total": 6.208,
+   "round": 1
+  },
+  "Keywatch": {
+   "fit": 6.25,
+   "gravitas": 5.59,
+   "distinct": 4.210000000000001,
+   "ease": 9.459999999999999,
+   "wit": 5.53,
+   "total": 6.208,
+   "round": 2
+  },
+  "Onlygate": {
+   "fit": 6.8500000000000005,
+   "gravitas": 5.11,
+   "distinct": 4.360000000000001,
+   "ease": 8.68,
+   "wit": 6.04,
+   "total": 6.208,
+   "round": 3
+  },
+  "Scopehold": {
+   "fit": 6.699999999999999,
+   "gravitas": 5.8,
+   "distinct": 4.48,
+   "ease": 8.11,
+   "wit": 5.92,
+   "total": 6.202,
+   "round": 3
+  },
+  "Boundhold": {
+   "fit": 6.5200000000000005,
+   "gravitas": 5.0200000000000005,
+   "distinct": 6.25,
+   "ease": 6.46,
+   "wit": 6.7299999999999995,
+   "total": 6.196,
+   "round": 4
+  },
+  "Fenceline": {
+   "fit": 5.86,
+   "gravitas": 5.2299999999999995,
+   "distinct": 4.84,
+   "ease": 9.25,
+   "wit": 5.7700000000000005,
+   "total": 6.19,
+   "round": 3
+  },
+  "Openhold": {
+   "fit": 5.47,
+   "gravitas": 5.680000000000001,
+   "distinct": 4.960000000000001,
+   "ease": 8.77,
+   "wit": 6.01,
+   "total": 6.178,
+   "round": 3
+  },
+  "Trothkeep": {
+   "fit": 6.19,
+   "gravitas": 5.74,
+   "distinct": 6.669999999999999,
+   "ease": 5.17,
+   "wit": 7.12,
+   "total": 6.178,
+   "round": 4
+  },
+  "Holdright": {
+   "fit": 6.5200000000000005,
+   "gravitas": 5.2,
+   "distinct": 4.66,
+   "ease": 8.05,
+   "wit": 6.46,
+   "total": 6.178,
+   "round": 5
+  },
+  "Waitmark": {
+   "fit": 5.95,
+   "gravitas": 3.4,
+   "distinct": 6.43,
+   "ease": 7.39,
+   "wit": 7.69,
+   "total": 6.172,
+   "round": 2
+  },
+  "Waithold": {
+   "fit": 6.43,
+   "gravitas": 4.9,
+   "distinct": 6.1,
+   "ease": 6.34,
+   "wit": 7.09,
+   "total": 6.172,
+   "round": 3
+  },
+  "Assentline": {
+   "fit": 6.94,
+   "gravitas": 5.71,
+   "distinct": 5.17,
+   "ease": 6.5200000000000005,
+   "wit": 6.489999999999999,
+   "total": 6.166,
+   "round": 2
+  },
+  "Latchward": {
+   "fit": 6.699999999999999,
+   "gravitas": 5.5,
+   "distinct": 5.7700000000000005,
+   "ease": 6.16,
+   "wit": 6.669999999999999,
+   "total": 6.16,
+   "round": 3
+  },
+  "Keygate": {
+   "fit": 6.64,
+   "gravitas": 4.869999999999999,
+   "distinct": 4.449999999999999,
+   "ease": 9.01,
+   "wit": 5.8,
+   "total": 6.154,
+   "round": 4
+  },
+  "Steadkeep": {
+   "fit": 5.86,
+   "gravitas": 6.46,
+   "distinct": 5.0200000000000005,
+   "ease": 7.75,
+   "wit": 5.65,
+   "total": 6.148000000000001,
+   "round": 4
+  },
+  "Bondstone": {
+   "fit": 4.66,
+   "gravitas": 5.2,
+   "distinct": 6.31,
+   "ease": 7.87,
+   "wit": 6.699999999999999,
+   "total": 6.148,
+   "round": 1
+  },
+  "Tollside": {
+   "fit": 5.95,
+   "gravitas": 4.539999999999999,
+   "distinct": 5.71,
+   "ease": 7.57,
+   "wit": 6.97,
+   "total": 6.148,
+   "round": 2
+  },
+  "Holdside": {
+   "fit": 5.83,
+   "gravitas": 5.0200000000000005,
+   "distinct": 5.35,
+   "ease": 7.81,
+   "wit": 6.7299999999999995,
+   "total": 6.148,
+   "round": 2
+  },
+  "Mandatekeep": {
+   "fit": 7.0,
+   "gravitas": 5.62,
+   "distinct": 5.29,
+   "ease": 7.0,
+   "wit": 5.7700000000000005,
+   "total": 6.136,
+   "round": 4
+  },
+  "Grantmark": {
+   "fit": 6.43,
+   "gravitas": 5.38,
+   "distinct": 4.360000000000001,
+   "ease": 8.649999999999999,
+   "wit": 5.86,
+   "total": 6.136,
+   "round": 5
+  },
+  "Signet Labs": {
+   "fit": 5.83,
+   "gravitas": 6.489999999999999,
+   "distinct": 5.47,
+   "ease": 6.550000000000001,
+   "wit": 6.31,
+   "total": 6.13,
+   "round": 1
+  },
+  "Signoff Systems": {
+   "fit": 7.0,
+   "gravitas": 5.41,
+   "distinct": 3.07,
+   "ease": 9.55,
+   "wit": 5.59,
+   "total": 6.1240000000000006,
+   "round": 4
+  },
+  "Portcullis Systems": {
+   "fit": 7.1499999999999995,
+   "gravitas": 6.94,
+   "distinct": 6.580000000000001,
+   "ease": 2.8899999999999997,
+   "wit": 7.06,
+   "total": 6.124,
+   "round": 1
+  },
+  "Latchside": {
+   "fit": 6.04,
+   "gravitas": 4.42,
+   "distinct": 6.22,
+   "ease": 7.0,
+   "wit": 6.94,
+   "total": 6.124,
+   "round": 2
+  },
+  "Boundline": {
+   "fit": 5.86,
+   "gravitas": 5.41,
+   "distinct": 5.41,
+   "ease": 8.02,
+   "wit": 5.92,
+   "total": 6.124,
+   "round": 3
+  },
+  "Proviso AI": {
+   "fit": 6.8500000000000005,
+   "gravitas": 5.62,
+   "distinct": 5.11,
+   "ease": 5.89,
+   "wit": 7.12,
+   "total": 6.118,
+   "round": 1
+  },
+  "Cordon AI": {
+   "fit": 6.46,
+   "gravitas": 6.04,
+   "distinct": 5.5,
+   "ease": 6.43,
+   "wit": 6.16,
+   "total": 6.118,
+   "round": 1
+  },
+  "Keygrant": {
+   "fit": 6.94,
+   "gravitas": 4.779999999999999,
+   "distinct": 4.630000000000001,
+   "ease": 8.02,
+   "wit": 6.22,
+   "total": 6.118,
+   "round": 3
+  },
+  "Ledgerhold": {
+   "fit": 5.92,
+   "gravitas": 6.13,
+   "distinct": 5.11,
+   "ease": 7.510000000000001,
+   "wit": 5.92,
+   "total": 6.118,
+   "round": 4
+  },
+  "Waygate": {
+   "fit": 5.65,
+   "gravitas": 5.2299999999999995,
+   "distinct": 5.38,
+   "ease": 7.8999999999999995,
+   "wit": 6.3999999999999995,
+   "total": 6.112,
+   "round": 4
+  },
+  "Antegate": {
+   "fit": 6.31,
+   "gravitas": 5.11,
+   "distinct": 6.580000000000001,
+   "ease": 5.53,
+   "wit": 7.0299999999999985,
+   "total": 6.112,
+   "round": 4
+  },
+  "Redoubt Labs": {
+   "fit": 5.65,
+   "gravitas": 7.06,
+   "distinct": 6.5200000000000005,
+   "ease": 4.93,
+   "wit": 6.37,
+   "total": 6.106,
+   "round": 1
+  },
+  "Affidavit AI": {
+   "fit": 5.9799999999999995,
+   "gravitas": 4.720000000000001,
+   "distinct": 6.91,
+   "ease": 4.84,
+   "wit": 8.079999999999998,
+   "total": 6.106,
+   "round": 1
+  },
+  "Fairkey": {
+   "fit": 5.9799999999999995,
+   "gravitas": 4.27,
+   "distinct": 5.17,
+   "ease": 8.71,
+   "wit": 6.3999999999999995,
+   "total": 6.106,
+   "round": 2
+  },
+  "Bondgate": {
+   "fit": 6.46,
+   "gravitas": 4.9,
+   "distinct": 4.389999999999999,
+   "ease": 8.739999999999998,
+   "wit": 6.04,
+   "total": 6.106,
+   "round": 3
+  },
+  "Charterhold": {
+   "fit": 6.580000000000001,
+   "gravitas": 6.5200000000000005,
+   "distinct": 5.0200000000000005,
+   "ease": 6.580000000000001,
+   "wit": 5.8,
+   "total": 6.1000000000000005,
+   "round": 3
+  },
+  "Signoff Hold": {
+   "fit": 7.21,
+   "gravitas": 3.8800000000000003,
+   "distinct": 4.210000000000001,
+   "ease": 8.68,
+   "wit": 6.5200000000000005,
+   "total": 6.1000000000000005,
+   "round": 5
+  },
+  "Keyward": {
+   "fit": 6.25,
+   "gravitas": 5.08,
+   "distinct": 5.74,
+   "ease": 6.34,
+   "wit": 7.09,
+   "total": 6.1,
+   "round": 2
+  },
+  "Askfirst": {
+   "fit": 6.46,
+   "gravitas": 3.91,
+   "distinct": 4.630000000000001,
+   "ease": 9.49,
+   "wit": 5.95,
+   "total": 6.088,
+   "round": 3
+  },
+  "Faithhold": {
+   "fit": 5.29,
+   "gravitas": 4.6,
+   "distinct": 5.62,
+   "ease": 8.379999999999999,
+   "wit": 6.550000000000001,
+   "total": 6.088,
+   "round": 4
+  },
+  "Fair Warning Ltd": {
+   "fit": 4.93,
+   "gravitas": 4.119999999999999,
+   "distinct": 4.869999999999999,
+   "ease": 9.43,
+   "wit": 7.06,
+   "total": 6.082,
+   "round": 2
+  },
+  "Wardstead": {
+   "fit": 5.14,
+   "gravitas": 6.489999999999999,
+   "distinct": 5.680000000000001,
+   "ease": 7.12,
+   "wit": 5.9799999999999995,
+   "total": 6.082,
+   "round": 5
+  },
+  "Bondward": {
+   "fit": 5.74,
+   "gravitas": 5.86,
+   "distinct": 5.14,
+   "ease": 7.06,
+   "wit": 6.580000000000001,
+   "total": 6.0760000000000005,
+   "round": 3
+  },
+  "Latchwell": {
+   "fit": 6.1,
+   "gravitas": 4.0600000000000005,
+   "distinct": 6.22,
+   "ease": 7.12,
+   "wit": 6.88,
+   "total": 6.076,
+   "round": 2
+  },
+  "Waitcraft": {
+   "fit": 6.46,
+   "gravitas": 2.02,
+   "distinct": 6.16,
+   "ease": 7.84,
+   "wit": 7.87,
+   "total": 6.07,
+   "round": 2
+  },
+  "Anteroom AI": {
+   "fit": 6.19,
+   "gravitas": 4.869999999999999,
+   "distinct": 6.64,
+   "ease": 4.84,
+   "wit": 7.81,
+   "total": 6.069999999999999,
+   "round": 1
+  },
+  "Suretyhold": {
+   "fit": 6.28,
+   "gravitas": 6.43,
+   "distinct": 5.17,
+   "ease": 6.550000000000001,
+   "wit": 5.89,
+   "total": 6.064,
+   "round": 3
+  },
+  "Limitgate": {
+   "fit": 6.669999999999999,
+   "gravitas": 4.210000000000001,
+   "distinct": 4.66,
+   "ease": 8.59,
+   "wit": 6.19,
+   "total": 6.064,
+   "round": 3
+  },
+  "Custodian Works": {
+   "fit": 6.64,
+   "gravitas": 6.550000000000001,
+   "distinct": 4.27,
+   "ease": 7.06,
+   "wit": 5.8,
+   "total": 6.064,
+   "round": 5
+  },
+  "Thresholdcraft": {
+   "fit": 5.8,
+   "gravitas": 5.29,
+   "distinct": 5.89,
+   "ease": 6.31,
+   "wit": 6.97,
+   "total": 6.052,
+   "round": 4
+  },
+  "Ravelin Systems": {
+   "fit": 4.960000000000001,
+   "gravitas": 7.09,
+   "distinct": 6.760000000000001,
+   "ease": 4.51,
+   "wit": 6.91,
+   "total": 6.046,
+   "round": 1
+  },
+  "Faithgate": {
+   "fit": 5.59,
+   "gravitas": 4.0600000000000005,
+   "distinct": 5.26,
+   "ease": 8.8,
+   "wit": 6.5200000000000005,
+   "total": 6.046,
+   "round": 4
+  },
+  "Holdline": {
+   "fit": 5.8,
+   "gravitas": 5.319999999999999,
+   "distinct": 5.08,
+   "ease": 8.02,
+   "wit": 6.01,
+   "total": 6.045999999999999,
+   "round": 3
+  },
+  "Consentkeep": {
+   "fit": 7.0,
+   "gravitas": 4.779999999999999,
+   "distinct": 4.6,
+   "ease": 8.02,
+   "wit": 5.83,
+   "total": 6.045999999999999,
+   "round": 4
+  },
+  "Permiso": {
+   "fit": 6.97,
+   "gravitas": 4.6899999999999995,
+   "distinct": 5.92,
+   "ease": 6.22,
+   "wit": 6.3999999999999995,
+   "total": 6.04,
+   "round": 1
+  },
+  "Clearance Works": {
+   "fit": 6.88,
+   "gravitas": 4.99,
+   "distinct": 3.6999999999999997,
+   "ease": 8.379999999999999,
+   "wit": 6.25,
+   "total": 6.04,
+   "round": 3
+  },
+  "Holdfast Systems": {
+   "fit": 5.11,
+   "gravitas": 6.34,
+   "distinct": 4.449999999999999,
+   "ease": 8.71,
+   "wit": 5.56,
+   "total": 6.034,
+   "round": 2
+  },
+  "Estoppel Labs": {
+   "fit": 6.1,
+   "gravitas": 5.74,
+   "distinct": 6.91,
+   "ease": 3.22,
+   "wit": 8.170000000000002,
+   "total": 6.0280000000000005,
+   "round": 1
+  },
+  "Quietward": {
+   "fit": 5.14,
+   "gravitas": 5.92,
+   "distinct": 5.5,
+   "ease": 6.760000000000001,
+   "wit": 6.82,
+   "total": 6.0280000000000005,
+   "round": 3
+  },
+  "Sluice Gate AI": {
+   "fit": 7.06,
+   "gravitas": 3.22,
+   "distinct": 7.36,
+   "ease": 4.539999999999999,
+   "wit": 7.96,
+   "total": 6.028,
+   "round": 1
+  },
+  "Threshold Works": {
+   "fit": 6.04,
+   "gravitas": 6.069999999999999,
+   "distinct": 4.75,
+   "ease": 7.239999999999999,
+   "wit": 6.04,
+   "total": 6.028,
+   "round": 5
+  },
+  "Gatelock": {
+   "fit": 6.79,
+   "gravitas": 4.75,
+   "distinct": 4.300000000000001,
+   "ease": 8.95,
+   "wit": 5.319999999999999,
+   "total": 6.022,
+   "round": 1
+  },
+  "Waystation": {
+   "fit": 4.84,
+   "gravitas": 4.869999999999999,
+   "distinct": 6.01,
+   "ease": 7.87,
+   "wit": 6.5200000000000005,
+   "total": 6.022,
+   "round": 1
+  },
+  "Gatework": {
+   "fit": 6.580000000000001,
+   "gravitas": 4.8100000000000005,
+   "distinct": 4.630000000000001,
+   "ease": 7.96,
+   "wit": 6.13,
+   "total": 6.022,
+   "round": 5
+  },
+  "Custody Works": {
+   "fit": 6.489999999999999,
+   "gravitas": 4.84,
+   "distinct": 4.0600000000000005,
+   "ease": 8.77,
+   "wit": 5.95,
+   "total": 6.022,
+   "round": 5
+  },
+  "Graceward": {
+   "fit": 4.84,
+   "gravitas": 5.9799999999999995,
+   "distinct": 5.65,
+   "ease": 7.329999999999999,
+   "wit": 6.31,
+   "total": 6.021999999999999,
+   "round": 3
+  },
+  "Trothline": {
+   "fit": 5.89,
+   "gravitas": 5.29,
+   "distinct": 6.760000000000001,
+   "ease": 4.75,
+   "wit": 7.39,
+   "total": 6.016,
+   "round": 2
+  },
+  "Keycraft Systems": {
+   "fit": 6.13,
+   "gravitas": 5.53,
+   "distinct": 4.18,
+   "ease": 8.739999999999998,
+   "wit": 5.5,
+   "total": 6.016,
+   "round": 2
+  },
+  "Chartergate": {
+   "fit": 6.22,
+   "gravitas": 5.71,
+   "distinct": 4.42,
+   "ease": 7.87,
+   "wit": 5.86,
+   "total": 6.016,
+   "round": 3
+  },
+  "Boundward": {
+   "fit": 6.01,
+   "gravitas": 5.38,
+   "distinct": 5.65,
+   "ease": 6.669999999999999,
+   "wit": 6.37,
+   "total": 6.016,
+   "round": 3
+  },
+  "Marchgate": {
+   "fit": 5.59,
+   "gravitas": 6.069999999999999,
+   "distinct": 5.08,
+   "ease": 7.6000000000000005,
+   "wit": 5.74,
+   "total": 6.016,
+   "round": 3
+  },
+  "Milestone & Gate": {
+   "fit": 6.3999999999999995,
+   "gravitas": 4.029999999999999,
+   "distinct": 5.14,
+   "ease": 7.989999999999999,
+   "wit": 6.489999999999999,
+   "total": 6.01,
+   "round": 1
+  },
+  "Remitward": {
+   "fit": 6.580000000000001,
+   "gravitas": 5.38,
+   "distinct": 5.62,
+   "ease": 5.8,
+   "wit": 6.669999999999999,
+   "total": 6.01,
+   "round": 3
+  },
+  "Gateline": {
+   "fit": 6.13,
+   "gravitas": 5.08,
+   "distinct": 5.2,
+   "ease": 7.93,
+   "wit": 5.680000000000001,
+   "total": 6.0040000000000004,
+   "round": 3
+  },
+  "Quorum Agents": {
+   "fit": 6.28,
+   "gravitas": 6.3999999999999995,
+   "distinct": 5.05,
+   "ease": 5.74,
+   "wit": 6.5200000000000005,
+   "total": 5.998,
+   "round": 1
+  },
+  "Proviso Systems": {
+   "fit": 6.79,
+   "gravitas": 6.16,
+   "distinct": 4.449999999999999,
+   "ease": 5.71,
+   "wit": 6.88,
+   "total": 5.998,
+   "round": 3
+  },
+  "Thresholdward": {
+   "fit": 6.34,
+   "gravitas": 5.83,
+   "distinct": 5.71,
+   "ease": 5.319999999999999,
+   "wit": 6.79,
+   "total": 5.998,
+   "round": 4
+  },
+  "Mandate Systems": {
+   "fit": 6.94,
+   "gravitas": 6.489999999999999,
+   "distinct": 3.19,
+   "ease": 8.23,
+   "wit": 5.11,
+   "total": 5.992,
+   "round": 3
+  },
+  "Holdfast Labs": {
+   "fit": 5.56,
+   "gravitas": 5.11,
+   "distinct": 4.6899999999999995,
+   "ease": 8.829999999999998,
+   "wit": 5.7700000000000005,
+   "total": 5.992,
+   "round": 4
+  },
+  "Latchgate": {
+   "fit": 6.760000000000001,
+   "gravitas": 2.7699999999999996,
+   "distinct": 6.22,
+   "ease": 7.09,
+   "wit": 7.09,
+   "total": 5.986,
+   "round": 1
+  },
+  "Onlyward": {
+   "fit": 5.74,
+   "gravitas": 4.8100000000000005,
+   "distinct": 5.95,
+   "ease": 6.760000000000001,
+   "wit": 6.580000000000001,
+   "total": 5.968000000000001,
+   "round": 3
+  },
+  "Trothwell": {
+   "fit": 5.0200000000000005,
+   "gravitas": 5.92,
+   "distinct": 6.5200000000000005,
+   "ease": 5.319999999999999,
+   "wit": 7.06,
+   "total": 5.968,
+   "round": 2
+  },
+  "Tollcraft": {
+   "fit": 5.44,
+   "gravitas": 4.27,
+   "distinct": 5.7700000000000005,
+   "ease": 7.36,
+   "wit": 7.0,
+   "total": 5.968,
+   "round": 3
+  },
+  "Wicketgate": {
+   "fit": 6.22,
+   "gravitas": 4.48,
+   "distinct": 7.12,
+   "ease": 4.24,
+   "wit": 7.7799999999999985,
+   "total": 5.968,
+   "round": 3
+  },
+  "Surety Labs": {
+   "fit": 5.83,
+   "gravitas": 6.43,
+   "distinct": 4.389999999999999,
+   "ease": 7.21,
+   "wit": 5.95,
+   "total": 5.962,
+   "round": 1
+  },
+  "Grantward": {
+   "fit": 6.580000000000001,
+   "gravitas": 5.26,
+   "distinct": 5.05,
+   "ease": 6.61,
+   "wit": 6.31,
+   "total": 5.962,
+   "round": 4
+  },
+  "Handstead": {
+   "fit": 5.14,
+   "gravitas": 5.08,
+   "distinct": 6.22,
+   "ease": 6.550000000000001,
+   "wit": 6.82,
+   "total": 5.962,
+   "round": 5
+  },
+  "Clearward": {
+   "fit": 4.24,
+   "gravitas": 6.19,
+   "distinct": 5.2299999999999995,
+   "ease": 8.23,
+   "wit": 5.86,
+   "total": 5.95,
+   "round": 3
+  },
+  "Fenceline AI": {
+   "fit": 5.89,
+   "gravitas": 5.0200000000000005,
+   "distinct": 4.75,
+   "ease": 8.29,
+   "wit": 5.8,
+   "total": 5.95,
+   "round": 4
+  },
+  "Waypermit": {
+   "fit": 6.88,
+   "gravitas": 4.09,
+   "distinct": 5.08,
+   "ease": 7.57,
+   "wit": 6.1,
+   "total": 5.944,
+   "round": 2
+  },
+  "Suretygate": {
+   "fit": 6.91,
+   "gravitas": 6.13,
+   "distinct": 4.389999999999999,
+   "ease": 6.25,
+   "wit": 6.04,
+   "total": 5.944,
+   "round": 3
+  },
+  "Steadgate": {
+   "fit": 5.56,
+   "gravitas": 5.59,
+   "distinct": 5.56,
+   "ease": 6.61,
+   "wit": 6.3999999999999995,
+   "total": 5.944,
+   "round": 4
+  },
+  "Muniment AI": {
+   "fit": 6.01,
+   "gravitas": 6.069999999999999,
+   "distinct": 6.760000000000001,
+   "ease": 3.07,
+   "wit": 7.7799999999999985,
+   "total": 5.938,
+   "round": 1
+  },
+  "Trustgate": {
+   "fit": 6.61,
+   "gravitas": 5.14,
+   "distinct": 3.37,
+   "ease": 9.37,
+   "wit": 5.2,
+   "total": 5.938,
+   "round": 3
+  },
+  "Vouchkeep": {
+   "fit": 6.04,
+   "gravitas": 4.6899999999999995,
+   "distinct": 5.38,
+   "ease": 6.91,
+   "wit": 6.669999999999999,
+   "total": 5.938,
+   "round": 4
+  },
+  "Portreeve": {
+   "fit": 5.65,
+   "gravitas": 5.86,
+   "distinct": 7.48,
+   "ease": 2.74,
+   "wit": 7.93,
+   "total": 5.932,
+   "round": 5
+  },
+  "Ledgerstone": {
+   "fit": 4.0600000000000005,
+   "gravitas": 6.489999999999999,
+   "distinct": 6.13,
+   "ease": 6.7299999999999995,
+   "wit": 6.25,
+   "total": 5.9319999999999995,
+   "round": 1
+  },
+  "Stillward": {
+   "fit": 4.360000000000001,
+   "gravitas": 6.31,
+   "distinct": 5.86,
+   "ease": 6.699999999999999,
+   "wit": 6.3999999999999995,
+   "total": 5.926,
+   "round": 3
+  },
+  "Keyline Systems": {
+   "fit": 5.38,
+   "gravitas": 6.13,
+   "distinct": 4.0,
+   "ease": 8.739999999999998,
+   "wit": 5.38,
+   "total": 5.925999999999999,
+   "round": 2
+  },
+  "Grantline": {
+   "fit": 6.61,
+   "gravitas": 4.57,
+   "distinct": 4.029999999999999,
+   "ease": 8.68,
+   "wit": 5.71,
+   "total": 5.92,
+   "round": 2
+  },
+  "Sayhold": {
+   "fit": 5.7700000000000005,
+   "gravitas": 3.31,
+   "distinct": 5.41,
+   "ease": 8.5,
+   "wit": 6.580000000000001,
+   "total": 5.914000000000001,
+   "round": 4
+  },
+  "Grantwell": {
+   "fit": 5.62,
+   "gravitas": 5.53,
+   "distinct": 4.0,
+   "ease": 8.5,
+   "wit": 5.92,
+   "total": 5.914,
+   "round": 1
+  },
+  "Foldgate": {
+   "fit": 5.89,
+   "gravitas": 4.6,
+   "distinct": 5.5,
+   "ease": 7.1499999999999995,
+   "wit": 6.43,
+   "total": 5.914,
+   "round": 4
+  },
+  "Antechamber": {
+   "fit": 5.680000000000001,
+   "gravitas": 5.08,
+   "distinct": 7.510000000000001,
+   "ease": 3.3400000000000003,
+   "wit": 7.93,
+   "total": 5.908,
+   "round": 2
+  },
+  "Deferward": {
+   "fit": 6.3999999999999995,
+   "gravitas": 4.18,
+   "distinct": 5.7700000000000005,
+   "ease": 5.65,
+   "wit": 7.54,
+   "total": 5.908,
+   "round": 4
+  },
+  "Pausehold": {
+   "fit": 6.34,
+   "gravitas": 3.52,
+   "distinct": 6.1,
+   "ease": 6.5200000000000005,
+   "wit": 7.06,
+   "total": 5.9079999999999995,
+   "round": 4
+  },
+  "Freehold AI": {
+   "fit": 4.84,
+   "gravitas": 4.539999999999999,
+   "distinct": 5.41,
+   "ease": 7.96,
+   "wit": 6.79,
+   "total": 5.9079999999999995,
+   "round": 5
+  },
+  "Palisade Works": {
+   "fit": 5.92,
+   "gravitas": 6.8500000000000005,
+   "distinct": 5.7700000000000005,
+   "ease": 4.720000000000001,
+   "wit": 6.25,
+   "total": 5.902,
+   "round": 1
+  },
+  "Scopeward": {
+   "fit": 6.01,
+   "gravitas": 5.56,
+   "distinct": 5.05,
+   "ease": 6.37,
+   "wit": 6.5200000000000005,
+   "total": 5.902,
+   "round": 3
+  },
+  "Barbican AI": {
+   "fit": 5.2,
+   "gravitas": 6.46,
+   "distinct": 6.46,
+   "ease": 5.0200000000000005,
+   "wit": 6.34,
+   "total": 5.896,
+   "round": 1
+  },
+  "Latchline": {
+   "fit": 6.1,
+   "gravitas": 4.360000000000001,
+   "distinct": 5.35,
+   "ease": 7.66,
+   "wit": 5.9799999999999995,
+   "total": 5.89,
+   "round": 3
+  },
+  "Marchward": {
+   "fit": 4.93,
+   "gravitas": 5.71,
+   "distinct": 6.16,
+   "ease": 6.19,
+   "wit": 6.3999999999999995,
+   "total": 5.878,
+   "round": 3
+  },
+  "Wardmark": {
+   "fit": 5.8,
+   "gravitas": 5.56,
+   "distinct": 4.51,
+   "ease": 8.02,
+   "wit": 5.5,
+   "total": 5.878,
+   "round": 5
+  },
+  "Deedward": {
+   "fit": 5.5,
+   "gravitas": 5.05,
+   "distinct": 5.89,
+   "ease": 6.16,
+   "wit": 6.760000000000001,
+   "total": 5.872,
+   "round": 3
+  },
+  "Halyard": {
+   "fit": 5.2,
+   "gravitas": 5.59,
+   "distinct": 7.1499999999999995,
+   "ease": 4.630000000000001,
+   "wit": 6.760000000000001,
+   "total": 5.8660000000000005,
+   "round": 1
+  },
+  "Rungate": {
+   "fit": 5.71,
+   "gravitas": 4.360000000000001,
+   "distinct": 4.99,
+   "ease": 8.260000000000002,
+   "wit": 6.01,
+   "total": 5.8660000000000005,
+   "round": 4
+  },
+  "Custodykey": {
+   "fit": 6.7299999999999995,
+   "gravitas": 5.17,
+   "distinct": 4.449999999999999,
+   "ease": 7.6000000000000005,
+   "wit": 5.38,
+   "total": 5.866,
+   "round": 5
+  },
+  "Portgate": {
+   "fit": 5.83,
+   "gravitas": 4.84,
+   "distinct": 4.6899999999999995,
+   "ease": 8.05,
+   "wit": 5.89,
+   "total": 5.86,
+   "round": 5
+  },
+  "Marchhold": {
+   "fit": 4.24,
+   "gravitas": 6.19,
+   "distinct": 5.86,
+   "ease": 7.06,
+   "wit": 5.92,
+   "total": 5.854,
+   "round": 3
+  },
+  "Grantpath": {
+   "fit": 6.3999999999999995,
+   "gravitas": 4.630000000000001,
+   "distinct": 4.48,
+   "ease": 8.260000000000002,
+   "wit": 5.5,
+   "total": 5.854,
+   "round": 4
+  },
+  "Trueward": {
+   "fit": 4.029999999999999,
+   "gravitas": 5.95,
+   "distinct": 5.41,
+   "ease": 7.75,
+   "wit": 6.13,
+   "total": 5.854,
+   "round": 5
+  },
+  "Quietcraft": {
+   "fit": 3.3400000000000003,
+   "gravitas": 4.09,
+   "distinct": 6.01,
+   "ease": 8.77,
+   "wit": 7.0,
+   "total": 5.842,
+   "round": 3
+  },
+  "Assentgate Systems": {
+   "fit": 7.27,
+   "gravitas": 5.71,
+   "distinct": 4.15,
+   "ease": 5.59,
+   "wit": 6.489999999999999,
+   "total": 5.842,
+   "round": 4
+  },
+  "Waymark AI": {
+   "fit": 3.97,
+   "gravitas": 5.92,
+   "distinct": 5.74,
+   "ease": 7.329999999999999,
+   "wit": 6.22,
+   "total": 5.836,
+   "round": 1
+  },
+  "Passhold": {
+   "fit": 6.16,
+   "gravitas": 4.48,
+   "distinct": 4.720000000000001,
+   "ease": 7.96,
+   "wit": 5.86,
+   "total": 5.836,
+   "round": 4
+  },
+  "Custodian Labs": {
+   "fit": 6.699999999999999,
+   "gravitas": 6.489999999999999,
+   "distinct": 3.67,
+   "ease": 6.94,
+   "wit": 5.38,
+   "total": 5.835999999999999,
+   "round": 1
+  },
+  "Chancery AI": {
+   "fit": 5.29,
+   "gravitas": 6.22,
+   "distinct": 5.74,
+   "ease": 4.9,
+   "wit": 7.0,
+   "total": 5.83,
+   "round": 1
+  },
+  "Solekey": {
+   "fit": 5.8,
+   "gravitas": 3.7600000000000002,
+   "distinct": 5.89,
+   "ease": 7.239999999999999,
+   "wit": 6.46,
+   "total": 5.83,
+   "round": 5
+  },
+  "Constrained Systems": {
+   "fit": 6.7299999999999995,
+   "gravitas": 6.5200000000000005,
+   "distinct": 2.4699999999999998,
+   "ease": 7.989999999999999,
+   "wit": 5.41,
+   "total": 5.824,
+   "round": 1
+  },
+  "Clearkeep": {
+   "fit": 4.360000000000001,
+   "gravitas": 6.16,
+   "distinct": 4.09,
+   "ease": 9.25,
+   "wit": 5.26,
+   "total": 5.824,
+   "round": 4
+  },
+  "Custodia": {
+   "fit": 5.9799999999999995,
+   "gravitas": 6.79,
+   "distinct": 5.56,
+   "ease": 5.0200000000000005,
+   "wit": 5.7700000000000005,
+   "total": 5.824,
+   "round": 5
+  },
+  "Recognisance": {
+   "fit": 5.8,
+   "gravitas": 6.069999999999999,
+   "distinct": 7.0,
+   "ease": 2.5,
+   "wit": 7.7200000000000015,
+   "total": 5.8180000000000005,
+   "round": 1
+  },
+  "Wardline": {
+   "fit": 4.9,
+   "gravitas": 6.04,
+   "distinct": 4.51,
+   "ease": 8.470000000000002,
+   "wit": 5.17,
+   "total": 5.8180000000000005,
+   "round": 5
+  },
+  "Fairwarn": {
+   "fit": 4.869999999999999,
+   "gravitas": 4.24,
+   "distinct": 5.74,
+   "ease": 7.329999999999999,
+   "wit": 6.91,
+   "total": 5.818,
+   "round": 2
+  },
+  "Antehold": {
+   "fit": 5.5,
+   "gravitas": 4.539999999999999,
+   "distinct": 6.489999999999999,
+   "ease": 5.26,
+   "wit": 7.300000000000001,
+   "total": 5.818,
+   "round": 4
+  },
+  "Keepwell": {
+   "fit": 4.6,
+   "gravitas": 4.33,
+   "distinct": 4.84,
+   "ease": 8.739999999999998,
+   "wit": 6.580000000000001,
+   "total": 5.818,
+   "round": 5
+  },
+  "Grantrite": {
+   "fit": 6.22,
+   "gravitas": 4.539999999999999,
+   "distinct": 6.069999999999999,
+   "ease": 5.319999999999999,
+   "wit": 6.94,
+   "total": 5.818,
+   "round": 5
+  },
+  "Latchhold": {
+   "fit": 6.34,
+   "gravitas": 3.64,
+   "distinct": 6.3999999999999995,
+   "ease": 6.22,
+   "wit": 6.46,
+   "total": 5.811999999999999,
+   "round": 4
+  },
+  "Portward": {
+   "fit": 4.539999999999999,
+   "gravitas": 5.47,
+   "distinct": 6.04,
+   "ease": 7.06,
+   "wit": 5.95,
+   "total": 5.811999999999999,
+   "round": 5
+  },
+  "Purview Labs": {
+   "fit": 5.74,
+   "gravitas": 6.489999999999999,
+   "distinct": 4.449999999999999,
+   "ease": 6.79,
+   "wit": 5.56,
+   "total": 5.806,
+   "round": 1
+  },
+  "Solehold": {
+   "fit": 4.9,
+   "gravitas": 4.029999999999999,
+   "distinct": 5.7700000000000005,
+   "ease": 7.329999999999999,
+   "wit": 7.0,
+   "total": 5.806,
+   "round": 5
+  },
+  "Steadward": {
+   "fit": 5.29,
+   "gravitas": 6.3999999999999995,
+   "distinct": 5.35,
+   "ease": 5.47,
+   "wit": 6.489999999999999,
+   "total": 5.8,
+   "round": 4
+  },
+  "Keepgate": {
+   "fit": 6.01,
+   "gravitas": 4.42,
+   "distinct": 4.48,
+   "ease": 8.59,
+   "wit": 5.5,
+   "total": 5.8,
+   "round": 5
+  },
+  "Glacis Labs": {
+   "fit": 4.869999999999999,
+   "gravitas": 6.3999999999999995,
+   "distinct": 7.0,
+   "ease": 3.43,
+   "wit": 7.27,
+   "total": 5.794,
+   "round": 1
+  },
+  "Assentwell": {
+   "fit": 6.8500000000000005,
+   "gravitas": 4.720000000000001,
+   "distinct": 4.24,
+   "ease": 6.91,
+   "wit": 6.22,
+   "total": 5.788,
+   "round": 2
+  },
+  "Firstgate": {
+   "fit": 6.25,
+   "gravitas": 5.44,
+   "distinct": 3.19,
+   "ease": 9.55,
+   "wit": 4.51,
+   "total": 5.788,
+   "round": 3
+  },
+  "Ledgerward": {
+   "fit": 4.93,
+   "gravitas": 5.86,
+   "distinct": 5.9799999999999995,
+   "ease": 5.59,
+   "wit": 6.580000000000001,
+   "total": 5.788,
+   "round": 4
+  },
+  "Handline": {
+   "fit": 5.44,
+   "gravitas": 3.46,
+   "distinct": 5.71,
+   "ease": 7.239999999999999,
+   "wit": 7.06,
+   "total": 5.782,
+   "round": 5
+  },
+  "Plimsoll": {
+   "fit": 3.43,
+   "gravitas": 5.74,
+   "distinct": 7.39,
+   "ease": 4.539999999999999,
+   "wit": 7.7799999999999985,
+   "total": 5.776,
+   "round": 1
+  },
+  "Waitline": {
+   "fit": 5.86,
+   "gravitas": 1.96,
+   "distinct": 5.11,
+   "ease": 8.829999999999998,
+   "wit": 7.12,
+   "total": 5.776,
+   "round": 2
+  },
+  "Openhand Labs": {
+   "fit": 4.6,
+   "gravitas": 3.58,
+   "distinct": 4.869999999999999,
+   "ease": 9.4,
+   "wit": 6.43,
+   "total": 5.776,
+   "round": 4
+  },
+  "Trothward": {
+   "fit": 5.2299999999999995,
+   "gravitas": 5.26,
+   "distinct": 6.669999999999999,
+   "ease": 4.57,
+   "wit": 7.1499999999999995,
+   "total": 5.776,
+   "round": 4
+  },
+  "Custody AI": {
+   "fit": 6.669999999999999,
+   "gravitas": 5.44,
+   "distinct": 3.8800000000000003,
+   "ease": 7.300000000000001,
+   "wit": 5.56,
+   "total": 5.77,
+   "round": 1
+  },
+  "Thresholder": {
+   "fit": 6.31,
+   "gravitas": 4.389999999999999,
+   "distinct": 6.19,
+   "ease": 5.0200000000000005,
+   "wit": 6.91,
+   "total": 5.764,
+   "round": 1
+  },
+  "Escrow Systems": {
+   "fit": 6.88,
+   "gravitas": 5.11,
+   "distinct": 4.029999999999999,
+   "ease": 5.92,
+   "wit": 6.88,
+   "total": 5.764,
+   "round": 1
+  },
+  "Pauseward": {
+   "fit": 5.89,
+   "gravitas": 3.7900000000000005,
+   "distinct": 5.71,
+   "ease": 6.37,
+   "wit": 7.06,
+   "total": 5.764,
+   "round": 3
+  },
+  "Pausegate": {
+   "fit": 6.580000000000001,
+   "gravitas": 2.5,
+   "distinct": 5.38,
+   "ease": 7.7200000000000015,
+   "wit": 6.61,
+   "total": 5.758000000000001,
+   "round": 3
+  },
+  "Handhold Systems": {
+   "fit": 5.86,
+   "gravitas": 3.73,
+   "distinct": 4.0600000000000005,
+   "ease": 9.16,
+   "wit": 5.9799999999999995,
+   "total": 5.758,
+   "round": 3
+  },
+  "Handhold AI": {
+   "fit": 6.16,
+   "gravitas": 2.5300000000000002,
+   "distinct": 4.630000000000001,
+   "ease": 9.25,
+   "wit": 6.19,
+   "total": 5.752000000000001,
+   "round": 5
+  },
+  "Holdline AI": {
+   "fit": 6.19,
+   "gravitas": 4.360000000000001,
+   "distinct": 4.27,
+   "ease": 7.81,
+   "wit": 6.13,
+   "total": 5.752,
+   "round": 2
+  },
+  "Askrule": {
+   "fit": 6.3999999999999995,
+   "gravitas": 2.8,
+   "distinct": 5.14,
+   "ease": 7.6000000000000005,
+   "wit": 6.82,
+   "total": 5.752,
+   "round": 4
+  },
+  "Trothcraft": {
+   "fit": 5.0200000000000005,
+   "gravitas": 4.029999999999999,
+   "distinct": 7.0,
+   "ease": 4.720000000000001,
+   "wit": 7.96,
+   "total": 5.746,
+   "round": 2
+  },
+  "Transom Works": {
+   "fit": 4.57,
+   "gravitas": 5.44,
+   "distinct": 6.16,
+   "ease": 5.47,
+   "wit": 7.06,
+   "total": 5.74,
+   "round": 1
+  },
+  "Stayhand": {
+   "fit": 6.43,
+   "gravitas": 2.9800000000000004,
+   "distinct": 5.680000000000001,
+   "ease": 6.7299999999999995,
+   "wit": 6.88,
+   "total": 5.74,
+   "round": 2
+  },
+  "Deedpath": {
+   "fit": 5.2,
+   "gravitas": 4.48,
+   "distinct": 5.56,
+   "ease": 6.699999999999999,
+   "wit": 6.760000000000001,
+   "total": 5.74,
+   "round": 4
+  },
+  "Grantfare": {
+   "fit": 6.580000000000001,
+   "gravitas": 2.71,
+   "distinct": 5.5,
+   "ease": 6.669999999999999,
+   "wit": 7.21,
+   "total": 5.734,
+   "round": 2
+  },
+  "Codicil AI": {
+   "fit": 6.069999999999999,
+   "gravitas": 4.6,
+   "distinct": 6.61,
+   "ease": 3.31,
+   "wit": 8.05,
+   "total": 5.728,
+   "round": 1
+  },
+  "Trothwise": {
+   "fit": 5.319999999999999,
+   "gravitas": 4.6,
+   "distinct": 6.43,
+   "ease": 4.539999999999999,
+   "wit": 7.75,
+   "total": 5.728,
+   "round": 2
+  },
+  "Mandateline": {
+   "fit": 6.61,
+   "gravitas": 5.56,
+   "distinct": 4.720000000000001,
+   "ease": 6.43,
+   "wit": 5.319999999999999,
+   "total": 5.728,
+   "round": 3
+  },
+  "Remithold": {
+   "fit": 6.580000000000001,
+   "gravitas": 5.35,
+   "distinct": 4.779999999999999,
+   "ease": 6.069999999999999,
+   "wit": 5.86,
+   "total": 5.728,
+   "round": 3
+  },
+  "Keyline AI": {
+   "fit": 5.62,
+   "gravitas": 5.14,
+   "distinct": 4.119999999999999,
+   "ease": 8.68,
+   "wit": 5.08,
+   "total": 5.728,
+   "round": 4
+  },
+  "Handstay": {
+   "fit": 6.16,
+   "gravitas": 3.37,
+   "distinct": 6.069999999999999,
+   "ease": 5.74,
+   "wit": 7.27,
+   "total": 5.7219999999999995,
+   "round": 2
+  },
+  "Faithward": {
+   "fit": 4.18,
+   "gravitas": 4.27,
+   "distinct": 5.53,
+   "ease": 8.23,
+   "wit": 6.3999999999999995,
+   "total": 5.7219999999999995,
+   "round": 4
+  },
+  "Vestibule AI": {
+   "fit": 5.86,
+   "gravitas": 5.47,
+   "distinct": 5.92,
+   "ease": 4.389999999999999,
+   "wit": 6.94,
+   "total": 5.716,
+   "round": 1
+  },
+  "Keyline": {
+   "fit": 5.14,
+   "gravitas": 4.99,
+   "distinct": 4.15,
+   "ease": 9.1,
+   "wit": 5.17,
+   "total": 5.71,
+   "round": 3
+  },
+  "Openhand Systems": {
+   "fit": 4.51,
+   "gravitas": 4.389999999999999,
+   "distinct": 4.539999999999999,
+   "ease": 9.01,
+   "wit": 6.069999999999999,
+   "total": 5.704,
+   "round": 3
+  },
+  "Handward": {
+   "fit": 5.2299999999999995,
+   "gravitas": 4.300000000000001,
+   "distinct": 5.47,
+   "ease": 6.88,
+   "wit": 6.61,
+   "total": 5.698,
+   "round": 4
+  },
+  "Askhold": {
+   "fit": 5.8,
+   "gravitas": 3.1599999999999997,
+   "distinct": 5.5,
+   "ease": 7.239999999999999,
+   "wit": 6.760000000000001,
+   "total": 5.692,
+   "round": 2
+  },
+  "Tollwell": {
+   "fit": 5.41,
+   "gravitas": 4.210000000000001,
+   "distinct": 5.319999999999999,
+   "ease": 6.97,
+   "wit": 6.5200000000000005,
+   "total": 5.686,
+   "round": 2
+  },
+  "Custodwell": {
+   "fit": 4.869999999999999,
+   "gravitas": 5.08,
+   "distinct": 5.86,
+   "ease": 5.9799999999999995,
+   "wit": 6.61,
+   "total": 5.68,
+   "round": 2
+  },
+  "Trustward": {
+   "fit": 5.35,
+   "gravitas": 6.069999999999999,
+   "distinct": 3.3400000000000003,
+   "ease": 8.29,
+   "wit": 5.35,
+   "total": 5.68,
+   "round": 3
+  },
+  "Faircraft": {
+   "fit": 3.4,
+   "gravitas": 4.360000000000001,
+   "distinct": 6.19,
+   "ease": 7.18,
+   "wit": 7.239999999999999,
+   "total": 5.674,
+   "round": 5
+  },
+  "Keyleave": {
+   "fit": 5.95,
+   "gravitas": 3.19,
+   "distinct": 5.319999999999999,
+   "ease": 7.21,
+   "wit": 6.699999999999999,
+   "total": 5.6739999999999995,
+   "round": 4
+  },
+  "Custodes": {
+   "fit": 6.16,
+   "gravitas": 7.09,
+   "distinct": 5.5,
+   "ease": 3.3400000000000003,
+   "wit": 6.25,
+   "total": 5.668,
+   "round": 1
+  },
+  "Byward": {
+   "fit": 4.0600000000000005,
+   "gravitas": 6.1,
+   "distinct": 6.01,
+   "ease": 5.7700000000000005,
+   "wit": 6.3999999999999995,
+   "total": 5.668,
+   "round": 2
+  },
+  "Passkeep": {
+   "fit": 5.8,
+   "gravitas": 4.360000000000001,
+   "distinct": 4.15,
+   "ease": 8.86,
+   "wit": 5.14,
+   "total": 5.662,
+   "round": 4
+  },
+  "Bywatch Systems": {
+   "fit": 4.84,
+   "gravitas": 5.680000000000001,
+   "distinct": 4.960000000000001,
+   "ease": 6.61,
+   "wit": 6.19,
+   "total": 5.656000000000001,
+   "round": 2
+  },
+  "Scopeline": {
+   "fit": 5.38,
+   "gravitas": 5.2,
+   "distinct": 4.539999999999999,
+   "ease": 7.7799999999999985,
+   "wit": 5.38,
+   "total": 5.656,
+   "round": 3
+  },
+  "Writward": {
+   "fit": 5.2,
+   "gravitas": 4.33,
+   "distinct": 6.3999999999999995,
+   "ease": 5.08,
+   "wit": 7.21,
+   "total": 5.644,
+   "round": 3
+  },
+  "Waykeep": {
+   "fit": 4.8100000000000005,
+   "gravitas": 4.93,
+   "distinct": 5.47,
+   "ease": 7.09,
+   "wit": 5.92,
+   "total": 5.644,
+   "round": 4
+  },
+  "Trueward Systems": {
+   "fit": 5.44,
+   "gravitas": 5.95,
+   "distinct": 4.24,
+   "ease": 6.94,
+   "wit": 5.65,
+   "total": 5.644,
+   "round": 5
+  },
+  "Clearmark": {
+   "fit": 4.18,
+   "gravitas": 5.7700000000000005,
+   "distinct": 3.82,
+   "ease": 9.55,
+   "wit": 4.84,
+   "total": 5.632,
+   "round": 2
+  },
+  "Gatemark": {
+   "fit": 5.92,
+   "gravitas": 4.300000000000001,
+   "distinct": 4.6899999999999995,
+   "ease": 7.239999999999999,
+   "wit": 5.9799999999999995,
+   "total": 5.6259999999999994,
+   "round": 5
+  },
+  "Forewarn Systems": {
+   "fit": 4.779999999999999,
+   "gravitas": 5.8,
+   "distinct": 3.8800000000000003,
+   "ease": 8.14,
+   "wit": 5.5,
+   "total": 5.62,
+   "round": 2
+  },
+  "Provisohold": {
+   "fit": 6.79,
+   "gravitas": 5.11,
+   "distinct": 4.93,
+   "ease": 4.630000000000001,
+   "wit": 6.64,
+   "total": 5.62,
+   "round": 3
+  },
+  "Discreet Labs": {
+   "fit": 4.42,
+   "gravitas": 5.680000000000001,
+   "distinct": 4.09,
+   "ease": 7.39,
+   "wit": 6.489999999999999,
+   "total": 5.614,
+   "round": 1
+  },
+  "Fairward": {
+   "fit": 4.119999999999999,
+   "gravitas": 5.14,
+   "distinct": 5.38,
+   "ease": 7.12,
+   "wit": 6.31,
+   "total": 5.614,
+   "round": 5
+  },
+  "Custodine": {
+   "fit": 5.83,
+   "gravitas": 5.86,
+   "distinct": 5.74,
+   "ease": 4.48,
+   "wit": 6.13,
+   "total": 5.6080000000000005,
+   "round": 2
+  },
+  "Trueward Labs": {
+   "fit": 4.960000000000001,
+   "gravitas": 5.56,
+   "distinct": 4.57,
+   "ease": 6.94,
+   "wit": 6.01,
+   "total": 5.6080000000000005,
+   "round": 5
+  },
+  "Handgate": {
+   "fit": 6.31,
+   "gravitas": 2.29,
+   "distinct": 4.99,
+   "ease": 8.14,
+   "wit": 6.31,
+   "total": 5.608,
+   "round": 3
+  },
+  "Sentrywell": {
+   "fit": 5.29,
+   "gravitas": 5.680000000000001,
+   "distinct": 3.67,
+   "ease": 7.21,
+   "wit": 6.13,
+   "total": 5.596,
+   "round": 1
+  },
+  "Waitward": {
+   "fit": 5.44,
+   "gravitas": 3.43,
+   "distinct": 5.5,
+   "ease": 6.64,
+   "wit": 6.97,
+   "total": 5.596,
+   "round": 3
+  },
+  "Passgate": {
+   "fit": 6.550000000000001,
+   "gravitas": 3.4899999999999998,
+   "distinct": 3.8499999999999996,
+   "ease": 8.5,
+   "wit": 5.59,
+   "total": 5.596,
+   "round": 5
+  },
+  "Chevron Trust": {
+   "fit": 5.95,
+   "gravitas": 4.389999999999999,
+   "distinct": 4.99,
+   "ease": 6.580000000000001,
+   "wit": 6.04,
+   "total": 5.59,
+   "round": 1
+  },
+  "Allowgate": {
+   "fit": 6.97,
+   "gravitas": 2.5599999999999996,
+   "distinct": 3.94,
+   "ease": 8.05,
+   "wit": 6.43,
+   "total": 5.59,
+   "round": 5
+  },
+  "Scopegate": {
+   "fit": 6.01,
+   "gravitas": 2.7699999999999996,
+   "distinct": 4.869999999999999,
+   "ease": 7.69,
+   "wit": 6.580000000000001,
+   "total": 5.584,
+   "round": 3
+  },
+  "Writhold": {
+   "fit": 6.34,
+   "gravitas": 4.029999999999999,
+   "distinct": 6.22,
+   "ease": 4.210000000000001,
+   "wit": 7.09,
+   "total": 5.578,
+   "round": 3
+  },
+  "Provisoward": {
+   "fit": 6.94,
+   "gravitas": 4.66,
+   "distinct": 5.319999999999999,
+   "ease": 4.18,
+   "wit": 6.79,
+   "total": 5.578,
+   "round": 3
+  },
+  "Fairmark AI": {
+   "fit": 4.630000000000001,
+   "gravitas": 4.8100000000000005,
+   "distinct": 4.0600000000000005,
+   "ease": 8.71,
+   "wit": 5.65,
+   "total": 5.572000000000001,
+   "round": 2
+  },
+  "Askgate": {
+   "fit": 6.069999999999999,
+   "gravitas": 1.81,
+   "distinct": 5.2299999999999995,
+   "ease": 8.350000000000001,
+   "wit": 6.3999999999999995,
+   "total": 5.572,
+   "round": 2
+  },
+  "Trustgate Systems": {
+   "fit": 6.699999999999999,
+   "gravitas": 5.11,
+   "distinct": 2.26,
+   "ease": 9.07,
+   "wit": 4.720000000000001,
+   "total": 5.572,
+   "round": 4
+  },
+  "Interlock Systems": {
+   "fit": 5.44,
+   "gravitas": 6.28,
+   "distinct": 2.74,
+   "ease": 8.739999999999998,
+   "wit": 4.630000000000001,
+   "total": 5.566,
+   "round": 1
+  },
+  "Gatekeep AI": {
+   "fit": 7.21,
+   "gravitas": 3.52,
+   "distinct": 3.55,
+   "ease": 8.2,
+   "wit": 5.35,
+   "total": 5.566,
+   "round": 5
+  },
+  "Faircourse": {
+   "fit": 3.6999999999999997,
+   "gravitas": 4.869999999999999,
+   "distinct": 5.35,
+   "ease": 7.36,
+   "wit": 6.5200000000000005,
+   "total": 5.56,
+   "round": 2
+  },
+  "Askwell": {
+   "fit": 5.44,
+   "gravitas": 3.07,
+   "distinct": 4.720000000000001,
+   "ease": 7.989999999999999,
+   "wit": 6.550000000000001,
+   "total": 5.554,
+   "round": 2
+  },
+  "Yieldgate": {
+   "fit": 5.56,
+   "gravitas": 3.46,
+   "distinct": 4.8100000000000005,
+   "ease": 7.300000000000001,
+   "wit": 6.64,
+   "total": 5.554,
+   "round": 4
+  },
+  "Clearcraft": {
+   "fit": 3.3400000000000003,
+   "gravitas": 5.08,
+   "distinct": 4.360000000000001,
+   "ease": 9.459999999999999,
+   "wit": 5.5,
+   "total": 5.548,
+   "round": 2
+  },
+  "Anteward": {
+   "fit": 4.389999999999999,
+   "gravitas": 5.2,
+   "distinct": 5.92,
+   "ease": 5.47,
+   "wit": 6.7299999999999995,
+   "total": 5.542,
+   "round": 4
+  },
+  "Stilegate": {
+   "fit": 5.83,
+   "gravitas": 4.630000000000001,
+   "distinct": 5.319999999999999,
+   "ease": 5.44,
+   "wit": 6.46,
+   "total": 5.5360000000000005,
+   "round": 3
+  },
+  "Bywrit": {
+   "fit": 6.19,
+   "gravitas": 3.61,
+   "distinct": 5.74,
+   "ease": 5.5,
+   "wit": 6.64,
+   "total": 5.536,
+   "round": 3
+  },
+  "Charterhouse AI": {
+   "fit": 5.0200000000000005,
+   "gravitas": 6.34,
+   "distinct": 5.65,
+   "ease": 4.66,
+   "wit": 5.9799999999999995,
+   "total": 5.53,
+   "round": 1
+  },
+  "Deponent Systems": {
+   "fit": 4.93,
+   "gravitas": 5.83,
+   "distinct": 5.89,
+   "ease": 3.7900000000000005,
+   "wit": 7.21,
+   "total": 5.53,
+   "round": 1
+  },
+  "Mindgate": {
+   "fit": 5.83,
+   "gravitas": 4.18,
+   "distinct": 3.37,
+   "ease": 8.95,
+   "wit": 5.26,
+   "total": 5.518,
+   "round": 2
+  },
+  "Bidehold": {
+   "fit": 5.5,
+   "gravitas": 5.08,
+   "distinct": 5.53,
+   "ease": 5.14,
+   "wit": 6.34,
+   "total": 5.518,
+   "round": 4
+  },
+  "Stilehold": {
+   "fit": 5.92,
+   "gravitas": 4.99,
+   "distinct": 5.35,
+   "ease": 4.9,
+   "wit": 6.3999999999999995,
+   "total": 5.512,
+   "round": 3
+  },
+  "Sayward": {
+   "fit": 4.51,
+   "gravitas": 3.55,
+   "distinct": 5.56,
+   "ease": 7.18,
+   "wit": 6.760000000000001,
+   "total": 5.512,
+   "round": 4
+  },
+  "Portstead": {
+   "fit": 4.15,
+   "gravitas": 5.71,
+   "distinct": 5.2,
+   "ease": 7.1499999999999995,
+   "wit": 5.319999999999999,
+   "total": 5.506,
+   "round": 5
+  },
+  "Byleave": {
+   "fit": 6.069999999999999,
+   "gravitas": 2.59,
+   "distinct": 5.89,
+   "ease": 5.65,
+   "wit": 7.300000000000001,
+   "total": 5.5,
+   "round": 2
+  },
+  "Handmark": {
+   "fit": 4.48,
+   "gravitas": 3.37,
+   "distinct": 5.05,
+   "ease": 8.529999999999998,
+   "wit": 6.069999999999999,
+   "total": 5.499999999999999,
+   "round": 2
+  },
+  "Forewell": {
+   "fit": 3.46,
+   "gravitas": 4.99,
+   "distinct": 5.680000000000001,
+   "ease": 6.8500000000000005,
+   "wit": 6.46,
+   "total": 5.488,
+   "round": 2
+  },
+  "Sconce Systems": {
+   "fit": 4.869999999999999,
+   "gravitas": 4.66,
+   "distinct": 6.46,
+   "ease": 3.55,
+   "wit": 7.7799999999999985,
+   "total": 5.4639999999999995,
+   "round": 1
+  },
+  "Handoff Systems": {
+   "fit": 5.59,
+   "gravitas": 4.6,
+   "distinct": 2.6500000000000004,
+   "ease": 9.459999999999999,
+   "wit": 5.0200000000000005,
+   "total": 5.4639999999999995,
+   "round": 4
+  },
+  "Overwatch Gate": {
+   "fit": 6.97,
+   "gravitas": 3.7900000000000005,
+   "distinct": 3.73,
+   "ease": 7.6000000000000005,
+   "wit": 5.17,
+   "total": 5.452,
+   "round": 4
+  },
+  "Keyrite": {
+   "fit": 5.56,
+   "gravitas": 3.43,
+   "distinct": 5.29,
+   "ease": 6.28,
+   "wit": 6.669999999999999,
+   "total": 5.446,
+   "round": 5
+  },
+  "Handwell": {
+   "fit": 4.6899999999999995,
+   "gravitas": 3.13,
+   "distinct": 4.57,
+   "ease": 8.32,
+   "wit": 6.489999999999999,
+   "total": 5.4399999999999995,
+   "round": 2
+  },
+  "Sanctum Systems": {
+   "fit": 4.99,
+   "gravitas": 6.550000000000001,
+   "distinct": 4.8100000000000005,
+   "ease": 5.2,
+   "wit": 5.62,
+   "total": 5.434,
+   "round": 1
+  },
+  "Handoff Labs": {
+   "fit": 5.35,
+   "gravitas": 3.6999999999999997,
+   "distinct": 3.3400000000000003,
+   "ease": 9.459999999999999,
+   "wit": 5.319999999999999,
+   "total": 5.433999999999999,
+   "round": 4
+  },
+  "Waitgate": {
+   "fit": 6.13,
+   "gravitas": 1.63,
+   "distinct": 5.38,
+   "ease": 7.69,
+   "wit": 6.31,
+   "total": 5.428,
+   "round": 4
+  },
+  "Vestry Labs": {
+   "fit": 3.7600000000000002,
+   "gravitas": 6.25,
+   "distinct": 5.8,
+   "ease": 4.869999999999999,
+   "wit": 6.43,
+   "total": 5.422,
+   "round": 1
+  },
+  "Weir Systems": {
+   "fit": 5.11,
+   "gravitas": 5.35,
+   "distinct": 5.47,
+   "ease": 4.6,
+   "wit": 6.580000000000001,
+   "total": 5.422,
+   "round": 1
+  },
+  "Fairside Systems": {
+   "fit": 3.4899999999999998,
+   "gravitas": 5.59,
+   "distinct": 3.64,
+   "ease": 8.98,
+   "wit": 5.35,
+   "total": 5.41,
+   "round": 2
+  },
+  "Stayline": {
+   "fit": 4.33,
+   "gravitas": 4.389999999999999,
+   "distinct": 4.24,
+   "ease": 8.5,
+   "wit": 5.56,
+   "total": 5.404,
+   "round": 2
+  },
+  "Writline": {
+   "fit": 4.779999999999999,
+   "gravitas": 3.82,
+   "distinct": 5.0200000000000005,
+   "ease": 7.420000000000001,
+   "wit": 5.95,
+   "total": 5.398,
+   "round": 3
+  },
+  "Boundlow": {
+   "fit": 5.0200000000000005,
+   "gravitas": 3.4,
+   "distinct": 5.65,
+   "ease": 6.13,
+   "wit": 6.64,
+   "total": 5.368,
+   "round": 1
+  },
+  "Grantly": {
+   "fit": 5.71,
+   "gravitas": 2.7699999999999996,
+   "distinct": 4.6,
+   "ease": 8.11,
+   "wit": 5.65,
+   "total": 5.367999999999999,
+   "round": 2
+  },
+  "Custodygate": {
+   "fit": 6.3999999999999995,
+   "gravitas": 2.62,
+   "distinct": 4.6899999999999995,
+   "ease": 6.669999999999999,
+   "wit": 6.43,
+   "total": 5.361999999999999,
+   "round": 5
+  },
+  "Wellwarned": {
+   "fit": 4.0600000000000005,
+   "gravitas": 3.61,
+   "distinct": 5.08,
+   "ease": 7.39,
+   "wit": 6.61,
+   "total": 5.35,
+   "round": 2
+  },
+  "Handfare": {
+   "fit": 5.59,
+   "gravitas": 1.9900000000000002,
+   "distinct": 5.92,
+   "ease": 6.01,
+   "wit": 7.1499999999999995,
+   "total": 5.332,
+   "round": 2
+  },
+  "Stileward": {
+   "fit": 5.05,
+   "gravitas": 4.6,
+   "distinct": 5.5,
+   "ease": 4.99,
+   "wit": 6.5200000000000005,
+   "total": 5.332,
+   "round": 3
+  },
+  "Remit Systems": {
+   "fit": 5.56,
+   "gravitas": 5.08,
+   "distinct": 3.6999999999999997,
+   "ease": 6.37,
+   "wit": 5.89,
+   "total": 5.32,
+   "round": 1
+  },
+  "Gantry AI": {
+   "fit": 3.8800000000000003,
+   "gravitas": 4.6,
+   "distinct": 5.7700000000000005,
+   "ease": 6.550000000000001,
+   "wit": 5.7700000000000005,
+   "total": 5.314,
+   "round": 1
+  },
+  "Curbstone": {
+   "fit": 3.07,
+   "gravitas": 2.8600000000000003,
+   "distinct": 6.37,
+   "ease": 8.170000000000002,
+   "wit": 6.069999999999999,
+   "total": 5.308,
+   "round": 1
+  },
+  "Solegate": {
+   "fit": 5.35,
+   "gravitas": 3.19,
+   "distinct": 4.6899999999999995,
+   "ease": 7.0299999999999985,
+   "wit": 6.22,
+   "total": 5.295999999999999,
+   "round": 5
+  },
+  "Merlon AI": {
+   "fit": 4.210000000000001,
+   "gravitas": 5.5,
+   "distinct": 6.22,
+   "ease": 4.300000000000001,
+   "wit": 6.22,
+   "total": 5.29,
+   "round": 1
+  },
+  "Clearside AI": {
+   "fit": 3.1599999999999997,
+   "gravitas": 5.05,
+   "distinct": 3.67,
+   "ease": 9.31,
+   "wit": 5.26,
+   "total": 5.29,
+   "round": 2
+  },
+  "Bellwether Systems": {
+   "fit": 3.07,
+   "gravitas": 5.89,
+   "distinct": 5.319999999999999,
+   "ease": 5.47,
+   "wit": 6.699999999999999,
+   "total": 5.289999999999999,
+   "round": 1
+  },
+  "Verimark": {
+   "fit": 4.33,
+   "gravitas": 6.28,
+   "distinct": 4.09,
+   "ease": 7.0299999999999985,
+   "wit": 4.6899999999999995,
+   "total": 5.284,
+   "round": 1
+  },
+  "Easement AI": {
+   "fit": 6.19,
+   "gravitas": 3.19,
+   "distinct": 5.26,
+   "ease": 4.6899999999999995,
+   "wit": 7.09,
+   "total": 5.284,
+   "round": 1
+  },
+  "Thresholdly": {
+   "fit": 5.29,
+   "gravitas": 4.029999999999999,
+   "distinct": 5.5,
+   "ease": 5.05,
+   "wit": 6.550000000000001,
+   "total": 5.284,
+   "round": 2
+  },
+  "Ambitgate": {
+   "fit": 6.13,
+   "gravitas": 2.5300000000000002,
+   "distinct": 5.5,
+   "ease": 4.8100000000000005,
+   "wit": 7.420000000000001,
+   "total": 5.2780000000000005,
+   "round": 5
+  },
+  "Keyfare": {
+   "fit": 5.26,
+   "gravitas": 2.4400000000000004,
+   "distinct": 5.680000000000001,
+   "ease": 6.01,
+   "wit": 6.97,
+   "total": 5.272,
+   "round": 2
+  },
+  "Tidewell AI": {
+   "fit": 3.13,
+   "gravitas": 4.84,
+   "distinct": 5.35,
+   "ease": 7.48,
+   "wit": 5.53,
+   "total": 5.266,
+   "round": 1
+  },
+  "Clearway AI": {
+   "fit": 3.46,
+   "gravitas": 5.26,
+   "distinct": 3.4,
+   "ease": 9.34,
+   "wit": 4.84,
+   "total": 5.26,
+   "round": 1
+  },
+  "Askmark": {
+   "fit": 5.11,
+   "gravitas": 2.92,
+   "distinct": 4.18,
+   "ease": 8.23,
+   "wit": 5.83,
+   "total": 5.2540000000000004,
+   "round": 2
+  },
+  "Keepline": {
+   "fit": 4.33,
+   "gravitas": 4.15,
+   "distinct": 4.09,
+   "ease": 7.93,
+   "wit": 5.7700000000000005,
+   "total": 5.2540000000000004,
+   "round": 5
+  },
+  "Grantfast": {
+   "fit": 5.7700000000000005,
+   "gravitas": 2.23,
+   "distinct": 3.82,
+   "ease": 9.16,
+   "wit": 5.29,
+   "total": 5.2540000000000004,
+   "round": 5
+  },
+  "Gaterite": {
+   "fit": 6.34,
+   "gravitas": 3.25,
+   "distinct": 5.2299999999999995,
+   "ease": 4.99,
+   "wit": 6.3999999999999995,
+   "total": 5.242,
+   "round": 5
+  },
+  "Betterhand": {
+   "fit": 4.720000000000001,
+   "gravitas": 2.17,
+   "distinct": 3.64,
+   "ease": 9.639999999999999,
+   "wit": 6.01,
+   "total": 5.236,
+   "round": 2
+  },
+  "Attend AI": {
+   "fit": 4.960000000000001,
+   "gravitas": 2.41,
+   "distinct": 3.55,
+   "ease": 9.01,
+   "wit": 6.22,
+   "total": 5.23,
+   "round": 1
+  },
+  "Corbel Systems": {
+   "fit": 3.3400000000000003,
+   "gravitas": 6.43,
+   "distinct": 5.59,
+   "ease": 4.630000000000001,
+   "wit": 6.13,
+   "total": 5.224,
+   "round": 1
+  },
+  "Askwise": {
+   "fit": 4.779999999999999,
+   "gravitas": 3.04,
+   "distinct": 3.4899999999999998,
+   "ease": 9.1,
+   "wit": 5.680000000000001,
+   "total": 5.218,
+   "round": 2
+  },
+  "Gnomon Systems": {
+   "fit": 3.3400000000000003,
+   "gravitas": 6.16,
+   "distinct": 6.580000000000001,
+   "ease": 2.74,
+   "wit": 7.239999999999999,
+   "total": 5.212,
+   "round": 1
+  },
+  "Ashlar AI": {
+   "fit": 3.22,
+   "gravitas": 6.31,
+   "distinct": 6.3999999999999995,
+   "ease": 3.55,
+   "wit": 6.580000000000001,
+   "total": 5.212,
+   "round": 1
+  },
+  "Quittance Labs": {
+   "fit": 4.48,
+   "gravitas": 4.6899999999999995,
+   "distinct": 5.8,
+   "ease": 3.94,
+   "wit": 7.1499999999999995,
+   "total": 5.212,
+   "round": 1
+  },
+  "Covenhold": {
+   "fit": 5.319999999999999,
+   "gravitas": 2.6800000000000006,
+   "distinct": 6.13,
+   "ease": 5.2,
+   "wit": 6.7299999999999995,
+   "total": 5.212,
+   "round": 3
+  },
+  "Covenward": {
+   "fit": 5.0200000000000005,
+   "gravitas": 3.13,
+   "distinct": 6.069999999999999,
+   "ease": 5.05,
+   "wit": 6.760000000000001,
+   "total": 5.206,
+   "round": 3
+  },
+  "Remitgate": {
+   "fit": 6.25,
+   "gravitas": 2.26,
+   "distinct": 5.05,
+   "ease": 5.86,
+   "wit": 6.61,
+   "total": 5.206,
+   "round": 3
+  },
+  "Handsel": {
+   "fit": 3.8499999999999996,
+   "gravitas": 3.37,
+   "distinct": 7.0,
+   "ease": 4.33,
+   "wit": 7.449999999999999,
+   "total": 5.2,
+   "round": 2
+  },
+  "Kepthold": {
+   "fit": 5.92,
+   "gravitas": 3.55,
+   "distinct": 6.34,
+   "ease": 3.22,
+   "wit": 6.97,
+   "total": 5.2,
+   "round": 4
+  },
+  "Yieldward": {
+   "fit": 4.300000000000001,
+   "gravitas": 3.91,
+   "distinct": 5.59,
+   "ease": 5.53,
+   "wit": 6.669999999999999,
+   "total": 5.2,
+   "round": 5
+  },
+  "Waitfare": {
+   "fit": 5.680000000000001,
+   "gravitas": 1.69,
+   "distinct": 5.41,
+   "ease": 6.31,
+   "wit": 6.82,
+   "total": 5.182,
+   "round": 2
+  },
+  "Askcraft": {
+   "fit": 4.18,
+   "gravitas": 2.41,
+   "distinct": 4.6,
+   "ease": 8.649999999999999,
+   "wit": 5.9799999999999995,
+   "total": 5.164,
+   "round": 2
+  },
+  "Clearwise": {
+   "fit": 3.4899999999999998,
+   "gravitas": 5.17,
+   "distinct": 3.1599999999999997,
+   "ease": 9.37,
+   "wit": 4.6,
+   "total": 5.1579999999999995,
+   "round": 2
+  },
+  "Ratifygate": {
+   "fit": 6.760000000000001,
+   "gravitas": 1.6,
+   "distinct": 5.59,
+   "ease": 5.17,
+   "wit": 6.669999999999999,
+   "total": 5.1579999999999995,
+   "round": 5
+  },
+  "Coventgate": {
+   "fit": 3.55,
+   "gravitas": 5.56,
+   "distinct": 5.41,
+   "ease": 5.2,
+   "wit": 6.04,
+   "total": 5.152,
+   "round": 3
+  },
+  "Firstward": {
+   "fit": 3.31,
+   "gravitas": 4.9,
+   "distinct": 4.6,
+   "ease": 7.48,
+   "wit": 5.44,
+   "total": 5.146,
+   "round": 3
+  },
+  "Deedline": {
+   "fit": 4.029999999999999,
+   "gravitas": 2.83,
+   "distinct": 5.53,
+   "ease": 5.9799999999999995,
+   "wit": 7.36,
+   "total": 5.146,
+   "round": 4
+  },
+  "Passward": {
+   "fit": 5.86,
+   "gravitas": 2.8600000000000003,
+   "distinct": 4.300000000000001,
+   "ease": 5.83,
+   "wit": 6.82,
+   "total": 5.134,
+   "round": 5
+  },
+  "Fenestra Systems": {
+   "fit": 4.210000000000001,
+   "gravitas": 5.62,
+   "distinct": 5.74,
+   "ease": 3.52,
+   "wit": 6.46,
+   "total": 5.11,
+   "round": 1
+  },
+  "Custodial Systems": {
+   "fit": 6.5200000000000005,
+   "gravitas": 5.71,
+   "distinct": 2.29,
+   "ease": 5.92,
+   "wit": 5.11,
+   "total": 5.11,
+   "round": 5
+  },
+  "Covenline": {
+   "fit": 5.08,
+   "gravitas": 3.1599999999999997,
+   "distinct": 5.65,
+   "ease": 5.29,
+   "wit": 6.34,
+   "total": 5.104,
+   "round": 3
+  },
+  "Askline": {
+   "fit": 5.0200000000000005,
+   "gravitas": 2.95,
+   "distinct": 4.210000000000001,
+   "ease": 7.69,
+   "wit": 5.56,
+   "total": 5.086,
+   "round": 5
+  },
+  "Trueline AI": {
+   "fit": 3.13,
+   "gravitas": 4.42,
+   "distinct": 3.91,
+   "ease": 8.86,
+   "wit": 5.08,
+   "total": 5.08,
+   "round": 5
+  },
+  "Askance AI": {
+   "fit": 3.91,
+   "gravitas": 2.62,
+   "distinct": 6.16,
+   "ease": 4.66,
+   "wit": 7.96,
+   "total": 5.062,
+   "round": 2
+  },
+  "Gatekey AI": {
+   "fit": 6.7299999999999995,
+   "gravitas": 2.6500000000000004,
+   "distinct": 3.8800000000000003,
+   "ease": 6.91,
+   "wit": 5.11,
+   "total": 5.056,
+   "round": 3
+  },
+  "Rightward AI": {
+   "fit": 3.22,
+   "gravitas": 3.31,
+   "distinct": 3.94,
+   "ease": 8.98,
+   "wit": 5.7700000000000005,
+   "total": 5.0440000000000005,
+   "round": 5
+  },
+  "Fosse AI": {
+   "fit": 3.07,
+   "gravitas": 3.8499999999999996,
+   "distinct": 6.5200000000000005,
+   "ease": 4.869999999999999,
+   "wit": 6.88,
+   "total": 5.038,
+   "round": 1
+  },
+  "Probity Systems": {
+   "fit": 4.0,
+   "gravitas": 7.0,
+   "distinct": 4.0600000000000005,
+   "ease": 4.93,
+   "wit": 5.17,
+   "total": 5.032,
+   "round": 1
+  },
+  "Milestone Agents": {
+   "fit": 2.92,
+   "gravitas": 4.99,
+   "distinct": 3.31,
+   "ease": 9.25,
+   "wit": 4.66,
+   "total": 5.026,
+   "round": 1
+  },
+  "Asksafe": {
+   "fit": 5.5,
+   "gravitas": 2.8,
+   "distinct": 2.6500000000000004,
+   "ease": 9.07,
+   "wit": 5.11,
+   "total": 5.026,
+   "round": 4
+  },
+  "Ledgergate": {
+   "fit": 4.300000000000001,
+   "gravitas": 2.5,
+   "distinct": 4.93,
+   "ease": 7.420000000000001,
+   "wit": 5.95,
+   "total": 5.0200000000000005,
+   "round": 4
+  },
+  "Plinth Labs": {
+   "fit": 2.5300000000000002,
+   "gravitas": 5.11,
+   "distinct": 5.95,
+   "ease": 5.11,
+   "wit": 6.37,
+   "total": 5.014,
+   "round": 1
+  },
+  "Grantguide": {
+   "fit": 6.3999999999999995,
+   "gravitas": 2.2,
+   "distinct": 3.43,
+   "ease": 8.379999999999999,
+   "wit": 4.66,
+   "total": 5.013999999999999,
+   "round": 5
+  },
+  "Handcraft AI": {
+   "fit": 3.64,
+   "gravitas": 2.83,
+   "distinct": 3.73,
+   "ease": 9.22,
+   "wit": 5.56,
+   "total": 4.996,
+   "round": 5
+  },
+  "Bailey Works": {
+   "fit": 2.41,
+   "gravitas": 4.449999999999999,
+   "distinct": 3.55,
+   "ease": 9.28,
+   "wit": 5.26,
+   "total": 4.989999999999999,
+   "round": 1
+  },
+  "Marginalia": {
+   "fit": 3.0100000000000002,
+   "gravitas": 3.0100000000000002,
+   "distinct": 7.27,
+   "ease": 3.61,
+   "wit": 7.989999999999999,
+   "total": 4.978,
+   "round": 1
+  },
+  "Waypass": {
+   "fit": 5.05,
+   "gravitas": 2.8,
+   "distinct": 3.82,
+   "ease": 8.2,
+   "wit": 5.0200000000000005,
+   "total": 4.978,
+   "round": 2
+  },
+  "Lintel AI": {
+   "fit": 3.67,
+   "gravitas": 3.73,
+   "distinct": 5.08,
+   "ease": 5.65,
+   "wit": 6.7299999999999995,
+   "total": 4.9719999999999995,
+   "round": 1
+  },
+  "Trustline": {
+   "fit": 4.42,
+   "gravitas": 4.630000000000001,
+   "distinct": 2.05,
+   "ease": 9.52,
+   "wit": 4.18,
+   "total": 4.96,
+   "round": 1
+  },
+  "Trustmark Systems": {
+   "fit": 4.48,
+   "gravitas": 5.14,
+   "distinct": 1.9,
+   "ease": 9.19,
+   "wit": 4.029999999999999,
+   "total": 4.9479999999999995,
+   "round": 1
+  },
+  "Solestead": {
+   "fit": 2.7699999999999996,
+   "gravitas": 4.119999999999999,
+   "distinct": 6.01,
+   "ease": 5.5,
+   "wit": 6.25,
+   "total": 4.93,
+   "round": 5
+  },
+  "Bidegate": {
+   "fit": 5.14,
+   "gravitas": 3.4,
+   "distinct": 5.08,
+   "ease": 4.51,
+   "wit": 6.43,
+   "total": 4.912,
+   "round": 4
+  },
+  "Wicketkey": {
+   "fit": 5.53,
+   "gravitas": 1.96,
+   "distinct": 6.13,
+   "ease": 4.720000000000001,
+   "wit": 6.19,
+   "total": 4.906000000000001,
+   "round": 3
+  },
+  "Stintwell": {
+   "fit": 3.46,
+   "gravitas": 3.73,
+   "distinct": 5.53,
+   "ease": 5.62,
+   "wit": 6.16,
+   "total": 4.9,
+   "round": 2
+  },
+  "Runkeep AI": {
+   "fit": 4.389999999999999,
+   "gravitas": 2.83,
+   "distinct": 4.449999999999999,
+   "ease": 7.12,
+   "wit": 5.680000000000001,
+   "total": 4.894,
+   "round": 4
+  },
+  "Freehand AI": {
+   "fit": 2.38,
+   "gravitas": 2.3200000000000003,
+   "distinct": 4.27,
+   "ease": 9.459999999999999,
+   "wit": 6.04,
+   "total": 4.894,
+   "round": 5
+  },
+  "Wicketward": {
+   "fit": 4.869999999999999,
+   "gravitas": 2.8,
+   "distinct": 5.92,
+   "ease": 4.300000000000001,
+   "wit": 6.28,
+   "total": 4.834,
+   "round": 3
+  },
+  "Stintline": {
+   "fit": 4.029999999999999,
+   "gravitas": 3.04,
+   "distinct": 5.59,
+   "ease": 5.14,
+   "wit": 6.31,
+   "total": 4.822,
+   "round": 2
+  },
+  "Runward": {
+   "fit": 3.4899999999999998,
+   "gravitas": 3.3400000000000003,
+   "distinct": 4.6,
+   "ease": 7.0,
+   "wit": 5.65,
+   "total": 4.816,
+   "round": 4
+  },
+  "Mandategate": {
+   "fit": 6.25,
+   "gravitas": 1.7200000000000002,
+   "distinct": 4.84,
+   "ease": 5.47,
+   "wit": 5.74,
+   "total": 4.804,
+   "round": 4
+  },
+  "Culvert Labs": {
+   "fit": 3.28,
+   "gravitas": 4.029999999999999,
+   "distinct": 5.89,
+   "ease": 4.66,
+   "wit": 6.069999999999999,
+   "total": 4.786,
+   "round": 1
+  },
+  "Mindwell AI": {
+   "fit": 2.59,
+   "gravitas": 3.91,
+   "distinct": 3.58,
+   "ease": 8.89,
+   "wit": 4.9,
+   "total": 4.774,
+   "round": 2
+  },
+  "Leavegate": {
+   "fit": 5.29,
+   "gravitas": 1.39,
+   "distinct": 4.869999999999999,
+   "ease": 6.5200000000000005,
+   "wit": 5.8,
+   "total": 4.774,
+   "round": 5
+  },
+  "Clearline Systems": {
+   "fit": 3.22,
+   "gravitas": 5.0200000000000005,
+   "distinct": 1.9300000000000002,
+   "ease": 9.4,
+   "wit": 4.27,
+   "total": 4.768,
+   "round": 2
+  },
+  "Passward AI": {
+   "fit": 5.65,
+   "gravitas": 2.62,
+   "distinct": 3.7600000000000002,
+   "ease": 5.41,
+   "wit": 6.3999999999999995,
+   "total": 4.768,
+   "round": 4
+  },
+  "Trustwell": {
+   "fit": 4.0600000000000005,
+   "gravitas": 4.360000000000001,
+   "distinct": 1.81,
+   "ease": 9.49,
+   "wit": 4.0600000000000005,
+   "total": 4.756,
+   "round": 2
+  },
+  "Askward": {
+   "fit": 5.05,
+   "gravitas": 1.27,
+   "distinct": 4.9,
+   "ease": 6.61,
+   "wit": 5.83,
+   "total": 4.732,
+   "round": 3
+  },
+  "Askrite": {
+   "fit": 4.8100000000000005,
+   "gravitas": 2.3499999999999996,
+   "distinct": 5.41,
+   "ease": 4.630000000000001,
+   "wit": 6.25,
+   "total": 4.69,
+   "round": 5
+  },
+  "Ambit AI": {
+   "fit": 3.6999999999999997,
+   "gravitas": 4.210000000000001,
+   "distinct": 4.360000000000001,
+   "ease": 5.83,
+   "wit": 5.319999999999999,
+   "total": 4.684,
+   "round": 1
+  },
+  "Waylet": {
+   "fit": 2.8600000000000003,
+   "gravitas": 2.3200000000000003,
+   "distinct": 5.74,
+   "ease": 6.34,
+   "wit": 6.1,
+   "total": 4.672,
+   "round": 4
+  },
+  "Approach Systems": {
+   "fit": 2.71,
+   "gravitas": 4.869999999999999,
+   "distinct": 1.4200000000000002,
+   "ease": 9.49,
+   "wit": 4.300000000000001,
+   "total": 4.558,
+   "round": 2
+  },
+  "Saygate": {
+   "fit": 4.48,
+   "gravitas": 1.3,
+   "distinct": 4.33,
+   "ease": 7.69,
+   "wit": 4.99,
+   "total": 4.558,
+   "round": 4
+  },
+  "Bidwell AI": {
+   "fit": 2.5599999999999996,
+   "gravitas": 4.18,
+   "distinct": 4.449999999999999,
+   "ease": 6.699999999999999,
+   "wit": 4.869999999999999,
+   "total": 4.552,
+   "round": 2
+  },
+  "Byfare": {
+   "fit": 3.91,
+   "gravitas": 2.3200000000000003,
+   "distinct": 5.35,
+   "ease": 4.630000000000001,
+   "wit": 6.19,
+   "total": 4.48,
+   "round": 2
+  },
+  "Firmament AI": {
+   "fit": 1.63,
+   "gravitas": 5.29,
+   "distinct": 5.05,
+   "ease": 5.17,
+   "wit": 4.93,
+   "total": 4.414,
+   "round": 1
+  },
+  "Bidgate": {
+   "fit": 3.64,
+   "gravitas": 1.27,
+   "distinct": 3.67,
+   "ease": 8.559999999999999,
+   "wit": 4.539999999999999,
+   "total": 4.335999999999999,
+   "round": 5
+  },
+  "Mindcraft AI": {
+   "fit": 2.26,
+   "gravitas": 2.02,
+   "distinct": 3.6999999999999997,
+   "ease": 8.14,
+   "wit": 4.6899999999999995,
+   "total": 4.162,
+   "round": 2
+  },
+  "Cinter": {
+   "fit": 2.1399999999999997,
+   "gravitas": 2.8600000000000003,
+   "distinct": 3.61,
+   "ease": 5.11,
+   "wit": 4.51,
+   "total": 3.646,
+   "round": 1
+  }
+ },
+ "cost": 0.07551979800000001
+}

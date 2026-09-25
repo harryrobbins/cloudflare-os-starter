@@ -1,0 +1,491 @@
+{
+  "meta": {
+    "gathered": "2026-08-26",
+    "axes": {
+      "build_axis": "0 = chat assistant, 10 = platform users build apps/agents on",
+      "deploy_axis": "0 = vendor cloud only, 10 = on-prem / sovereign / any cloud",
+      "access_control": "0 none beyond login; 1 per-user; 2 per-document/row-level; 3 capability/scoped-credential; 4 capability + derivative/data-flow tracking"
+    },
+    "grade_note": "Axis scores are the author's own judgement (grade C) informed by vendor docs; pricing and UK facts carry their own source grades in pricing.json.",
+    "sources": [
+      {
+        "name": "Cloudflare OS launch blog",
+        "url": "https://blog.cloudflare.com/cloudflare-os/"
+      },
+      {
+        "name": "Channel Insider on Cloudflare OS partners",
+        "url": "https://www.channelinsider.com/security/managed-services/news-cloudflare-os-enterprise-ai-agents-partners/"
+      },
+      {
+        "name": "EPC Group Copilot SKUs Jul 2026",
+        "url": "https://www.epcgroup.net/answers/microsoft-copilot-pricing-july-2026"
+      },
+      {
+        "name": "CloudZero Copilot Studio",
+        "url": "https://www.cloudzero.com/blog/copilot-studio-pricing/"
+      },
+      {
+        "name": "Coworker.ai Gemini Enterprise",
+        "url": "https://coworker.ai/blog/gemini-enterprise-pricing"
+      },
+      {
+        "name": "CloudZero ChatGPT pricing",
+        "url": "https://www.cloudzero.com/blog/how-much-does-chatgpt-cost/"
+      },
+      {
+        "name": "ExploreAgentic Claude Enterprise",
+        "url": "https://www.exploreagentic.ai/insights/claude-team-enterprise-seat-pricing/"
+      },
+      {
+        "name": "Retool London office",
+        "url": "https://retool.com/blog/london-office-announcement"
+      },
+      {
+        "name": "Jet Admin Appsmith / Budibase / ToolJet guides",
+        "url": "https://www.jetadmin.io/blog/"
+      },
+      {
+        "name": "Windmill pricing",
+        "url": "https://www.windmill.dev/pricing"
+      },
+      {
+        "name": "Grist pricing",
+        "url": "https://www.getgrist.com/pricing/"
+      },
+      {
+        "name": "Directus pricing 2026",
+        "url": "https://nayankyada.com/blog/directus-pricing-2026-self-hosted-costs-cloud-tiers-license-thresholds"
+      },
+      {
+        "name": "Nextcloud Enterprise pricing",
+        "url": "https://nextcloud.com/pricing/"
+      },
+      {
+        "name": "TNW: UK reviews GBP 330m NHS Palantir deal",
+        "url": "https://thenextweb.com/news/uk-nhs-palantir-contract-review-break-clause"
+      },
+      {
+        "name": "Coworker.ai Glean pricing",
+        "url": "https://coworker.ai/blog/glean-pricing"
+      },
+      {
+        "name": "Glean Technologies UK Ltd (Companies House)",
+        "url": "https://find-and-update.company-information.service.gov.uk/company/16620415"
+      },
+      {
+        "name": "Kainos FY26 results (ChannelWeb)",
+        "url": "https://www.channelweb.co.uk/news/2026/kainos-fy26-results"
+      },
+      {
+        "name": "Made Tech FY26 results (TipRanks)",
+        "url": "https://www.tipranks.com/news/company-announcements/made-tech-lifts-fy26-earnings-and-cash-as-public-sector-ai-demand-builds"
+      },
+      {
+        "name": "Accenture completes acquisition of Faculty",
+        "url": "https://newsroom.accenture.com/news/2026/accenture-completes-acquisition-of-faculty"
+      },
+      {
+        "name": "Faculty Frontier G-Cloud listing",
+        "url": "https://www.applytosupply.digitalmarketplace.service.gov.uk/g-cloud/services/833092345267794"
+      },
+      {
+        "name": "Databricks Genie pricing Jul 2026",
+        "url": "https://blog.devgenius.io/databricks-genie-pricing-what-actually-changes-in-july-2026-0f3558f26d61"
+      },
+      {
+        "name": "Finout Snowflake Cortex pricing",
+        "url": "https://www.finout.io/blog/snowflake-cortex-pricing"
+      }
+    ]
+  },
+  "competitors": [
+    {
+      "key": "excelcion",
+      "name": "Excelcion (target)",
+      "build_axis": 8,
+      "deploy_axis": 9,
+      "access_control": 4,
+      "access_control_note": "target: capability-scoped credentials plus derivative/data-flow tracking across generated apps and agents",
+      "origin": "open-source",
+      "uk_presence": "UK-founded; target UK public sector and regulated mid-market",
+      "pricing_note": "TBD",
+      "one_line_pitch": "Enterprise wrapper around vibe-coding platforms: governed, sovereign-deployable app and agent building.",
+      "sources": [],
+      "grade": "C",
+      "note": "target"
+    },
+    {
+      "key": "microsoft-m365-copilot",
+      "name": "Microsoft 365 Copilot",
+      "build_axis": 2,
+      "deploy_axis": 1,
+      "access_control": 2,
+      "access_control_note": "Inherits Microsoft Graph per-item permissions and Purview sensitivity labels; no capability scoping of agent actions beyond Graph ACLs (Microsoft Learn: Copilot data, privacy and security).",
+      "origin": "hyperscaler",
+      "uk_presence": "Dominant; UK Government Copilot cross-departmental pilot 2024-25, widespread NHS/central-government deployment; UK data residency in Microsoft UK regions",
+      "pricing_note": "$30/user/month add-on (Business tier GBP 16.10, promo 13.80); E7 Frontier Suite $99 bundles Copilot from Jul 2026",
+      "one_line_pitch": "AI assistant inside the Office apps every UK enterprise already licenses.",
+      "sources": [
+        "https://www.epcgroup.net/answers/microsoft-copilot-pricing-july-2026",
+        "https://www.expertsure.com/uk/ai-tools/microsoft-copilot-review/"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "microsoft-copilot-studio",
+      "name": "Microsoft Copilot Studio",
+      "build_axis": 7,
+      "deploy_axis": 1,
+      "access_control": 2,
+      "access_control_note": "Agents run under maker/user identity with Graph and Dataverse row-level security; connectors governed by DLP policies, but no per-agent capability tokens (Copilot Studio security docs).",
+      "origin": "hyperscaler",
+      "uk_presence": "Sold via every UK Microsoft partner; used by councils and NHS trusts for FAQ/service agents",
+      "pricing_note": "$0.01/credit PAYG or $200/25k credits; free credits for M365 Copilot-licensed users",
+      "one_line_pitch": "Low-code agent builder for the M365 tenant, metered by credits.",
+      "sources": [
+        "https://www.cloudzero.com/blog/copilot-studio-pricing/"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "microsoft-power-platform",
+      "name": "Microsoft Power Platform (Power Apps / Automate)",
+      "build_axis": 8,
+      "deploy_axis": 1,
+      "access_control": 2,
+      "access_control_note": "Dataverse security roles with table/row/column-level security; environment DLP policies; no derivative tracking (Power Platform security docs).",
+      "origin": "hyperscaler",
+      "uk_presence": "Very large citizen-developer footprint in UK government and NHS; UK Power Platform regions",
+      "pricing_note": "Power Apps Premium GBP 15.40/user (GBP 9.20 at 2,000 seats); per-app plan retired Jan 2026",
+      "one_line_pitch": "The default low-code platform for UK enterprises on Microsoft.",
+      "sources": [
+        "https://powertech365.co.uk/insights/power-platform-licensing-costs-explained/"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "google-gemini-enterprise",
+      "name": "Google Gemini for Workspace / Gemini Enterprise (ex-Agentspace)",
+      "build_axis": 5,
+      "deploy_axis": 2,
+      "access_control": 2,
+      "access_control_note": "Respects source-system ACLs across connectors (per-document); IAM roles per agent; Google Distributed Cloud offers air-gapped Gemini for sovereign cases (Gemini Enterprise docs).",
+      "origin": "hyperscaler",
+      "uk_presence": "Google Cloud London region; UK public-sector footprint smaller than Microsoft; G-Cloud listed via partners",
+      "pricing_note": "Gemini bundled into Workspace (Business Std GBP 11.80); Gemini Enterprise $21 / $30 / ~$50-60 per seat plus metered overage",
+      "one_line_pitch": "Search-and-agent platform over Workspace and connected enterprise data.",
+      "sources": [
+        "https://coworker.ai/blog/gemini-enterprise-pricing",
+        "https://refractiv.co.uk/news/google-workspace-cost-uk-pricing/"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "openai-chatgpt-enterprise",
+      "name": "OpenAI ChatGPT Enterprise",
+      "build_axis": 3,
+      "deploy_axis": 1,
+      "access_control": 1,
+      "access_control_note": "SSO/SCIM, workspace roles, custom GPT sharing controls and connector-level permissions; no row-level or capability model (OpenAI Enterprise privacy docs).",
+      "origin": "enterprise-saas",
+      "uk_presence": "OpenAI London office; MoU with UK Government (Jul 2025) and UK data residency offered; used across Whitehall pilots",
+      "pricing_note": "Business $20-25/seat; Enterprise quote-based, reported $45-75/seat",
+      "one_line_pitch": "Frontier chat assistant with custom GPTs and connectors, enterprise data controls.",
+      "sources": [
+        "https://www.cloudzero.com/blog/how-much-does-chatgpt-cost/",
+        "https://ibl.ai/resources/ai-cost-statistics"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "anthropic-claude-enterprise",
+      "name": "Anthropic Claude Enterprise",
+      "build_axis": 4,
+      "deploy_axis": 2,
+      "access_control": 1,
+      "access_control_note": "SSO/SCIM, role-based permissions, project sharing, audit logs; MCP connectors carry user-level OAuth; available via AWS Bedrock / Google Vertex for region control (Claude Enterprise docs).",
+      "origin": "enterprise-saas",
+      "uk_presence": "Anthropic London office; MoU with UK Government (Feb 2025); Claude available in UK regions via Bedrock",
+      "pricing_note": "Team $20-25 standard / $100-125 premium seat; Enterprise quote-based (reports range $20 seat + tokens to ~$60)",
+      "one_line_pitch": "Claude with projects, artifacts and Claude Code for enterprise knowledge work.",
+      "sources": [
+        "https://www.exploreagentic.ai/insights/claude-team-enterprise-seat-pricing/"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "retool",
+      "name": "Retool",
+      "build_axis": 9,
+      "deploy_axis": 6,
+      "access_control": 2,
+      "access_control_note": "Granular app/resource/query permissions and permission groups on Business+; self-hosted on Enterprise; no capability tokens for agents (Retool permissions docs).",
+      "origin": "enterprise-saas",
+      "uk_presence": "London office opened; UK customer base in fintech/scale-ups; limited UK public-sector references",
+      "pricing_note": "Team ~$10 / Business $50-65 per builder; end users $5-10; self-host only on Enterprise",
+      "one_line_pitch": "Internal-tool and agent builder for engineering teams, now with AI credits.",
+      "sources": [
+        "https://automationatlas.io/answers/retool-pricing-explained-2026/",
+        "https://retool.com/blog/london-office-announcement"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "appsmith",
+      "name": "Appsmith",
+      "build_axis": 9,
+      "deploy_axis": 9,
+      "access_control": 2,
+      "access_control_note": "Granular access control (roles on apps, pages, datasources) on Business/Enterprise; audit logs; self-hosted by default (Appsmith GAC docs).",
+      "origin": "open-source",
+      "uk_presence": "Community adoption; no notable UK public-sector references found",
+      "pricing_note": "Business $15/user; Enterprise from $2,500/mo (100 users)",
+      "one_line_pitch": "Open-source internal-tool builder with self-hosted licence keys.",
+      "sources": [
+        "https://www.jetadmin.io/blog/appsmith-pricing-2026-guide-to-plans-limits-and-total-cost-with-jet-admin-comparison/"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "budibase",
+      "name": "Budibase",
+      "build_axis": 9,
+      "deploy_axis": 9,
+      "access_control": 2,
+      "access_control_note": "Role-based access with per-app roles and row-level filtering via data-source views; SSO/SCIM on paid tiers (Budibase RBAC docs).",
+      "origin": "open-source",
+      "uk_presence": "Belfast-founded UK company; NHS and local-authority users cited in Budibase marketing",
+      "pricing_note": "App users $5, creators $50 (annual); self-hosted free with unlimited apps/agents",
+      "one_line_pitch": "UK-built open-source low-code with cheap end-user seats and free self-hosting.",
+      "sources": [
+        "https://www.jetadmin.io/blog/untitled-39/"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "tooljet",
+      "name": "ToolJet",
+      "build_axis": 9,
+      "deploy_axis": 9,
+      "access_control": 2,
+      "access_control_note": "Groups and granular app/data-source permissions; self-host community edition (ToolJet permissions docs).",
+      "origin": "open-source",
+      "uk_presence": "Minimal UK footprint",
+      "pricing_note": "Starter $24 / Pro $99 / Team $249 per builder; community edition free",
+      "one_line_pitch": "Open-source low-code app and agent builder priced per builder.",
+      "sources": [
+        "https://www.jetadmin.io/blog/tooljet-pricing-and-best-alternatives-july-2026-guide/"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "windmill",
+      "name": "Windmill",
+      "build_axis": 9,
+      "deploy_axis": 10,
+      "access_control": 2,
+      "access_control_note": "Workspace/folder-level RBAC, per-resource and per-variable permissions, audit logs on Enterprise; scripts run with resource bindings but no data-flow tracking (Windmill docs).",
+      "origin": "open-source",
+      "uk_presence": "Minimal UK footprint",
+      "pricing_note": "Dev seat $20, operator $10, plus $120/mo base and compute units; free tier to 10 SSO users",
+      "one_line_pitch": "Developer-first scripts/flows/apps platform, self-hostable anywhere.",
+      "sources": [
+        "https://www.windmill.dev/pricing"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "grist",
+      "name": "Grist",
+      "build_axis": 6,
+      "deploy_axis": 9,
+      "access_control": 2,
+      "access_control_note": "Row- and column-level access rules per document with formula-based conditions; self-hosted community and enterprise (Grist access-rules docs).",
+      "origin": "open-source",
+      "uk_presence": "Small UK presence; used by some European public bodies (French government deployments)",
+      "pricing_note": "Pro $8-10, Business $24-30 per user; self-hosted Enterprise on quote (min 50)",
+      "one_line_pitch": "Open-source relational spreadsheet with granular access rules and AI assistant.",
+      "sources": [
+        "https://www.getgrist.com/pricing/"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "directus",
+      "name": "Directus",
+      "build_axis": 7,
+      "deploy_axis": 9,
+      "access_control": 2,
+      "access_control_note": "Policy-based permissions with item-level filter rules per collection and field; BSL self-host (Directus permissions docs).",
+      "origin": "open-source",
+      "uk_presence": "Minimal UK-specific footprint",
+      "pricing_note": "Cloud $15 / $99 / $299 per project-month; self-host free under $5m revenue",
+      "one_line_pitch": "Headless data platform and app builder over any SQL database.",
+      "sources": [
+        "https://nayankyada.com/blog/directus-pricing-2026-self-hosted-costs-cloud-tiers-license-thresholds"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "nextcloud",
+      "name": "Nextcloud (Hub + Assistant)",
+      "build_axis": 3,
+      "deploy_axis": 10,
+      "access_control": 2,
+      "access_control_note": "File-level ACLs, group folders, file access control rules; local AI Assistant runs on-prem; no capability model for agents (Nextcloud admin docs).",
+      "origin": "open-source",
+      "uk_presence": "Modest UK presence; strong in EU public sector (German federal government, French ministries)",
+      "pricing_note": "Enterprise EUR 53-205 per user per year by tier/volume; Assistant only in Ultimate",
+      "one_line_pitch": "Sovereign collaboration suite with a local AI assistant.",
+      "sources": [
+        "https://nextcloud.com/pricing/"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "palantir-aip",
+      "name": "Palantir AIP / Foundry",
+      "build_axis": 8,
+      "deploy_axis": 8,
+      "access_control": 3,
+      "access_control_note": "Ontology-level markings, purpose-based access and row/column policies with data lineage; AIP Logic agents act through ontology permissions with audit (Palantir security docs). Closest incumbent to a data-flow model.",
+      "origin": "enterprise-saas",
+      "uk_presence": "NHS Federated Data Platform GBP 330m; MoD and Home Office contracts; London office; contract under political review with 2027 break clause",
+      "pricing_note": "No public per-seat price; enterprise contracts",
+      "one_line_pitch": "Ontology-centred operational AI platform for government and defence.",
+      "sources": [
+        "https://thenextweb.com/news/uk-nhs-palantir-contract-review-break-clause"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "glean",
+      "name": "Glean",
+      "build_axis": 4,
+      "deploy_axis": 2,
+      "access_control": 2,
+      "access_control_note": "Permissions-aware search mirroring source-system per-document ACLs; agent builder inherits same (Glean security docs).",
+      "origin": "enterprise-saas",
+      "uk_presence": "Glean Technologies UK Ltd incorporated 2025; London Tech Week exhibitor; UK enterprise logos, few public-sector references",
+      "pricing_note": "Reported $50+/user plus ~$15 each for generative and agent add-ons; $100k+ minimums",
+      "one_line_pitch": "Permissions-aware enterprise search and agents over SaaS knowledge.",
+      "sources": [
+        "https://coworker.ai/blog/glean-pricing",
+        "https://find-and-update.company-information.service.gov.uk/company/16620415"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "cloudflare-os",
+      "name": "Cloudflare OS (open source; managed version planned)",
+      "build_axis": 8,
+      "deploy_axis": 5,
+      "access_control": 4,
+      "access_control_note": "Agents get typed bindings not raw keys; Gatekeeper Workers enforce per-service scoped policies; the system records every resource an agent reads and 'policy follows what the agent has seen' (Cloudflare OS launch blog). Runs in the customer's Cloudflare account, not on-prem.",
+      "origin": "open-source",
+      "uk_presence": "Cloudflare London office and UK data localisation; Cloudflare OS itself is early-access (Aug 2026) with no UK references; implementation partners Presidio and Happy Cog are US-based",
+      "pricing_note": "Apache-2.0, no licence fee; runs on Workers/Workers AI usage pricing; managed dashboard product announced without date",
+      "one_line_pitch": "Open agent workspace with capability-scoped credentials and observation tracking, deployed in your Cloudflare account.",
+      "sources": [
+        "https://blog.cloudflare.com/cloudflare-os/",
+        "https://www.channelinsider.com/security/managed-services/news-cloudflare-os-enterprise-ai-agents-partners/"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "kainos",
+      "name": "Kainos",
+      "build_axis": 6,
+      "deploy_axis": 8,
+      "access_control": 1,
+      "access_control_note": "Services firm; inherits the control model of whatever platform it deploys (typically Azure/M365/Workday).",
+      "origin": "si",
+      "uk_presence": "Belfast HQ; FY26 revenue GBP 431m, 3,475 staff; GBP 136m public-sector digital revenue; claims 7th largest AI supplier to UK public sector (GBP 66m awarded since 2018); Home Office, DfT, DVSA, NHS England, GBP 150m Defra deal",
+      "pricing_note": "T&M / outcome-based; Workday products GBP 89m ARR",
+      "one_line_pitch": "UK's largest listed public-sector digital and AI delivery partner.",
+      "sources": [
+        "https://www.channelweb.co.uk/news/2026/kainos-fy26-results"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "made-tech",
+      "name": "Made Tech",
+      "build_axis": 6,
+      "deploy_axis": 8,
+      "access_control": 1,
+      "access_control_note": "Services firm; control model inherited from client platform.",
+      "origin": "si",
+      "uk_presence": "UK public sector only; FY26 revenue GBP 58.9m (+27%); GBP 19m GDS contract; central government, NHS, local government",
+      "pricing_note": "T&M via G-Cloud and DOS frameworks",
+      "one_line_pitch": "Public-sector-only digital and AI delivery specialist.",
+      "sources": [
+        "https://www.tipranks.com/news/company-announcements/made-tech-lifts-fy26-earnings-and-cash-as-public-sector-ai-demand-builds"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "bjss-cgi",
+      "name": "BJSS (CGI)",
+      "build_axis": 6,
+      "deploy_axis": 8,
+      "access_control": 1,
+      "access_control_note": "Services firm; control model inherited from client platform.",
+      "origin": "si",
+      "uk_presence": "BJSS acquired by CGI (2025); CGI UK ~6,000 staff with long-standing MoD, DWP, NHS and Scottish Government contracts",
+      "pricing_note": "T&M / managed service",
+      "one_line_pitch": "Scaled UK engineering consultancy inside a global SI.",
+      "sources": [],
+      "grade": "C"
+    },
+    {
+      "key": "faculty-frontier",
+      "name": "Faculty Frontier (Accenture)",
+      "build_axis": 7,
+      "deploy_axis": 8,
+      "access_control": 1,
+      "access_control_note": "Identity federation, MFA, ISO 27001; per-user access, no published row-level or capability model (G-Cloud listing).",
+      "origin": "si",
+      "uk_presence": "London HQ, acquired by Accenture Jan 2026; NHS England Early Warning System, multiple NHS G-Cloud listings; UK and EEA data residency",
+      "pricing_note": "G-Cloud GBP 1,000-250,000 per unit per month",
+      "one_line_pitch": "Decision-intelligence platform plus delivery, deployed in the buyer's cloud.",
+      "sources": [
+        "https://www.applytosupply.digitalmarketplace.service.gov.uk/g-cloud/services/833092345267794",
+        "https://newsroom.accenture.com/news/2026/accenture-completes-acquisition-of-faculty"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "databricks",
+      "name": "Databricks (Genie / Agent Bricks)",
+      "build_axis": 7,
+      "deploy_axis": 6,
+      "access_control": 2,
+      "access_control_note": "Unity Catalog row filters, column masks and lineage; agents governed by catalog grants; runs in customer's AWS/Azure/GCP account (Databricks Unity Catalog docs).",
+      "origin": "enterprise-saas",
+      "uk_presence": "London office; NHS, HMRC and Shell references; UK regions on all three clouds",
+      "pricing_note": "No seat fee; 150 DBU (~$10.50) free LLM usage per user per month from Jul 2026, then PAYG",
+      "one_line_pitch": "Data-lakehouse-native analyst and agent tooling billed on consumption.",
+      "sources": [
+        "https://blog.devgenius.io/databricks-genie-pricing-what-actually-changes-in-july-2026-0f3558f26d61"
+      ],
+      "grade": "C"
+    },
+    {
+      "key": "snowflake-cortex",
+      "name": "Snowflake Cortex / Snowflake Intelligence",
+      "build_axis": 6,
+      "deploy_axis": 4,
+      "access_control": 2,
+      "access_control_note": "Row access policies, masking policies and RBAC applied to Cortex Search/Analyst and agents (Snowflake governance docs).",
+      "origin": "enterprise-saas",
+      "uk_presence": "London office; UK public-sector via partners; UK regions on AWS/Azure",
+      "pricing_note": "AI Credits $2.00-2.20; $0.12-5.10 per M tokens; no seat fee",
+      "one_line_pitch": "Warehouse-native LLM functions and agents over governed data.",
+      "sources": [
+        "https://www.finout.io/blog/snowflake-cortex-pricing"
+      ],
+      "grade": "C"
+    }
+  ]
+}

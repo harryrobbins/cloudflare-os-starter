@@ -1,0 +1,1545 @@
+{
+ "Countermand": [],
+ "Permissa": [
+  {
+   "mark": "ASDA protect ORAL HYGIENE SYSTEM TOTAL CARE Maximum Permissable Fluoride Toothpaste",
+   "office": "GB",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    3
+   ],
+   "owner": "Asda Stores Limited",
+   "filed": "1996-05-31",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000002101522",
+   "type": "Figurative"
+  },
+  {
+   "mark": "permisso",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    9,
+    42
+   ],
+   "owner": "BEYOND THE SCOPE, S.L.",
+   "filed": "2024-06-26",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000019046595",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERMISSO",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    30
+   ],
+   "owner": "Concorp Holding B.V.",
+   "filed": "2001-10-25",
+   "uk_eu": true,
+   "url": "http://euipo.europa.eu/trademark/data/EM500000002424828",
+   "type": "Word"
+  },
+  {
+   "mark": "PERMISSO",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    9,
+    42
+   ],
+   "owner": "Beyond The Scope, S.L.",
+   "filed": "2024-12-09",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000004134763",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERMISSO",
+   "office": "WO",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    30
+   ],
+   "owner": "Concorp B.V.",
+   "filed": "2001-09-20",
+   "uk_eu": false,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000000770018",
+   "type": "Word"
+  },
+  {
+   "mark": "CERMISSA",
+   "office": "WO",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    5
+   ],
+   "owner": "Abbott Products Operations AG",
+   "filed": "2011-07-05",
+   "uk_eu": false,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000001086781",
+   "type": "Word"
+  },
+  {
+   "mark": "CERMISSA",
+   "office": "WO",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    5
+   ],
+   "owner": "BGP Products Operations GmbH",
+   "filed": "2011-07-05",
+   "uk_eu": true,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO50000001086781A",
+   "type": "Word"
+  },
+  {
+   "mark": "PERISSA",
+   "office": "GB",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    29,
+    30,
+    31
+   ],
+   "owner": "THE FRESH OLIVE COMPANY LIMITED",
+   "filed": "2015-06-12",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000914242218",
+   "type": "Word"
+  },
+  {
+   "mark": "PERISSA",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    29,
+    30,
+    31
+   ],
+   "owner": "THE FRESH OLIVE COMPANY LIMITED",
+   "filed": "2015-06-12",
+   "uk_eu": true,
+   "url": "/EM500000014242218",
+   "type": "Word"
+  },
+  {
+   "mark": "LA PERISSA",
+   "office": "WO",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    35,
+    25
+   ],
+   "owner": "LA PER\u0130SSA TEKST\u0130L,SANAY\u0130 VE T\u0130CARET L\u0130M\u0130TED \u015e\u0130RKET\u0130",
+   "filed": "2023-12-13",
+   "uk_eu": true,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000001783600",
+   "type": "Figurative"
+  },
+  {
+   "mark": "Perissa Mackenzie Cakes",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    29,
+    30
+   ],
+   "owner": "Perissa Mackenzie",
+   "filed": "2020-11-18",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000003557617",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERMIRA",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    35,
+    36
+   ],
+   "owner": "Permira I.P. Limited",
+   "filed": "2015-05-20",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000014099238",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERMIRA",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    35,
+    36
+   ],
+   "owner": "Permira I.P. Limited",
+   "filed": "2001-08-01",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000902324085",
+   "type": "Word"
+  },
+  {
+   "mark": "PERMIRA",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    35,
+    36
+   ],
+   "owner": "Permira I.P. Limited",
+   "filed": "2001-08-01",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000002324085",
+   "type": "Word"
+  },
+  {
+   "mark": "DERMISA",
+   "office": "WO",
+   "status": "Ended",
+   "live": false,
+   "classes": [
+    3
+   ],
+   "owner": "MONTANI COSMETICS, INC.",
+   "filed": "2006-08-08",
+   "uk_eu": true,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000000897613",
+   "type": "Word"
+  },
+  {
+   "mark": "PERMIRA",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    35,
+    36
+   ],
+   "owner": "Permira I.P. Limited",
+   "filed": "2022-06-15",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000003799287",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERMIRA",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    35,
+    36
+   ],
+   "owner": "Permira I.P. Limited",
+   "filed": "2015-05-20",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000914099238",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERMIRA",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    35,
+    36
+   ],
+   "owner": "Permira I.P. Limited",
+   "filed": "2022-06-15",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000018716835",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERMASA",
+   "office": "WO",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    20
+   ],
+   "owner": "PERMASA, S.A.",
+   "filed": "1979-12-13",
+   "uk_eu": false,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000000449110",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERMIRA",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    35,
+    36
+   ],
+   "owner": "Permira I.P. Limited",
+   "filed": "2001-05-23",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000002270945",
+   "type": "Word"
+  },
+  {
+   "mark": "PERMIRA",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    35,
+    36
+   ],
+   "owner": "Permira I.P. Limited",
+   "filed": "2015-05-20",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000003109705",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERFISA",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    6
+   ],
+   "owner": "PERFISA - F\u00c1BRICA DE PERFIS MET\u00c1LICOS, S.A.",
+   "filed": "2009-01-23",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000007546121",
+   "type": "Figurative"
+  },
+  {
+   "mark": "Dermisa",
+   "office": "WO",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    3
+   ],
+   "owner": "Montani Cosmetics, Inc.",
+   "filed": "2016-07-27",
+   "uk_eu": true,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000001318106",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERMISH",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    9
+   ],
+   "owner": "HOYA CORPORATION",
+   "filed": "2002-08-07",
+   "uk_eu": true,
+   "url": "http://euipo.europa.eu/trademark/data/EM500000002804656",
+   "type": "Word"
+  },
+  {
+   "mark": "Permira",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    36,
+    35
+   ],
+   "owner": "Permira I.P. Limited",
+   "filed": "2008-07-17",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000007073828",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERLISA",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    18,
+    25
+   ],
+   "owner": "IDEE HOLDING SRL A SOCIO UNICO",
+   "filed": "2019-04-16",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000918052343",
+   "type": "Word"
+  },
+  {
+   "mark": "Permasa",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    20
+   ],
+   "owner": "PERMASA, S.A.",
+   "filed": "1998-02-09",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000000741801",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERLISA",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    18,
+    25
+   ],
+   "owner": "IDEE HOLDING SRL A SOCIO UNICO",
+   "filed": "2019-04-16",
+   "uk_eu": true,
+   "url": "http://euipo.europa.eu/trademark/data/EM500000018052343",
+   "type": "Word"
+  },
+  {
+   "mark": "Permasa",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    20,
+    35,
+    39,
+    6,
+    38
+   ],
+   "owner": "PERMASA, S.A.",
+   "filed": "2008-01-25",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000006609291",
+   "type": "Figurative"
+  },
+  {
+   "mark": "Permia",
+   "office": "GB",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    9,
+    16,
+    28,
+    41
+   ],
+   "owner": "Seepia Games Ltd",
+   "filed": "2012-11-14",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000911177318",
+   "type": "Word"
+  },
+  {
+   "mark": "Permia",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    16,
+    28,
+    9,
+    41
+   ],
+   "owner": "Seepia Games Ltd",
+   "filed": "2012-11-14",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000011177318",
+   "type": "Word"
+  },
+  {
+   "mark": "PERMIRA CREDIT",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    35,
+    36
+   ],
+   "owner": "Permira I.P. Limited",
+   "filed": "2021-05-26",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000003647193",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PF PERFISA",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    6
+   ],
+   "owner": "PERFISA - F\u00c1BRICA DE PERFIS MET\u00c1LICOS, S.A.",
+   "filed": "2019-01-25",
+   "uk_eu": true,
+   "url": "http://euipo.europa.eu/trademark/data/EM500000018000035",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERMASA ENTROPIA",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    6,
+    20
+   ],
+   "owner": "PERMASA, S.A.",
+   "filed": "1997-07-16",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000000586388",
+   "type": "Word"
+  },
+  {
+   "mark": "PF PERFISA",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    6
+   ],
+   "owner": "PERFISA - F\u00c1BRICA DE PERFIS MET\u00c1LICOS, S.A.",
+   "filed": "2019-01-25",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000918000035",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERMIRA CREDIT",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    35,
+    36
+   ],
+   "owner": "Permira I.P. Limited",
+   "filed": "2021-05-26",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000018478960",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PECHE PERMIS",
+   "office": "GB",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    3
+   ],
+   "owner": "Blanchet",
+   "filed": "1958-01-07",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000000772855",
+   "type": "Word"
+  },
+  {
+   "mark": "PERMIA SENSING",
+   "office": "GB",
+   "status": "Filed",
+   "live": true,
+   "classes": [
+    35,
+    42,
+    44
+   ],
+   "owner": "Permia Sensing Limited",
+   "filed": "2026-09-22",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000004449208",
+   "type": "Figurative"
+  },
+  {
+   "mark": "Mercredi c\u00e9 permis",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    25
+   ],
+   "owner": "GO MKP",
+   "filed": "2012-05-23",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000010905164",
+   "type": "Word"
+  },
+  {
+   "mark": "PERMIS DE SEDUIRE",
+   "office": "WO",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    35,
+    16,
+    38,
+    9,
+    41,
+    42
+   ],
+   "owner": "AB DROITS AUDIOVISUELS",
+   "filed": "2003-08-19",
+   "uk_eu": false,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000000809374",
+   "type": "Figurative"
+  },
+  {
+   "mark": "permis de conduire",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    41
+   ],
+   "owner": "soluzione Script GmbH",
+   "filed": "2025-01-06",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000019127244",
+   "type": "Word"
+  },
+  {
+   "mark": "Mercredi c\u00e9 permis",
+   "office": "GB",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    25
+   ],
+   "owner": "GO MKP",
+   "filed": "2012-05-23",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000910905164",
+   "type": "Word"
+  },
+  {
+   "mark": "PERMIS DE GOUTER",
+   "office": "WO",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    35,
+    16,
+    28,
+    30,
+    41
+   ],
+   "owner": "GENERALE BISCUIT",
+   "filed": "1999-10-07",
+   "uk_eu": false,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000000722411",
+   "type": "Figurative"
+  },
+  {
+   "mark": "TOUT EST PERMIS",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    16,
+    20,
+    24,
+    25,
+    35,
+    38
+   ],
+   "owner": "LA REDOUTE",
+   "filed": "2010-08-05",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000009295941",
+   "type": "Word"
+  },
+  {
+   "mark": "SANS PERMIS S.L.",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    12,
+    35
+   ],
+   "owner": "SANS PERMIS",
+   "filed": "2014-05-21",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000012895769",
+   "type": "Figurative"
+  },
+  {
+   "mark": "SANS PERMIS S.L.",
+   "office": "GB",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    12,
+    35
+   ],
+   "owner": "SANS PERMIS",
+   "filed": "2014-05-21",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000912895769",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERMIS DE PENSER DENKEN ERLAUBT",
+   "office": "WO",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    38,
+    9,
+    41
+   ],
+   "owner": "MK2TV",
+   "filed": "2005-01-25",
+   "uk_eu": false,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000000850936",
+   "type": "Word"
+  },
+  {
+   "mark": "Permis de conduire presse a' injecter",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    16,
+    41
+   ],
+   "owner": "Kraft, Helmut",
+   "filed": "2013-07-03",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000011952389",
+   "type": "Word"
+  },
+  {
+   "mark": "Vendredi tout est permis avec Arthur",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    9,
+    38,
+    41
+   ],
+   "owner": "SATISFACTION - THE TELEVISION AGENCY",
+   "filed": "2014-05-05",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000912845558",
+   "type": "Figurative"
+  },
+  {
+   "mark": "QUI VEUT GARDER SON PERMIS ?",
+   "office": "EM",
+   "status": "Ended",
+   "live": false,
+   "classes": [
+    9,
+    10,
+    35,
+    41,
+    45
+   ],
+   "owner": "CONTRALCO SAS",
+   "filed": "2013-07-25",
+   "uk_eu": true,
+   "url": "http://euipo.europa.eu/trademark/data/EM500000012015161",
+   "type": "Word"
+  },
+  {
+   "mark": "Permis de conduire presse a' injecter",
+   "office": "GB",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    16,
+    41
+   ],
+   "owner": "Helmut Kraft",
+   "filed": "2013-07-03",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000911952389",
+   "type": "Word"
+  },
+  {
+   "mark": "Vendredi tout est permis avec Arthur",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    9,
+    41,
+    38
+   ],
+   "owner": "SATISFACTION - THE TELEVISION AGENCY",
+   "filed": "2014-05-05",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000012845558",
+   "type": "Figurative"
+  },
+  {
+   "mark": "Ce soir tout est permis avec Arthur",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    9,
+    38,
+    41
+   ],
+   "owner": "SATISFACTION - THE TELEVISION AGENCY",
+   "filed": "2014-05-05",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000912845764",
+   "type": "Figurative"
+  },
+  {
+   "mark": "FEU VERT pour le permis de conduire",
+   "office": "GB",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    9,
+    16,
+    41,
+    42
+   ],
+   "owner": "Uitgeverij Van In",
+   "filed": "2014-12-18",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000913587878",
+   "type": "Figurative"
+  },
+  {
+   "mark": "Ce soir tout est permis avec Arthur",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    9,
+    38,
+    41
+   ],
+   "owner": "SATISFACTION - THE TELEVISION AGENCY",
+   "filed": "2014-05-05",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000012845764",
+   "type": "Figurative"
+  },
+  {
+   "mark": "FEU VERT pour le permis de conduire",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    9,
+    16,
+    42,
+    41
+   ],
+   "owner": "Uitgeverij Van In",
+   "filed": "2014-12-18",
+   "uk_eu": true,
+   "url": "/EM500000013587878",
+   "type": "Figurative"
+  },
+  {
+   "mark": "jdm L'automobile sans permis Jdm Simpa Constructeur",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    12
+   ],
+   "owner": "Forest Jacques",
+   "filed": "1998-12-10",
+   "uk_eu": true,
+   "url": "http://euipo.europa.eu/trademark/data/EM500000000968511",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERMISPASCHER.FR Permis de conduire auto-\u00e9cole low cost",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    35,
+    38,
+    39,
+    41
+   ],
+   "owner": "PPC",
+   "filed": "2015-06-23",
+   "uk_eu": true,
+   "url": "/EM500000014283501",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERMISPASCHER.FR Permis de conduire auto-\u00e9cole low cost",
+   "office": "GB",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    35,
+    38,
+    39,
+    41
+   ],
+   "owner": "PPC",
+   "filed": "2015-06-23",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000914283501",
+   "type": "Figurative"
+  },
+  {
+   "mark": "A B C UP PERMIS DE CONDUIRE DE L'ENTREPRENEUR",
+   "office": "WO",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    35,
+    38,
+    41
+   ],
+   "owner": "Wirtschaftskammer \u00d6sterreich",
+   "filed": "2010-05-12",
+   "uk_eu": false,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000001059270",
+   "type": "Figurative"
+  },
+  {
+   "mark": "Zen'Auto, location voitures et utilitaires, Economiques et Ecologiques, sans ou avec permis",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    39,
+    35,
+    12
+   ],
+   "owner": "Zen'Auto",
+   "filed": "2010-05-18",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000009111469",
+   "type": "Figurative"
+  },
+  {
+   "mark": "Permisio",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    9,
+    42
+   ],
+   "owner": "Quantcast Corporation",
+   "filed": "2020-10-01",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000018315823",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERMESSO",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    18,
+    25,
+    35
+   ],
+   "owner": "EMBOGA, S.A.",
+   "filed": "2016-10-13",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000915921331",
+   "type": "Word"
+  },
+  {
+   "mark": "PERMISIO",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    9,
+    42
+   ],
+   "owner": "Quantcast Corporation",
+   "filed": "2020-09-21",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000018311154",
+   "type": "Word"
+  },
+  {
+   "mark": "PERMESSO",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    11,
+    20,
+    35
+   ],
+   "owner": "Gutirrez de Pando Portero Javier",
+   "filed": "2002-10-25",
+   "uk_eu": true,
+   "url": "http://euipo.europa.eu/trademark/data/EM500000002909794",
+   "type": "Word"
+  },
+  {
+   "mark": "PERMESSO",
+   "office": "WO",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    11
+   ],
+   "owner": "Gutierrez de Pando Portero, Javier",
+   "filed": "2005-03-18",
+   "uk_eu": false,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000000864520",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERMISIO",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    9,
+    42
+   ],
+   "owner": "Quantcast Corporation",
+   "filed": "2020-10-02",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000003540040",
+   "type": "Word"
+  },
+  {
+   "mark": "Permisio",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    9,
+    42
+   ],
+   "owner": "Quantcast Corporation",
+   "filed": "2020-10-02",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000003540142",
+   "type": "Figurative"
+  },
+  {
+   "mark": "PERMESSO",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    18,
+    25,
+    35
+   ],
+   "owner": "EMBOGA, S.A.",
+   "filed": "2016-10-13",
+   "uk_eu": true,
+   "url": "/EM500000015921331",
+   "type": "Word"
+  },
+  {
+   "mark": "PERMESSO",
+   "office": "WO",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    25
+   ],
+   "owner": "MALUA - GEST\u00c3O TEXTIL, S.A.",
+   "filed": "1996-04-30",
+   "uk_eu": false,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000000654404",
+   "type": "Word"
+  },
+  {
+   "mark": "PERMESSO DI SOGGIORNO FACILE",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    36
+   ],
+   "owner": "Permessodisoggiornofacile Ltd",
+   "filed": "2024-05-27",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000004056548",
+   "type": "Figurative"
+  }
+ ],
+ "Claustra": [
+  {
+   "mark": "CLAUSTRA",
+   "office": "WO",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    19
+   ],
+   "owner": "BREDERO BETON B.V.",
+   "filed": "1968-07-16",
+   "uk_eu": false,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000000347846",
+   "type": "Figurative"
+  },
+  {
+   "mark": "CLAUSTRA",
+   "office": "EM",
+   "status": "Filed",
+   "live": true,
+   "classes": [
+    35,
+    41,
+    42,
+    45
+   ],
+   "owner": "Ernst, Holger, Juche, Gabor",
+   "filed": "2026-09-14",
+   "uk_eu": true,
+   "url": "/EM500000019421901",
+   "type": "Word"
+  },
+  {
+   "mark": "process claustra LAUDESCHER",
+   "office": "EM",
+   "status": "Ended",
+   "live": false,
+   "classes": [
+    19,
+    20
+   ],
+   "owner": "",
+   "filed": "2004-01-26",
+   "uk_eu": true,
+   "url": "http://euipo.europa.eu/trademark/data/EM500000003629871",
+   "type": "Figurative"
+  },
+  {
+   "mark": "CLAUSTRO",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    29,
+    30,
+    35
+   ],
+   "owner": "FOOBESPAIN, S.L.",
+   "filed": "2012-01-23",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000010580991",
+   "type": "Figurative"
+  },
+  {
+   "mark": "CLAUSTRO",
+   "office": "EM",
+   "status": "Ended",
+   "live": false,
+   "classes": [
+    32,
+    33
+   ],
+   "owner": "Gomez Martinez de Escobar Gonzalo Manuel",
+   "filed": "2003-10-22",
+   "uk_eu": true,
+   "url": "http://euipo.europa.eu/trademark/data/EM500000003427408",
+   "type": "Word"
+  },
+  {
+   "mark": "CLAUSTRO",
+   "office": "WO",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    35,
+    39,
+    41
+   ],
+   "owner": "PILAR MARTINEZ MANSO",
+   "filed": "2001-04-11",
+   "uk_eu": false,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000000758422",
+   "type": "Word"
+  },
+  {
+   "mark": "CLAUSTRO",
+   "office": "GB",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    29,
+    30,
+    35
+   ],
+   "owner": "FOOBESPAIN, S.L.",
+   "filed": "2012-01-23",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000910580991",
+   "type": "Figurative"
+  },
+  {
+   "mark": "Clausura",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    25
+   ],
+   "owner": "Harvey Pennington a partner in the Clausura Partnership, Jack Pennington a partner in the Clausura Partnership",
+   "filed": "2025-09-24",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000004268844",
+   "type": "Word"
+  },
+  {
+   "mark": "CLAUSTRO",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    1,
+    5
+   ],
+   "owner": "COMERCIAL QUIMICA MASSO S.A.",
+   "filed": "2026-03-27",
+   "uk_eu": true,
+   "url": "/EM500000019338250",
+   "type": "Word"
+  },
+  {
+   "mark": "KLAUSTRA",
+   "office": "EM",
+   "status": "Filed",
+   "live": true,
+   "classes": [
+    9,
+    36,
+    42
+   ],
+   "owner": "SANCHO RODR\u00cdGUEZ, LUZ MAR\u00cdA",
+   "filed": "2026-09-09",
+   "uk_eu": true,
+   "url": "/EM500000019420171",
+   "type": "Word"
+  },
+  {
+   "mark": "CLUSTRA",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    42,
+    16,
+    9
+   ],
+   "owner": "CLUSTRA SYSTEMS INC.",
+   "filed": "1999-08-30",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000001293042",
+   "type": "Word"
+  },
+  {
+   "mark": "CLUSTRA",
+   "office": "WO",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    9,
+    42
+   ],
+   "owner": "ClustRa AS",
+   "filed": "1998-02-16",
+   "uk_eu": true,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000000689544",
+   "type": "Figurative"
+  },
+  {
+   "mark": "GRAN CLAUSTRO",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    33
+   ],
+   "owner": "CAVAS DEL CASTILLO DE PERELADA, S.L.",
+   "filed": "1996-04-01",
+   "uk_eu": true,
+   "url": "/EM500000000056333",
+   "type": "Word"
+  },
+  {
+   "mark": "GRAN CLAUSTRO",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    33
+   ],
+   "owner": "CAVAS DEL CASTILLO DE PERELADA, S.L.",
+   "filed": "1996-04-01",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000900056333",
+   "type": "Word"
+  },
+  {
+   "mark": "GRAN CLAUSTRE",
+   "office": "EM",
+   "status": "Filed",
+   "live": true,
+   "classes": [
+    33
+   ],
+   "owner": "CAVAS DEL CASTILLO DE PERELADA, S.L.",
+   "filed": "2026-07-01",
+   "uk_eu": true,
+   "url": "/EM500000019389262",
+   "type": "Word"
+  },
+  {
+   "mark": "CLAUSTRO DE IBERUM",
+   "office": "GB",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    31,
+    32
+   ],
+   "owner": "FOOBESPAIN, S.L.",
+   "filed": "2015-10-16",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000914687231",
+   "type": "Figurative"
+  },
+  {
+   "mark": "CLAUSTRO DE IBERUM",
+   "office": "EM",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    31,
+    32
+   ],
+   "owner": "FOOBESPAIN, S.L.",
+   "filed": "2015-10-16",
+   "uk_eu": true,
+   "url": "/EM500000014687231",
+   "type": "Figurative"
+  },
+  {
+   "mark": "EL CLAUSTRE DE L\u2019ABAT MIR\u00d3",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    33
+   ],
+   "owner": "CODORN\u00cdU S.A.",
+   "filed": "2022-03-01",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000018663706",
+   "type": "Word"
+  },
+  {
+   "mark": "Claustro Universitario de las Artes",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    35,
+    41,
+    45
+   ],
+   "owner": "Artistas Int\u00e9rpretes o Ejecutantes, S.G.E.",
+   "filed": "2022-05-19",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000018705205",
+   "type": "Figurative"
+  },
+  {
+   "mark": "CLUSTA",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    35,
+    38,
+    42
+   ],
+   "owner": "Clusta Ltd.",
+   "filed": "2017-05-23",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000003233042",
+   "type": "Word"
+  },
+  {
+   "mark": "CLUSTA RACK",
+   "office": "GB",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    6,
+    19
+   ],
+   "owner": "Simon Nicholas Twigger",
+   "filed": "2007-03-02",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000002448198",
+   "type": "Word"
+  },
+  {
+   "mark": "BEACON CLUSTA",
+   "office": "GB",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    30
+   ],
+   "owner": "Beacon Sweets and Chocolates (Pty) Limited",
+   "filed": "1996-08-14",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000002107650",
+   "type": "Word"
+  },
+  {
+   "mark": "claustrophobia",
+   "office": "GB",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    9,
+    16,
+    18,
+    21,
+    24,
+    25,
+    28,
+    30,
+    41,
+    42
+   ],
+   "owner": "Obschestvo s ogranichennoy otvetstvennostyu \"Klaustrofobiya\"",
+   "filed": "2015-06-15",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000801266776",
+   "type": "Figurative"
+  },
+  {
+   "mark": "claustrophobia",
+   "office": "GB",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    28,
+    41
+   ],
+   "owner": "Obschestvo s ogranichennoy otvetstvennostyu \"Klaustrofobiya\"",
+   "filed": "2014-08-22",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000801226948",
+   "type": "Figurative"
+  },
+  {
+   "mark": "Claustrum Colforcella",
+   "office": "EM",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    43
+   ],
+   "owner": "Claustrum Colforcella S.R.L.",
+   "filed": "2024-12-04",
+   "uk_eu": true,
+   "url": "https://euipo.europa.eu/trademark/data/EM500000019115044",
+   "type": "Figurative"
+  },
+  {
+   "mark": "claustrophobia",
+   "office": "WO",
+   "status": "Expired",
+   "live": false,
+   "classes": [
+    24,
+    25,
+    16,
+    28,
+    18,
+    9,
+    30,
+    41,
+    42,
+    21
+   ],
+   "owner": "CLAUSTROPHOBIA-V LLC",
+   "filed": "2015-06-15",
+   "uk_eu": true,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000001266776",
+   "type": "Figurative"
+  },
+  {
+   "mark": "CLAUSTROGLOBIA!",
+   "office": "WO",
+   "status": "Ended",
+   "live": false,
+   "classes": [
+    25,
+    16,
+    41
+   ],
+   "owner": "Kaster, John D.",
+   "filed": "2008-11-10",
+   "uk_eu": true,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000000996193",
+   "type": "Figurative"
+  },
+  {
+   "mark": "claustrophobia",
+   "office": "WO",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    28,
+    41
+   ],
+   "owner": "CLAUSTROPHOBIA-V LLC",
+   "filed": "2014-08-22",
+   "uk_eu": true,
+   "url": "https://www.tmdn.org/tmdsview-cdc/trademark/data/WO500000001226948",
+   "type": "Figurative"
+  },
+  {
+   "mark": "CLUSTR",
+   "office": "GB",
+   "status": "Registered",
+   "live": true,
+   "classes": [
+    36
+   ],
+   "owner": "Clustr Tech Ltd",
+   "filed": "2024-06-03",
+   "uk_eu": true,
+   "url": "http://soap.ipo.gov.uk/trademark/data/GB500000004059182",
+   "type": "Word"
+  }
+ ]
+}

@@ -1,0 +1,18 @@
+  A2 round 1: 31 -> 16; top Claustra Labs 7.98; failed none; $0.1477
+  B2 round 1: 31 -> 16; top Countermand Labs 8.19; failed none; $0.1816
+  A2 round 2: 16 -> 8; top Countermand Labs 8.74; failed none; $0.2690
+  C2 round 1: 31 -> 16; top Countermand Labs 8.12; failed none; $0.1646
+  B2 round 2: 16 -> 8; top Countermand Labs 8.57; failed none; $0.3208
+  A2 round 3: 8 -> 4; top Countermand Labs 9.01; failed none; $0.3459
+  C2 round 2: 16 -> 8; top Countermand Labs 8.54; failed none; $0.2781
+  B2 round 3: 8 -> 4; top Countermand Labs 8.73; failed none; $0.4065
+  B2 round 4: 4 -> 2; top Countermand Labs 8.70; failed none; $0.4519
+  C2 round 3: 8 -> 4; top Countermand Labs 8.88; failed none; $0.3574
+  A2 round 4: 4 -> 2; top Countermand Labs 8.66; failed none; $0.4057
+  A2 round 5: 2 -> 1; top Countermand Labs 8.62; failed none; $0.4435
+A2: winner C15 Countermand Labs (by deepseek-v4-pro); $0.4435, 75 calls
+  C2 round 4: 4 -> 2; top Countermand Labs 8.96; failed none; $0.4028
+  B2 round 5: 2 -> 1; top Countermand Labs 8.61; failed none; $0.4896
+B2: winner C15 Countermand Labs (by deepseek-v4-pro); $0.4896, 83 calls
+  C2 round 5: 2 -> 1; top Countermand Labs 8.74; failed none; $0.4292
+C2: winner C15 Countermand Labs (by deepseek-v4-pro); $0.4292, 76 calls

@@ -1,0 +1,5791 @@
+{
+ "run": "C2",
+ "variant": "C",
+ "repeat": 2,
+ "winner": "C15",
+ "winner_name": "Countermand Labs",
+ "rounds": [
+  {
+   "round": 1,
+   "field": [
+    "C15",
+    "C23",
+    "C24",
+    "C25",
+    "C16",
+    "C26",
+    "C30",
+    "C12",
+    "C22",
+    "C29",
+    "C27",
+    "C14",
+    "C31",
+    "C17",
+    "C11",
+    "C18",
+    "C04",
+    "C20",
+    "C01",
+    "C21",
+    "C06",
+    "C28",
+    "C09",
+    "C13",
+    "C03",
+    "C19",
+    "C02",
+    "C05",
+    "C10",
+    "C08",
+    "C07"
+   ],
+   "keep": 16,
+   "scores": {
+    "C15": {
+     "score": 8.117,
+     "panel": 8.117,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 8.35
+      },
+      "claude-sonnet-5": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.55
+      },
+      "gemini-3.8-flash": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.55
+      },
+      "deepseek-v4-flash": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 8.35
+      },
+      "minimax-m3": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 8.1
+      },
+      "nemotron-ultra": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 10.0,
+       "total": 9.05
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.05
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.25
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.8
+      }
+     }
+    },
+    "C23": {
+     "score": 7.972,
+     "panel": 7.972,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 8.05
+      },
+      "claude-sonnet-5": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.3
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.25
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.85
+      },
+      "deepseek-v4-flash": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.55
+      },
+      "nemotron-ultra": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 10.0,
+       "total": 8.6
+      },
+      "gpt-oss-120b": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.3
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 8.0,
+       "total": 8.3
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.55
+      }
+     }
+    },
+    "C24": {
+     "score": 7.917,
+     "panel": 7.917,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.0
+      },
+      "claude-sonnet-5": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.55
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 8.0,
+       "total": 7.75
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 5.0,
+       "distinct": 5.0,
+       "ownable": 9.0,
+       "total": 7.199999999999999
+      },
+      "deepseek-v4-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 8.05
+      },
+      "minimax-m3": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.8
+      },
+      "gpt-oss-120b": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 8.35
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.55
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.0
+      }
+     }
+    },
+    "C25": {
+     "score": 7.872,
+     "panel": 7.872,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.6
+      },
+      "claude-sonnet-5": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.55
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 7.0,
+       "total": 7.75
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.85
+      },
+      "minimax-m3": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 6.0,
+       "total": 7.1
+      },
+      "nemotron-ultra": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 10.0,
+       "total": 9.05
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.8
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.8
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.35
+      }
+     }
+    },
+    "C16": {
+     "score": 7.694,
+     "panel": 7.694,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.9
+      },
+      "claude-sonnet-5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 7.1
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.55
+      },
+      "deepseek-v4-flash": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 8.1
+      },
+      "minimax-m3": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.35
+      },
+      "nemotron-ultra": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 10.0,
+       "total": 8.8
+      },
+      "gpt-oss-120b": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 7.0,
+       "total": 6.6
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 8.0,
+       "total": 8.3
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.55
+      }
+     }
+    },
+    "C26": {
+     "score": 7.322,
+     "panel": 7.322,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.25
+      },
+      "claude-sonnet-5": {
+       "fit": 7.0,
+       "gravitas": 5.0,
+       "distinct": 6.0,
+       "ownable": 9.0,
+       "total": 6.800000000000001
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.8
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 5.0,
+       "distinct": 5.0,
+       "ownable": 9.0,
+       "total": 7.199999999999999
+      },
+      "deepseek-v4-flash": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 9.0,
+       "total": 7.300000000000001
+      },
+      "minimax-m3": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 9.0,
+       "total": 7.4
+      },
+      "gpt-oss-120b": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 8.0,
+       "total": 6.6
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 7.75
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.8
+      }
+     }
+    },
+    "C30": {
+     "score": 7.272,
+     "panel": 7.272,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 8.05
+      },
+      "claude-sonnet-5": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 8.0,
+       "total": 6.3
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 8.05
+      },
+      "deepseek-v4-pro": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 4.0,
+       "ownable": 9.0,
+       "total": 6.95
+      },
+      "minimax-m3": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 8.0,
+       "total": 6.85
+      },
+      "nemotron-ultra": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 10.0,
+       "total": 8.3
+      },
+      "gpt-oss-120b": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 7.0,
+       "total": 6.35
+      },
+      "gemma-4-31b": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.300000000000001
+      },
+      "claude-haiku-4.5": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 9.0,
+       "total": 7.300000000000001
+      }
+     }
+    },
+    "C12": {
+     "score": 7.117,
+     "panel": 7.117,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 7.35
+      },
+      "claude-sonnet-5": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 4.0,
+       "total": 7.05
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 4.0,
+       "total": 6.55
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 4.0,
+       "total": 6.6
+      },
+      "deepseek-v4-flash": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 4.0,
+       "total": 6.65
+      },
+      "minimax-m3": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 4.0,
+       "total": 6.55
+      },
+      "nemotron-ultra": {
+       "fit": 10.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 7.9
+      },
+      "gpt-oss-120b": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 8.0,
+       "total": 8.05
+      },
+      "claude-haiku-4.5": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 7.35
+      }
+     }
+    },
+    "C22": {
+     "score": 7.106,
+     "panel": 7.106,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 7.1
+      },
+      "claude-sonnet-5": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 6.550000000000001
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 6.0,
+       "total": 6.300000000000001
+      },
+      "deepseek-v4-flash": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 6.800000000000001
+      },
+      "minimax-m3": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 5.0,
+       "total": 6.050000000000001
+      },
+      "nemotron-ultra": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.05
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.55
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 8.0,
+       "total": 8.3
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.25
+      }
+     }
+    },
+    "C29": {
+     "score": 7.056,
+     "panel": 7.056,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 9.0,
+       "total": 7.4
+      },
+      "claude-sonnet-5": {
+       "fit": 7.0,
+       "gravitas": 5.0,
+       "distinct": 5.0,
+       "ownable": 7.0,
+       "total": 6.1
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 6.550000000000001
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 5.0,
+       "distinct": 5.0,
+       "ownable": 9.0,
+       "total": 7.199999999999999
+      },
+      "minimax-m3": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 4.0,
+       "ownable": 8.0,
+       "total": 6.65
+      },
+      "nemotron-ultra": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 9.0,
+       "total": 7.35
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.1
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.0
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 9.0,
+       "total": 7.15
+      }
+     }
+    },
+    "C27": {
+     "score": 6.967,
+     "panel": 6.967,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.050000000000001
+      },
+      "claude-sonnet-5": {
+       "fit": 6.0,
+       "gravitas": 4.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 6.2
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 6.75
+      },
+      "deepseek-v4-pro": {
+       "fit": 8.0,
+       "gravitas": 4.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 6.35
+      },
+      "deepseek-v4-flash": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.0
+      },
+      "nemotron-ultra": {
+       "fit": 8.0,
+       "gravitas": 5.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.3
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 7.1
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 9.0,
+       "ownable": 8.0,
+       "total": 7.95
+      },
+      "claude-haiku-4.5": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.0
+      }
+     }
+    },
+    "C14": {
+     "score": 6.6,
+     "panel": 6.6,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "claude-sonnet-5": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 5.0,
+       "total": 6.050000000000001
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 6.75
+      },
+      "deepseek-v4-pro": {
+       "fit": 7.0,
+       "gravitas": 5.0,
+       "distinct": 5.0,
+       "ownable": 5.0,
+       "total": 5.6
+      },
+      "deepseek-v4-flash": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 7.050000000000001
+      },
+      "minimax-m3": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 5.0,
+       "total": 6.300000000000001
+      },
+      "nemotron-ultra": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 6.0,
+       "total": 5.8
+      },
+      "gpt-oss-120b": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.050000000000001
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 6.0,
+       "total": 7.5
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.3
+      }
+     }
+    },
+    "C31": {
+     "score": 6.394,
+     "panel": 6.394,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 4.0,
+       "ownable": 4.0,
+       "total": 6.2
+      },
+      "claude-sonnet-5": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 3.0,
+       "total": 5.35
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 4.0,
+       "total": 6.050000000000001
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 4.0,
+       "total": 6.9
+      },
+      "deepseek-v4-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 3.0,
+       "total": 6.35
+      },
+      "minimax-m3": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 5.0,
+       "ownable": 3.0,
+       "total": 6.449999999999999
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 6.0,
+       "total": 6.6
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 3.0,
+       "total": 6.35
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.3
+      }
+     }
+    },
+    "C17": {
+     "score": 6.1,
+     "panel": 6.1,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 4.0,
+       "ownable": 6.0,
+       "total": 6.45
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 4.0,
+       "total": 5.800000000000001
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 4.0,
+       "distinct": 3.0,
+       "ownable": 3.0,
+       "total": 5.05
+      },
+      "deepseek-v4-flash": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 4.0,
+       "total": 6.1
+      },
+      "minimax-m3": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 4.0,
+       "ownable": 2.0,
+       "total": 5.15
+      },
+      "nemotron-ultra": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 4.0,
+       "total": 6.3
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 5.0,
+       "total": 7.25
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 4.0,
+       "ownable": 8.0,
+       "total": 6.7
+      }
+     }
+    },
+    "C11": {
+     "score": 6.0,
+     "panel": 6.0,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.0
+      },
+      "claude-sonnet-5": {
+       "fit": 6.0,
+       "gravitas": 5.0,
+       "distinct": 5.0,
+       "ownable": 5.0,
+       "total": 5.3
+      },
+      "gemini-3.8-flash": {
+       "fit": 5.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 6.0,
+       "total": 5.5
+      },
+      "deepseek-v4-pro": {
+       "fit": 5.0,
+       "gravitas": 4.0,
+       "distinct": 4.0,
+       "ownable": 5.0,
+       "total": 4.55
+      },
+      "deepseek-v4-flash": {
+       "fit": 6.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 6.0,
+       "total": 6.25
+      },
+      "minimax-m3": {
+       "fit": 6.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 5.0,
+       "total": 5.8
+      },
+      "nemotron-ultra": {
+       "fit": 7.0,
+       "gravitas": 4.0,
+       "distinct": 5.0,
+       "ownable": 6.0,
+       "total": 5.6
+      },
+      "gemma-4-31b": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 6.0,
+       "total": 6.0
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.0
+      }
+     }
+    },
+    "C18": {
+     "score": 5.922,
+     "panel": 5.922,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "claude-sonnet-5": {
+       "fit": 6.0,
+       "gravitas": 5.0,
+       "distinct": 5.0,
+       "ownable": 3.0,
+       "total": 4.8
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 3.0,
+       "total": 5.800000000000001
+      },
+      "deepseek-v4-pro": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 3.0,
+       "total": 6.05
+      },
+      "deepseek-v4-flash": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 4.0,
+       "total": 6.5
+      },
+      "minimax-m3": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 2.0,
+       "total": 5.35
+      },
+      "nemotron-ultra": {
+       "fit": 7.0,
+       "gravitas": 5.0,
+       "distinct": 5.0,
+       "ownable": 3.0,
+       "total": 5.1
+      },
+      "gpt-oss-120b": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 5.0,
+       "total": 5.85
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 5.0,
+       "total": 7.05
+      },
+      "claude-haiku-4.5": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 6.800000000000001
+      }
+     }
+    },
+    "C04": {
+     "score": 5.811,
+     "panel": 5.811,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 1.0,
+       "total": 5.85
+      },
+      "claude-sonnet-5": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 1.0,
+       "total": 5.1
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 2.0,
+       "total": 6.1
+      },
+      "deepseek-v4-pro": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 4.0,
+       "ownable": 2.0,
+       "total": 5.45
+      },
+      "deepseek-v4-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 2.0,
+       "total": 6.1
+      },
+      "minimax-m3": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 5.0,
+       "ownable": 2.0,
+       "total": 5.9
+      },
+      "nemotron-ultra": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 2.0,
+       "ownable": 1.0,
+       "total": 5.35
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 5.0,
+       "total": 6.35
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 2.0,
+       "total": 6.1
+      }
+     }
+    },
+    "C20": {
+     "score": 5.717,
+     "panel": 5.717,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 6.0,
+       "gravitas": 7.0,
+       "distinct": 3.0,
+       "ownable": 8.0,
+       "total": 6.15
+      },
+      "claude-sonnet-5": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 5.0,
+       "total": 5.85
+      },
+      "gemini-3.8-flash": {
+       "fit": 6.0,
+       "gravitas": 4.0,
+       "distinct": 3.0,
+       "ownable": 6.0,
+       "total": 4.9
+      },
+      "deepseek-v4-pro": {
+       "fit": 6.0,
+       "gravitas": 5.0,
+       "distinct": 3.0,
+       "ownable": 4.0,
+       "total": 4.65
+      },
+      "deepseek-v4-flash": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 6.0,
+       "total": 6.1
+      },
+      "minimax-m3": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 4.0,
+       "ownable": 5.0,
+       "total": 5.9
+      },
+      "nemotron-ultra": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 4.0,
+       "ownable": 7.0,
+       "total": 6.4
+      },
+      "gemma-4-31b": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 4.0,
+       "ownable": 5.0,
+       "total": 5.35
+      },
+      "claude-haiku-4.5": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 4.0,
+       "ownable": 7.0,
+       "total": 6.15
+      }
+     }
+    },
+    "C01": {
+     "score": 5.517,
+     "panel": 5.517,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 1.0,
+       "total": 5.4
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 2.0,
+       "total": 5.1
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 1.0,
+       "total": 5.65
+      },
+      "deepseek-v4-flash": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 4.0,
+       "ownable": 1.0,
+       "total": 4.95
+      },
+      "minimax-m3": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 2.0,
+       "total": 6.05
+      },
+      "nemotron-ultra": {
+       "fit": 7.0,
+       "gravitas": 5.0,
+       "distinct": 3.0,
+       "ownable": 1.0,
+       "total": 4.2
+      },
+      "gpt-oss-120b": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 8.0,
+       "total": 6.6
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 2.0,
+       "total": 6.15
+      },
+      "claude-haiku-4.5": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 2.0,
+       "total": 5.550000000000001
+      }
+     }
+    },
+    "C21": {
+     "score": 5.5,
+     "panel": 5.5,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 4.0,
+       "ownable": 1.0,
+       "total": 5.45
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 2.0,
+       "total": 5.35
+      },
+      "deepseek-v4-pro": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 1.0,
+       "total": 5.6
+      },
+      "deepseek-v4-flash": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 5.0,
+       "ownable": 2.0,
+       "total": 5.6
+      },
+      "minimax-m3": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 1.0,
+       "total": 5.300000000000001
+      },
+      "nemotron-ultra": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 1.0,
+       "total": 5.4
+      },
+      "gpt-oss-120b": {
+       "fit": 6.0,
+       "gravitas": 5.0,
+       "distinct": 4.0,
+       "ownable": 5.0,
+       "total": 5.1
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 2.0,
+       "total": 6.1
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 1.0,
+       "total": 5.6
+      }
+     }
+    },
+    "C06": {
+     "score": 5.167,
+     "panel": 5.167,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 6.0,
+       "gravitas": 7.0,
+       "distinct": 4.0,
+       "ownable": 5.0,
+       "total": 5.6
+      },
+      "claude-sonnet-5": {
+       "fit": 5.0,
+       "gravitas": 5.0,
+       "distinct": 4.0,
+       "ownable": 4.0,
+       "total": 4.55
+      },
+      "gemini-3.8-flash": {
+       "fit": 6.0,
+       "gravitas": 4.0,
+       "distinct": 3.0,
+       "ownable": 7.0,
+       "total": 5.15
+      },
+      "deepseek-v4-pro": {
+       "fit": 5.0,
+       "gravitas": 5.0,
+       "distinct": 2.0,
+       "ownable": 3.0,
+       "total": 3.9
+      },
+      "deepseek-v4-flash": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 4.0,
+       "ownable": 4.0,
+       "total": 5.4
+      },
+      "minimax-m3": {
+       "fit": 6.0,
+       "gravitas": 5.0,
+       "distinct": 4.0,
+       "ownable": 6.0,
+       "total": 5.35
+      },
+      "nemotron-ultra": {
+       "fit": 7.0,
+       "gravitas": 5.0,
+       "distinct": 4.0,
+       "ownable": 7.0,
+       "total": 5.9
+      },
+      "gemma-4-31b": {
+       "fit": 5.0,
+       "gravitas": 5.0,
+       "distinct": 4.0,
+       "ownable": 6.0,
+       "total": 5.05
+      },
+      "claude-haiku-4.5": {
+       "fit": 6.0,
+       "gravitas": 5.0,
+       "distinct": 4.0,
+       "ownable": 7.0,
+       "total": 5.6
+      }
+     }
+    },
+    "C28": {
+     "score": 5.133,
+     "panel": 5.133,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 4.0,
+       "ownable": 1.0,
+       "total": 5.2
+      },
+      "claude-sonnet-5": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 3.0,
+       "ownable": 1.0,
+       "total": 4.15
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 2.0,
+       "total": 5.35
+      },
+      "deepseek-v4-pro": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 3.0,
+       "ownable": 1.0,
+       "total": 4.75
+      },
+      "deepseek-v4-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 5.0,
+       "ownable": 1.0,
+       "total": 5.65
+      },
+      "nemotron-ultra": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 2.0,
+       "ownable": 1.0,
+       "total": 4.25
+      },
+      "gpt-oss-120b": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 3.0,
+       "total": 5.35
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 5.0,
+       "ownable": 2.0,
+       "total": 5.9
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 1.0,
+       "total": 5.6
+      }
+     }
+    },
+    "C09": {
+     "score": 5.072,
+     "panel": 5.072,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 4.0,
+       "gravitas": 7.0,
+       "distinct": 3.0,
+       "ownable": 6.0,
+       "total": 5.05
+      },
+      "claude-sonnet-5": {
+       "fit": 3.0,
+       "gravitas": 5.0,
+       "distinct": 5.0,
+       "ownable": 5.0,
+       "total": 4.4
+      },
+      "deepseek-v4-pro": {
+       "fit": 5.0,
+       "gravitas": 5.0,
+       "distinct": 3.0,
+       "ownable": 4.0,
+       "total": 4.35
+      },
+      "deepseek-v4-flash": {
+       "fit": 5.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 6.0,
+       "total": 5.95
+      },
+      "minimax-m3": {
+       "fit": 3.0,
+       "gravitas": 5.0,
+       "distinct": 4.0,
+       "ownable": 5.0,
+       "total": 4.2
+      },
+      "nemotron-ultra": {
+       "fit": 5.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 8.0,
+       "total": 6.0
+      },
+      "gpt-oss-120b": {
+       "fit": 5.0,
+       "gravitas": 5.0,
+       "distinct": 4.0,
+       "ownable": 5.0,
+       "total": 4.8
+      },
+      "gemma-4-31b": {
+       "fit": 4.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 6.0,
+       "total": 5.2
+      },
+      "claude-haiku-4.5": {
+       "fit": 4.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 8.0,
+       "total": 5.7
+      }
+     }
+    },
+    "C13": {
+     "score": 4.878,
+     "panel": 4.878,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 6.0,
+       "gravitas": 7.0,
+       "distinct": 3.0,
+       "ownable": 1.0,
+       "total": 4.4
+      },
+      "claude-sonnet-5": {
+       "fit": 5.0,
+       "gravitas": 5.0,
+       "distinct": 5.0,
+       "ownable": 2.0,
+       "total": 4.25
+      },
+      "deepseek-v4-pro": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 1.0,
+       "total": 5.8
+      },
+      "deepseek-v4-flash": {
+       "fit": 6.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 2.0,
+       "total": 5.05
+      },
+      "minimax-m3": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 3.0,
+       "ownable": 1.0,
+       "total": 4.15
+      },
+      "nemotron-ultra": {
+       "fit": 7.0,
+       "gravitas": 5.0,
+       "distinct": 3.0,
+       "ownable": 1.0,
+       "total": 4.2
+      },
+      "gpt-oss-120b": {
+       "fit": 6.0,
+       "gravitas": 4.0,
+       "distinct": 3.0,
+       "ownable": 4.0,
+       "total": 4.4
+      },
+      "gemma-4-31b": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 2.0,
+       "total": 5.800000000000001
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 2.0,
+       "total": 5.85
+      }
+     }
+    },
+    "C03": {
+     "score": 4.567,
+     "panel": 4.567,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 3.0,
+       "ownable": 1.0,
+       "total": 4.7
+      },
+      "claude-sonnet-5": {
+       "fit": 5.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 1.0,
+       "total": 4.25
+      },
+      "gemini-3.8-flash": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 4.0,
+       "ownable": 2.0,
+       "total": 4.6
+      },
+      "deepseek-v4-pro": {
+       "fit": 5.0,
+       "gravitas": 5.0,
+       "distinct": 3.0,
+       "ownable": 1.0,
+       "total": 3.6
+      },
+      "deepseek-v4-flash": {
+       "fit": 5.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 2.0,
+       "total": 4.75
+      },
+      "minimax-m3": {
+       "fit": 5.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 1.0,
+       "total": 4.5
+      },
+      "nemotron-ultra": {
+       "fit": 5.0,
+       "gravitas": 5.0,
+       "distinct": 3.0,
+       "ownable": 1.0,
+       "total": 3.6
+      },
+      "gpt-oss-120b": {
+       "fit": 6.0,
+       "gravitas": 5.0,
+       "distinct": 4.0,
+       "ownable": 7.0,
+       "total": 5.6
+      },
+      "gemma-4-31b": {
+       "fit": 6.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 2.0,
+       "total": 5.5
+      }
+     }
+    },
+    "C19": {
+     "score": 4.533,
+     "panel": 4.533,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "claude-sonnet-5": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 2.0,
+       "total": 5.1
+      },
+      "gemini-3.8-flash": {
+       "fit": 6.0,
+       "gravitas": 5.0,
+       "distinct": 4.0,
+       "ownable": 1.0,
+       "total": 4.1
+      },
+      "deepseek-v4-pro": {
+       "fit": 6.0,
+       "gravitas": 4.0,
+       "distinct": 4.0,
+       "ownable": 1.0,
+       "total": 3.8499999999999996
+      },
+      "deepseek-v4-flash": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 1.0,
+       "total": 5.1
+      },
+      "minimax-m3": {
+       "fit": 6.0,
+       "gravitas": 5.0,
+       "distinct": 3.0,
+       "ownable": 1.0,
+       "total": 3.9
+      },
+      "nemotron-ultra": {
+       "fit": 7.0,
+       "gravitas": 5.0,
+       "distinct": 3.0,
+       "ownable": 1.0,
+       "total": 4.2
+      },
+      "gpt-oss-120b": {
+       "fit": 6.0,
+       "gravitas": 5.0,
+       "distinct": 5.0,
+       "ownable": 4.0,
+       "total": 5.05
+      },
+      "gemma-4-31b": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 2.0,
+       "total": 4.8
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 5.0,
+       "distinct": 4.0,
+       "ownable": 1.0,
+       "total": 4.7
+      }
+     }
+    },
+    "C02": {
+     "score": 4.528,
+     "panel": 4.528,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 3.0,
+       "ownable": 1.0,
+       "total": 4.95
+      },
+      "claude-sonnet-5": {
+       "fit": 5.0,
+       "gravitas": 5.0,
+       "distinct": 6.0,
+       "ownable": 2.0,
+       "total": 4.45
+      },
+      "gemini-3.8-flash": {
+       "fit": 4.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 2.0,
+       "total": 4.4
+      },
+      "deepseek-v4-pro": {
+       "fit": 4.0,
+       "gravitas": 5.0,
+       "distinct": 4.0,
+       "ownable": 1.0,
+       "total": 3.5
+      },
+      "deepseek-v4-flash": {
+       "fit": 5.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 2.0,
+       "total": 4.95
+      },
+      "minimax-m3": {
+       "fit": 5.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 1.0,
+       "total": 4.45
+      },
+      "nemotron-ultra": {
+       "fit": 5.0,
+       "gravitas": 4.0,
+       "distinct": 3.0,
+       "ownable": 1.0,
+       "total": 3.35
+      },
+      "gpt-oss-120b": {
+       "fit": 7.0,
+       "gravitas": 5.0,
+       "distinct": 4.0,
+       "ownable": 6.0,
+       "total": 5.65
+      },
+      "claude-haiku-4.5": {
+       "fit": 6.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 2.0,
+       "total": 5.05
+      }
+     }
+    },
+    "C05": {
+     "score": 4.356,
+     "panel": 4.356,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 6.0,
+       "gravitas": 7.0,
+       "distinct": 4.0,
+       "ownable": 2.0,
+       "total": 4.85
+      },
+      "claude-sonnet-5": {
+       "fit": 5.0,
+       "gravitas": 5.0,
+       "distinct": 5.0,
+       "ownable": 1.0,
+       "total": 4.0
+      },
+      "deepseek-v4-pro": {
+       "fit": 6.0,
+       "gravitas": 5.0,
+       "distinct": 4.0,
+       "ownable": 2.0,
+       "total": 4.35
+      },
+      "deepseek-v4-flash": {
+       "fit": 6.0,
+       "gravitas": 5.0,
+       "distinct": 5.0,
+       "ownable": 1.0,
+       "total": 4.3
+      },
+      "minimax-m3": {
+       "fit": 6.0,
+       "gravitas": 5.0,
+       "distinct": 4.0,
+       "ownable": 1.0,
+       "total": 4.1
+      },
+      "nemotron-ultra": {
+       "fit": 5.0,
+       "gravitas": 4.0,
+       "distinct": 3.0,
+       "ownable": 1.0,
+       "total": 3.35
+      },
+      "gpt-oss-120b": {
+       "fit": 5.0,
+       "gravitas": 4.0,
+       "distinct": 3.0,
+       "ownable": 4.0,
+       "total": 4.1
+      },
+      "gemma-4-31b": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 3.0,
+       "total": 5.05
+      },
+      "claude-haiku-4.5": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 1.0,
+       "total": 5.1
+      }
+     }
+    },
+    "C10": {
+     "score": 3.978,
+     "panel": 3.978,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 1.0,
+       "ownable": 1.0,
+       "total": 4.3
+      },
+      "claude-sonnet-5": {
+       "fit": 5.0,
+       "gravitas": 6.0,
+       "distinct": 2.0,
+       "ownable": 1.0,
+       "total": 3.65
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 1.0,
+       "ownable": 1.0,
+       "total": 4.05
+      },
+      "deepseek-v4-pro": {
+       "fit": 6.0,
+       "gravitas": 7.0,
+       "distinct": 1.0,
+       "ownable": 1.0,
+       "total": 4.0
+      },
+      "deepseek-v4-flash": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 1.0,
+       "ownable": 1.0,
+       "total": 3.75
+      },
+      "minimax-m3": {
+       "fit": 5.0,
+       "gravitas": 6.0,
+       "distinct": 1.0,
+       "ownable": 1.0,
+       "total": 3.45
+      },
+      "nemotron-ultra": {
+       "fit": 4.0,
+       "gravitas": 5.0,
+       "distinct": 2.0,
+       "ownable": 2.0,
+       "total": 3.35
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 4.0,
+       "distinct": 3.0,
+       "ownable": 5.0,
+       "total": 5.25
+      },
+      "gemma-4-31b": {
+       "fit": 6.0,
+       "gravitas": 7.0,
+       "distinct": 1.0,
+       "ownable": 1.0,
+       "total": 4.0
+      }
+     }
+    },
+    "C08": {
+     "score": 3.972,
+     "panel": 3.972,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 5.0,
+       "gravitas": 7.0,
+       "distinct": 2.0,
+       "ownable": 1.0,
+       "total": 3.9
+      },
+      "claude-sonnet-5": {
+       "fit": 5.0,
+       "gravitas": 6.0,
+       "distinct": 2.0,
+       "ownable": 1.0,
+       "total": 3.65
+      },
+      "gemini-3.8-flash": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 2.0,
+       "ownable": 1.0,
+       "total": 3.9499999999999997
+      },
+      "deepseek-v4-pro": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 1.0,
+       "ownable": 1.0,
+       "total": 3.75
+      },
+      "deepseek-v4-flash": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 2.0,
+       "ownable": 1.0,
+       "total": 4.5
+      },
+      "minimax-m3": {
+       "fit": 5.0,
+       "gravitas": 5.0,
+       "distinct": 2.0,
+       "ownable": 1.0,
+       "total": 3.4
+      },
+      "nemotron-ultra": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 1.0,
+       "ownable": 1.0,
+       "total": 3.75
+      },
+      "gpt-oss-120b": {
+       "fit": 6.0,
+       "gravitas": 5.0,
+       "distinct": 3.0,
+       "ownable": 4.0,
+       "total": 4.65
+      },
+      "gemma-4-31b": {
+       "fit": 6.0,
+       "gravitas": 7.0,
+       "distinct": 2.0,
+       "ownable": 1.0,
+       "total": 4.2
+      }
+     }
+    },
+    "C07": {
+     "score": 2.11,
+     "panel": 2.11,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 2.0,
+       "gravitas": 4.0,
+       "distinct": 2.0,
+       "ownable": 1.0,
+       "total": 2.25
+      },
+      "claude-sonnet-5": {
+       "fit": 2.0,
+       "gravitas": 3.0,
+       "distinct": 2.0,
+       "ownable": 2.0,
+       "total": 2.25
+      },
+      "gemini-3.8-flash": {
+       "fit": 2.0,
+       "gravitas": 2.0,
+       "distinct": 1.0,
+       "ownable": 1.0,
+       "total": 1.55
+      },
+      "deepseek-v4-pro": {
+       "fit": 1.0,
+       "gravitas": 2.0,
+       "distinct": 1.0,
+       "ownable": 1.0,
+       "total": 1.25
+      },
+      "deepseek-v4-flash": {
+       "fit": 2.0,
+       "gravitas": 3.0,
+       "distinct": 1.0,
+       "ownable": 1.0,
+       "total": 1.8
+      },
+      "minimax-m3": {
+       "fit": 2.0,
+       "gravitas": 3.0,
+       "distinct": 2.0,
+       "ownable": 1.0,
+       "total": 2.0
+      },
+      "nemotron-ultra": {
+       "fit": 2.0,
+       "gravitas": 2.0,
+       "distinct": 1.0,
+       "ownable": 2.0,
+       "total": 1.8
+      },
+      "gpt-oss-120b": {
+       "fit": 5.0,
+       "gravitas": 3.0,
+       "distinct": 2.0,
+       "ownable": 4.0,
+       "total": 3.65
+      },
+      "gemma-4-31b": {
+       "fit": 2.0,
+       "gravitas": 3.0,
+       "distinct": 1.0,
+       "ownable": 3.0,
+       "total": 2.3
+      },
+      "claude-haiku-4.5": {
+       "fit": 2.0,
+       "gravitas": 2.0,
+       "distinct": 2.0,
+       "ownable": 3.0,
+       "total": 2.25
+      }
+     }
+    }
+   },
+   "critiques": {
+    "C01": [
+     "Blocked, multiple AI security competitors",
+     "Checkpoint metaphor strong; blocked name and crowded AI-security use.",
+     "Blocked at Companies House with crowded AI security namespace.",
+     "Strong permission metaphor, but blocked, crowded, and security-associated.",
+     "Strong fit, but 'Cordon' already claimed by multiple AI security tools.",
+     "Excellent fit, but blocked; existing AI security uses and no domains.",
+     "Blocked at Companies House; no free domains available.",
+     "Blocked on Companies House; heavily used in AI security.",
+     "Cordon feels like a barrier, but name crowded in security."
+    ],
+    "C02": [
+     "Blocked, obscure, VFX education clash",
+     "Sundial precision is obscure; blocked, no domains, VFX school clash.",
+     "Obscure meaning, blocked name, and clashing VFX and AI consultancies.",
+     "Blocked; no domains; obscure sundial meaning lost on buyers.",
+     "Precision metaphor obscure; blocked, clashes with VFX school",
+     "Precise architectural metaphor, undermined by blocked registration and major unrelated uses.",
+     "Precision metaphor, but blocked and confused with AI guardrail/VFX brands.",
+     "Gnomon obscure to most; blocked at Companies House; overlaps VFX school.",
+     "Gnomon intriguing but obscure; domain clash with VFX school."
+    ],
+    "C03": [
+     "Archaic, weak fit; blocked and clashes with Certes cybersecurity.",
+     "Blocked, existing cybersecurity rebrand",
+     "Archaic certainty; blocked, clashes with cybersecurity Certes Networks",
+     "Blocked; no domains; archaic and hard to pronounce.",
+     "Blocked registration, archaic tone, and major clash with Certes Networks.",
+     "Signals certainty and sanction, but blocked and directly overlaps Certes.ai.",
+     "Certainty suits trust, but blocked and clashes with Certes cybersecurity.",
+     "Blocked on Companies House; significant clash with Certes.ai.",
+     "Archaic Certes may confuse pronunciation and lacks distinctness."
+    ],
+    "C04": [
+     "Wall metaphor apt; blocked and rivals funded Hadrian.io directly",
+     "Blocked, direct well-funded AI competitor",
+     "Strong boundary metaphor, but blocked and close to Hadrian security platform.",
+     "Excellent boundary metaphor, but blocked and closely overlaps an AI-security competitor.",
+     "Blocked at CH; Hadrian.io is direct AI-security competitor.",
+     "Boundary metaphor strong; blocked name and Hadrian AI-security clash.",
+     "Directly blocked by existing UK entity and major AI security firm.",
+     "Excellent fit and gravitas; blocked; direct competitor Hadrian.io exists.",
+     "Hadrian Labs clashes with existing AI security startup."
+    ],
+    "C05": [
+     "Blocked, hardware company clash",
+     "Compartmentalised fit modest; blocked by existing hardware company",
+     "Billet Labs hardware connotation, blocked registration.",
+     "Blocked at CH; direct UK clash; reads as hardware.",
+     "Warrant metaphor, but direct UK company clash and hardware connotations.",
+     "Reads as machining hardware; direct UK Billet Labs clash, no .com.",
+     "Conveys disciplined allocation, but existing UK hardware company creates direct confusion.",
+     "Blocked on Companies House; reads as CNC hardware.",
+     "Good fit and sober tone; blocked at Companies House; hardware brand clash."
+    ],
+    "C06": [
+     "Generic compound; aegis clich\u00e9 and attack-vector connotations, weak differentiation.",
+     "Generic compound; crowded Aegis namespace undermines distinctiveness",
+     "Reads like a generic, machine-generated security brand.",
+     "Clich\u00e9 Aegis namespace makes it sound generic and machine generated.",
+     "Crowded aegis space; compound reads as machine-generated.",
+     "Protection plus direction; generic Aegis namespace, weak domains.",
+     "Generic compound; 'Aegis' crowded namespace; 'vector' adds little meaning.",
+     "Protective but generic compound; Aegis namespace is crowded and vector suggests attacks.",
+     "Generic compound, crowded 'Aegis' space"
+    ],
+    "C07": [
+     "Generic compound, saturated, no domain or differentiation.",
+     "Generic, saturated naming pattern devoid of gravitas and story fit.",
+     "Generic AI-solutions name; saturated, undifferentiated, no domains.",
+     "Generic saturated pattern, no distinctiveness",
+     "Saturated naming pattern; no fit to distrust thesis.",
+     "Generic AI naming pattern, saturated market, and no distinctive trust architecture.",
+     "Generic filler name; saturated across unrelated small firms",
+     "Generic, saturated pattern; no distinctive meaning; poor fit.",
+     "Generic, clich\u00e9, and completely lacks distinctiveness.",
+     "NovaPulse generic, low distinctiveness, many similar brands."
+    ],
+    "C08": [
+     "Blocked; no domains; saturated security clich\u00e9.",
+     "Classic shield clich\u00e9; blocked, saturated defence/security branding",
+     "Classic but hopelessly crowded; blocked, no domains, major defence clashes.",
+     "Ultra-crowded security brand, blocked",
+     "Clear protection signal, but exceptionally crowded across security, defence, and enterprise.",
+     "Severely blocked, overused in security, and lacks any distinctiveness.",
+     "Blocked on Companies House; extremely saturated security name.",
+     "Classical protection story, but blocked, crowded, and AegisAI clash.",
+     "Aegis crowded in defence, limited uniqueness."
+    ],
+    "C09": [
+     "Reads as private aviation; no .com; fintech-crowded sovereign.",
+     "Reads as private aviation; 'air gap' link forced, weak tech fit.",
+     "Air-gap link weak; reads as private-jet charter brand",
+     "Sovereign Air suggests aviation, not AI security.",
+     "Prestigious but reads as private aviation, with weak connection to governed AI.",
+     "Sounds like a private jet charter company.",
+     "Weak fit; 'air gap' not standard usage; reads as aviation company.",
+     "Authority and air-gap hint; reads private aviation, not AI control.",
+     "Sounds like aviation, not AI security"
+    ],
+    "C10": [
+     "Ubiquitous security clich\u00e9, zero ownability",
+     "Saturated security clich\u00e9; blocked; no domains.",
+     "Extremely overused clich\u00e9; blocked and dominated by giants",
+     "Guardian clich\u00e9; Microsoft Sentinel and SentinelOne dominate.",
+     "Overused security clich\u00e9; no domains and massive SentinelOne/Microsoft conflicts.",
+     "Utterly generic in security; impossible to own.",
+     "Ubiquitous security clich\u00e9 dominated heavily by SentinelOne and Microsoft.",
+     "Perfect oversight meaning, but unavailable and dominated by major security brands.",
+     "Sentinel overused; weak distinctiveness and ownership issues."
+    ],
+    "C11": [
+     "Coined 'caution' name; close to Cautio, lacks .com/.ai.",
+     "Cautious root sensible; unclear pronunciation, clashes with Cautio",
+     "Unclear pronunciation and very close to funded AI startup Cautio.",
+     "Coined, sounds like funded 'Cautio'",
+     "Close to funded Cautio; pronunciation uncertain.",
+     "Coined word; close to Cautio AI dashcam startup.",
+     "Cautious tone fits; pronunciation and Cautio proximity weaken ownership.",
+     "Concise and ownable, though pronunciation uncertainty and Cautio similarity weaken it.",
+     "Excellent fit and distinctiveness; rare spelling; near-identical Cautio exists (different sector)."
+    ],
+    "C12": [
+     "Superb thesis fit but fatally overlaps with existing AI agent veto.so.",
+     "veto.so is near-identical thesis competitor; Ona Veto too.",
+     "Strong fit, but exact-space Veto tools; no .com.",
+     "Human-veto metaphor strong; clashes with existing AI-agent Veto products.",
+     "Sharp human-veto fit; direct clash with veto.so product",
+     "Excellent fit; wry and memorable; veto.so closely matches thesis; easily grabbed.",
+     "Memorable human-veto concept, but directly overlaps existing agent-authorisation products.",
+     "Ideal fit, but veto.so close rival",
+     "Veto Labs perfectly captures human\u2011in\u2011the\u2011loop; strong fit."
+    ],
+    "C13": [
+     "Blocked; no domains; clashes with Microsoft typeface.",
+     "Blocked at CH, multiple AI clashes",
+     "Weak narrative link; blocked, clashes with Microsoft's Corbel font",
+     "Corbel clashes with Microsoft typeface and existing AI firms.",
+     "Good structural restraint metaphor, yet blocked and crowded across Microsoft and AI products.",
+     "Restraint metaphor, but blocked, typeface clutter, and Corbel AI clash.",
+     "Strong metaphor, but blocked and crowded: no domains, Corbel AI/pay clash.",
+     "Blocked on Companies House; clash with Corbel AI.",
+     "Strong fit and distinctiveness; blocked at Companies House; Corbel Pay/AI exist."
+    ],
+    "C14": [
+     "Fitting but archaic; existing identity startup and Vouched weaken ownability.",
+     "Archaic, identity-space clashes, hard pronounce",
+     "Old-world grace fits well; clashes with identity-verification Vouchsafe",
+     "Vouchsafe.id exists in identity space; slightly awkward to say.",
+     "Archaic and clunky to pronounce, though ownable with clear domains.",
+     "Old-fashioned permission promise; identity startup Vouchsafe may confuse.",
+     "Vouchsafe Labs formal, distinct, but a bit long.",
+     "Excellent fit; archaic charm; registrable; 'hard to say quickly' slight weakness.",
+     "Formal and weighty, but slightly awkward to pronounce."
+    ],
+    "C15": [
+     "Countermand Labs clear command metaphor, decent uniqueness.",
+     "Human-override fit strong; slightly militaristic but clean and ownable",
+     "Excellent fit; military gravitas; all domains free; no conflicting companies.",
+     "Strong fit; clean CH; all four domains free.",
+     "Strong military vibe; perfectly captures the veto power.",
+     "Commanding stop metaphor; clear domains and distinct, sober name.",
+     "Precisely captures revocable authority, with gravitas and unusually strong ownability.",
+     "Superb fit for human revocation, highly sober, available, and ownable.",
+     "Strong military metaphor, fully ownable"
+    ],
+    "C16": [
+     "Imprimatur Labs weighty, but religious tie may limit appeal.",
+     "Official-approval meaning fits; minor clash with UK Imprimatur Group",
+     "Catholic censorship shade; otherwise clean and registrable.",
+     "Strong approval theme, available domains, though slight ecclesiastical censorship overtone.",
+     "Strong fit; imprimatur meaning clear; Catholic connotation mild; domains available.",
+     "Excellent sanction metaphor, though ecclesiastical censorship associations may narrow appeal.",
+     "Approval metaphor excellent; Catholic censorship connotation may distract.",
+     "Very strong fit for 'human-in-the-loop' approval.",
+     "Perfect 'human approval' metaphor, ownable"
+    ],
+    "C17": [
+     "Strong steward metaphor, but obscure and no domains.",
+     "No free domains; obscure; fantasy/RPG connotations.",
+     "Hard to pronounce, no domains free, evokes fantasy gaming tropes.",
+     "Delegated authority fits; archaic, hard to spell, no prime domains.",
+     "Strong metaphor, archaic, domains gone",
+     "Strong delegated-authority story, but obscure pronunciation and unavailable core domains.",
+     "Excellent fit; obscure, hard to spell/pronounce; archaic medieval term.",
+     "Strong concept, but lack of domains is a problem."
+    ],
+    "C18": [
+     "Defensive image decent; no domains, fringe political association",
+     "Survivalist associations, domains gone",
+     "No free domains; American Redoubt survivalist associations.",
+     "No usable domains free and carries awkward US survivalist connotations.",
+     "Redoubt concise but US\u2011centric connotations problematic.",
+     "Strong metaphor, but no domains and 'American Redoubt' political baggage.",
+     "Fortress containment; no key domains and survivalist fringe association.",
+     "Good fit; domains free; small unrelated companies; survivalist connotation concern.",
+     "No usable domains; risky US political association."
+    ],
+    "C19": [
+     "Coined authority story, but blocked and used by several AI startups.",
+     "Blocked; no domains; used by three rival AI startups.",
+     "Blocked at Companies House and crowded with multiple AI startups.",
+     "Blocked, multiple AI startups using name",
+     "Strong fit; coined blend unclear; blocked; multiple Auctra AI startups exist.",
+     "Blocked on Companies House; multiple AI agent collisions.",
+     "Auctra similar to auction; several startups already use it.",
+     "Authority-layering idea; blocked, crowded Auctra AI startups, auction mishear.",
+     "Blocked at Companies House; clashes with multiple AI-governance startups"
+    ],
+    "C20": [
+     "Fit okay, but Veritas is heavily used and '-gate' suggests scandal.",
+     "Veritas is corporate clich\u00e9; suffix evokes scandal rather than control.",
+     "Generic compound; 'gate' implies scandal.",
+     "Truth-gate fits; Veritas overused, echoes scandal via 'gate'",
+     "Veritas Technologies clash; two clich\u00e9s awkwardly combined.",
+     "Truth-gate idea, but clunky and heavily shadowed by Veritas.",
+     "Reasonable fit; Latin compound; 'gate' suggests scandal; Veritas brand saturated.",
+     "Sober but generic, heavily overlaps Veritas, and gate suggests scandal.",
+     "'Veritas' saturated, '-gate' scandal risk"
+    ],
+    "C21": [
+     "Chancery evokes legal slow\u2011down; name already used.",
+     "Blocked; no domains; Chancery AI is direct competitor.",
+     "Blocked in UK, zero domains, and burdened by Bleak House.",
+     "Blocked, active UK legal-AI competitor",
+     "Approval and records fit strongly, but blocked, crowded, and legally bureaucratic.",
+     "Equity approval metaphor; blocked, Chancery AI, slow-litigation baggage.",
+     "Excellent fit; elegant meaning; blocked at Companies House; Chancery.ai startup active.",
+     "Strong legal control story, but blocked; Chancery AI and no domains.",
+     "Blocked on Companies House; Chancery.ai is a direct clash."
+    ],
+    "C22": [
+     "Offshore-finance hint; Fortune 500 .com clash; no .com.",
+     "Good jurisdiction metaphor but slightly frivolous sound and offshore finance echo.",
+     "Jurisdiction metaphor works; faint offshore-finance association lingers",
+     "Bounded jurisdiction fits; offshore-finance and IT-services names shadow it.",
+     "Offshore finance associations, existing IT brand",
+     "Good jurisdiction metaphor, though offshore-finance associations and existing Bailiwick dilute ownership.",
+     "Bailiwick Labs evokes authority; domains clear, good gravitas.",
+     "Outstanding fit and gravitas; excellent distinctiveness; all domains free; no conflicts.",
+     "Excellent fit for constrained agency and jurisdiction."
+    ],
+    "C23": [
+     "Flow-control metaphor apt; minor soundalike risk with Pentera",
+     "Sluice-gate flow control; Pentera soundalike and industrial utility vibe.",
+     "Strong fit; good distinctiveness; technical meaning clear; no conflicts.",
+     "Strong flow-control metaphor and ownability; only sound-alike Pentera risk.",
+     "Distinctive, available, and strong flow-control metaphor; slightly obscure but explainable.",
+     "Excellent sluice-gate metaphor, highly sober, clean namespace and clear domains.",
+     "Great metaphor for controlled flow; industrial gravitas.",
+     "Penstock Labs vividly fits architecture, strong gravitas, free domains.",
+     "Strong flow metaphor, Pentera sound-alike"
+    ],
+    "C24": [
+     "Strong fit and ownability, but claustrophobia/cloister root may unsettle.",
+     "Barred-gate metaphor precise; sober, clean, no clashes found",
+     "Sharp gatekeeping meaning, fully available, though carries faint claustrophobia risk.",
+     "Strong fit; clean CH; all four domains free.",
+     "Excellent fit; weighty Latin; highly distinctive; domains free; no conflicts.",
+     "Highly distinctive and ownable, with strong boundary meaning but pronunciation friction.",
+     "Barred-gate control, clear domains; claustrophobia echo slightly grim.",
+     "Claustra Labs strong fit, sober, clear domains, low clash.",
+     "Strong Latin root; evokes structural boundaries."
+    ],
+    "C25": [
+     "Magna Carta gravitas; UK council and prominent charity clashes.",
+     "Strong fit; powerful Magna Carta symbolism; UK council/charity nearby (minor clash).",
+     "Magna Carta resonance strong; slight overlap with Runnymede Trust",
+     "Excellent rule-of-law associations, though council and charity uses reduce distinctiveness.",
+     "Great rule-of-law metaphor, UK resonance, though shared with famous trust.",
+     "Runnymede evokes rule\u2011of\u2011law; memorable and ownable.",
+     "Excellent fit and gravitas; lacks .com and clashes with known Runnymede bodies.",
+     "Strong historical link to law and limits of power.",
+     "Magna Carta metaphor, strong UK gravitas"
+    ],
+    "C26": [
+     "Chary Labs cautious tone fits, but word rare.",
+     "Cautious fit strong; obscure word risks mispronunciation as charity",
+     "Strong fit and domains, but risk misreading as charity.",
+     "Wry least-privilege signal and excellent ownability; uncommon word risks mishearing.",
+     "Cautious posture fits; risks misreading as charity or chary.",
+     "Clean CH; all domains free; charity confusion risk.",
+     "Wry and fitting, though potentially misread as 'charity'.",
+     "Captures least-privilege beautifully, fully clean domains, slight mishearing risk.",
+     "Excellent fit; uncommon word; pronunciation risk ('charity'); all domains free."
+    ],
+    "C27": [
+     "Memorable monastic image; reclusive connotation undermines enterprise trust",
+     "Striking but reclusive; inactive Anchorite Labs LLC and no .com.",
+     "Evocative containment metaphor but perhaps too monastic and anti-social.",
+     "Good fit; wry and distinctive; obscure/reclusive connotation; inactive US company.",
+     "Walled-cell metaphor wry; obscure and reclusive, inactive US names.",
+     "Memorable containment metaphor, but monastic obscurity may feel antisocial to buyers.",
+     "Anchorite Labs wry, memorable, domains available.",
+     "Monastic antisocial vibe, obscure metaphor",
+     "Wry and weighty, though slightly obscure."
+    ],
+    "C28": [
+     "Strong image; dominated by famous Barbican Centre brand",
+     "Dominated by London arts centre, blocked",
+     "Strong fortress fit, but Barbican Centre/security dominate and no domains.",
+     "Strong gatekeeping metaphor, but dominated by London landmark and security company.",
+     "Barbican blocked, famous arts centre, domain scarcity.",
+     "Direct Companies House conflict and eclipsed by London arts complex.",
+     "Strong fit; blocked; Barbican Centre dominates; strong London brand association.",
+     "Fortress gate metaphor; blocked and dominated by London Barbican and security firm.",
+     "Blocked on Companies House; too closely linked to arts centre."
+    ],
+    "C29": [
+     "Steward metaphor solid; archaic spelling risks mispronunciation issues",
+     "Fits delegated authority well, clear domains, but tricky to spell.",
+     "All domains free; archaic word, hard to spell.",
+     "Seneschal Labs unique, fits story, domains free.",
+     "Good fit; archaic difficulty worse with 'Labs'; domains free; no major conflicts.",
+     "Great ownability but archaic, hard to say and spell for enterprise.",
+     "Archaic, hard to spell, domains free",
+     "Delegated-stewardship meaning works, though spelling, pronunciation, and fantasy associations hinder.",
+     "Strong fit, though spelling/pronunciation is a hurdle."
+    ],
+    "C30": [
+     "Delegated-authority fit decent; reads too academic/institutional overall",
+     "Provost Labs academic feel may limit enterprise perception.",
+     "University-administration read; all domains free.",
+     "Good governance fit and domains, but reads institutional/university.",
+     "Good fit; institutional/academic read; domains all free; no conflicts.",
+     "Institutional feel; lacks the 'wry' edge.",
+     "Sturdy governance metaphor, highly sober for CISOs, completely clear legally.",
+     "Trustworthy delegated-authority metaphor with excellent ownership; university associations slightly constrain.",
+     "Strong institutional metaphor, fully ownable"
+    ],
+    "C31": [
+     "Roman rampart fits well; crowded by AI-governance rival Vallum",
+     "Strong boundary concept but clashing heavily with existing vallum.ai startup.",
+     "Powerful boundary metaphor, but crowded directly within AI governance and security.",
+     "Direct collision with Vallum.ai AI governance platform.",
+     "Roman boundary story strong; Vallum AI-security and proxy already crowd space.",
+     "Vallum.ai is direct AI-governance competitor; very crowded space.",
+     "Vallum Labs fits theme but AI\u2011governance rivals exist.",
+     "Strong frontier metaphor, but adjacent Vallum AI security firms crowd the space.",
+     "Excellent fit; Latin gravitas; crowded adjacent AI-security space; Vallum.ai exists."
+    ]
+   },
+   "cases": {},
+   "self_marks": [
+    {
+     "judge": "gpt-5.6-luna",
+     "id": "C14",
+     "fit": 8.0,
+     "gravitas": 7.0,
+     "distinct": 6.0,
+     "ownable": 8.0,
+     "total": 7.35
+    },
+    {
+     "judge": "gpt-5.6-luna",
+     "id": "C18",
+     "fit": 8.0,
+     "gravitas": 7.0,
+     "distinct": 6.0,
+     "ownable": 5.0,
+     "total": 6.6
+    },
+    {
+     "judge": "gpt-5.6-luna",
+     "id": "C19",
+     "fit": 8.0,
+     "gravitas": 8.0,
+     "distinct": 7.0,
+     "ownable": 9.0,
+     "total": 8.05
+    },
+    {
+     "judge": "claude-sonnet-5",
+     "id": "C01",
+     "fit": 8.0,
+     "gravitas": 6.0,
+     "distinct": 6.0,
+     "ownable": 2.0,
+     "total": 5.6
+    },
+    {
+     "judge": "claude-sonnet-5",
+     "id": "C21",
+     "fit": 7.0,
+     "gravitas": 8.0,
+     "distinct": 6.0,
+     "ownable": 2.0,
+     "total": 5.800000000000001
+    },
+    {
+     "judge": "claude-sonnet-5",
+     "id": "C17",
+     "fit": 7.0,
+     "gravitas": 5.0,
+     "distinct": 5.0,
+     "ownable": 3.0,
+     "total": 5.1
+    },
+    {
+     "judge": "gemini-3.8-flash",
+     "id": "C05",
+     "fit": 5.0,
+     "gravitas": 5.0,
+     "distinct": 6.0,
+     "ownable": 2.0,
+     "total": 4.45
+    },
+    {
+     "judge": "gemini-3.8-flash",
+     "id": "C09",
+     "fit": 3.0,
+     "gravitas": 4.0,
+     "distinct": 4.0,
+     "ownable": 6.0,
+     "total": 4.2
+    },
+    {
+     "judge": "gemini-3.8-flash",
+     "id": "C13",
+     "fit": 6.0,
+     "gravitas": 6.0,
+     "distinct": 5.0,
+     "ownable": 2.0,
+     "total": 4.8
+    },
+    {
+     "judge": "deepseek-v4-pro",
+     "id": "C22",
+     "fit": 8.0,
+     "gravitas": 6.0,
+     "distinct": 5.0,
+     "ownable": 6.0,
+     "total": 6.4
+    },
+    {
+     "judge": "deepseek-v4-pro",
+     "id": "C15",
+     "fit": 9.0,
+     "gravitas": 8.0,
+     "distinct": 7.0,
+     "ownable": 10.0,
+     "total": 8.6
+    },
+    {
+     "judge": "deepseek-v4-pro",
+     "id": "C16",
+     "fit": 9.0,
+     "gravitas": 6.0,
+     "distinct": 6.0,
+     "ownable": 6.0,
+     "total": 6.9
+    },
+    {
+     "judge": "deepseek-v4-flash",
+     "id": "C25",
+     "fit": 7.0,
+     "gravitas": 8.0,
+     "distinct": 7.0,
+     "ownable": 7.0,
+     "total": 7.25
+    },
+    {
+     "judge": "deepseek-v4-flash",
+     "id": "C29",
+     "fit": 8.0,
+     "gravitas": 7.0,
+     "distinct": 6.0,
+     "ownable": 9.0,
+     "total": 7.6
+    },
+    {
+     "judge": "deepseek-v4-flash",
+     "id": "C30",
+     "fit": 7.0,
+     "gravitas": 8.0,
+     "distinct": 5.0,
+     "ownable": 9.0,
+     "total": 7.35
+    },
+    {
+     "judge": "minimax-m3",
+     "id": "C23",
+     "fit": 8.0,
+     "gravitas": 7.0,
+     "distinct": 6.0,
+     "ownable": 6.0,
+     "total": 6.85
+    },
+    {
+     "judge": "minimax-m3",
+     "id": "C27",
+     "fit": 6.0,
+     "gravitas": 7.0,
+     "distinct": 5.0,
+     "ownable": 6.0,
+     "total": 6.05
+    },
+    {
+     "judge": "minimax-m3",
+     "id": "C28",
+     "fit": 8.0,
+     "gravitas": 7.0,
+     "distinct": 3.0,
+     "ownable": 1.0,
+     "total": 5.0
+    },
+    {
+     "judge": "nemotron-ultra",
+     "id": "C24",
+     "fit": 9.0,
+     "gravitas": 8.0,
+     "distinct": 8.0,
+     "ownable": 10.0,
+     "total": 8.8
+    },
+    {
+     "judge": "nemotron-ultra",
+     "id": "C26",
+     "fit": 7.0,
+     "gravitas": 4.0,
+     "distinct": 6.0,
+     "ownable": 10.0,
+     "total": 6.800000000000001
+    },
+    {
+     "judge": "nemotron-ultra",
+     "id": "C31",
+     "fit": 9.0,
+     "gravitas": 8.0,
+     "distinct": 5.0,
+     "ownable": 5.0,
+     "total": 6.949999999999999
+    },
+    {
+     "judge": "gpt-oss-120b",
+     "id": "C11",
+     "fit": 8.0,
+     "gravitas": 7.0,
+     "distinct": 7.0,
+     "ownable": 8.0,
+     "total": 7.55
+    },
+    {
+     "judge": "gpt-oss-120b",
+     "id": "C06",
+     "fit": 6.0,
+     "gravitas": 5.0,
+     "distinct": 4.0,
+     "ownable": 6.0,
+     "total": 5.35
+    },
+    {
+     "judge": "gpt-oss-120b",
+     "id": "C20",
+     "fit": 7.0,
+     "gravitas": 6.0,
+     "distinct": 5.0,
+     "ownable": 5.0,
+     "total": 5.85
+    },
+    {
+     "judge": "gemma-4-31b",
+     "id": "C04",
+     "fit": 8.0,
+     "gravitas": 8.0,
+     "distinct": 6.0,
+     "ownable": 2.0,
+     "total": 6.1
+    },
+    {
+     "judge": "gemma-4-31b",
+     "id": "C12",
+     "fit": 9.0,
+     "gravitas": 6.0,
+     "distinct": 7.0,
+     "ownable": 3.0,
+     "total": 6.35
+    },
+    {
+     "judge": "gemma-4-31b",
+     "id": "C02",
+     "fit": 6.0,
+     "gravitas": 8.0,
+     "distinct": 6.0,
+     "ownable": 3.0,
+     "total": 5.75
+    },
+    {
+     "judge": "claude-haiku-4.5",
+     "id": "C03",
+     "fit": 6.0,
+     "gravitas": 8.0,
+     "distinct": 4.0,
+     "ownable": 1.0,
+     "total": 4.85
+    },
+    {
+     "judge": "claude-haiku-4.5",
+     "id": "C08",
+     "fit": 7.0,
+     "gravitas": 8.0,
+     "distinct": 3.0,
+     "ownable": 1.0,
+     "total": 4.95
+    },
+    {
+     "judge": "claude-haiku-4.5",
+     "id": "C10",
+     "fit": 7.0,
+     "gravitas": 7.0,
+     "distinct": 2.0,
+     "ownable": 1.0,
+     "total": 4.5
+    }
+   ],
+   "backings": {},
+   "failed_ballots": [],
+   "cost_so_far": 0.16457
+  },
+  {
+   "round": 2,
+   "field": [
+    "C15",
+    "C24",
+    "C16",
+    "C26",
+    "C23",
+    "C25",
+    "C30",
+    "C29",
+    "C12",
+    "C27",
+    "C31",
+    "C22",
+    "C14",
+    "C17",
+    "C11",
+    "C18"
+   ],
+   "keep": 8,
+   "scores": {
+    "C15": {
+     "score": 8.539,
+     "panel": 8.539,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 9.0,
+       "ownable": 10.0,
+       "total": 9.0
+      },
+      "claude-sonnet-5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.8
+      },
+      "gemini-3.8-flash": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.55
+      },
+      "deepseek-v4-flash": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.55
+      },
+      "minimax-m3": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.55
+      },
+      "nemotron-ultra": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.55
+      },
+      "gpt-oss-120b": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 8.35
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 9.0,
+       "ownable": 10.0,
+       "total": 9.25
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.25
+      }
+     }
+    },
+    "C24": {
+     "score": 8.183,
+     "panel": 8.183,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 10.0,
+       "total": 8.8
+      },
+      "claude-sonnet-5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.0
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.25
+      },
+      "deepseek-v4-pro": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 9.0,
+       "total": 7.6
+      },
+      "deepseek-v4-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.25
+      },
+      "minimax-m3": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 8.05
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 9.0,
+       "total": 7.6
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 10.0,
+       "total": 9.05
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 8.05
+      }
+     }
+    },
+    "C16": {
+     "score": 7.983,
+     "panel": 7.983,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 8.0,
+       "total": 8.3
+      },
+      "claude-sonnet-5": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.3
+      },
+      "gemini-3.8-flash": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 8.1
+      },
+      "deepseek-v4-flash": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 8.0,
+       "total": 8.3
+      },
+      "minimax-m3": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 7.0,
+       "total": 8.05
+      },
+      "nemotron-ultra": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 8.0,
+       "total": 8.3
+      },
+      "gpt-oss-120b": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.9
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 6.0,
+       "total": 7.8
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.8
+      }
+     }
+    },
+    "C26": {
+     "score": 7.867,
+     "panel": 7.867,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 10.0,
+       "total": 8.55
+      },
+      "claude-sonnet-5": {
+       "fit": 8.0,
+       "gravitas": 5.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.05
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.55
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 8.1
+      },
+      "deepseek-v4-flash": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.3
+      },
+      "minimax-m3": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 8.0,
+       "total": 8.05
+      },
+      "gpt-oss-120b": {
+       "fit": 9.0,
+       "gravitas": 6.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.05
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 10.0,
+       "total": 8.35
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.8
+      }
+     }
+    },
+    "C23": {
+     "score": 7.756,
+     "panel": 7.756,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.55
+      },
+      "claude-sonnet-5": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 6.0,
+       "total": 6.6
+      },
+      "gemini-3.8-flash": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 8.0,
+       "total": 8.3
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.85
+      },
+      "deepseek-v4-flash": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.3
+      },
+      "nemotron-ultra": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 7.0,
+       "total": 8.05
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.55
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 7.0,
+       "total": 8.05
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.55
+      }
+     }
+    },
+    "C25": {
+     "score": 7.567,
+     "panel": 7.567,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 9.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 7.55
+      },
+      "claude-sonnet-5": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 5.0,
+       "total": 6.75
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 7.0,
+       "total": 8.0
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 7.6
+      },
+      "minimax-m3": {
+       "fit": 8.0,
+       "gravitas": 9.0,
+       "distinct": 7.0,
+       "ownable": 4.0,
+       "total": 7.05
+      },
+      "nemotron-ultra": {
+       "fit": 8.0,
+       "gravitas": 9.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 7.55
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 9.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.85
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 9.0,
+       "distinct": 9.0,
+       "ownable": 7.0,
+       "total": 8.2
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.55
+      }
+     }
+    },
+    "C30": {
+     "score": 7.506,
+     "panel": 7.506,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.75
+      },
+      "claude-sonnet-5": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 6.5
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.75
+      },
+      "deepseek-v4-pro": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.8
+      },
+      "minimax-m3": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 9.0,
+       "total": 7.85
+      },
+      "nemotron-ultra": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.050000000000001
+      },
+      "gpt-oss-120b": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 9.0,
+       "total": 7.300000000000001
+      },
+      "gemma-4-31b": {
+       "fit": 7.0,
+       "gravitas": 9.0,
+       "distinct": 7.0,
+       "ownable": 10.0,
+       "total": 8.25
+      },
+      "claude-haiku-4.5": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 9.0,
+       "total": 7.300000000000001
+      }
+     }
+    },
+    "C29": {
+     "score": 7.439,
+     "panel": 7.439,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.35
+      },
+      "claude-sonnet-5": {
+       "fit": 7.0,
+       "gravitas": 5.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 6.550000000000001
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.050000000000001
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.4
+      },
+      "minimax-m3": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 9.0,
+       "total": 8.15
+      },
+      "nemotron-ultra": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.35
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 9.0,
+       "total": 7.4
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 10.0,
+       "total": 8.6
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 7.1
+      }
+     }
+    },
+    "C12": {
+     "score": 7.05,
+     "panel": 7.05,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 10.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 4.0,
+       "total": 7.6
+      },
+      "claude-sonnet-5": {
+       "fit": 9.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 4.0,
+       "total": 6.4
+      },
+      "gemini-3.8-flash": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 3.0,
+       "total": 6.6
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 4.0,
+       "total": 6.65
+      },
+      "deepseek-v4-flash": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 5.0,
+       "total": 6.9
+      },
+      "minimax-m3": {
+       "fit": 10.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 3.0,
+       "total": 6.65
+      },
+      "nemotron-ultra": {
+       "fit": 10.0,
+       "gravitas": 8.0,
+       "distinct": 9.0,
+       "ownable": 4.0,
+       "total": 7.8
+      },
+      "gpt-oss-120b": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.6
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 6.0,
+       "total": 7.25
+      }
+     }
+    },
+    "C27": {
+     "score": 6.75,
+     "panel": 6.75,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 8.0,
+       "total": 7.75
+      },
+      "claude-sonnet-5": {
+       "fit": 6.0,
+       "gravitas": 4.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 5.95
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 6.550000000000001
+      },
+      "deepseek-v4-pro": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 5.0,
+       "total": 6.25
+      },
+      "deepseek-v4-flash": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 6.75
+      },
+      "nemotron-ultra": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 6.75
+      },
+      "gpt-oss-120b": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 6.800000000000001
+      },
+      "gemma-4-31b": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 9.0,
+       "ownable": 8.0,
+       "total": 7.4
+      },
+      "claude-haiku-4.5": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 6.0,
+       "total": 6.550000000000001
+      }
+     }
+    },
+    "C31": {
+     "score": 6.672,
+     "panel": 6.672,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 7.0,
+       "ownable": 2.0,
+       "total": 6.85
+      },
+      "claude-sonnet-5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 3.0,
+       "total": 5.9
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 4.0,
+       "total": 6.55
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 5.0,
+       "ownable": 4.0,
+       "total": 6.699999999999999
+      },
+      "deepseek-v4-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 4.0,
+       "total": 6.6
+      },
+      "minimax-m3": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 3.0,
+       "total": 6.65
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 7.0,
+       "total": 6.9
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 2.0,
+       "total": 6.6
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 7.3
+      }
+     }
+    },
+    "C22": {
+     "score": 6.639,
+     "panel": 6.639,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 4.0,
+       "total": 6.6
+      },
+      "claude-sonnet-5": {
+       "fit": 7.0,
+       "gravitas": 5.0,
+       "distinct": 6.0,
+       "ownable": 5.0,
+       "total": 5.800000000000001
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 6.75
+      },
+      "deepseek-v4-flash": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 7.05
+      },
+      "minimax-m3": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 3.0,
+       "total": 6.0
+      },
+      "nemotron-ultra": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 5.0,
+       "total": 6.55
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.35
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 5.0,
+       "total": 6.8
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 6.85
+      }
+     }
+    },
+    "C14": {
+     "score": 6.611,
+     "panel": 6.611,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "claude-sonnet-5": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 4.0,
+       "total": 5.800000000000001
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 6.0,
+       "total": 6.300000000000001
+      },
+      "deepseek-v4-pro": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 5.0,
+       "total": 6.8
+      },
+      "deepseek-v4-flash": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 6.75
+      },
+      "minimax-m3": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 5.0,
+       "total": 6.6
+      },
+      "nemotron-ultra": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 6.800000000000001
+      },
+      "gpt-oss-120b": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 8.0,
+       "total": 6.6
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 5.0,
+       "total": 7.05
+      },
+      "claude-haiku-4.5": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 6.800000000000001
+      }
+     }
+    },
+    "C17": {
+     "score": 6.156,
+     "panel": 6.156,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 4.0,
+       "total": 6.8
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 2.0,
+       "total": 5.300000000000001
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 3.0,
+       "total": 6.15
+      },
+      "deepseek-v4-flash": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 4.0,
+       "total": 6.65
+      },
+      "minimax-m3": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 2.0,
+       "total": 6.1
+      },
+      "nemotron-ultra": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 3.0,
+       "total": 5.85
+      },
+      "gpt-oss-120b": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 5.0,
+       "total": 5.85
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 1.0,
+       "total": 6.35
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 4.0,
+       "total": 6.35
+      }
+     }
+    },
+    "C11": {
+     "score": 6.044,
+     "panel": 6.044,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 8.0,
+       "ownable": 6.0,
+       "total": 6.7
+      },
+      "claude-sonnet-5": {
+       "fit": 6.0,
+       "gravitas": 5.0,
+       "distinct": 6.0,
+       "ownable": 5.0,
+       "total": 5.5
+      },
+      "gemini-3.8-flash": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 5.0,
+       "total": 5.55
+      },
+      "deepseek-v4-pro": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 5.0,
+       "total": 6.35
+      },
+      "deepseek-v4-flash": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 5.0,
+       "total": 5.75
+      },
+      "minimax-m3": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 4.0,
+       "total": 5.5
+      },
+      "nemotron-ultra": {
+       "fit": 6.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 7.0,
+       "total": 6.05
+      },
+      "gemma-4-31b": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 6.5
+      },
+      "claude-haiku-4.5": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 6.5
+      }
+     }
+    },
+    "C18": {
+     "score": 5.456,
+     "panel": 5.456,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "claude-sonnet-5": {
+       "fit": 6.0,
+       "gravitas": 5.0,
+       "distinct": 6.0,
+       "ownable": 3.0,
+       "total": 5.0
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 2.0,
+       "total": 5.300000000000001
+      },
+      "deepseek-v4-pro": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 4.0,
+       "ownable": 3.0,
+       "total": 5.45
+      },
+      "deepseek-v4-flash": {
+       "fit": 7.0,
+       "gravitas": 5.0,
+       "distinct": 7.0,
+       "ownable": 3.0,
+       "total": 5.5
+      },
+      "minimax-m3": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 2.0,
+       "total": 5.550000000000001
+      },
+      "nemotron-ultra": {
+       "fit": 7.0,
+       "gravitas": 5.0,
+       "distinct": 6.0,
+       "ownable": 3.0,
+       "total": 5.300000000000001
+      },
+      "gpt-oss-120b": {
+       "fit": 7.0,
+       "gravitas": 5.0,
+       "distinct": 5.0,
+       "ownable": 5.0,
+       "total": 5.6
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 2.0,
+       "total": 6.05
+      },
+      "claude-haiku-4.5": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 3.0,
+       "total": 5.35
+      }
+     }
+    }
+   },
+   "critiques": {
+    "C15": [
+     "Clear command metaphor; clean, ownable, sober",
+     "Military command metaphor precisely apt; sober; highly memorable and ownable.",
+     "Strong command metaphor; very ownable, no obvious conflicts",
+     "Military command-and-control metaphor ideal for defence context; fully ownable",
+     "Outstanding command-and-control fit, authoritative gravitas, completely clear registrations.",
+     "Precise 'revoke order' metaphor; military discipline tone; fully ownable, all domains free.",
+     "Revocation metaphor strong; militaristic tone may narrow appeal.",
+     "Clear revocation metaphor, highly memorable and fully ownable, with slightly militaristic overtones.",
+     "Disciplined command metaphor; excellent fit and availability."
+    ],
+    "C23": [
+     "Flow metaphor apt; risks confusion with Pentera",
+     "Flow-control metaphor apt; Pentera soundalike risks confusion.",
+     "Clear flow-control image; slight sound\u2011alike risk with Pentera",
+     "Excellent flow metaphor; Pentera soundalike manageable; all domains free.",
+     "Sluice-gate precision; Pentera soundalike risk, otherwise clear.",
+     "Perfect sluice-gate flow metaphor; engineering gravitas; Pentera sound-alike risk.",
+     "Precise flow metaphor; minor risk of sound-alike confusion.",
+     "Superb flow-metering metaphor; clean registrations despite minor Pentera phonetic proximity.",
+     "Excellent controlled-flow metaphor, with only modest soundalike risk from Pentera."
+    ],
+    "C24": [
+     "Latin barred-gate precision; claustrophobia root may unsettle.",
+     "Latin gate imagery fits thesis; may evoke claustrophobia for some",
+     "Precise Latin gatekeeping; fully clear and ownable",
+     "Latin architecture perfectly sober; claustrophobia root overcome by gravitas.",
+     "Latin barred-gate metaphor apt; claustrophobia root and pronunciation are the only risks",
+     "Gate architecture precise; cloister/claustrophobia undertone slightly unsettling.",
+     "Sober architectural barrier metaphor; completely free domains and clear UK registration.",
+     "Precise boundary metaphor and exceptional ownability, though claustrophobic associations may unsettle.",
+     "Sober architectural Latin; avoids clich\u00e9s, though claustrophobia root lingers."
+    ],
+    "C25": [
+     "Strong Magna Carta gravitas; council/charity overlap",
+     "Magna Carta resonance superb; Runnymede Trust and Council clash, no .com",
+     "Excellent rule-of-law symbolism, but council and charity associations dilute ownability.",
+     "Magna Carta gravitas strong; UK council and charity overlaps minor.",
+     "Magna Carta metaphor strong for UK regulated buyers; council/charity clashes; no .com.",
+     "Magna Carta bounded authority; council/charity names and missing .com dilute.",
+     "Magna Carta gravitas strong; minor overlap with UK charity",
+     "Impeccable British legal gravitas; prominent UK charity name creates minor noise.",
+     "Strong UK legal gravitas; minor non-tech entity overlap."
+    ],
+    "C16": [
+     "Strong approval metaphor; ecclesiastical undertone lingers",
+     "Human approval perfectly embodied; ecclesiastical tone adds gravitas.",
+     "Strong approval metaphor; clash with Imprimatur Group's AI product.",
+     "Human\u2011approval metaphor perfect; religious connotation could limit appeal",
+     "Human-approval signature perfect; religious tie limits secular reach and Imprimatur Group",
+     "Official human-signoff metaphor fits brilliantly; dignified and highly ownable.",
+     "Approval meaning is exceptionally apt, though ecclesiastical censorship associations may narrow appeal.",
+     "Perfect 'human approval' metaphor; ecclesiastical gravitas; adjacent translation firm exists.",
+     "Perfect approval metaphor; ecclesiastical censorship may limit appeal."
+    ],
+    "C26": [
+     "Precise caution fit; rare word, mispronunciation risk",
+     "Cautious posture fits; 'charity' mishearing and rare word.",
+     "Prudent posture fits architecture; risks being misread or misheard as charity.",
+     "Precise fit; uncommon word; 'charity' mispronunciation risk minor.",
+     "Exact fit; rare word risks mispronunciation as \u201ccharity\u201d",
+     "Legal caution fits perfectly; charity mishearing is single, manageable pronunciation risk",
+     "Precise least-privilege fit; rare word risks 'charity' misreading.",
+     "Semantically perfect; pronunciation risk with 'charity' is a drawback.",
+     "Semantically exact and highly ownable, but rarity risks mishearing as charity."
+    ],
+    "C30": [
+     "Governance fit decent; reads too academic",
+     "Institutional delegated-authority metaphor; reads academic/university spin-out; fully ownable.",
+     "Delegated authority clear; reads institutional; all domains free.",
+     "Delegated authority clear; sounds academic, less punchy",
+     "Governance metaphor is credible, but strong university associations make it feel institutional.",
+     "Institutional governance tone appeals to CISOs; clean across all registries.",
+     "Institutional delegated authority; clear domains though academic tone.",
+     "Delegated-authority metaphor strong; academic tone reads institutional rather than defence-grade",
+     "Very sober and trustworthy; slightly too academic in tone."
+    ],
+    "C12": [
+     "Perfect fit but direct veto.so competitor clash",
+     "Superb thesis fit ruined by direct AI runtime clash veto.so.",
+     "Human-veto precision; veto.so and Ona Veto closely collide.",
+     "Veto is perfect brief; veto.so and Ona create direct fatal clashes",
+     "Perfect veto metaphor; crowded by direct AI-agent veto ventures.",
+     "Veto.so existing developer-layer competitor; fit remains strong for enterprise.",
+     "Fits thesis well; clashes with existing Veto.so platform",
+     "Perfect approval metaphor, but direct overlap with AI-agent veto products is disqualifying.",
+     "Perfect thesis fit; but veto.so and Ona's Veto are direct AI-governance rivals."
+    ],
+    "C22": [
+     "Offshore-finance echo; established Bailiwick.com clash",
+     "Jurisdiction metaphor apt; Fortune 500 .com clash and offshore-finance tint limit",
+     "Jurisdiction metaphor fits; offshore finance association; Fortune 500 holds .com.",
+     "Jurisdiction metaphor fits strongly, but Fortune 500 overlap and offshore associations weaken ownership.",
+     "Jurisdiction concept fits nicely; missing dot-com and Fortune 500 clash.",
+     "Good fit; offshore finance association and major IT clash.",
+     "Jurisdiction fit excellent; offshore-finance connotation; no .com available.",
+     "Jurisdiction fit; offshore-finance and Fortune 500 .com clash.",
+     "Jurisdiction metaphor apt; offshore finance association may concern some"
+    ],
+    "C29": [
+     "Delegated-steward fit; archaic, fantasy-genre flavour",
+     "Apt steward concept with clear domains, but archaic spelling hampers recall.",
+     "Strong steward metaphor; archaic spelling risks mispronunciation.",
+     "Excellent stewardship story, though difficult spelling and pronunciation reduce memorability and accessibility.",
+     "Strong steward metaphor; archaic spelling/pronunciation barrier; fully ownable with .com.",
+     "Steward metaphor strong; archaic spelling can hinder recall",
+     "Steward-under-instruction metaphor strong; archaic spelling and sound challenge recall.",
+     "Stewardship metaphor ideal; archaic spelling/pronunciation hurdle otherwise immaculate ownership",
+     "Better availability than C17; spelling/pronunciation remains a hurdle."
+    ],
+    "C27": [
+     "Reclusive monastic tone undercuts enterprise trust",
+     "Walled-in metaphor; reclusive tone, missing .com, dormant LLC.",
+     "Enclosure thesis fits, but reclusive ascetic tone alienates enterprise buyers.",
+     "Wry enclosure metaphor; reclusive connotation risks trust; one US LLC.",
+     "Bounded-cell metaphor; reclusive undertone and dormant US LLC.",
+     "Wry monastic metaphor for bounded agents; reclusive connotation risks enterprise trust.",
+     "Monastic imagery wry but may suggest reclusiveness",
+     "Clever metaphor, but reclusive connotations may alienate clients.",
+     "Memorable boundedness metaphor, though monastic reclusiveness may feel antisocial to enterprise buyers."
+    ],
+    "C14": [
+     "Apt promise; crowded identity-verification namespace",
+     "Archaic condescension meaning distracts; UK biometric identity startup conflict.",
+     "Archaic verb fits; pronunciation slightly awkward, existing Vouchsafe brand",
+     "Vouchsafe.id and Vouched create identity-verification confusion clutter",
+     "Archaic permission metaphor; identity-startup clash weakens ownability.",
+     "Permission-grant metaphor fits; adjacent identity startups Vouchsafe/Vouched weaken ownability.",
+     "Archaic verb maps to granted capability; identity-startup adjacency; awkward pronunciation.",
+     "Vouchsafe.id distinct sector; archaic credible; pronunciation slightly awkward.",
+     "Formal and apt; clash with biometric startup weakens it."
+    ],
+    "C31": [
+     "Strong Roman metaphor; collides with Vallum.ai rival",
+     "Strong boundary imagery heavily compromised by existing AI-governance startup Vallum.ai.",
+     "Rampart fit; crowded by direct Vallum AI-governance rival.",
+     "Strong fit, but direct collision with Vallum.ai is disqualifying.",
+     "Excellent Roman metaphor; Vallum.ai direct rival and no .com available",
+     "Perfect frontier metaphor but crowded by Vallum.ai and security projects.",
+     "Powerful fortress metaphor, but existing AI-governance and security brands create severe conflict.",
+     "Roman rampart fits theme; crowded by similar AI\u2011security names",
+     "Roman frontier perfectly encodes distrust; Vallum.ai crowding AI-security space."
+    ],
+    "C17": [
+     "No primary domains available; archaic single word suffers practical acquisition hurdles.",
+     "Same steward metaphor; no 'Labs' weakens tech positioning; zero usable domains.",
+     "Steward metaphor good; domains unavailable hampers ownability",
+     "Steward metaphor definitive; zero domains is fatal absence for enterprise brand",
+     "Steward metaphor definitive; no domains and existing consultancies block.",
+     "Excellent semantic fit, but fails on critical domain availability.",
+     "Perfect steward concept; obscure; no .com/.ai/.io domains.",
+     "Delegated authority ideal; no domains and hard to pronounce.",
+     "Strong delegated-authority metaphor, but obscure spelling and unavailable domains are serious liabilities."
+    ],
+    "C11": [
+     "Cautio too close; obscure construction and no .com or .ai undermine",
+     "Soft coined word; too close to Cautio",
+     "Coined form lacks presence; Cautio collision and missing key domains hurt.",
+     "Caution-derived, but Cautio proximity and missing domains hurt.",
+     "Coined word; near-clash with funded AI startup Cautio; pronunciation ambiguous.",
+     "Cautious legal coinage; lacks .com/.ai, near-identical Cautio startup.",
+     "Cautio Roman-legal fit strong; near-identical Cautio exists; no domains.",
+     "Coined name feels weaker; close to Cautio fleet-safety startup.",
+     "Distinctive and cautious, but pronunciation uncertainty and Cautio similarity weaken confidence."
+    ],
+    "C18": [
+     "No domains; survivalist political baggage",
+     "Strong containment metaphor; no usable domains; US far-right association risk.",
+     "Zero domain availability and awkward political baggage make this unusable.",
+     "Perfect fit; no usable domains; US political association risk.",
+     "Fortified-boundary fit; no domains, crowded, fringe political association.",
+     "Fortified containment fits; no key domains and far-right association.",
+     "Defensive fort fits; American Redoubt political stain and zero usable domains",
+     "Fortified refuge fits thesis; no usable domains and political connotations",
+     "Strong imagery, but no domains and risky political connotations."
+    ]
+   },
+   "cases": {
+    "C16": "\u201cImprimatur\u201d makes human approval the brand promise: weighty, memorable and apt for regulated buyers. Its ecclesiastical origin adds gravitas, while \u201cLabs\u201d keeps it technological; existing uses are adjacent, not identical.",
+    "C30": "Provost Labs signals governance by consent, not command\u2014exactly the delegated-authority story CISOs want; academic tone reads as trustworthy, careful, and all domains are free.",
+    "C18": "Redoubt evokes contained, fortified agents with actions held behind walls until approved\u2014precise architectural fit; Companies House is clear, meaning outweighs niche associations.",
+    "C24": "Rather than unsettling, the architectural Latin root provides precise, sober authority for gatekeeping; it offers completely clear UK registration, every key domain, and avoids crowded, generic security tropes entirely.",
+    "C11": "Evoking Roman legal guarantees (*cautio*), it delivers serious enterprise restraint. Clear of UK registrations, it uniquely targets enterprise AI workflows, distinct from India-focused hardware fleet dashcams.",
+    "C23": "Penstock Labs: sluice-gate precision\u2014capability and information flow only when opened. Companies House clear, exact domains free; no Penstock Labs. Pentera soundalike is minor, category distinct.",
+    "C27": "Anchorite's chosen enclosure is the point: agents bounded by granted capabilities, not hermits shunning clients. Labs signals enterprise R&D; clear UK registration and usable .co.uk/.ai domains outweigh dormant US LLC.",
+    "C14": "Vouchsafe Labs can register full .com; vouchsafe.id is biometric identity, not governed AI. Archaic promise suits CISO trust; pronunciation is clear.",
+    "C15": "Militaristic? Yes\u2014and that's the point. In defence, countermand is the disciplined word for revoking an order, fitting an architecture where AI holds only granted power. Sober, ownable, all domains free, no collisions.",
+    "C31": "Vallum.ai is a startup, not a fortress; co-existence with one early-stage rival is recoverable. The Roman frontier metaphor precisely encodes architecture-of-distrust\u2014gates, ramparts, sovereignty\u2014better than any generic shield name.",
+    "C12": "veto.so targets developers building agents; Veto Labs sells fixed-price consultancy to CFOs/CISOs in regulated UK enterprise. Different buyer, layer, and GTM. .ai/.io/.co.uk are standard for AI infra; the name perfectly embodies the architecture of distrust.",
+    "C29": "Pronounced SEN-uh-shal; spelling is phonetic. Archaic gravitas cuts through 'Shield/Guard' noise, signaling sober stewardship for regulated sectors. Exact .com secured. The medieval steward metaphor maps precisely to delegated, bounded agent authority.",
+    "C25": "Strong Magna Carta symbolism signals bounded AI authority, resonating with C\u2011level risk managers. Unique UK heritage, no tech conflict, and clear domain availability outweigh minor council/charity overlap.",
+    "C22": "The jurisdiction metaphor perfectly aligns with restricted AI capabilities. The offshore association suggests high-finance precision, while 'Labs' grounds the brand in technical rigor, neutralizing any perceived frivolity.",
+    "C17": "The steward metaphor is the definitive expression of delegated authority. Its rarity provides a sophisticated, singular identity that avoids AI clich\u00e9s, turning obscurity into a mark of prestige.",
+    "C26": "Chary's rarity is its strength: precise, legal, and ownable. Yes, some mishear it as 'charity'\u2014but that single phonetic risk is outweighed by perfect semantic fit, zero brand collision, and memorable distinctiveness among generic AI vendors."
+   },
+   "self_marks": [
+    {
+     "judge": "gpt-5.6-luna",
+     "id": "C14",
+     "fit": 8.0,
+     "gravitas": 8.0,
+     "distinct": 6.0,
+     "ownable": 5.0,
+     "total": 6.85
+    },
+    {
+     "judge": "gpt-5.6-luna",
+     "id": "C18",
+     "fit": 8.0,
+     "gravitas": 7.0,
+     "distinct": 7.0,
+     "ownable": 3.0,
+     "total": 6.3
+    },
+    {
+     "judge": "claude-sonnet-5",
+     "id": "C17",
+     "fit": 7.0,
+     "gravitas": 6.0,
+     "distinct": 5.0,
+     "ownable": 3.0,
+     "total": 5.35
+    },
+    {
+     "judge": "deepseek-v4-pro",
+     "id": "C15",
+     "fit": 9.0,
+     "gravitas": 8.0,
+     "distinct": 8.0,
+     "ownable": 9.0,
+     "total": 8.55
+    },
+    {
+     "judge": "deepseek-v4-pro",
+     "id": "C16",
+     "fit": 9.0,
+     "gravitas": 7.0,
+     "distinct": 8.0,
+     "ownable": 7.0,
+     "total": 7.8
+    },
+    {
+     "judge": "deepseek-v4-pro",
+     "id": "C22",
+     "fit": 8.0,
+     "gravitas": 7.0,
+     "distinct": 7.0,
+     "ownable": 5.0,
+     "total": 6.8
+    },
+    {
+     "judge": "deepseek-v4-flash",
+     "id": "C30",
+     "fit": 7.0,
+     "gravitas": 8.0,
+     "distinct": 6.0,
+     "ownable": 8.0,
+     "total": 7.300000000000001
+    },
+    {
+     "judge": "deepseek-v4-flash",
+     "id": "C25",
+     "fit": 8.0,
+     "gravitas": 9.0,
+     "distinct": 7.0,
+     "ownable": 7.0,
+     "total": 7.8
+    },
+    {
+     "judge": "deepseek-v4-flash",
+     "id": "C29",
+     "fit": 9.0,
+     "gravitas": 7.0,
+     "distinct": 6.0,
+     "ownable": 8.0,
+     "total": 7.65
+    },
+    {
+     "judge": "minimax-m3",
+     "id": "C27",
+     "fit": 7.0,
+     "gravitas": 6.0,
+     "distinct": 9.0,
+     "ownable": 5.0,
+     "total": 6.65
+    },
+    {
+     "judge": "minimax-m3",
+     "id": "C23",
+     "fit": 8.0,
+     "gravitas": 7.0,
+     "distinct": 7.0,
+     "ownable": 7.0,
+     "total": 7.3
+    },
+    {
+     "judge": "nemotron-ultra",
+     "id": "C24",
+     "fit": 9.0,
+     "gravitas": 8.0,
+     "distinct": 7.0,
+     "ownable": 9.0,
+     "total": 8.35
+    },
+    {
+     "judge": "nemotron-ultra",
+     "id": "C31",
+     "fit": 9.0,
+     "gravitas": 8.0,
+     "distinct": 7.0,
+     "ownable": 5.0,
+     "total": 7.35
+    },
+    {
+     "judge": "nemotron-ultra",
+     "id": "C26",
+     "fit": 8.0,
+     "gravitas": 6.0,
+     "distinct": 7.0,
+     "ownable": 9.0,
+     "total": 7.55
+    },
+    {
+     "judge": "gpt-oss-120b",
+     "id": "C11",
+     "fit": 7.0,
+     "gravitas": 6.0,
+     "distinct": 6.0,
+     "ownable": 8.0,
+     "total": 6.800000000000001
+    },
+    {
+     "judge": "gemma-4-31b",
+     "id": "C12",
+     "fit": 10.0,
+     "gravitas": 6.0,
+     "distinct": 7.0,
+     "ownable": 2.0,
+     "total": 6.4
+    }
+   ],
+   "backings": {},
+   "failed_ballots": [],
+   "cost_so_far": 0.2781
+  },
+  {
+   "round": 3,
+   "field": [
+    "C15",
+    "C24",
+    "C26",
+    "C16",
+    "C23",
+    "C25",
+    "C30",
+    "C29"
+   ],
+   "keep": 4,
+   "scores": {
+    "C15": {
+     "score": 8.878,
+     "panel": 8.878,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 10.0,
+       "total": 9.05
+      },
+      "claude-sonnet-5": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.55
+      },
+      "gemini-3.8-flash": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.8
+      },
+      "deepseek-v4-flash": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 9.0,
+       "ownable": 10.0,
+       "total": 9.25
+      },
+      "minimax-m3": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.8
+      },
+      "nemotron-ultra": {
+       "fit": 10.0,
+       "gravitas": 9.0,
+       "distinct": 9.0,
+       "ownable": 9.0,
+       "total": 9.3
+      },
+      "gpt-oss-120b": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.55
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.8
+      },
+      "claude-haiku-4.5": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.8
+      }
+     }
+    },
+    "C24": {
+     "score": 8.05,
+     "panel": 8.05,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.25
+      },
+      "claude-sonnet-5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.0
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 9.0,
+       "ownable": 9.0,
+       "total": 8.45
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.55
+      },
+      "deepseek-v4-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.25
+      },
+      "minimax-m3": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.3
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.55
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 8.05
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 8.05
+      }
+     }
+    },
+    "C26": {
+     "score": 7.533,
+     "panel": 7.533,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.0
+      },
+      "claude-sonnet-5": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.55
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.3
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.6
+      },
+      "deepseek-v4-flash": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 9.0,
+       "total": 7.9
+      },
+      "minimax-m3": {
+       "fit": 9.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 6.0,
+       "total": 6.699999999999999
+      },
+      "gpt-oss-120b": {
+       "fit": 9.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.6
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 9.0,
+       "total": 7.65
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 8.0,
+       "ownable": 8.0,
+       "total": 7.5
+      }
+     }
+    },
+    "C16": {
+     "score": 7.489,
+     "panel": 7.489,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.85
+      },
+      "claude-sonnet-5": {
+       "fit": 9.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.35
+      },
+      "gemini-3.8-flash": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 7.0,
+       "total": 8.05
+      },
+      "deepseek-v4-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 7.0,
+       "total": 7.75
+      },
+      "minimax-m3": {
+       "fit": 9.0,
+       "gravitas": 5.0,
+       "distinct": 8.0,
+       "ownable": 5.0,
+       "total": 6.8
+      },
+      "nemotron-ultra": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 6.0,
+       "total": 6.85
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 7.1
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.85
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.8
+      }
+     }
+    },
+    "C23": {
+     "score": 7.389,
+     "panel": 7.389,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 6.0,
+       "total": 7.25
+      },
+      "claude-sonnet-5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 7.1
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.55
+      },
+      "deepseek-v4-pro": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 7.0,
+       "total": 7.75
+      },
+      "deepseek-v4-flash": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 7.05
+      },
+      "nemotron-ultra": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 7.6
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.55
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 7.1
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.55
+      }
+     }
+    },
+    "C25": {
+     "score": 7.278,
+     "panel": 7.278,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 7.0,
+       "gravitas": 9.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 7.25
+      },
+      "claude-sonnet-5": {
+       "fit": 6.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 6.7
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.55
+      },
+      "deepseek-v4-pro": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 7.3
+      },
+      "minimax-m3": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 6.0,
+       "total": 7.5
+      },
+      "nemotron-ultra": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.6
+      },
+      "gpt-oss-120b": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 7.050000000000001
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 6.0,
+       "total": 7.75
+      },
+      "claude-haiku-4.5": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 6.800000000000001
+      }
+     }
+    },
+    "C30": {
+     "score": 7.239,
+     "panel": 7.239,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.300000000000001
+      },
+      "claude-sonnet-5": {
+       "fit": 6.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 6.5
+      },
+      "gemini-3.8-flash": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.75
+      },
+      "deepseek-v4-pro": {
+       "fit": 8.0,
+       "gravitas": 9.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.85
+      },
+      "minimax-m3": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 5.0,
+       "ownable": 7.0,
+       "total": 6.6
+      },
+      "nemotron-ultra": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.5
+      },
+      "gpt-oss-120b": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 7.050000000000001
+      },
+      "gemma-4-31b": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.300000000000001
+      },
+      "claude-haiku-4.5": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.300000000000001
+      }
+     }
+    },
+    "C29": {
+     "score": 7.178,
+     "panel": 7.178,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 8.0,
+       "ownable": 7.0,
+       "total": 7.25
+      },
+      "claude-sonnet-5": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.0
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.35
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.4
+      },
+      "minimax-m3": {
+       "fit": 8.0,
+       "gravitas": 5.0,
+       "distinct": 5.0,
+       "ownable": 9.0,
+       "total": 6.9
+      },
+      "nemotron-ultra": {
+       "fit": 9.0,
+       "gravitas": 5.0,
+       "distinct": 5.0,
+       "ownable": 9.0,
+       "total": 7.199999999999999
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 8.0,
+       "ownable": 7.0,
+       "total": 7.25
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 9.0,
+       "total": 7.15
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 7.1
+      }
+     }
+    }
+   },
+   "critiques": {
+    "C15": [
+     "Sharp revocation metaphor; sober, clean, highly ownable",
+     "Strong command metaphor, highly ownable, slightly militaristic",
+     "Disciplined command metaphor; clean registrability, full domains, military precision.",
+     "Disciplined, precise, and perfectly aligns with the veto-power thesis.",
+     "Military precision nails revocation thesis; instantly credible to CISOs.",
+     "Superb thesis fit with military authority and pristine trademark availability.",
+     "Directly captures human override and command control; unusually clear, sober, and highly ownable.",
+     "Revocation metaphor is exact, sober, memorable, and cleanly registrable.",
+     "Perfect command metaphor; clean, ownable, sober gravitas."
+    ],
+    "C24": [
+     "Architectural Latin precision; claustrophobia root lingers but gravitas and differentiation compensate.",
+     "Latin precision, minor claustrophobia connotation",
+     "Sober Latin barrier; clean registrability, mild claustrophobia echo",
+     "Sober Latin gravitas; claustrophobia root lingers despite architectural clarity.",
+     "Weighty architectural feel, though claustrophobia root is a slight risk.",
+     "Architecturally precise and distinctive; claustrophobia associations slightly temper its warmth and accessibility.",
+     "Barred-gate flow metaphor; claustrophobia root slightly clouds sober Latin clarity.",
+     "Distinctive architectural Latin that captures containment despite the claustrophobia echo.",
+     "Latin barred-gate precision fits; claustrophobia root may slightly unsettle."
+    ],
+    "C16": [
+     "Perfect approval metaphor; UK firm clash and Catholic censorship baggage undermine.",
+     "Strong approval metaphor; ecclesiastical tone limits appeal.",
+     "Ecclesiastical approval metaphor, may limit appeal",
+     "Perfect approval metaphor; ecclesiastical undertone, minor translation-firm clash",
+     "Approval metaphor strong; ecclesiastical censorship and Imprimatur Group muddy ownership.",
+     "Approval gate metaphor strong; ecclesiastical censorship shadow limits modern appeal.",
+     "Excellent approval metaphor, but ecclesiastical associations and Imprimatur Group weaken distinctiveness and ownability.",
+     "Strong approval metaphor, but ecclesiastical tones may feel dated.",
+     "Outstanding approval metaphor, though ecclesiastical roots and translation firm complicate ownership."
+    ],
+    "C26": [
+     "Semantically exact least-privilege fit; charity mishearing and obscure word risks.",
+     "Accurate posture of caution, but sounds fragile and risks mishearing.",
+     "Semantic fit exact for zero-trust posture; rarity risks 'charity' mishearing.",
+     "Exact cautious fit; rare word risks mispronunciation, misreading",
+     "Exact caution meaning, uncommon word risks mispronunciation",
+     "Exact caution meaning; rare word risks misreading as charity.",
+     "Semantically perfect, but pronunciation and brevity risk perceived insignificance.",
+     "Cautious posture fits; mishearing as charity and pronunciation risk linger.",
+     "Precisely conveys caution and restraint, though unfamiliar pronunciation and charity confusion require repeated explanation."
+    ],
+    "C23": [
+     "Flow-control fit works; Pentera and Penstock Group weaken distinct ownership.",
+     "Apt flow metaphor; sound-alike risk with Pentera is a concern.",
+     "Good flow metaphor; Pentera soundalike risks confusion",
+     "Excellent controlled-flow metaphor, but Penstock Group and Pentera create meaningful confusion risks.",
+     "Elegant flow metaphor; minor Pentera soundalike, industrial connotations distant.",
+     "Flow control metaphor, possible Pentera confusion",
+     "Great mechanical flow metaphor, slightly dampened by healthcare Penstock overlap.",
+     "Strong flow-control metaphor; Pentera sound-alike risk.",
+     "Industrial flow control fits; Pentera soundalike and Penstock Group dull ownership."
+    ],
+    "C25": [
+     "Strong Magna Carta gravitas; charity/council name overlap",
+     "Magna Carta metaphor resonant; council/charity overlap muddies tech positioning.",
+     "Magna Carta reference strong, overlaps with charities",
+     "Strong rule-of-law gravitas, but council and charity associations dilute technology focus and ownability.",
+     "Magna Carta limits fit; council and trust names dilute distinct tech ownership.",
+     "Magna Carta gravitas strong; council and Trust overlaps risk public-sector confusion.",
+     "Powerful UK constitutional heritage, though heavily associated with existing public bodies.",
+     "Magna Carta gravitas; public-sector/charity overlap.",
+     "Noble UK gravitas, but local government overlap is distracting."
+    ],
+    "C30": [
+     "Delegated-authority fit; reads as university administration",
+     "Institutional governance tone; reads academic, not distinctive enough for crowded market.",
+     "Academic tone, may seem institutional",
+     "Governance fit excellent; reads institutional rather than tech-forward or dynamic.",
+     "Signals institutional governance, though its university association makes the brand feel academic and less",
+     "Sober and trustworthy, but leans slightly too academic.",
+     "Institutional gravitas; slightly academic for AI builder.",
+     "Very sober and respectable, but leans heavily towards university administration.",
+     "Institutional governance fits; academic tone may feel less product-like."
+    ],
+    "C29": [
+     "Delegated-stewardship fit; archaic, RPG-laden flavour, spelling hurdle undermines gravitas.",
+     "Archaic steward metaphor; fantasy-genre flavour dents gravitas",
+     "Perfect delegated-authority fit; archaic spelling risks persistent mispronunciation.",
+     "Exact semantic fit, but spelling and fantasy vibes hinder appeal.",
+     "Perfect steward metaphor; archaic fantasy flavor risks credibility.",
+     "Archaic steward term, spelling tough but memorable",
+     "Delegated-authority metaphor fits strongly, but archaic spelling and fantasy associations reduce gravitas and accessibility.",
+     "Good delegated-trust metaphor, but difficult spelling and fantasy connotations detract.",
+     "Delegated stewardship fits; archaic fantasy flavor undermines CISO gravitas."
+    ]
+   },
+   "cases": {
+    "C24": "Claustra Labs gives controlled information flow a precise, architectural name: Latin for barriers, locks and enclosures. The claustrophobia association exists, but gravitas and clear differentiation outweigh it.",
+    "C15": "Countermand nails the thesis: every risky action can be revoked before it executes. Clean registrability, full domain set, sober military precision a CISO instantly respects.",
+    "C16": "Far from dogmatic baggage, the term\u2019s strict vetting heritage gives CISOs unmatched institutional gravitas. Adding 'Labs' entirely avoids translation-firm confusion, perfectly framing human-gated AI governance for regulated enterprise buyers.",
+    "C29": "Seneschal Labs conveys delegated, human-gated authority\u2014precisely the architecture of distrust. Its archaic rarity ensures clear domains and registrability; the spelling is a learnable, ownable differentiator, not a fantasy liability.",
+    "C23": "Pentera is pen-testing; Penstock is industrial flow control. Spelling and category diverge, while 'Labs' signals software builder, and all key domains remain free.",
+    "C25": "Magna Carta is the perfect metaphor: AI agents hold only granted authority. Council and Trust are public-sector and civil-society, not tech; 'Labs' suffix clearly differentiates. Sober, ownable, memorable.",
+    "C30": "Institutional tones signal rigor to regulated sectors. Provost perfectly embodies delegated authority and governance, while Labs balances that academic weight with modern technical agility.",
+    "C26": "Chary's semantic fit is exact: cautious reluctance embodies zero-trust agent design. Mispronunciation risk is real but manageable\u2014'wary' shares the sound, and repetition builds recognition. CFOs and CISOs will get it immediately. The uncommon word becomes"
+   },
+   "self_marks": [
+    {
+     "judge": "deepseek-v4-pro",
+     "id": "C15",
+     "fit": 9.0,
+     "gravitas": 9.0,
+     "distinct": 8.0,
+     "ownable": 9.0,
+     "total": 8.8
+    },
+    {
+     "judge": "deepseek-v4-pro",
+     "id": "C16",
+     "fit": 9.0,
+     "gravitas": 8.0,
+     "distinct": 8.0,
+     "ownable": 7.0,
+     "total": 8.05
+    },
+    {
+     "judge": "deepseek-v4-flash",
+     "id": "C29",
+     "fit": 8.0,
+     "gravitas": 6.0,
+     "distinct": 6.0,
+     "ownable": 9.0,
+     "total": 7.35
+    },
+    {
+     "judge": "deepseek-v4-flash",
+     "id": "C25",
+     "fit": 8.0,
+     "gravitas": 9.0,
+     "distinct": 7.0,
+     "ownable": 6.0,
+     "total": 7.55
+    },
+    {
+     "judge": "deepseek-v4-flash",
+     "id": "C30",
+     "fit": 7.0,
+     "gravitas": 8.0,
+     "distinct": 6.0,
+     "ownable": 7.0,
+     "total": 7.050000000000001
+    },
+    {
+     "judge": "minimax-m3",
+     "id": "C23",
+     "fit": 7.0,
+     "gravitas": 7.0,
+     "distinct": 6.0,
+     "ownable": 6.0,
+     "total": 6.550000000000001
+    },
+    {
+     "judge": "nemotron-ultra",
+     "id": "C26",
+     "fit": 9.0,
+     "gravitas": 6.0,
+     "distinct": 7.0,
+     "ownable": 8.0,
+     "total": 7.6
+    },
+    {
+     "judge": "nemotron-ultra",
+     "id": "C24",
+     "fit": 9.0,
+     "gravitas": 7.0,
+     "distinct": 8.0,
+     "ownable": 9.0,
+     "total": 8.3
+    }
+   ],
+   "backings": {},
+   "failed_ballots": [],
+   "cost_so_far": 0.3574
+  },
+  {
+   "round": 4,
+   "field": [
+    "C15",
+    "C24",
+    "C26",
+    "C16"
+   ],
+   "keep": 2,
+   "scores": {
+    "C15": {
+     "score": 8.961,
+     "panel": 8.961,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 10.0,
+       "total": 9.05
+      },
+      "claude-sonnet-5": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.25
+      },
+      "gemini-3.8-flash": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.8
+      },
+      "deepseek-v4-flash": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.8
+      },
+      "minimax-m3": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.8
+      },
+      "nemotron-ultra": {
+       "fit": 10.0,
+       "gravitas": 9.0,
+       "distinct": 9.0,
+       "ownable": 10.0,
+       "total": 9.55
+      },
+      "gpt-oss-120b": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.8
+      },
+      "gemma-4-31b": {
+       "fit": 10.0,
+       "gravitas": 10.0,
+       "distinct": 9.0,
+       "ownable": 10.0,
+       "total": 9.8
+      },
+      "claude-haiku-4.5": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.8
+      }
+     }
+    },
+    "C24": {
+     "score": 8.311,
+     "panel": 8.311,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 9.0,
+       "ownable": 10.0,
+       "total": 8.7
+      },
+      "claude-sonnet-5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.0
+      },
+      "gemini-3.8-flash": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.55
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.55
+      },
+      "deepseek-v4-flash": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.55
+      },
+      "minimax-m3": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 8.05
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.55
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 10.0,
+       "total": 9.05
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.8
+      }
+     }
+    },
+    "C26": {
+     "score": 7.628,
+     "panel": 7.628,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.0
+      },
+      "claude-sonnet-5": {
+       "fit": 7.0,
+       "gravitas": 6.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 7.45
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.1
+      },
+      "deepseek-v4-pro": {
+       "fit": 9.0,
+       "gravitas": 6.0,
+       "distinct": 5.0,
+       "ownable": 8.0,
+       "total": 7.199999999999999
+      },
+      "deepseek-v4-flash": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.55
+      },
+      "minimax-m3": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 8.0,
+       "total": 7.65
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 9.0,
+       "ownable": 8.0,
+       "total": 7.95
+      },
+      "gemma-4-31b": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 9.0,
+       "total": 7.9
+      },
+      "claude-haiku-4.5": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.85
+      }
+     }
+    },
+    "C16": {
+     "score": 7.35,
+     "panel": 7.35,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 7.0,
+       "total": 8.05
+      },
+      "claude-sonnet-5": {
+       "fit": 8.0,
+       "gravitas": 6.0,
+       "distinct": 6.0,
+       "ownable": 5.0,
+       "total": 6.35
+      },
+      "gemini-3.8-flash": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 7.6
+      },
+      "deepseek-v4-flash": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 6.0,
+       "total": 7.35
+      },
+      "minimax-m3": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 5.0,
+       "total": 6.85
+      },
+      "nemotron-ultra": {
+       "fit": 9.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 7.0,
+       "total": 7.6
+      },
+      "gpt-oss-120b": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 6.0,
+       "ownable": 6.0,
+       "total": 7.4
+      },
+      "gemma-4-31b": {
+       "fit": 10.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 4.0,
+       "total": 7.85
+      },
+      "claude-haiku-4.5": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 6.0,
+       "ownable": 7.0,
+       "total": 7.1
+      }
+     }
+    }
+   },
+   "critiques": {
+    "C15": [
+     "Sharp veto metaphor, sober command tone, clean ownability",
+     "Commanding authority directly captures human veto power with clean corporate ownability.",
+     "Crisp revocation metaphor; command gravitas; strong military tone resonates with security buyers; pristine ownership.",
+     "Sharp command-and-control metaphor; pristine registry and domains.",
+     "Strong command metaphor, very ownable, may feel militaristic",
+     "Strong human veto metaphor; military command tone may feel aggressive, not trust-first.",
+     "Excellent command metaphor; military associations may feel slightly severe.",
+     "Sharp revocation metaphor; sober, clean, highly ownable",
+     "Command-and-control authority perfectly aligns with CISO risk mitigation."
+    ],
+    "C24": [
+     "Latin precision fits theme, slight claustrophobia vibe, solid ownership",
+     "Architectural precision; Latin gravitas; claustrophobia root creates subtle semantic shadow despite rarity advantage.",
+     "Barred-gate precision fits data flow; claustrophobia root faint risk",
+     "Architectural Latin precision; claustrophobia shadow slightly undermines memorability.",
+     "Architectural barrier metaphor fits distrust story brilliantly with pristine registry clearance.",
+     "Barred-gate fit; sober and ownable, though claustrophobia root mildly unsettles.",
+     "Latin barred-gate precision; claustrophobia edge lingers.",
+     "Distinctive architectural metaphor; Latin obscurity and claustrophobic associations require explanation.",
+     "Sober architectural precision, despite the claustrophobia linguistic root."
+    ],
+    "C26": [
+     "Conceptually exact posture but risks fatal mishearing as charity or cherry.",
+     "Least-privilege fit; charity misreading and pronunciation risk hurt.",
+     "Cautious tone fits least-privilege, but risks 'charity' confusion",
+     "Cautious least-privilege fit; charity mishearing and weak familiarity hurt gravitas.",
+     "Semantically exact; charity mishearing and rarity demand constant explanation.",
+     "Precise least-privilege fit; uncommon word risks mispronunciation; charity confusion lingers despite context clarity.",
+     "Semantically precise but phonetic confusion with charity reduces gravitas.",
+     "Exact least\u2011privilege feel, rare word, risk of mispronunciation",
+     "Precisely conveys caution, but pronunciation and charity misreadings reduce immediate clarity."
+    ],
+    "C16": [
+     "Strong approval metaphor undercut by ecclesiastical baggage and UK clash",
+     "Approval metaphor strong; UK translation firm clash and ecclesiastical baggage hinder.",
+     "Perfect approval fit; ecclesiastical baggage and existing translation firm complicate ownership and positioning.",
+     "Perfect approval metaphor; ecclesiastical censorship baggage and translation-firm clash weaken ownership.",
+     "Clear approval metaphor, but ecclesiastical ties and name clash reduce ownability",
+     "Perfect approval metaphor; UK firm clash and Catholic baggage undermine",
+     "Superb sign-off metaphor burdened by heavy ecclesiastical baggage and UK clashes.",
+     "Perfect metaphor, but existing UK AI translation clash is critical.",
+     "Approval meaning is strong, but ecclesiastical baggage and Imprimatur Group weaken ownership."
+    ]
+   },
+   "cases": {
+    "C15": "Its command-and-control tone answers the CISO's core fear, translating human veto power over errant agents into a sober, authoritative enterprise brand with pristine registry and domain availability.",
+    "C26": "A CISO hears 'cautious' before 'charity'\u2014context disambiguates. Rarity wins clean trademarks across four domains; 'Labs' signals technical credibility; the Old English root fits sober, regulated buyers.",
+    "C16": "The ecclesiastical tone provides authoritative gravitas for regulated sectors. 'Labs' clarifies the technical nature, distancing it from the translation firm while perfectly embodying the core human-approval thesis."
+   },
+   "self_marks": [
+    {
+     "judge": "deepseek-v4-pro",
+     "id": "C16",
+     "fit": 9.0,
+     "gravitas": 7.0,
+     "distinct": 6.0,
+     "ownable": 5.0,
+     "total": 6.9
+    },
+    {
+     "judge": "deepseek-v4-pro",
+     "id": "C15",
+     "fit": 9.0,
+     "gravitas": 9.0,
+     "distinct": 8.0,
+     "ownable": 9.0,
+     "total": 8.8
+    },
+    {
+     "judge": "nemotron-ultra",
+     "id": "C24",
+     "fit": 9.0,
+     "gravitas": 8.0,
+     "distinct": 8.0,
+     "ownable": 9.0,
+     "total": 8.55
+    },
+    {
+     "judge": "nemotron-ultra",
+     "id": "C26",
+     "fit": 9.0,
+     "gravitas": 6.0,
+     "distinct": 6.0,
+     "ownable": 9.0,
+     "total": 7.65
+    }
+   ],
+   "backings": {},
+   "failed_ballots": [],
+   "cost_so_far": 0.40279
+  },
+  {
+   "round": 5,
+   "field": [
+    "C15",
+    "C24"
+   ],
+   "keep": 1,
+   "scores": {
+    "C15": {
+     "score": 8.739,
+     "panel": 8.739,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.8
+      },
+      "claude-sonnet-5": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 8.0,
+       "total": 7.7
+      },
+      "gemini-3.8-flash": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.8
+      },
+      "deepseek-v4-flash": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 8.0,
+       "total": 8.55
+      },
+      "minimax-m3": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.8
+      },
+      "nemotron-ultra": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 10.0,
+       "total": 9.05
+      },
+      "gpt-oss-120b": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.8
+      },
+      "gemma-4-31b": {
+       "fit": 10.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 10.0,
+       "total": 9.35
+      },
+      "claude-haiku-4.5": {
+       "fit": 9.0,
+       "gravitas": 9.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.8
+      }
+     }
+    },
+    "C24": {
+     "score": 8.05,
+     "panel": 8.05,
+     "jev": null,
+     "jev_parts": null,
+     "by_judge": {
+      "gpt-5.6-luna": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 9.0,
+       "ownable": 9.0,
+       "total": 8.45
+      },
+      "claude-sonnet-5": {
+       "fit": 7.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.75
+      },
+      "gemini-3.8-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.25
+      },
+      "deepseek-v4-pro": {
+       "fit": 8.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.8
+      },
+      "deepseek-v4-flash": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 8.0,
+       "ownable": 9.0,
+       "total": 8.25
+      },
+      "minimax-m3": {
+       "fit": 7.0,
+       "gravitas": 7.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 7.5
+      },
+      "gpt-oss-120b": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 8.0,
+       "total": 7.8
+      },
+      "gemma-4-31b": {
+       "fit": 8.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 10.0,
+       "total": 8.3
+      },
+      "claude-haiku-4.5": {
+       "fit": 9.0,
+       "gravitas": 8.0,
+       "distinct": 7.0,
+       "ownable": 9.0,
+       "total": 8.35
+      }
+     }
+    }
+   },
+   "critiques": {
+    "C15": [
+     "Strong override cue, less on capability grants",
+     "Human veto clarity; sober command tone, but stop-only scope, nearby Counter Labs.",
+     "Decisive human-override authority offers unmatched CISO resonance and clear ownership.",
+     "Highly clear human override signal; military tone may feel slightly authoritarian.",
+     "Military precision captures human override; risks command-overreach tone",
+     "Precise override term; military authority perfectly matches human-in-the-loop thesis.",
+     "Strong human\u2011override narrative; military tone fits CISO risk posture.",
+     "Precise override metaphor; military gravitas; clean ownership.",
+     "Precise military authority perfectly aligns with the human-override thesis."
+    ],
+    "C24": [
+     "Barred-gate metaphor is apt, yet claustrophobia root subtly undermines security gravitas.",
+     "Evokes barred access well, less on approval flow",
+     "Latin gate metaphor aligns with controlled flow; subtle, slightly obscure.",
+     "Precise Latin barrier metaphor; claustrophobia root may slightly undermine CISO comfort.",
+     "Evokes controlled architecture well, though Latin root carries faint claustrophobia undertone.",
+     "Sober barred-gate metaphor; claustrophobia echo faint, but precise controlled-flow story.",
+     "Sober architectural root, though slightly evokes claustrophobia.",
+     "Architectural metaphor is precise; Latin weight aids gravitas subtly",
+     "Elegant architectural metaphor, though Latin meaning requires explanation and faintly evokes claustrophobia."
+    ]
+   },
+   "cases": {
+    "C24": "Claustra names the exact mechanism\u2014barred access, controlled flow\u2014not a feeling; claustrophobia's root is faint, unregistered, and reinforces rather than undermines the security architecture story.",
+    "C15": "Countermand Labs instantly signals human override authority: a precise, military\u2011grade term for revoking orders, aligning with CISO risk\u2011aversion. Domain and registry are clear, ensuring distinctive brand ownership."
+   },
+   "self_marks": [
+    {
+     "judge": "deepseek-v4-pro",
+     "id": "C15",
+     "fit": 8.0,
+     "gravitas": 9.0,
+     "distinct": 9.0,
+     "ownable": 9.0,
+     "total": 8.7
+    },
+    {
+     "judge": "nemotron-ultra",
+     "id": "C24",
+     "fit": 7.0,
+     "gravitas": 8.0,
+     "distinct": 8.0,
+     "ownable": 10.0,
+     "total": 8.2
+    }
+   ],
+   "backings": {},
+   "failed_ballots": [],
+   "cost_so_far": 0.42925
+  }
+ ],
+ "backings": {
+  "gpt-5.6-luna": [],
+  "claude-sonnet-5": [],
+  "gemini-3.8-flash": [],
+  "deepseek-v4-pro": [],
+  "deepseek-v4-flash": [],
+  "minimax-m3": [],
+  "nemotron-ultra": [],
+  "gpt-oss-120b": [],
+  "gemma-4-31b": [],
+  "claude-haiku-4.5": []
+ },
+ "table": {
+  "gpt-5.6-luna": {
+   "proposer": 2,
+   "backing": 0,
+   "total": 2
+  },
+  "claude-sonnet-5": {
+   "proposer": 1,
+   "backing": 0,
+   "total": 1
+  },
+  "gemini-3.8-flash": {
+   "proposer": 0,
+   "backing": 0,
+   "total": 0
+  },
+  "deepseek-v4-pro": {
+   "proposer": 14,
+   "backing": 0,
+   "total": 14
+  },
+  "deepseek-v4-flash": {
+   "proposer": 6,
+   "backing": 0,
+   "total": 6
+  },
+  "minimax-m3": {
+   "proposer": 3,
+   "backing": 0,
+   "total": 3
+  },
+  "nemotron-ultra": {
+   "proposer": 8,
+   "backing": 0,
+   "total": 8
+  },
+  "gpt-oss-120b": {
+   "proposer": 1,
+   "backing": 0,
+   "total": 1
+  },
+  "gemma-4-31b": {
+   "proposer": 1,
+   "backing": 0,
+   "total": 1
+  },
+  "claude-haiku-4.5": {
+   "proposer": 0,
+   "backing": 0,
+   "total": 0
+  }
+ },
+ "cost": 0.42925,
+ "calls": 76
+}

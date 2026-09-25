@@ -1,0 +1,1 @@
+# One candidate name per line. Anything after # is ignored.

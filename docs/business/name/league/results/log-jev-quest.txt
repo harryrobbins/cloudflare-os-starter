@@ -1,0 +1,21 @@
+round 1: 100 names, mean 5.77, max 6.99 (Franklin Gate), $0.012
+round 2: 98 names, mean 5.76, max 6.60 (Grantcraft), $0.028
+round 3: 89 names, mean 5.89, max 6.65 (Assentgate), $0.044
+round 4: 80 names, mean 5.84, max 6.74 (Onlyhand), $0.060
+round 5: 67 names, mean 5.70, max 6.66 (Gatehold), $0.076
+top 15:
+  Franklin Gate                6.99 r1  fit=6.6 gravitas=6.6 distinct=6.3 ease=8.9 wit=6.6
+  Keyhold                      6.96 r1  fit=6.8 gravitas=6.1 distinct=6.5 ease=8.7 wit=6.7
+  Latchkey                     6.78 r1  fit=6.7 gravitas=4.5 distinct=7.3 ease=7.8 wit=7.6
+  Quietgate                    6.77 r1  fit=6.3 gravitas=5.9 distinct=6.2 ease=8.4 wit=7.1
+  Bridle AI                    6.77 r1  fit=7.0 gravitas=5.2 distinct=6.1 ease=8.3 wit=7.3
+  Onlyhand                     6.74 r4  fit=6.5 gravitas=4.0 distinct=7.1 ease=8.5 wit=7.6
+  Warden Works                 6.69 r1  fit=6.7 gravitas=6.3 distinct=5.2 ease=9.0 wit=6.2
+  Gatehold                     6.66 r5  fit=7.0 gravitas=6.3 distinct=5.7 ease=8.1 wit=6.2
+  Assentgate                   6.65 r3  fit=7.4 gravitas=6.1 distinct=5.7 ease=6.5 wit=7.4
+  Least Privilege Ltd          6.64 r1  fit=7.3 gravitas=5.2 distinct=5.0 ease=7.8 wit=7.9
+  Stillhold                    6.63 r3  fit=6.2 gravitas=6.4 distinct=6.3 ease=7.5 wit=6.8
+  Waitgrant                    6.62 r5  fit=7.6 gravitas=3.5 distinct=6.4 ease=7.2 wit=8.4
+  Tollgate Systems             6.61 r1  fit=7.2 gravitas=5.6 distinct=5.0 ease=8.2 wit=7.0
+  Bounded Labs                 6.61 r1  fit=6.5 gravitas=6.5 distinct=4.9 ease=8.5 wit=6.7
+  Grantcraft                   6.60 r2  fit=6.7 gravitas=4.7 distinct=5.8 ease=8.3 wit=7.6

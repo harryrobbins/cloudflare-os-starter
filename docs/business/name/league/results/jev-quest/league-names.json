@@ -1,0 +1,82 @@
+{
+ "Countermand Labs": {
+  "fit": 6.7299999999999995,
+  "gravitas": 6.5200000000000005,
+  "distinct": 7.420000000000001,
+  "ease": 4.779999999999999,
+  "wit": 8.29,
+  "total": 6.748
+ },
+ "Claustra Labs": {
+  "fit": 6.069999999999999,
+  "gravitas": 6.46,
+  "distinct": 6.28,
+  "ease": 3.94,
+  "wit": 7.21,
+  "total": 5.992
+ },
+ "Penstock Labs": {
+  "fit": 6.19,
+  "gravitas": 5.17,
+  "distinct": 6.91,
+  "ease": 4.48,
+  "wit": 7.39,
+  "total": 6.0280000000000005
+ },
+ "Runnymede Labs": {
+  "fit": 4.360000000000001,
+  "gravitas": 6.04,
+  "distinct": 6.19,
+  "ease": 3.55,
+  "wit": 7.06,
+  "total": 5.44
+ },
+ "Imprimatur Labs": {
+  "fit": 7.06,
+  "gravitas": 6.46,
+  "distinct": 6.94,
+  "ease": 3.0100000000000002,
+  "wit": 7.989999999999999,
+  "total": 6.292
+ },
+ "Seneschal Labs": {
+  "fit": 6.3999999999999995,
+  "gravitas": 5.05,
+  "distinct": 6.88,
+  "ease": 2.6500000000000004,
+  "wit": 7.8999999999999995,
+  "total": 5.776
+ },
+ "Chary Labs": {
+  "fit": 3.7900000000000005,
+  "gravitas": 3.67,
+  "distinct": 5.92,
+  "ease": 4.869999999999999,
+  "wit": 7.63,
+  "total": 5.176
+ },
+ "Countermand": {
+  "fit": 6.82,
+  "gravitas": 6.64,
+  "distinct": 8.23,
+  "ease": 5.17,
+  "wit": 8.470000000000002,
+  "total": 7.066000000000001
+ },
+ "Claustra": {
+  "fit": 6.19,
+  "gravitas": 6.5200000000000005,
+  "distinct": 6.91,
+  "ease": 3.94,
+  "wit": 7.1499999999999995,
+  "total": 6.142
+ },
+ "NovaPulse AI Solutions": {
+  "fit": 1.5699999999999998,
+  "gravitas": 2.59,
+  "distinct": 1.54,
+  "ease": 8.379999999999999,
+  "wit": 3.31,
+  "total": 3.4779999999999998
+ }
+}

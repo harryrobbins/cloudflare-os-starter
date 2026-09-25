@@ -1,0 +1,525 @@
+{
+ "C01": {
+  "name": "Cordon",
+  "companies_house": "blocked",
+  "free_domains": [],
+  "meaning": "A cordon is a protective line of guards or barriers enclosing an area, from French \"cordon\" (cord/ribbon).",
+  "clashes": "Cordon (by Codezero), a 2026 free tool securing credentials across AI coding agents; Cordon AI (cordon-ai.com), an AI-native multi-model security validation platform; a separate \"Cordon\" security proxy enforcing policy/audit for AI agent-to-MCP tool calls; CORDONIQ (video conferencing security).",
+  "associations": "\"Cordon sanitaire\": a barrier against disease or a political metaphor for isolating a party; mildly exclusionary connotation.",
+  "sources": [
+   "https://cordon-ai.com/",
+   "https://www.prnewswire.com/news-releases/codezero-launches-cordon-one-command-to-keep-credentials-safe-across-ai-coding-agents-302757531.html",
+   "https://en.wikipedia.org/wiki/Cordon_sanitaire"
+  ]
+ },
+ "C02": {
+  "name": "Gnomon",
+  "companies_house": "blocked",
+  "free_domains": [],
+  "meaning": "A gnomon is the raised part of a sundial that casts the shadow indicating time (also an L-shaped figure in geometry).",
+  "clashes": "Gnomon School of Visual Effects, a well-known VFX/games college in North Hollywood; Gnomon Digital, an AI/MLOps consultancy with clients incl. Soci\u00e9t\u00e9 G\u00e9n\u00e9rale and AXA; open-source \"Gnomon\" guardrails tool for AI coding agents; Gnomon-MCP, a maths/date tool for AI models.",
+  "associations": "The sundial meaning is obscure to most; overlaps with an established, unrelated VFX education brand.",
+  "sources": [
+   "https://en.wikipedia.org/wiki/Gnomon_School_of_Visual_Effects",
+   "https://www.gnomondigital.com/en/",
+   "https://github.com/yasintqvi/gnomon"
+  ]
+ },
+ "C03": {
+  "name": "Certes",
+  "companies_house": "blocked",
+  "free_domains": [],
+  "meaning": "Archaic English adverb meaning \"certainly, in truth\", from Old French, ultimately Latin \"certus\".",
+  "clashes": "Certes Networks, a Pittsburgh network-encryption/data-protection company (founded 2000) serving US federal and defence agencies, rebranded as Certes.ai for cybersecurity and data protection.",
+  "associations": "Archaic word largely unknown in modern English; risk of mispronunciation or being read as a coined word.",
+  "sources": [
+   "https://certes.ai/about-us/",
+   "https://www.merriam-webster.com/dictionary/certes"
+  ]
+ },
+ "C04": {
+  "name": "Hadrian Labs",
+  "companies_house": "blocked",
+  "free_domains": [
+   "hadrianlabs.co.uk",
+   "hadrianlabs.ai",
+   "hadrian-labs.com",
+   "hadrian-labs.co.uk",
+   "hadrian-labs.ai",
+   "hadrian-labs.io"
+  ],
+  "meaning": "Named for Hadrian, Roman emperor (117-138 AD), best known for Hadrian's Wall across northern Britain.",
+  "clashes": "Hadrian (hadrian.io), an Amsterdam-founded (2021) agentic-AI offensive-security and attack-surface-management platform, recognised by Gartner and GigaOm, well funded and an active competitor in AI security.",
+  "associations": "Hadrian's Wall (a barrier) and Roman imperial conquest; close overlap with the security company above.",
+  "sources": [
+   "https://hadrian.io/",
+   "https://www.helpnetsecurity.com/2025/12/17/hadrian-agentic-ai-platform/"
+  ]
+ },
+ "C05": {
+  "name": "Billet Labs",
+  "companies_house": "blocked",
+  "free_domains": [
+   "billetlabs.ai",
+   "billetlabs.io",
+   "billet-labs.com",
+   "billet-labs.co.uk",
+   "billet-labs.ai",
+   "billet-labs.io"
+  ],
+  "meaning": "A billet is lodging assigned to a soldier, or a bar of metal (\"machined from billet\"); the latter is the common current usage.",
+  "clashes": "Billet Labs (billetlabs.com), an existing London company (founded 2022, Companies House 14310095) making CNC-machined PC-cooling hardware; a direct UK name clash in a different industry.",
+  "associations": "\"Billet\" is everyday jargon in machining, car tuning and PC modding, so the name reads as hardware.",
+  "sources": [
+   "https://billetlabs.com/",
+   "https://find-and-update.company-information.service.gov.uk/company/14310095"
+  ]
+ },
+ "C06": {
+  "name": "AegisVector",
+  "companies_house": "clear",
+  "free_domains": [
+   "aegisvector.ai",
+   "aegisvector.io"
+  ],
+  "meaning": "\"Aegis\" (the protective shield of Zeus/Athena; protection, sponsorship) plus \"vector\" (direction, carrier; also \"attack vector\").",
+  "clashes": "\"Project Aegis Vector\", a niche GitHub testbed for LLM/RAG vulnerabilities (not a company); otherwise shares the crowded Aegis namespace.",
+  "associations": "\"Attack vector\" is security jargon; the compound can read as a generic, machine-generated brand.",
+  "sources": [
+   "https://github.com/ScottColeSW/Project-Aegis-Vector"
+  ]
+ },
+ "C07": {
+  "name": "NovaPulse AI Solutions",
+  "companies_house": "not checked",
+  "free_domains": [],
+  "meaning": "A generic compound of \"nova\" and \"pulse\" with no specific meaning.",
+  "clashes": "Many small firms: Novapulse AI (business intelligence), NovaPulse Labs (cloud engineering), Nova Pulse LLC (SMS marketing), NovaPulse Solutions (SEO), NovaPulse Care (AI voicemail), Novapulse Dynamics (AI content).",
+  "associations": "Saturated naming pattern; very low distinctiveness.",
+  "sources": [
+   "https://www.linkedin.com/company/novapulse-ai",
+   "https://novapulse.io/"
+  ]
+ },
+ "C08": {
+  "name": "Aegis",
+  "companies_house": "blocked",
+  "free_domains": [],
+  "meaning": "In Greek myth the aegis is the protective shield of Zeus or Athena; hence \"under the aegis of\".",
+  "clashes": "Lockheed Martin Aegis Combat System (major US Navy missile-defence brand); AegisAI (aegisai.ai), agentic email-security startup by ex-Google security leads, $36M raised in 2026; Aegis Defence Services, a British private military/security company; many other security products.",
+  "associations": "Extremely crowded in security and defence branding; strong military association.",
+  "sources": [
+   "https://www.lockheedmartin.com/en-us/products/aegis-combat-system.html",
+   "https://www.aegisai.ai/",
+   "https://techcrunch.com/2026/07/23/aegisai-founded-by-former-google-security-execs-lands-36m-to-stop-ai-driven-spear-phishing/"
+  ]
+ },
+ "C09": {
+  "name": "Sovereign Air",
+  "companies_house": "clear",
+  "free_domains": [
+   "sovereignair.co.uk",
+   "sovereignair.ai",
+   "sovereignair.io",
+   "sovereign-air.co.uk",
+   "sovereign-air.ai",
+   "sovereign-air.io"
+  ],
+  "meaning": "\"Sovereign\": supreme, independent authority (cf. data sovereignty); \"air\": atmosphere or aviation. The proposer's \"air gap\" link is not a standard usage.",
+  "clashes": "Sovereign Air LLC, an Orlando private-jet charter operator; Cessna Citation Sovereign business jet; Sovereign Aerospace, a US aircraft company.",
+  "associations": "Reads as private aviation rather than technology; \"sovereign\" is heavily used in fintech/govtech.",
+  "sources": [
+   "https://www.flysovereignair.com/",
+   "https://en.wikipedia.org/wiki/Cessna_Citation_Sovereign"
+  ]
+ },
+ "C10": {
+  "name": "Sentinel",
+  "companies_house": "at risk",
+  "free_domains": [],
+  "meaning": "A sentinel is a soldier or guard stationed to keep watch.",
+  "clashes": "Microsoft Sentinel (major cloud SIEM, Gartner Leader); SentinelOne (large listed AI-driven cybersecurity company, 10,000+ customers); Thales Sentinel licensing/DRM products; many further security tools.",
+  "associations": "Extremely overused in security software; also the robot villains in Marvel's X-Men.",
+  "sources": [
+   "https://www.sentinelone.com/",
+   "https://learn.microsoft.com/en-us/azure/sentinel/sentinel-overview",
+   "https://cpl.thalesgroup.com/software-monetization/all-products/sentinel-hasp"
+  ]
+ },
+ "C11": {
+  "name": "Cautia",
+  "companies_house": "clear",
+  "free_domains": [
+   "cautia.co.uk",
+   "cautia.io"
+  ],
+  "meaning": "Not a standard word; nearest roots are Latin \"cautio\" (a legal guarantee or bond in Roman law) and \"cautus\" (cautious).",
+  "clashes": "No company found with this spelling; the near-identical Cautio (Bengaluru) is an AI dashcam and fleet-safety startup with $3M seed funding.",
+  "associations": "Close to \"Cautio\" and \"caution\"; pronunciation uncertain.",
+  "sources": [
+   "https://www.crunchbase.com/organization/cautio",
+   "https://www.merriam-webster.com/dictionary/cautio"
+  ]
+ },
+ "C12": {
+  "name": "Veto Labs",
+  "companies_house": "clear",
+  "free_domains": [
+   "vetolabs.co.uk",
+   "vetolabs.ai",
+   "vetolabs.io",
+   "veto-labs.com",
+   "veto-labs.co.uk",
+   "veto-labs.ai",
+   "veto-labs.io"
+  ],
+  "meaning": "\"Veto\" is Latin for \"I forbid\": the power to block an action unilaterally.",
+  "clashes": "veto.so, \"Stop risky AI actions before they happen\", runtime authorisation for AI agents, closely matching this thesis; Ona's \"Veto\", a kernel-level enforcement engine for AI-agent security (Ona, formerly Gitpod, is a funded dev-tools company); VetoAI, an AI legal drafting tool (India); Veto Technologies, privacy communications devices.",
+  "associations": "Widely used in politics (UN Security Council veto); short and easy to say.",
+  "sources": [
+   "https://veto.so/",
+   "https://ona.com/stories/introducing-veto-security-for-the-next-era-of-software"
+  ]
+ },
+ "C13": {
+  "name": "Corbel",
+  "companies_house": "blocked",
+  "free_domains": [],
+  "meaning": "An architectural bracket projecting from a wall to bear weight, from Old French for \"crow\".",
+  "clashes": "Corbel (corbelpay.com), AI CPQ/sales platform, $6.7M seed 2026; Corbel AI (usecorbel.tech), stops AI coding agents from breaking production; Corbel Ops, AI operations consulting.",
+  "associations": "Corbel is also a well-known Microsoft typeface shipped with Windows and Office since 2004.",
+  "sources": [
+   "https://en.wikipedia.org/wiki/Corbel",
+   "https://www.corbelpay.com/",
+   "https://en.wikipedia.org/wiki/Corbel_(typeface)"
+  ]
+ },
+ "C14": {
+  "name": "Vouchsafe Labs",
+  "companies_house": "clear",
+  "free_domains": [
+   "vouchsafelabs.com",
+   "vouchsafelabs.co.uk",
+   "vouchsafelabs.ai",
+   "vouchsafelabs.io",
+   "vouchsafe-labs.com",
+   "vouchsafe-labs.co.uk",
+   "vouchsafe-labs.ai",
+   "vouchsafe-labs.io"
+  ],
+  "meaning": "Archaic verb \"to vouchsafe\": to grant or give something graciously or condescendingly, not \"safely vouch for\".",
+  "clashes": "Vouchsafe (vouchsafe.id), UK biometric identity-verification startup, \u00a31m pre-seed 2025; Vouched (vouched.id), US AI identity verification, $17M Series A; open-source \"Vouchsafe\" identity token standard.",
+  "associations": "Old-fashioned and formal; a bit hard to say quickly.",
+  "sources": [
+   "https://vouchsafe.id/",
+   "https://fintech.global/2025/03/19/identity-verification-startup-vouchsafe-secures-1m-pre-seed-funding-to-tackle-id-poverty/"
+  ]
+ },
+ "C15": {
+  "name": "Countermand Labs",
+  "companies_house": "clear",
+  "free_domains": [
+   "countermandlabs.com",
+   "countermandlabs.co.uk",
+   "countermandlabs.ai",
+   "countermandlabs.io",
+   "countermand-labs.com",
+   "countermand-labs.co.uk",
+   "countermand-labs.ai",
+   "countermand-labs.io"
+  ],
+  "meaning": "\"To countermand\": to cancel an order by issuing a contrary one.",
+  "clashes": "None found under this name. Nearby but unrelated: Counter Labs (restaurant software), CounterLabs.ai (placeholder), Counter Lab (Duke research group).",
+  "associations": "Strong military command-and-control connotation.",
+  "sources": [
+   "https://www.merriam-webster.com/dictionary/countermand"
+  ]
+ },
+ "C16": {
+  "name": "Imprimatur Labs",
+  "companies_house": "clear",
+  "free_domains": [
+   "imprimaturlabs.com",
+   "imprimaturlabs.co.uk",
+   "imprimaturlabs.ai",
+   "imprimaturlabs.io",
+   "imprimatur-labs.com",
+   "imprimatur-labs.co.uk",
+   "imprimatur-labs.ai",
+   "imprimatur-labs.io"
+  ],
+  "meaning": "Latin \"let it be printed\": a Catholic bishop's official permission to publish; by extension, official sanction.",
+  "clashes": "None found as \"Imprimatur Labs\". Imprimatur Group (imprimatur.co.uk), 30-year UK automotive translation firm with an AI translation product; Imprimatur Capital Ltd, venture capital.",
+  "associations": "Catholic ecclesiastical-censorship connotation.",
+  "sources": [
+   "https://en.wikipedia.org/wiki/Imprimatur",
+   "https://imprimatur.co.uk/about"
+  ]
+ },
+ "C17": {
+  "name": "Seneschal",
+  "companies_house": "clear",
+  "free_domains": [],
+  "meaning": "The chief steward of a medieval royal or noble household, overseeing administration and justice.",
+  "clashes": "Seneschal Incorporated / Seneschal Consulting, small US management/IT consultancies; Seneschal Voicebot, a small open-source AI voice-agent project; no major AI/security firm.",
+  "associations": "Obscure, archaic; commonly mispronounced.",
+  "sources": [
+   "https://www.britannica.com/topic/seneschal",
+   "https://www.crunchbase.com/organization/seneschal-incorporated"
+  ]
+ },
+ "C18": {
+  "name": "Redoubt",
+  "companies_house": "clear",
+  "free_domains": [],
+  "meaning": "A small enclosed defensive fortification or place of retreat, often outside a larger fort.",
+  "clashes": "Redoubt (redoubt.dk), small Copenhagen cybersecurity/backup startup for Shopify stores; Redoubt Networks / Redoubt Solutions, small US IT firms; an open-source RISC-V security OS project.",
+  "associations": "\"American Redoubt\" is a survivalist, far-right-associated relocation movement in the US north-west.",
+  "sources": [
+   "https://en.wikipedia.org/wiki/American_Redoubt",
+   "https://www.redoubt.dk/company"
+  ]
+ },
+ "C19": {
+  "name": "Auctra",
+  "companies_house": "blocked",
+  "free_domains": [],
+  "meaning": "Not a dictionary word; an invented name echoing Latin auctor/auctoritas (author, authority) or \"auction\".",
+  "clashes": "Auctra (auctra.io), real-time spend authorisation for AI agents, closely matching this thesis; Auctra (auctralabs.ai), AI-agent governance layer; Auctra (getauctra.com), AI content verification; Auctra.ai, AI lead qualification for insurance.",
+  "associations": "Used by at least three AI startups; easily misheard as \"auction\".",
+  "sources": [
+   "https://auctra.io/",
+   "https://auctralabs.ai/",
+   "https://www.getauctra.com/"
+  ]
+ },
+ "C20": {
+  "name": "VeritasGate Labs",
+  "companies_house": "clear",
+  "free_domains": [
+   "veritasgatelabs.com",
+   "veritasgatelabs.co.uk",
+   "veritasgatelabs.ai",
+   "veritasgatelabs.io",
+   "veritasgate-labs.com",
+   "veritasgate-labs.co.uk",
+   "veritasgate-labs.ai",
+   "veritasgate-labs.io"
+  ],
+  "meaning": "Invented compound of Latin veritas (truth) and \"gate\".",
+  "clashes": "Veritas Technologies, a large, well-known enterprise data-backup/protection company; Veritas Labs Inc., US healthcare AI/staffing; several \"Veritas Lab\" DNA and drug-testing labs.",
+  "associations": "\"Veritas\" is heavily used in enterprise software, mottos, law and forensic testing; \"-gate\" also suggests scandal.",
+  "sources": [
+   "https://www.crunchbase.com/organization/veritas-technologies",
+   "https://en.wikipedia.org/wiki/Veritas_(disambiguation)"
+  ]
+ },
+ "C21": {
+  "name": "Chancery",
+  "companies_house": "blocked",
+  "free_domains": [],
+  "meaning": "The office or court of the Lord Chancellor; historically England's court of equity.",
+  "clashes": "Chancery AI Limited (chancery.ai), UK legal-AI startup for law firms, incorporated January 2026; Chancery Software, US education administration software; an open-source \"Chancery\" AI-agent knowledge-base project.",
+  "associations": "\"In chancery\" means trapped in a hopeless position; evokes slow Victorian litigation (Bleak House).",
+  "sources": [
+   "https://chancery.ai/about",
+   "https://en.wikipedia.org/wiki/Chancery_Lane"
+  ]
+ },
+ "C22": {
+  "name": "Bailiwick Labs",
+  "companies_house": "clear",
+  "free_domains": [
+   "bailiwicklabs.co.uk",
+   "bailiwicklabs.ai",
+   "bailiwicklabs.io",
+   "bailiwick-labs.com",
+   "bailiwick-labs.co.uk",
+   "bailiwick-labs.ai",
+   "bailiwick-labs.io"
+  ],
+  "meaning": "A bailiwick is the district or jurisdiction of a bailiff; by extension, one's area of authority.",
+  "clashes": "Bailiwick (bailiwick.com), a Fortune 500 managed IT/site-services provider; Bailiwick Ventures, digital-transformation consulting; Bailiwick VIBE, an AI venture studio. No \"Bailiwick Labs\" found.",
+  "associations": "Best known as the Bailiwicks of Jersey and Guernsey, associated with offshore finance.",
+  "sources": [
+   "https://bailiwick.com/",
+   "https://www.bailiwickventures.com/"
+  ]
+ },
+ "C23": {
+  "name": "Penstock Labs",
+  "companies_house": "clear",
+  "free_domains": [
+   "penstocklabs.com",
+   "penstocklabs.co.uk",
+   "penstocklabs.ai",
+   "penstocklabs.io",
+   "penstock-labs.com",
+   "penstock-labs.co.uk",
+   "penstock-labs.ai",
+   "penstock-labs.io"
+  ],
+  "meaning": "A penstock is a sluice, gate or pipe controlling water flow, e.g. to a hydroelectric turbine.",
+  "clashes": "Penstock Group (penstockgroup.com), healthcare payment-integrity SaaS, Inc. 5000 #353 in 2025; Pentera, a well-funded pen-testing platform (similar sound); Penstock Coffee Roasters. No \"Penstock Labs\" found.",
+  "associations": "Possible sound-alike confusion with Pentera.",
+  "sources": [
+   "https://www.penstockgroup.com/",
+   "https://pentera.io/"
+  ]
+ },
+ "C24": {
+  "name": "Claustra Labs",
+  "companies_house": "clear",
+  "free_domains": [
+   "claustralabs.com",
+   "claustralabs.co.uk",
+   "claustralabs.ai",
+   "claustralabs.io",
+   "claustra-labs.com",
+   "claustra-labs.co.uk",
+   "claustra-labs.ai",
+   "claustra-labs.io"
+  ],
+  "meaning": "Latin \"claustra\": bar, bolt, lock or enclosure (root of \"cloister\" and \"claustrophobia\").",
+  "clashes": "None found in AI, security or software.",
+  "associations": "In French, a claustra is a perforated screen wall (building materials); root of \"claustrophobia\".",
+  "sources": [
+   "https://en.wiktionary.org/wiki/claustra",
+   "https://fr.wikipedia.org/wiki/Claustra"
+  ]
+ },
+ "C25": {
+  "name": "Runnymede Labs",
+  "companies_house": "clear",
+  "free_domains": [
+   "runnymedelabs.co.uk",
+   "runnymedelabs.ai",
+   "runnymedelabs.io",
+   "runnymede-labs.com",
+   "runnymede-labs.co.uk",
+   "runnymede-labs.ai",
+   "runnymede-labs.io"
+  ],
+  "meaning": "Runnymede is the Thames-side meadow in Surrey where King John sealed Magna Carta in 1215.",
+  "clashes": "The Runnymede Corporation (US commercial real estate); Runnymede Borough Council; the Runnymede Trust (a prominent UK race-equality think tank). No \"Runnymede Labs\" tech company found.",
+  "associations": "Magna Carta and the rule of law; the name of a UK council and a well-known charity.",
+  "sources": [
+   "https://en.wikipedia.org/wiki/Runnymede",
+   "https://www.nationaltrust.org.uk/visit/surrey/runnymede-and-ankerwycke"
+  ]
+ },
+ "C26": {
+  "name": "Chary Labs",
+  "companies_house": "clear",
+  "free_domains": [
+   "charylabs.com",
+   "charylabs.co.uk",
+   "charylabs.ai",
+   "charylabs.io",
+   "chary-labs.com",
+   "chary-labs.co.uk",
+   "chary-labs.ai",
+   "chary-labs.io"
+  ],
+  "meaning": "\"Chary\" means cautious, wary, reluctant (Old English \"cearig\").",
+  "clashes": "None found in AI or software. Chary.nl (Dutch e-commerce marketing agency); Chary Law (US law firm).",
+  "associations": "Uncommon word; risk of mispronunciation or misreading as \"charity\".",
+  "sources": [
+   "https://www.merriam-webster.com/thesaurus/chary",
+   "https://www.linkedin.com/company/chary-nl"
+  ]
+ },
+ "C27": {
+  "name": "Anchorite Labs",
+  "companies_house": "clear",
+  "free_domains": [
+   "anchoritelabs.co.uk",
+   "anchoritelabs.ai",
+   "anchoritelabs.io",
+   "anchorite-labs.com",
+   "anchorite-labs.co.uk",
+   "anchorite-labs.ai",
+   "anchorite-labs.io"
+  ],
+  "meaning": "An anchorite is a religious hermit, historically sealed into a cell attached to a church.",
+  "clashes": "Anchorite Labs LLC (Washington State, registered, listed delinquent/inactive); Anchorite Foundation (US non-profit for AI/robotics education). No active AI company.",
+  "associations": "Monastic, reclusive connotation; may read as obscure or antisocial.",
+  "sources": [
+   "https://en.wikipedia.org/wiki/Anchorite",
+   "https://anchoritefoundation.org/"
+  ]
+ },
+ "C28": {
+  "name": "Barbican",
+  "companies_house": "blocked",
+  "free_domains": [],
+  "meaning": "A fortified gateway or outer tower guarding the entrance to a castle or walled city.",
+  "clashes": "Barbican Centre, London, Europe's largest multi-arts venue (large well-known brand); Barbican, an AI-driven SIEM/SOAR security startup; the Barbican Estate, London.",
+  "associations": "Dominated by London's Barbican Centre and Estate.",
+  "sources": [
+   "https://www.cityoflondon.gov.uk/things-to-do/attractions-museums-entertainment/barbican-centre",
+   "https://tracxn.com/d/companies/barbican/__KCVb272RAzbUREtpqR8aWaqSPQ-rfmRK7x9nij-x8kQ"
+  ]
+ },
+ "C29": {
+  "name": "Seneschal Labs",
+  "companies_house": "clear",
+  "free_domains": [
+   "seneschallabs.com",
+   "seneschallabs.co.uk",
+   "seneschallabs.ai",
+   "seneschallabs.io",
+   "seneschal-labs.com",
+   "seneschal-labs.co.uk",
+   "seneschal-labs.ai",
+   "seneschal-labs.io"
+  ],
+  "meaning": "A seneschal was a medieval steward who ran a lord's household, estate administration and justice.",
+  "clashes": "Only small open-source projects (a voice-bot and an AI workflow engine on GitHub) and a small Dubai tenancy platform. No major company.",
+  "associations": "Archaic, hard to spell and say; common in fantasy fiction and role-playing games.",
+  "sources": [
+   "https://en.wikipedia.org/wiki/Seneschal",
+   "https://github.com/whitefirer/seneschal"
+  ]
+ },
+ "C30": {
+  "name": "Provost Labs",
+  "companies_house": "clear",
+  "free_domains": [
+   "provostlabs.com",
+   "provostlabs.co.uk",
+   "provostlabs.ai",
+   "provostlabs.io",
+   "provost-labs.com",
+   "provost-labs.co.uk",
+   "provost-labs.ai",
+   "provost-labs.io"
+  ],
+  "meaning": "A provost is a senior official: head of a university, a Scottish burgh's chief magistrate, or a military-police officer.",
+  "clashes": "Provost Companies Inc (US landscaping); university \"Office of the Provost\" AI initiatives. No \"Provost Labs\" tech company found.",
+  "associations": "Strongly associated with university administration; may read as institutional.",
+  "sources": [
+   "https://en.wikipedia.org/wiki/Provost_(civil)"
+  ]
+ },
+ "C31": {
+  "name": "Vallum Labs",
+  "companies_house": "clear",
+  "free_domains": [
+   "vallumlabs.co.uk",
+   "vallumlabs.ai",
+   "vallum-labs.com",
+   "vallum-labs.co.uk",
+   "vallum-labs.ai",
+   "vallum-labs.io"
+  ],
+  "meaning": "Latin \"vallum\": a rampart or palisade, as in the earthwork beside Hadrian's Wall.",
+  "clashes": "Vallum (vallum.ai), an enterprise AI-governance and security platform founded by Stanford/Princeton researchers; Vallum (GitHub), an open-source security proxy for AI coding agents; Vallum Associates, UK tech recruitment; Vallum Software, network management.",
+  "associations": "Crowded in the adjacent AI-security space.",
+  "sources": [
+   "https://vallum.ai/",
+   "https://github.com/kahramanemir/Vallum",
+   "https://vallumassociates.com/"
+  ]
+ }
+}

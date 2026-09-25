@@ -1,0 +1,253 @@
+{
+ "brief": "We are naming a UK company: an AI consulting and products agency for mid-market and enterprise\nbuyers (CFOs, CISOs, operations leads). Its thesis is an architecture of distrust: AI agents hold\nonly the capabilities they are given, risky actions wait for human approval, and information flows\nonly where it may. It aims to be worth \u00a3100m, so the name must be sober and weighty, memorable, a\nlittle wry but never silly (think Palantir, Anduril, Thought Machine, Darktrace, Tailscale). Plain\nEnglish single words are all taken; coined words, literary or historical borrowings, short phrases\nand a \"Labs\" suffix are fine. It must not clash with a known AI or security company.",
+ "candidates": [
+  {
+   "name": "Cordon",
+   "pitch": "A cordon lets movement through only at sanctioned points\u2014AI actions cross only when a human waves them on.",
+   "owners": [
+    "claude-sonnet-5"
+   ],
+   "id": "C01"
+  },
+  {
+   "name": "Gnomon",
+   "pitch": "An architectural term for precision and oversight, offering the sobriety and weight required for enterprise buyers.",
+   "owners": [
+    "gemma-4-31b"
+   ],
+   "id": "C02"
+  },
+  {
+   "name": "Certes",
+   "pitch": "Medieval certainty; archaic gravitas suggesting verified, trustworthy AI action under human sanction.",
+   "owners": [
+    "claude-haiku-4.5"
+   ],
+   "id": "C03"
+  },
+  {
+   "name": "Hadrian Labs",
+   "pitch": "Evokes the Roman boundary wall, signaling strict limits and a controlled architecture of distrust.",
+   "owners": [
+    "gemma-4-31b"
+   ],
+   "id": "C04"
+  },
+  {
+   "name": "Billet Labs",
+   "pitch": "Military quarters assigned strictly by warrant, capturing constrained agency, compartmentalized access, and disciplined, no-nonsense UK engineering.",
+   "owners": [
+    "gemini-3.8-flash"
+   ],
+   "id": "C05"
+  },
+  {
+   "name": "AegisVector",
+   "pitch": "Aegis implies protection, vector signals directionality; together they convey AI that moves only where authorised.",
+   "owners": [
+    "gpt-oss-120b"
+   ],
+   "id": "C06"
+  },
+  {
+   "name": "NovaPulse AI Solutions",
+   "pitch": "A modern, innovative name that conveys energy and cutting-edge AI solutions for business.",
+   "owners": [],
+   "control": true,
+   "id": "C07"
+  },
+  {
+   "name": "Aegis",
+   "pitch": "Classical shield; connotes protection through careful permission-gating and bounded agent autonomy.",
+   "owners": [
+    "claude-haiku-4.5"
+   ],
+   "id": "C08"
+  },
+  {
+   "name": "Sovereign Air",
+   "pitch": "Evoking 'air gaps' and supreme authority, it signals absolute operational boundaries, strict oversight, and elite British enterprise gravitas.",
+   "owners": [
+    "gemini-3.8-flash"
+   ],
+   "id": "C09"
+  },
+  {
+   "name": "Sentinel",
+   "pitch": "Watchful guardian; evokes controlled oversight and the architecture of distrust at your core.",
+   "owners": [
+    "claude-haiku-4.5"
+   ],
+   "id": "C10"
+  },
+  {
+   "name": "Cautia",
+   "pitch": "Derived from \u201ccautious\u201d, a concise coined word evoking measured AI trust, fitting mid\u2011market enterprise seriousness.",
+   "owners": [
+    "gpt-oss-120b"
+   ],
+   "id": "C11"
+  },
+  {
+   "name": "Veto Labs",
+   "pitch": "A wry nod to the human-in-the-loop, ensuring risky AI actions require explicit human approval.",
+   "owners": [
+    "gemma-4-31b"
+   ],
+   "id": "C12"
+  },
+  {
+   "name": "Corbel",
+   "pitch": "An architectural stone bracket supporting massive weight only through structural restraint, embodying an unyielding, deliberate architecture of distrust.",
+   "owners": [
+    "gemini-3.8-flash"
+   ],
+   "id": "C13"
+  },
+  {
+   "name": "Vouchsafe Labs",
+   "pitch": "A deliberately old-fashioned promise of permission and protection, capturing governed AI that earns trust rather than assuming it.",
+   "owners": [
+    "gpt-5.6-luna"
+   ],
+   "id": "C14"
+  },
+  {
+   "name": "Countermand Labs",
+   "pitch": "Countermand means revoking an order, capturing the human power to stop risky AI actions before they proceed.",
+   "owners": [
+    "deepseek-v4-pro"
+   ],
+   "id": "C15"
+  },
+  {
+   "name": "Imprimatur Labs",
+   "pitch": "Imprimatur means official approval, fitting a firm where risky AI actions wait for human sign-off.",
+   "owners": [
+    "deepseek-v4-pro"
+   ],
+   "id": "C16"
+  },
+  {
+   "name": "Seneschal",
+   "pitch": "A seneschal held a lord's keys but never his throne\u2014our agents act only with delegated, revocable authority.",
+   "owners": [
+    "claude-sonnet-5"
+   ],
+   "id": "C17"
+  },
+  {
+   "name": "Redoubt",
+   "pitch": "A fortified refuge with clear defensive boundaries, evoking agents contained by design and consequential actions held behind approval.",
+   "owners": [
+    "gpt-5.6-luna"
+   ],
+   "id": "C18"
+  },
+  {
+   "name": "Auctra",
+   "pitch": "A coined blend of authority and strata, suggesting carefully layered powers, controls, and accountability for enterprise AI.",
+   "owners": [
+    "gpt-5.6-luna"
+   ],
+   "id": "C19"
+  },
+  {
+   "name": "VeritasGate Labs",
+   "pitch": "Latin for truth gate, signalling controlled AI flow and human\u2011approved decisions, a sober, weighty brand.",
+   "owners": [
+    "gpt-oss-120b"
+   ],
+   "id": "C20"
+  },
+  {
+   "name": "Chancery",
+   "pitch": "Like a chancery court, every sensitive action is sealed, recorded, and released only once duly authorised.",
+   "owners": [
+    "claude-sonnet-5"
+   ],
+   "id": "C21"
+  },
+  {
+   "name": "Bailiwick Labs",
+   "pitch": "Bailiwick means one's rightful domain, fitting AI agents confined to approved capabilities and information boundaries.",
+   "owners": [
+    "deepseek-v4-pro"
+   ],
+   "id": "C22"
+  },
+  {
+   "name": "Penstock Labs",
+   "pitch": "The sluice-gate that meters a river \u2014 Penstock fits an architecture admitting capability and information only where, and when, they should.",
+   "owners": [
+    "minimax-m3"
+   ],
+   "id": "C23"
+  },
+  {
+   "name": "Claustra Labs",
+   "pitch": "Latin for barred gates and grates\u2014the physical architecture of 'information flows only where it may,' rendered sober and weighty.",
+   "owners": [
+    "nemotron-ultra"
+   ],
+   "id": "C24"
+  },
+  {
+   "name": "Runnymede Labs",
+   "pitch": "At Runnymede, power accepted limits; AI agents should act only within granted boundaries.",
+   "owners": [
+    "deepseek-v4-flash"
+   ],
+   "id": "C25"
+  },
+  {
+   "name": "Chary Labs",
+   "pitch": "Chary means cautiously reluctant\u2014exactly the posture of least-privilege agents, mandatory approval gates, and need-to-know data flows.",
+   "owners": [
+    "nemotron-ultra"
+   ],
+   "id": "C26"
+  },
+  {
+   "name": "Anchorite Labs",
+   "pitch": "The medieval anchorite was walled into a cell by choice \u2014 wry, weighty shorthand for capability held strictly to its granted bounds.",
+   "owners": [
+    "minimax-m3"
+   ],
+   "id": "C27"
+  },
+  {
+   "name": "Barbican",
+   "pitch": "A medieval fortress guarding the gates \u2014 fitting for a firm channelling AI capability and data only where they should flow.",
+   "owners": [
+    "minimax-m3"
+   ],
+   "id": "C28"
+  },
+  {
+   "name": "Seneschal Labs",
+   "pitch": "A seneschal stewards power under strict instruction; our agents act only when explicitly granted.",
+   "owners": [
+    "deepseek-v4-flash"
+   ],
+   "id": "C29"
+  },
+  {
+   "name": "Provost Labs",
+   "pitch": "A provost governs by consent and check; AI agents should hold only delegated authority.",
+   "owners": [
+    "deepseek-v4-flash"
+   ],
+   "id": "C30"
+  },
+  {
+   "name": "Vallum Labs",
+   "pitch": "The Roman frontier system: ramparts, ditches, and controlled gates enforcing sovereign boundaries\u2014architecture of distrust made imperial infrastructure.",
+   "owners": [
+    "nemotron-ultra"
+   ],
+   "id": "C31"
+  }
+ ],
+ "cost": 0.122004208
+}

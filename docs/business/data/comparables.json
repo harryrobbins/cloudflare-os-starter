@@ -1,0 +1,1334 @@
+{
+  "meta": {
+    "gathered": "2026-08-26",
+    "notes": "Year-by-year revenue/headcount points for the comparables visualisation. Grade A = audited accounts, annual report, or RNS; B = press/interview figure attributed to the company or founder; C = third-party estimate (getlatka/Endole/globaldatabase) or a founder-quoted band. Currency is as reported (GBP for UK filings, USD for US press, EUR n/a). Made Tech FY ends 31 May; Infinity Works FY ends 31 Aug; Equal Experts FY ends 31 Mar; Snowplow moved its year end from 31 Mar to 31 Jan in 2024. Companies House pages for Snowplow (07852221) list filed accounts but the PDFs were not parsed; third-party mirrors (companycheck/northdata) were rate-limited, so Snowplow turnover points come from press. Redgate/Red Gate Software Ltd (£72m, 2023) is the operating subsidiary, not the group. Percona points before 2014 are inferred from founder statements (~10 staff in 2010, 100% consulting at start). 37signals never discloses revenue; only headcount and a third-party estimate are recorded. Bitnami never disclosed revenue or acquisition price.",
+    "sources": [
+      {
+        "name": "Sramana Mitra - Percona Part 3",
+        "url": "https://www.sramanamitra.com/2019/12/18/bootstrapping-a-virtual-company-to-25-million-percona-ceo-peter-zaitsev-part-3/"
+      },
+      {
+        "name": "WebProNews - Percona $100M",
+        "url": "https://www.webpronews.com/how-percona-defied-silicon-valley-wisdom-to-build-a-100m-open-source-database-empire/"
+      },
+      {
+        "name": "Sacra - dbt Labs",
+        "url": "https://sacra.com/c/dbt/"
+      },
+      {
+        "name": "Forbes - dbt Series D",
+        "url": "https://www.forbes.com/sites/kenrickcai/2022/02/24/dbt-labs-series-d-4-billion-less-than-planned/"
+      },
+      {
+        "name": "Tristan Handy - Two Years In (2018)",
+        "url": "https://medium.com/fishtown-analytics/two-years-in-and-its-just-getting-good-26c5c133c4b9"
+      },
+      {
+        "name": "Technical.ly - Fishtown Series A/B/C",
+        "url": "https://technical.ly/startups/fishtown-analytics-raise-12-million-series-a-dbt-tool-hiring-engineering-jobs/"
+      },
+      {
+        "name": "getlatka - dbt",
+        "url": "https://getlatka.com/companies/getdbt.com"
+      },
+      {
+        "name": "TechCrunch - Snowplow Series B",
+        "url": "https://techcrunch.com/2022/06/30/snowplow-secures-fresh-cash-to-capture-and-create-behavioral-data/"
+      },
+      {
+        "name": "Companies House - Snowplow filing history",
+        "url": "https://find-and-update.company-information.service.gov.uk/company/07852221/filing-history"
+      },
+      {
+        "name": "getlatka - Snowplow",
+        "url": "https://getlatka.com/companies/snowplow.io"
+      },
+      {
+        "name": "Made Tech Annual Report 2022",
+        "url": "https://investors.madetech.com/wp-content/uploads/2022/09/Made-Tech_Annual-Report-2022.pdf"
+      },
+      {
+        "name": "Made Tech FY25 Final Results (RNS)",
+        "url": "https://www.investegate.co.uk/announcement/rns/made-tech-group--mtec/final-results/9127402"
+      },
+      {
+        "name": "H2 Radnor - Made Tech FY25 note",
+        "url": "https://h2radnor.com/wp-content/uploads/2025/09/H2R-Made-Tech-FY25-results.pdf"
+      },
+      {
+        "name": "Prolific North - Infinity Works acquired",
+        "url": "https://www.prolificnorth.co.uk/news/ps50m-turnover-leeds-digital-firm-acquired-accenture/"
+      },
+      {
+        "name": "GCP - Infinity Works exit",
+        "url": "https://www.growthcapital.co.uk/investment-news/growth-capital-partners-realises-its-investment-in-infinity-works/"
+      },
+      {
+        "name": "Consultancy.uk - Cognizant buys Contino",
+        "url": "https://www.consultancy.uk/news/22735/cognizant-buys-uk-technology-consulting-firm-contino"
+      },
+      {
+        "name": "Contino Series B release",
+        "url": "https://www.contino.io/insights/enterprise-devops-specialist-contino-secures-40m-in-series-b-funding-to-help-meet-growing-demand-for-rapid-transformation"
+      },
+      {
+        "name": "Kantata - Contino $15m to $120m",
+        "url": "https://www.kantata.com/blog/article/contino-increases-global-revenue-by-over-100-million-with-the-support-of-kimble-psa"
+      },
+      {
+        "name": "Redgate 25th birthday release",
+        "url": "https://www.businesswire.com/news/home/20240716794244/en/Redgate-Celebrates-25th-Birthday-Launches-Community-Support-Initiatives-and-Announces-Commercial-Milestone"
+      },
+      {
+        "name": "Real Deals - Sagemount/Redgate",
+        "url": "https://realdeals.eu.com/article/sagemount-completes-acquisition-of-uk-based-devops-platform-redgate-software"
+      },
+      {
+        "name": "GlobalDatabase - Red Gate Software Ltd",
+        "url": "https://uk.globaldatabase.com/company/red-gate-software-limited"
+      },
+      {
+        "name": "Endole - Equal Experts UK Ltd",
+        "url": "https://open.endole.co.uk/insight/company/06191086-equal-experts-uk-limited"
+      },
+      {
+        "name": "Fast Track - Equal Experts",
+        "url": "https://www.fasttrack.co.uk/company_profile/equal-experts/"
+      },
+      {
+        "name": "Moore Kingston Smith - Equal Experts EOT",
+        "url": "https://mooreks.co.uk/insights/moore-kingston-smith-advises-equal-experts-on-employee-ownership-transition/"
+      },
+      {
+        "name": "OpenRevolution - Matrix/New Vector funding",
+        "url": "https://openrevolution.net/news/matrix-new-vector-real-time-chat-open-decentralized"
+      },
+      {
+        "name": "The Stack - Element one to watch",
+        "url": "https://www.thestack.technology/element-messenger-matrix-protocol-one-to-watch/"
+      },
+      {
+        "name": "UKTN - New Vector Series B",
+        "url": "https://www.uktechnews.info/2021/07/27/new-vector-t-a-element-secures-21-76-million-series-b-investment-from-investors-including-protocol-labs/"
+      },
+      {
+        "name": "Silicon Republic - Budibase seed",
+        "url": "https://www.siliconrepublic.com/start-ups/budibase-low-code-funding"
+      },
+      {
+        "name": "getlatka - Budibase",
+        "url": "https://getlatka.com/companies/budibase.com"
+      },
+      {
+        "name": "TechCrunch - Directus Series A",
+        "url": "https://techcrunch.com/2022/11/10/directus-wants-to-democratize-data-across-the-enterprise/"
+      },
+      {
+        "name": "getlatka - Grist",
+        "url": "https://getlatka.com/companies/getgrist.com"
+      },
+      {
+        "name": "Nextcloud blog - 75% revenue growth 2021",
+        "url": "https://nextcloud.com/blog/nextcloud-keeps-growth-up-with-75-more-revenue-and-10x-userbase/"
+      },
+      {
+        "name": "Nextcloud blog - doubled team 2017",
+        "url": "https://nextcloud.com/blog/nextcloud-grew-customer-base-7x-added-over-6-6-million-lines-of-code-and-doubled-its-team-in-2017/"
+      },
+      {
+        "name": "Nextcloud blog - 50% bookings growth 2025",
+        "url": "https://nextcloud.com/blog/digital-sovereignty-gains-momentum-millions-of-new-enterprise-users/"
+      },
+      {
+        "name": "Wikipedia - Bitnami",
+        "url": "https://en.wikipedia.org/wiki/Bitnami"
+      },
+      {
+        "name": "Opensource.com - Brescia interview 2015",
+        "url": "https://opensource.com/business/15/5/interview-erica-brescia-bitnami"
+      },
+      {
+        "name": "Wikipedia - 37signals",
+        "url": "https://en.wikipedia.org/wiki/37signals"
+      },
+      {
+        "name": "SignHouse - Basecamp stats",
+        "url": "https://usesignhouse.com/blog/basecamp-stats/"
+      }
+    ]
+  },
+  "companies": [
+    {
+      "key": "percona",
+      "label": "Percona",
+      "founded": 2006,
+      "country": "US",
+      "outcome": "independent",
+      "outcome_year": null,
+      "points": [
+        {
+          "year": 2010,
+          "revenue": null,
+          "currency": "USD",
+          "headcount": 10,
+          "grade": "B",
+          "source": "https://www.sramanamitra.com/2019/12/18/bootstrapping-a-virtual-company-to-25-million-percona-ceo-peter-zaitsev-part-3/"
+        },
+        {
+          "year": 2014,
+          "revenue": 10000000,
+          "currency": "USD",
+          "headcount": null,
+          "grade": "B",
+          "note": "'over $10m'",
+          "source": "https://www.sramanamitra.com/2019/12/18/bootstrapping-a-virtual-company-to-25-million-percona-ceo-peter-zaitsev-part-3/"
+        },
+        {
+          "year": 2019,
+          "revenue_low": 25000000,
+          "revenue_high": 30000000,
+          "currency": "USD",
+          "headcount": 200,
+          "grade": "B",
+          "source": "https://www.sramanamitra.com/2019/12/18/bootstrapping-a-virtual-company-to-25-million-percona-ceo-peter-zaitsev-part-3/"
+        },
+        {
+          "year": 2025,
+          "revenue": 100000000,
+          "currency": "USD",
+          "headcount": null,
+          "grade": "B",
+          "note": "'over $100m', 3,000+ customers, bootstrapped",
+          "source": "https://www.webpronews.com/how-percona-defied-silicon-valley-wisdom-to-build-a-100m-open-source-database-empire/"
+        }
+      ],
+      "events": [
+        {
+          "year": 2006,
+          "type": "founding",
+          "label": "Founded as MySQL performance consultancy (bootstrapped, no outside capital ever)",
+          "amount": null,
+          "source": "https://www.sramanamitra.com/2019/12/16/bootstrapping-a-virtual-company-to-25-million-percona-ceo-peter-zaitsev-part-1/"
+        },
+        {
+          "year": 2010,
+          "type": "pivot",
+          "label": "Shift from hourly emergency consulting to support subscriptions; consulting falls from 100% to ~20% of revenue within 3-4 years",
+          "amount": null,
+          "source": "https://www.sramanamitra.com/2019/12/18/bootstrapping-a-virtual-company-to-25-million-percona-ceo-peter-zaitsev-part-3/"
+        },
+        {
+          "year": 2016,
+          "type": "pivot",
+          "label": "Adds MongoDB (Percona Server for MongoDB) and later PostgreSQL; managed services line grows",
+          "amount": null,
+          "source": "https://en.wikipedia.org/wiki/Percona"
+        }
+      ],
+      "revenue_mix": [
+        {
+          "from": 2006,
+          "to": 2010,
+          "type": "services"
+        },
+        {
+          "from": 2010,
+          "to": 2014,
+          "type": "mixed"
+        },
+        {
+          "from": 2014,
+          "to": 2026,
+          "type": "support-subscription"
+        }
+      ]
+    },
+    {
+      "key": "snowplow",
+      "label": "Snowplow Analytics",
+      "founded": 2012,
+      "country": "UK",
+      "outcome": "independent",
+      "outcome_year": null,
+      "points": [
+        {
+          "year": 2012,
+          "revenue": 0,
+          "currency": "GBP",
+          "headcount": 2,
+          "grade": "B",
+          "note": "Two-founder consultancy spin-out (Deloitte/PwC backgrounds)",
+          "source": "https://techcrunch.com/2022/06/30/snowplow-secures-fresh-cash-to-capture-and-create-behavioral-data/"
+        },
+        {
+          "year": 2022,
+          "revenue": 12000000,
+          "currency": "USD",
+          "headcount": 140,
+          "grade": "B",
+          "note": "ARR at Series B; plan to reach 200 staff by end-2022",
+          "source": "https://techcrunch.com/2022/06/30/snowplow-secures-fresh-cash-to-capture-and-create-behavioral-data/"
+        },
+        {
+          "year": 2025,
+          "revenue": 17900000,
+          "currency": "USD",
+          "headcount": 163,
+          "grade": "C",
+          "note": "getlatka estimate (its 'bootstrapped' claim is wrong; treat with caution)",
+          "source": "https://getlatka.com/companies/snowplow.io"
+        }
+      ],
+      "events": [
+        {
+          "year": 2012,
+          "type": "founding",
+          "label": "Open-source Snowplow launched; company revenue initially from consulting/implementation",
+          "amount": null,
+          "source": "https://techcrunch.com/2022/06/30/snowplow-secures-fresh-cash-to-capture-and-create-behavioral-data/"
+        },
+        {
+          "year": 2019,
+          "type": "pivot",
+          "label": "Snowplow Insights / BDP (Behavioral Data Platform) managed offering becomes core product",
+          "amount": null,
+          "source": "https://snowplow.io/blog/snowplow-announces-series-b"
+        },
+        {
+          "year": 2020,
+          "type": "funding",
+          "label": "Series A (MMC, Atlantic Bridge) - total raised $15m pre-B",
+          "amount": 15000000,
+          "source": "https://mmc.vc/snowplow-raises-40-million-series-b-round/"
+        },
+        {
+          "year": 2022,
+          "type": "funding",
+          "label": "Series B led by NEA; total raised $55m",
+          "amount": 40000000,
+          "source": "https://techcrunch.com/2022/06/30/snowplow-secures-fresh-cash-to-capture-and-create-behavioral-data/"
+        },
+        {
+          "year": 2024,
+          "type": "other",
+          "label": "Share premium reduction and year-end change to 31 Jan (Companies House)",
+          "amount": null,
+          "source": "https://find-and-update.company-information.service.gov.uk/company/07852221/filing-history"
+        }
+      ],
+      "revenue_mix": [
+        {
+          "from": 2012,
+          "to": 2016,
+          "type": "services"
+        },
+        {
+          "from": 2016,
+          "to": 2019,
+          "type": "mixed"
+        },
+        {
+          "from": 2019,
+          "to": 2026,
+          "type": "saas"
+        }
+      ]
+    },
+    {
+      "key": "dbt",
+      "label": "Fishtown Analytics / dbt Labs",
+      "founded": 2016,
+      "country": "US",
+      "outcome": "acquired",
+      "outcome_year": 2025,
+      "points": [
+        {
+          "year": 2018,
+          "revenue": 1000000,
+          "currency": "USD",
+          "headcount": 10,
+          "grade": "B",
+          "note": "$1m run-rate crossed Q1 2018; 7 analysts + 3 engineers; consulting-led",
+          "source": "https://medium.com/fishtown-analytics/two-years-in-and-its-just-getting-good-26c5c133c4b9"
+        },
+        {
+          "year": 2021,
+          "revenue_low": 10000000,
+          "revenue_high": 50000000,
+          "currency": "USD",
+          "headcount": 250,
+          "grade": "C",
+          "note": "Forbes: revenue grew 6x in 2021 to 'double-digit millions'; headcount target 250 by end-2022 later doubled to 500",
+          "source": "https://www.forbes.com/sites/kenrickcai/2022/02/24/dbt-labs-series-d-4-billion-less-than-planned/"
+        },
+        {
+          "year": 2023,
+          "revenue": 59000000,
+          "currency": "USD",
+          "headcount": 411,
+          "grade": "C",
+          "note": "Sacra ARR estimate; headcount from getlatka",
+          "source": "https://sacra.com/c/dbt/"
+        },
+        {
+          "year": 2024,
+          "revenue": 100000000,
+          "currency": "USD",
+          "headcount": null,
+          "grade": "B",
+          "note": "$100m ARR (company-confirmed milestone)",
+          "source": "https://sacra.com/c/dbt/"
+        },
+        {
+          "year": 2026,
+          "revenue": null,
+          "currency": "USD",
+          "headcount": 923,
+          "grade": "C",
+          "source": "https://getlatka.com/companies/getdbt.com"
+        }
+      ],
+      "events": [
+        {
+          "year": 2016,
+          "type": "founding",
+          "label": "Fishtown Analytics founded as analytics consultancy; dbt open-sourced",
+          "amount": null,
+          "source": "https://medium.com/fishtown-analytics/two-years-in-and-its-just-getting-good-26c5c133c4b9"
+        },
+        {
+          "year": 2020,
+          "type": "funding",
+          "label": "Series A (a16z), $48m valuation - pivot from consulting to product (dbt Cloud)",
+          "amount": 12900000,
+          "source": "https://technical.ly/startups/fishtown-analytics-raise-12-million-series-a-dbt-tool-hiring-engineering-jobs/"
+        },
+        {
+          "year": 2020,
+          "type": "pivot",
+          "label": "Consulting arm wound down; dbt Cloud becomes the business",
+          "amount": null,
+          "source": "https://technical.ly/philly/2020/11/11/fishtown-analytics-series-b/"
+        },
+        {
+          "year": 2020,
+          "type": "funding",
+          "label": "Series B (Sequoia)",
+          "amount": 29500000,
+          "source": "https://technical.ly/philly/2020/11/11/fishtown-analytics-series-b/"
+        },
+        {
+          "year": 2021,
+          "type": "funding",
+          "label": "Series C; renamed dbt Labs; $1.5bn valuation",
+          "amount": 150000000,
+          "source": "https://technical.ly/startups/dbt-labs-series-c/"
+        },
+        {
+          "year": 2022,
+          "type": "funding",
+          "label": "Series D (Altimeter) at $4.2bn",
+          "amount": 222000000,
+          "source": "https://www.forbes.com/sites/kenrickcai/2022/02/24/dbt-labs-series-d-4-billion-less-than-planned/"
+        },
+        {
+          "year": 2025,
+          "type": "exit",
+          "label": "All-stock merger with Fivetran (combined ~$600m revenue)",
+          "amount": null,
+          "source": "https://sacra.com/c/dbt/"
+        }
+      ],
+      "revenue_mix": [
+        {
+          "from": 2016,
+          "to": 2020,
+          "type": "services"
+        },
+        {
+          "from": 2020,
+          "to": 2026,
+          "type": "saas"
+        }
+      ]
+    },
+    {
+      "key": "nextcloud",
+      "label": "Nextcloud GmbH",
+      "founded": 2016,
+      "country": "DE",
+      "outcome": "independent",
+      "outcome_year": null,
+      "points": [
+        {
+          "year": 2016,
+          "revenue": null,
+          "currency": "EUR",
+          "headcount": 12,
+          "grade": "C",
+          "note": "Founding team forked from ownCloud; approx. dozen staff",
+          "source": "https://nextcloud.com/blog/nextcloud-grew-customer-base-7x-added-over-6-6-million-lines-of-code-and-doubled-its-team-in-2017/"
+        },
+        {
+          "year": 2017,
+          "revenue": null,
+          "currency": "EUR",
+          "headcount": null,
+          "grade": "B",
+          "note": "Customer base 7x, team doubled in 2017",
+          "source": "https://nextcloud.com/blog/nextcloud-grew-customer-base-7x-added-over-6-6-million-lines-of-code-and-doubled-its-team-in-2017/"
+        },
+        {
+          "year": 2021,
+          "revenue": null,
+          "currency": "EUR",
+          "headcount": null,
+          "grade": "B",
+          "note": "Revenue +75%, net income +133%, team +70% vs 2020; profitable and bootstrapped",
+          "source": "https://nextcloud.com/blog/nextcloud-keeps-growth-up-with-75-more-revenue-and-10x-userbase/"
+        },
+        {
+          "year": 2025,
+          "revenue": null,
+          "currency": "EUR",
+          "headcount": null,
+          "grade": "B",
+          "note": "Bookings +50% vs 2024; 2m+ new professional seats; EUR250m 5-yr investment plan",
+          "source": "https://nextcloud.com/blog/digital-sovereignty-gains-momentum-millions-of-new-enterprise-users/"
+        }
+      ],
+      "events": [
+        {
+          "year": 2016,
+          "type": "founding",
+          "label": "Fork of ownCloud by Frank Karlitschek; bootstrapped, no VC",
+          "amount": null,
+          "source": "https://en.wikipedia.org/wiki/Frank_Karlitschek"
+        },
+        {
+          "year": 2021,
+          "type": "pivot",
+          "label": "Nextcloud Hub 21/22 positions product as full collaboration suite; Deutsche Telekom & IONOS partnerships",
+          "amount": null,
+          "source": "https://nextcloud.com/blog/nextcloud-keeps-growth-up-with-75-more-revenue-and-10x-userbase/"
+        }
+      ],
+      "revenue_mix": [
+        {
+          "from": 2016,
+          "to": 2026,
+          "type": "support-subscription"
+        }
+      ]
+    },
+    {
+      "key": "directus",
+      "label": "Directus / Monospace",
+      "founded": 2020,
+      "country": "US",
+      "outcome": "independent",
+      "outcome_year": null,
+      "points": [
+        {
+          "year": 2020,
+          "revenue": null,
+          "currency": "USD",
+          "headcount": 5,
+          "grade": "C",
+          "note": "Spun out of founders' consultancy (RANGER Studio); project dates from 2004",
+          "source": "https://techcrunch.com/2022/11/10/directus-wants-to-democratize-data-across-the-enterprise/"
+        },
+        {
+          "year": 2022,
+          "revenue": null,
+          "currency": "USD",
+          "headcount": 25,
+          "grade": "B",
+          "note": "At Series A; paid cloud from $25/mo; customers Bose, Adobe, Tripadvisor",
+          "source": "https://techcrunch.com/2022/11/10/directus-wants-to-democratize-data-across-the-enterprise/"
+        }
+      ],
+      "events": [
+        {
+          "year": 2004,
+          "type": "founding",
+          "label": "Directus project begun inside Ben Haynes' agency",
+          "amount": null,
+          "source": "https://techcrunch.com/2022/11/10/directus-wants-to-democratize-data-across-the-enterprise/"
+        },
+        {
+          "year": 2020,
+          "type": "founding",
+          "label": "Monospace Inc formed as product company",
+          "amount": null,
+          "source": "https://techcrunch.com/2022/11/10/directus-wants-to-democratize-data-across-the-enterprise/"
+        },
+        {
+          "year": 2022,
+          "type": "funding",
+          "label": "Series A led by True Ventures; total raised $8.5m",
+          "amount": 7000000,
+          "source": "https://directus.io/blog/open-source-software-company-directus-lands-7-million-in-series-a-funding/"
+        },
+        {
+          "year": 2023,
+          "type": "pivot",
+          "label": "Relicensed from GPL to BSL (source-available) to monetise larger companies",
+          "amount": null,
+          "source": "https://directus.com/resources/why-we-are-relicensing-directus"
+        }
+      ],
+      "revenue_mix": [
+        {
+          "from": 2004,
+          "to": 2020,
+          "type": "services"
+        },
+        {
+          "from": 2020,
+          "to": 2026,
+          "type": "saas"
+        }
+      ]
+    },
+    {
+      "key": "bitnami",
+      "label": "Bitnami / BitRock",
+      "founded": 2003,
+      "country": "ES/US",
+      "outcome": "acquired",
+      "outcome_year": 2019,
+      "points": [
+        {
+          "year": 2003,
+          "revenue": null,
+          "currency": "USD",
+          "headcount": 2,
+          "grade": "C",
+          "note": "Founded in Seville around InstallBuilder tooling",
+          "source": "https://en.wikipedia.org/wiki/Bitnami"
+        },
+        {
+          "year": 2015,
+          "revenue": null,
+          "currency": "USD",
+          "headcount": null,
+          "grade": "B",
+          "note": "1m+ deployments/month; offices SF, Seville, Poland; freemium cloud hosting + support",
+          "source": "https://opensource.com/business/15/5/interview-erica-brescia-bitnami"
+        },
+        {
+          "year": 2019,
+          "revenue": null,
+          "currency": "USD",
+          "headcount_low": 60,
+          "headcount_high": 100,
+          "grade": "C",
+          "note": "Headcount band at VMware acquisition per press estimates; revenue never disclosed",
+          "source": "https://techcrunch.com/2019/05/15/vmware-acquires-bitnami-to-deliver-packaged-applications-anywhere"
+        }
+      ],
+      "events": [
+        {
+          "year": 2003,
+          "type": "founding",
+          "label": "BitRock founded (InstallBuilder); bootstrapped",
+          "amount": null,
+          "source": "https://en.wikipedia.org/wiki/Bitnami"
+        },
+        {
+          "year": 2007,
+          "type": "pivot",
+          "label": "Bitnami app-stack catalogue launched from packaging tooling",
+          "amount": null,
+          "source": "https://opensource.com/business/15/5/interview-erica-brescia-bitnami"
+        },
+        {
+          "year": 2013,
+          "type": "funding",
+          "label": "Y Combinator W13 (only outside capital)",
+          "amount": null,
+          "source": "https://www.ycombinator.com/blog/female-founder-stories-erica-brescia-founder-of-bitnami-yc-w13/"
+        },
+        {
+          "year": 2019,
+          "type": "exit",
+          "label": "Acquired by VMware (undisclosed); later Broadcom 2023",
+          "amount": null,
+          "source": "https://blog.bitnami.com/2019/05/vmware-to-acquire-bitnami.html"
+        }
+      ],
+      "revenue_mix": [
+        {
+          "from": 2003,
+          "to": 2012,
+          "type": "support-subscription"
+        },
+        {
+          "from": 2012,
+          "to": 2019,
+          "type": "mixed"
+        }
+      ]
+    },
+    {
+      "key": "37signals",
+      "label": "37signals / Basecamp",
+      "founded": 1999,
+      "country": "US",
+      "outcome": "independent",
+      "outcome_year": null,
+      "points": [
+        {
+          "year": 2007,
+          "revenue": null,
+          "currency": "USD",
+          "headcount": 8,
+          "grade": "B",
+          "note": "Time: 'a million users and a payroll of eight'",
+          "source": "https://en.wikipedia.org/wiki/37signals"
+        },
+        {
+          "year": 2010,
+          "revenue": null,
+          "currency": "USD",
+          "headcount": 15,
+          "grade": "B",
+          "source": "https://usesignhouse.com/blog/basecamp-stats/"
+        },
+        {
+          "year": 2016,
+          "revenue_low": 100000000,
+          "revenue_high": 155000000,
+          "currency": "USD",
+          "headcount": null,
+          "grade": "C",
+          "note": "Third-party estimate from 130k paying accounts; company never discloses revenue",
+          "source": "https://usesignhouse.com/blog/basecamp-stats/"
+        },
+        {
+          "year": 2021,
+          "revenue": null,
+          "currency": "USD",
+          "headcount": 57,
+          "grade": "B",
+          "note": "Before ~one-third resigned after April 2021 policy change",
+          "source": "https://usesignhouse.com/blog/basecamp-stats/"
+        }
+      ],
+      "events": [
+        {
+          "year": 1999,
+          "type": "founding",
+          "label": "Web design agency (services)",
+          "amount": null,
+          "source": "https://en.wikipedia.org/wiki/37signals"
+        },
+        {
+          "year": 2004,
+          "type": "pivot",
+          "label": "Basecamp launched; agency work dropped in favour of SaaS",
+          "amount": null,
+          "source": "https://en.wikipedia.org/wiki/37signals"
+        },
+        {
+          "year": 2006,
+          "type": "funding",
+          "label": "Bezos Expeditions minority stake (secondary, undisclosed)",
+          "amount": null,
+          "source": "https://en.wikipedia.org/wiki/37signals"
+        },
+        {
+          "year": 2014,
+          "type": "pivot",
+          "label": "Renamed Basecamp; single-product focus",
+          "amount": null,
+          "source": "https://en.wikipedia.org/wiki/37signals"
+        },
+        {
+          "year": 2021,
+          "type": "other",
+          "label": "Workplace-policy controversy; ~1/3 of staff leave",
+          "amount": null,
+          "source": "https://en.wikipedia.org/wiki/37signals"
+        },
+        {
+          "year": 2024,
+          "type": "pivot",
+          "label": "ONCE line: one-off purchase self-hosted software",
+          "amount": null,
+          "source": "https://en.wikipedia.org/wiki/37signals"
+        }
+      ],
+      "revenue_mix": [
+        {
+          "from": 1999,
+          "to": 2004,
+          "type": "services"
+        },
+        {
+          "from": 2004,
+          "to": 2006,
+          "type": "mixed"
+        },
+        {
+          "from": 2006,
+          "to": 2026,
+          "type": "saas"
+        }
+      ]
+    },
+    {
+      "key": "redgate",
+      "label": "Redgate Software",
+      "founded": 1999,
+      "country": "UK",
+      "outcome": "acquired",
+      "outcome_year": 2026,
+      "points": [
+        {
+          "year": 1999,
+          "revenue": null,
+          "currency": "GBP",
+          "headcount": 2,
+          "grade": "B",
+          "note": "Two-person start-up",
+          "source": "https://www.businesswire.com/news/home/20240716794244/en/Redgate-Celebrates-25th-Birthday-Launches-Community-Support-Initiatives-and-Announces-Commercial-Milestone"
+        },
+        {
+          "year": 2023,
+          "revenue": 72000000,
+          "currency": "GBP",
+          "headcount": 332,
+          "grade": "C",
+          "note": "Red Gate Software Ltd (operating subsidiary) per GlobalDatabase; group headcount is higher",
+          "source": "https://uk.globaldatabase.com/company/red-gate-software-limited"
+        },
+        {
+          "year": 2024,
+          "revenue": 100000000,
+          "currency": "USD",
+          "headcount": 550,
+          "grade": "B",
+          "note": "$100m ARR milestone; 550+ employees; adj. EBITDA GBP11.4m FY2024",
+          "source": "https://www.businesswire.com/news/home/20240716794244/en/Redgate-Celebrates-25th-Birthday-Launches-Community-Support-Initiatives-and-Announces-Commercial-Milestone"
+        }
+      ],
+      "events": [
+        {
+          "year": 1999,
+          "type": "founding",
+          "label": "Founded Cambridge, bootstrapped; SQL tools sold as perpetual licences",
+          "amount": null,
+          "source": "https://en.wikipedia.org/wiki/Redgate"
+        },
+        {
+          "year": 2022,
+          "type": "pivot",
+          "label": "Transition to subscription-based model",
+          "amount": null,
+          "source": "https://www.businesswire.com/news/home/20240716794244/en/Redgate-Celebrates-25th-Birthday-Launches-Community-Support-Initiatives-and-Announces-Commercial-Milestone"
+        },
+        {
+          "year": 2026,
+          "type": "exit",
+          "label": "Bregal Sagemount majority growth investment (founders retain significant voting rights)",
+          "amount": null,
+          "source": "https://realdeals.eu.com/article/sagemount-completes-acquisition-of-uk-based-devops-platform-redgate-software"
+        }
+      ],
+      "revenue_mix": [
+        {
+          "from": 1999,
+          "to": 2022,
+          "type": "support-subscription"
+        },
+        {
+          "from": 2022,
+          "to": 2026,
+          "type": "saas"
+        }
+      ]
+    },
+    {
+      "key": "infinity_works",
+      "label": "Infinity Works",
+      "founded": 2014,
+      "country": "UK",
+      "outcome": "acquired",
+      "outcome_year": 2021,
+      "points": [
+        {
+          "year": 2014,
+          "revenue": 0,
+          "currency": "GBP",
+          "headcount": 4,
+          "grade": "B",
+          "note": "Four founders, Leeds",
+          "source": "https://www.prolificnorth.co.uk/news/ps50m-turnover-leeds-digital-firm-acquired-accenture/"
+        },
+        {
+          "year": 2019,
+          "revenue": 34000000,
+          "currency": "GBP",
+          "headcount": null,
+          "grade": "C",
+          "note": "Implied FY Aug-2019 from FY2020 GBP50.7m at +49%",
+          "source": "https://www.prolificnorth.co.uk/news/ps50m-turnover-leeds-digital-firm-acquired-accenture/"
+        },
+        {
+          "year": 2020,
+          "revenue": 50700000,
+          "currency": "GBP",
+          "headcount": 440,
+          "grade": "A",
+          "note": "FY to 31 Aug 2020 accounts; PAT GBP9.1m",
+          "source": "https://www.prolificnorth.co.uk/news/ps50m-turnover-leeds-digital-firm-acquired-accenture/"
+        }
+      ],
+      "events": [
+        {
+          "year": 2019,
+          "type": "funding",
+          "label": "Growth Capital Partners minority investment",
+          "amount": null,
+          "source": "https://www.growthcapital.co.uk/investment-news/gcp-completes-investment-in-infinity-works/"
+        },
+        {
+          "year": 2021,
+          "type": "exit",
+          "label": "Acquired by Accenture (undisclosed)",
+          "amount": null,
+          "source": "https://newsroom.accenture.com/news/2021/accenture-expands-cloud-first-offerings-and-engineering-capabilities-in-the-uk-with-acquisition-of-infinity-works"
+        }
+      ],
+      "revenue_mix": [
+        {
+          "from": 2014,
+          "to": 2021,
+          "type": "services"
+        }
+      ]
+    },
+    {
+      "key": "contino",
+      "label": "Contino",
+      "founded": 2014,
+      "country": "UK",
+      "outcome": "acquired",
+      "outcome_year": 2019,
+      "points": [
+        {
+          "year": 2016,
+          "revenue": null,
+          "currency": "USD",
+          "headcount": 20,
+          "grade": "B",
+          "note": "At Series A",
+          "source": "https://www.contino.io/insights/enterprise-devops-specialist-contino-secures-40m-in-series-b-funding-to-help-meet-growing-demand-for-rapid-transformation"
+        },
+        {
+          "year": 2017,
+          "revenue": 15000000,
+          "currency": "USD",
+          "headcount": null,
+          "grade": "B",
+          "note": "SVP Finance quote: $15m when Kimble adopted in 2017",
+          "source": "https://www.kantata.com/blog/article/contino-increases-global-revenue-by-over-100-million-with-the-support-of-kimble-psa"
+        },
+        {
+          "year": 2018,
+          "revenue": null,
+          "currency": "USD",
+          "headcount": 250,
+          "grade": "B",
+          "note": "At Series B; revenue more than doubled YoY for three years",
+          "source": "https://www.contino.io/insights/enterprise-devops-specialist-contino-secures-40m-in-series-b-funding-to-help-meet-growing-demand-for-rapid-transformation"
+        },
+        {
+          "year": 2019,
+          "revenue": null,
+          "currency": "USD",
+          "headcount": 350,
+          "grade": "B",
+          "note": "At Cognizant acquisition",
+          "source": "https://www.consultancy.uk/news/22735/cognizant-buys-uk-technology-consulting-firm-contino"
+        },
+        {
+          "year": 2021,
+          "revenue": 120000000,
+          "currency": "USD",
+          "headcount": null,
+          "grade": "B",
+          "note": "'over $120m' (inside Cognizant)",
+          "source": "https://www.kantata.com/blog/article/contino-increases-global-revenue-by-over-100-million-with-the-support-of-kimble-psa"
+        }
+      ],
+      "events": [
+        {
+          "year": 2016,
+          "type": "funding",
+          "label": "Series A (Columbia Capital)",
+          "amount": null,
+          "source": "https://www.contino.io/insights/enterprise-devops-specialist-contino-secures-40m-in-series-b-funding-to-help-meet-growing-demand-for-rapid-transformation"
+        },
+        {
+          "year": 2018,
+          "type": "funding",
+          "label": "Series B (Columbia Capital, Top Tier)",
+          "amount": 40000000,
+          "source": "https://www.contino.io/insights/enterprise-devops-specialist-contino-secures-40m-in-series-b-funding-to-help-meet-growing-demand-for-rapid-transformation"
+        },
+        {
+          "year": 2019,
+          "type": "exit",
+          "label": "Acquired by Cognizant (undisclosed)",
+          "amount": null,
+          "source": "https://news.cognizant.com/2019-10-16-Cognizant-to-Acquire-Contino-a-Premier-Enterprise-DevOps-and-Cloud-Transformation-Consultancy"
+        }
+      ],
+      "revenue_mix": [
+        {
+          "from": 2014,
+          "to": 2021,
+          "type": "services"
+        }
+      ]
+    },
+    {
+      "key": "made_tech",
+      "label": "Made Tech",
+      "founded": 2008,
+      "country": "UK",
+      "outcome": "listed",
+      "outcome_year": 2021,
+      "points": [
+        {
+          "year": 2019,
+          "revenue": 4200000,
+          "currency": "GBP",
+          "headcount": null,
+          "grade": "A",
+          "note": "FY to 31 May 2019",
+          "source": "https://investors.madetech.com/wp-content/uploads/2022/09/Made-Tech_Annual-Report-2022.pdf"
+        },
+        {
+          "year": 2020,
+          "revenue": 5500000,
+          "currency": "GBP",
+          "headcount": null,
+          "grade": "A",
+          "source": "https://investors.madetech.com/wp-content/uploads/2022/09/Made-Tech_Annual-Report-2022.pdf"
+        },
+        {
+          "year": 2021,
+          "revenue": 13300000,
+          "currency": "GBP",
+          "headcount": 235,
+          "grade": "A",
+          "source": "https://investors.madetech.com/wp-content/uploads/2022/09/Made-Tech_Annual-Report-2022.pdf"
+        },
+        {
+          "year": 2022,
+          "revenue": 29300000,
+          "currency": "GBP",
+          "headcount": 478,
+          "grade": "A",
+          "note": "Headcount incl. contractors",
+          "source": "https://investors.madetech.com/wp-content/uploads/2022/09/Made-Tech_Annual-Report-2022.pdf"
+        },
+        {
+          "year": 2023,
+          "revenue": 40200000,
+          "currency": "GBP",
+          "headcount": null,
+          "grade": "A",
+          "source": "https://h2radnor.com/wp-content/uploads/2025/09/H2R-Made-Tech-FY25-results.pdf"
+        },
+        {
+          "year": 2024,
+          "revenue": 38600000,
+          "currency": "GBP",
+          "headcount": 349,
+          "grade": "A",
+          "note": "Excl. contractors",
+          "source": "https://www.investegate.co.uk/announcement/rns/made-tech-group--mtec/final-results/9127402"
+        },
+        {
+          "year": 2025,
+          "revenue": 46400000,
+          "currency": "GBP",
+          "headcount": 374,
+          "grade": "A",
+          "note": "Excl. contractors; adj. EBITDA GBP3.5m",
+          "source": "https://www.investegate.co.uk/announcement/rns/made-tech-group--mtec/final-results/9127402"
+        }
+      ],
+      "events": [
+        {
+          "year": 2008,
+          "type": "founding",
+          "label": "Founded as software agency; pivots to public-sector digital delivery c.2016",
+          "amount": null,
+          "source": "https://investors.madetech.com/wp-content/uploads/2022/09/Made-Tech_Annual-Report-2022.pdf"
+        },
+        {
+          "year": 2021,
+          "type": "ipo",
+          "label": "AIM IPO, 30 Sep 2021; GBP15m gross primary",
+          "amount": 15000000,
+          "source": "https://investors.madetech.com/wp-content/uploads/2022/09/Made-Tech_Annual-Report-2022.pdf"
+        }
+      ],
+      "revenue_mix": [
+        {
+          "from": 2008,
+          "to": 2026,
+          "type": "services"
+        }
+      ]
+    },
+    {
+      "key": "element",
+      "label": "Element / New Vector",
+      "founded": 2017,
+      "country": "UK",
+      "outcome": "independent",
+      "outcome_year": null,
+      "points": [
+        {
+          "year": 2017,
+          "revenue": null,
+          "currency": "USD",
+          "headcount": 11,
+          "grade": "B",
+          "note": "Core Matrix team spun out of Amdocs",
+          "source": "https://openrevolution.net/news/matrix-new-vector-real-time-chat-open-decentralized"
+        },
+        {
+          "year": 2021,
+          "revenue": null,
+          "currency": "USD",
+          "headcount": 71,
+          "grade": "B",
+          "note": "April 2021; $18m raised to date; revenue from EMS hosting + government professional services",
+          "source": "https://www.thestack.technology/element-messenger-matrix-protocol-one-to-watch/"
+        }
+      ],
+      "events": [
+        {
+          "year": 2017,
+          "type": "founding",
+          "label": "New Vector Ltd formed",
+          "amount": null,
+          "source": "https://openrevolution.net/news/matrix-new-vector-real-time-chat-open-decentralized"
+        },
+        {
+          "year": 2018,
+          "type": "funding",
+          "label": "Status.im",
+          "amount": 5000000,
+          "source": "https://openrevolution.net/news/matrix-new-vector-real-time-chat-open-decentralized"
+        },
+        {
+          "year": 2019,
+          "type": "funding",
+          "label": "Series A (Notion Capital, Dawn, Firstminute)",
+          "amount": 8500000,
+          "source": "https://openrevolution.net/news/matrix-new-vector-real-time-chat-open-decentralized"
+        },
+        {
+          "year": 2020,
+          "type": "funding",
+          "label": "Automattic strategic",
+          "amount": 4600000,
+          "source": "https://openrevolution.net/news/matrix-new-vector-real-time-chat-open-decentralized"
+        },
+        {
+          "year": 2021,
+          "type": "funding",
+          "label": "Series B (Protocol Labs, Metaplanet)",
+          "amount": 30000000,
+          "source": "https://www.uktechnews.info/2021/07/27/new-vector-t-a-element-secures-21-76-million-series-b-investment-from-investors-including-protocol-labs/"
+        }
+      ],
+      "revenue_mix": [
+        {
+          "from": 2017,
+          "to": 2026,
+          "type": "mixed"
+        }
+      ]
+    },
+    {
+      "key": "budibase",
+      "label": "Budibase",
+      "founded": 2019,
+      "country": "UK",
+      "outcome": "independent",
+      "outcome_year": null,
+      "points": [
+        {
+          "year": 2019,
+          "revenue": 0,
+          "currency": "USD",
+          "headcount": 3,
+          "grade": "C",
+          "note": "Founding team Belfast",
+          "source": "https://www.siliconrepublic.com/start-ups/budibase-low-code-funding"
+        },
+        {
+          "year": 2022,
+          "revenue": null,
+          "currency": "USD",
+          "headcount": 17,
+          "grade": "C",
+          "source": "https://getlatka.com/companies/budibase.com"
+        },
+        {
+          "year": 2023,
+          "revenue": 2000000,
+          "currency": "USD",
+          "headcount": 23,
+          "grade": "C",
+          "note": "getlatka ARR estimate (its 'bootstrapped' claim is wrong)",
+          "source": "https://getlatka.com/companies/budibase.com"
+        }
+      ],
+      "events": [
+        {
+          "year": 2021,
+          "type": "funding",
+          "label": "Seed (Techstart NI, Angular); total to $2.25m",
+          "amount": 2250000,
+          "source": "https://www.siliconrepublic.com/start-ups/budibase-low-code-funding"
+        },
+        {
+          "year": 2022,
+          "type": "funding",
+          "label": "Seed led by SignalFire; total raised $9.25m",
+          "amount": 7000000,
+          "source": "https://www.siliconrepublic.com/start-ups/budibase-low-code-funding"
+        }
+      ],
+      "revenue_mix": [
+        {
+          "from": 2019,
+          "to": 2026,
+          "type": "saas"
+        }
+      ]
+    },
+    {
+      "key": "grist",
+      "label": "Grist Labs",
+      "founded": 2011,
+      "country": "US",
+      "outcome": "independent",
+      "outcome_year": null,
+      "points": [
+        {
+          "year": 2017,
+          "revenue": null,
+          "currency": "USD",
+          "headcount": 4,
+          "grade": "C",
+          "note": "Product public beta era; small NY team",
+          "source": "https://www.getgrist.com/about/"
+        },
+        {
+          "year": 2024,
+          "revenue": 5000000,
+          "currency": "USD",
+          "headcount": 10,
+          "grade": "C",
+          "note": "getlatka estimate; funding history conflicts (Crunchbase shows 1-10 employees, seed reported 2022)",
+          "source": "https://getlatka.com/companies/getgrist.com"
+        }
+      ],
+      "events": [
+        {
+          "year": 2011,
+          "type": "founding",
+          "label": "Grist Labs founded (NY); product launched publicly ~2017",
+          "amount": null,
+          "source": "https://www.crunchbase.com/organization/grist-labs"
+        },
+        {
+          "year": 2022,
+          "type": "funding",
+          "label": "Seed round reported (~$4.5m)",
+          "amount": 4500000,
+          "source": "https://www.crunchbase.com/organization/grist-labs"
+        }
+      ],
+      "revenue_mix": [
+        {
+          "from": 2017,
+          "to": 2026,
+          "type": "saas"
+        }
+      ]
+    },
+    {
+      "key": "equal_experts",
+      "label": "Equal Experts",
+      "founded": 2007,
+      "country": "UK",
+      "outcome": "eot",
+      "outcome_year": 2025,
+      "points": [
+        {
+          "year": 2015,
+          "revenue": 30600000,
+          "currency": "GBP",
+          "headcount": null,
+          "grade": "B",
+          "note": "Sunday Times Tech Track; 3-yr sales CAGR 44%",
+          "source": "https://www.fasttrack.co.uk/company_profile/equal-experts/"
+        },
+        {
+          "year": 2024,
+          "revenue": 203100000,
+          "currency": "GBP",
+          "headcount": 486,
+          "grade": "C",
+          "note": "Implied FY Mar-2024 from Endole deltas (+GBP6.87m, +58 staff)",
+          "source": "https://open.endole.co.uk/insight/company/06191086-equal-experts-uk-limited"
+        },
+        {
+          "year": 2025,
+          "revenue": 209990000,
+          "currency": "GBP",
+          "headcount": 544,
+          "grade": "A",
+          "note": "Equal Experts UK Ltd accounts FY to 31 Mar 2025; employees exclude ~3,000 associate contractors",
+          "source": "https://open.endole.co.uk/insight/company/06191086-equal-experts-uk-limited"
+        }
+      ],
+      "events": [
+        {
+          "year": 2007,
+          "type": "founding",
+          "label": "Founded by Thomas Granier; senior-associate network model",
+          "amount": null,
+          "source": "https://www.fasttrack.co.uk/company_profile/equal-experts/"
+        },
+        {
+          "year": 2025,
+          "type": "exit",
+          "label": "Transition to Employee Ownership Trust; >GBP200m revenue, >GBP30m EBITDA",
+          "amount": null,
+          "source": "https://mooreks.co.uk/insights/moore-kingston-smith-advises-equal-experts-on-employee-ownership-transition/"
+        }
+      ],
+      "revenue_mix": [
+        {
+          "from": 2007,
+          "to": 2026,
+          "type": "services"
+        }
+      ]
+    }
+  ]
+}

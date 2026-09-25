@@ -1,0 +1,597 @@
+{
+  "meta": {
+    "compiled": "2026-08-26",
+    "purpose": "Primary-sourced UK buyer sentiment on AI (concerns, adoption, outcomes) for a 'buyer's mind' chart",
+    "grading": "A = figure read on the primary publisher's page/PDF; B = read on reputable secondary coverage of a primary survey",
+    "not_captured": [
+      "DWP and HMRC department-level Copilot figures (the user's '19 min/day' DWP figure was not found in the cross-government report; only the 26 min/day cross-government mean is on the page)",
+      "Gartner/IDC/McKinsey UK-specific figures (paywalled or global-only)",
+      "Deloitte State of GenAI in the Enterprise: UK landing page shows only global figures (74% ROI met/exceeded; 26% exploring agentic AI to a large extent) - recorded but not UK-specific"
+    ]
+  },
+  "surveys": [
+    {
+      "key": "ons-bics-ai-2026",
+      "title": "Artificial intelligence in UK businesses: 2023 to 2026 (Business Insights and Conditions Survey)",
+      "publisher": "Office for National Statistics",
+      "date": "2026 (BICS wave 159, fieldwork 5-28 June 2026)",
+      "audience": "UK businesses with 10+ employees (plus 0-9 band where stated)",
+      "n": 38637,
+      "url": "https://www.ons.gov.uk/businessindustryandtrade/business/businessservices/articles/artificialintelligenceinukbusinesses/2023to2026",
+      "grade": "A",
+      "items": [
+        {
+          "label": "Businesses (10+ employees) currently using AI, Sept 2023",
+          "pct": 12,
+          "type": "adoption"
+        },
+        {
+          "label": "Businesses (10+ employees) currently using AI, June 2026",
+          "pct": 35,
+          "type": "adoption"
+        },
+        {
+          "label": "Businesses with 0-9 employees using AI, June 2026",
+          "pct": 28,
+          "type": "adoption"
+        },
+        {
+          "label": "Businesses with 250+ employees using AI, June 2026",
+          "pct": 49,
+          "type": "adoption"
+        },
+        {
+          "label": "Information & communication sector using AI, June 2026",
+          "pct": 58,
+          "type": "adoption"
+        },
+        {
+          "label": "Construction sector using AI, June 2026",
+          "pct": 13,
+          "type": "adoption"
+        },
+        {
+          "label": "Report no barriers to AI adoption",
+          "pct": 41,
+          "type": "concern"
+        },
+        {
+          "label": "Barrier: lack of expertise (range across size bands 7-18%)",
+          "pct": 18,
+          "type": "concern"
+        },
+        {
+          "label": "Barrier: cost (range across size bands 7-14%)",
+          "pct": 14,
+          "type": "concern"
+        }
+      ],
+      "notes": "Response rate 26.7%. Manufacturing, wholesale/retail, accommodation & food and admin services are described as lower-adoption industries but exact % not extracted; employee concerns, regulation and product availability are listed as lower-frequency barriers. Use the ONS dataset download for the full industry table."
+    },
+    {
+      "key": "redhat-uk-2025",
+      "title": "Red Hat survey: UK organisations ready for widespread AI adoption, but skills gaps, high costs and 'shadow AI' threaten ambition",
+      "publisher": "Red Hat (fieldwork Censuswide)",
+      "date": "2025-10-09",
+      "audience": "UK IT managers, directors and AI engineers at companies with 500+ employees (part of 909-respondent EMEA study)",
+      "n": 100,
+      "url": "https://www.redhat.com/en/about/press-releases/red-hat-survey-uk-organizations-ready-widespread-ai-adoption-skills-gaps-high-costs-and-shadow-ai-threaten-ambition",
+      "grade": "A",
+      "items": [
+        {
+          "label": "Experience barriers to AI adoption",
+          "pct": 95,
+          "type": "concern"
+        },
+        {
+          "label": "Experiencing a 'shadow AI' problem",
+          "pct": 83,
+          "type": "concern"
+        },
+        {
+          "label": "Barrier: high implementation/maintenance costs",
+          "pct": 34,
+          "type": "concern"
+        },
+        {
+          "label": "Barrier: data privacy/security concerns",
+          "pct": 30,
+          "type": "concern"
+        },
+        {
+          "label": "Barrier: integration challenges",
+          "pct": 28,
+          "type": "concern"
+        },
+        {
+          "label": "Agree there is an urgent AI skills gap",
+          "pct": 62,
+          "type": "concern"
+        },
+        {
+          "label": "Not yet delivering customer value from AI",
+          "pct": 89,
+          "type": "outcome"
+        },
+        {
+          "label": "Driving customer value from AI",
+          "pct": 11,
+          "type": "outcome"
+        },
+        {
+          "label": "Open source important to AI strategy",
+          "pct": 84,
+          "type": "adoption"
+        },
+        {
+          "label": "AI is top IT priority (tied with security)",
+          "pct": 62,
+          "type": "adoption"
+        }
+      ],
+      "notes": "Small UK sample (n=100); treat percentages as indicative."
+    },
+    {
+      "key": "lga-state-of-sector-ai-2025",
+      "title": "State of the sector: Artificial intelligence - 2025 update",
+      "publisher": "Local Government Association",
+      "date": "Fieldwork Dec 2024 - Feb 2025; published 2025",
+      "audience": "English councils (33% of councils responded)",
+      "n": null,
+      "url": "https://www.local.gov.uk/publications/state-sector-artificial-intelligence",
+      "grade": "A",
+      "items": [
+        {
+          "label": "Councils using or exploring AI",
+          "pct": 95,
+          "type": "adoption"
+        },
+        {
+          "label": "At the beginning of their AI journey",
+          "pct": 50,
+          "type": "adoption"
+        },
+        {
+          "label": "Using generative AI",
+          "pct": 83,
+          "type": "adoption"
+        },
+        {
+          "label": "Paying for / procuring external AI tools",
+          "pct": 68,
+          "type": "adoption"
+        },
+        {
+          "label": "Barrier: lack of funding",
+          "pct": 62,
+          "type": "concern"
+        },
+        {
+          "label": "Barrier: lack of staff capabilities",
+          "pct": 56,
+          "type": "concern"
+        },
+        {
+          "label": "Barrier: lack of staff capacity",
+          "pct": 52,
+          "type": "concern"
+        },
+        {
+          "label": "Risk: cyber security",
+          "pct": 83,
+          "type": "concern"
+        },
+        {
+          "label": "Risk: deep fakes / disinformation",
+          "pct": 69,
+          "type": "concern"
+        },
+        {
+          "label": "Risk: organisational reputation and resident trust",
+          "pct": 68,
+          "type": "concern"
+        },
+        {
+          "label": "Benefit realised: staff productivity",
+          "pct": 36,
+          "type": "outcome"
+        },
+        {
+          "label": "Benefit realised: service efficiencies",
+          "pct": 33,
+          "type": "outcome"
+        },
+        {
+          "label": "Benefit realised: cost savings",
+          "pct": 21,
+          "type": "outcome"
+        },
+        {
+          "label": "Have a specific AI policy",
+          "pct": 41,
+          "type": "adoption"
+        }
+      ],
+      "notes": "Approx one-third of English councils responded; exact n not stated on the summary page (see PDF)."
+    },
+    {
+      "key": "dbt-copilot-evaluation-2025",
+      "title": "Microsoft 365 Copilot evaluation (Department for Business and Trade)",
+      "publisher": "Department for Business and Trade (GOV.UK)",
+      "date": "Trial Oct-Dec 2024; published Sept 2025",
+      "audience": "DBT staff with Copilot licences (~70% volunteers, ~30% randomly selected)",
+      "n": 1000,
+      "url": "https://assets.publishing.service.gov.uk/media/68adbe409e1cebdd2c96a19d/dbt-microsoft-365-copilot-evaluation.pdf",
+      "grade": "A",
+      "items": [
+        {
+          "label": "Mean daily active users",
+          "pct": 21,
+          "type": "adoption"
+        },
+        {
+          "label": "Mean weekly active users",
+          "pct": 64,
+          "type": "adoption"
+        },
+        {
+          "label": "Satisfied or very satisfied",
+          "pct": 72,
+          "type": "outcome"
+        },
+        {
+          "label": "Identified hallucinations",
+          "pct": 22,
+          "type": "concern"
+        },
+        {
+          "label": "Did not identify hallucinations",
+          "pct": 43,
+          "type": "outcome"
+        },
+        {
+          "label": "Unsure whether they encountered hallucinations",
+          "pct": 11,
+          "type": "concern"
+        },
+        {
+          "label": "Diary study response rate (300 of 1,000)",
+          "pct": 32,
+          "type": "adoption"
+        }
+      ],
+      "notes": "1,000 licences; 1.14 Copilot actions per user per day; NPS 31 (49% promoters, 18% detractors). Time saved per task: drafting 1.3h, summarising research 0.8h; scheduling -0.6h and image generation -0.5h (took longer). Evaluation found no clear organisation-level productivity gain (widely reported)."
+    },
+    {
+      "key": "cross-gov-copilot-experiment-2025",
+      "title": "M365 Copilot Experiment Findings Report (cross-government)",
+      "publisher": "Government Digital Service / DSIT (GOV.UK)",
+      "date": "Trial 30 Sep - 31 Dec 2024; published 2025",
+      "audience": "~20,000 civil servants across 12 organisations incl. DWP, HMRC, Home Office, MoJ, DESNZ, DSIT, FCDO, DEFRA, DBT, Welsh Government, ONS, Companies House",
+      "n": 7115,
+      "url": "https://assets.publishing.service.gov.uk/media/683db42bd23a62e5d32680d0/M365_Copilot_Experiment_Findings_Report.pdf",
+      "grade": "A",
+      "items": [
+        {
+          "label": "Would not want to return to pre-Copilot working",
+          "pct": 82,
+          "type": "outcome"
+        },
+        {
+          "label": "Agree tool provides good value to the organisation",
+          "pct": 85,
+          "type": "outcome"
+        },
+        {
+          "label": "Access influenced satisfaction with employer",
+          "pct": 63,
+          "type": "outcome"
+        },
+        {
+          "label": "Peak adoption (Oct 2024)",
+          "pct": 83,
+          "type": "adoption"
+        },
+        {
+          "label": "Adoption maintained through trial",
+          "pct": 80,
+          "type": "adoption"
+        }
+      ],
+      "notes": "n = 7,115 survey responses; usage telemetry from 14,500 users. Self-reported average 26 minutes saved per person per day (~13 working days/year); drafting 24 min, presentations 19 min, comms 9 min. Satisfaction 7.7/10, recommendation 8.2/10. No hallucination % in this report; no per-department breakdown on the page."
+    },
+    {
+      "key": "microsoft-uk-shadow-ai-2025",
+      "title": "Rise in 'shadow AI' tools raising security concerns for UK",
+      "publisher": "Microsoft UK (fieldwork Censuswide)",
+      "date": "October 2025",
+      "audience": "UK employees aged 18+ (min 500 from 250+ employee firms, 500 public sector; min 100 each in FS, retail, consumer goods, education, health & social care)",
+      "n": 2003,
+      "url": "https://ukstories.microsoft.com/features/rise-in-shadow-ai-tools-raising-security-concerns-for-uk/",
+      "grade": "A",
+      "items": [
+        {
+          "label": "Have used unapproved consumer AI tools at work",
+          "pct": 71,
+          "type": "adoption"
+        },
+        {
+          "label": "Use shadow AI weekly",
+          "pct": 51,
+          "type": "adoption"
+        },
+        {
+          "label": "Used AI for workplace communications",
+          "pct": 49,
+          "type": "adoption"
+        },
+        {
+          "label": "Used AI for reports/presentations",
+          "pct": 40,
+          "type": "adoption"
+        },
+        {
+          "label": "Used AI for finance tasks",
+          "pct": 22,
+          "type": "adoption"
+        },
+        {
+          "label": "Concerned about data privacy risks",
+          "pct": 32,
+          "type": "concern"
+        },
+        {
+          "label": "Concerned about IT security risks",
+          "pct": 29,
+          "type": "concern"
+        },
+        {
+          "label": "Use unapproved tools because personally familiar",
+          "pct": 41,
+          "type": "concern"
+        },
+        {
+          "label": "No company-approved option available",
+          "pct": 28,
+          "type": "concern"
+        },
+        {
+          "label": "Don't know where to start with AI",
+          "pct": 36,
+          "type": "concern"
+        },
+        {
+          "label": "Feel optimistic about AI",
+          "pct": 57,
+          "type": "outcome"
+        }
+      ],
+      "notes": "Users report saving 7.75 hours/week on admin tasks."
+    },
+    {
+      "key": "fsb-ai-small-business-2025",
+      "title": "FSB small business AI report (AI fears preventing GBP 42bn boost)",
+      "publisher": "Federation of Small Businesses",
+      "date": "Fieldwork 11-24 November 2025; published 2026",
+      "audience": "UK small business owners",
+      "n": 904,
+      "url": "https://nationaltechnology.co.uk/FSB_AI_Fears_Preventing_Small_Businesses_From_Adding_42bn_UK_Economy_Annually.php",
+      "grade": "B",
+      "items": [
+        {
+          "label": "Small firms concerned about AI risks (2025)",
+          "pct": 92,
+          "type": "concern"
+        },
+        {
+          "label": "Small firms concerned about AI risks (2023)",
+          "pct": 73,
+          "type": "concern"
+        },
+        {
+          "label": "Specific fear: AI hallucinations",
+          "pct": 54,
+          "type": "concern"
+        },
+        {
+          "label": "Small businesses using AI (2025)",
+          "pct": 55,
+          "type": "adoption"
+        },
+        {
+          "label": "Small businesses using AI (2023)",
+          "pct": 20,
+          "type": "adoption"
+        },
+        {
+          "label": "AI improved productivity",
+          "pct": 59,
+          "type": "outcome"
+        },
+        {
+          "label": "Higher revenues after AI adoption",
+          "pct": 24,
+          "type": "outcome"
+        },
+        {
+          "label": "AI helped grow the business",
+          "pct": 22,
+          "type": "outcome"
+        }
+      ],
+      "notes": "Read via trade-press coverage; FSB report page not opened. GBP 42bn projection is model-based (3% revenue uplift assumption)."
+    },
+    {
+      "key": "bcc-sme-ai-2026",
+      "title": "Half of SMEs using AI - with limited headcount impact so far",
+      "publisher": "British Chambers of Commerce (with Atos and University of Essex MiSoC)",
+      "date": "March 2026",
+      "audience": "UK firms, ~94% SMEs",
+      "n": null,
+      "url": "https://www.britishchambers.org.uk/news/2026/03/half-of-smes-using-ai-with-limited-headcount-impact-so-far/",
+      "grade": "A",
+      "items": [
+        {
+          "label": "Firms actively using AI (2026)",
+          "pct": 54,
+          "type": "adoption"
+        },
+        {
+          "label": "Firms using AI (2025)",
+          "pct": 35,
+          "type": "adoption"
+        },
+        {
+          "label": "Firms using AI (2024)",
+          "pct": 25,
+          "type": "adoption"
+        },
+        {
+          "label": "Firms using AI (2023)",
+          "pct": 23,
+          "type": "adoption"
+        },
+        {
+          "label": "AI-using SMEs reporting no workforce impact in past year",
+          "pct": 95,
+          "type": "outcome"
+        },
+        {
+          "label": "Job roles unchanged",
+          "pct": 86,
+          "type": "outcome"
+        },
+        {
+          "label": "SMEs adopting deeper bespoke AI solutions",
+          "pct": 10,
+          "type": "adoption"
+        },
+        {
+          "label": "SMEs investing in AI training that expect headcount cuts within 12 months",
+          "pct": 14,
+          "type": "outcome"
+        }
+      ],
+      "notes": "Sample size and fieldwork dates not on the news page. Net productivity expectation among AI users +71 percentage points."
+    },
+    {
+      "key": "iab-uk-state-of-ai-advertising-2026",
+      "title": "The State of AI in Advertising: Charting the Shift from Automation to Autonomy",
+      "publisher": "IAB UK",
+      "date": "2026-06-02",
+      "audience": "IAB UK members (300+ publishers, ad tech, agencies, brands) plus advertiser survey and consumer research",
+      "n": null,
+      "url": "https://www.iabuk.com/news-article/one-third-uk-digital-ad-spend-will-be-ai-driven-2030-iab-uk-forecasts",
+      "grade": "A",
+      "items": [
+        {
+          "label": "Members experimenting with or piloting agentic AI",
+          "pct": 58,
+          "type": "adoption"
+        },
+        {
+          "label": "Members scaling agentic systems / agent-first workflows",
+          "pct": 16,
+          "type": "adoption"
+        },
+        {
+          "label": "Members fully 'agent-first'",
+          "pct": 4,
+          "type": "adoption"
+        },
+        {
+          "label": "Advertisers distrust AI agents due to lack of transparency in decision-making",
+          "pct": 47,
+          "type": "concern"
+        },
+        {
+          "label": "Members with transparency concerns about AI agents",
+          "pct": 67,
+          "type": "concern"
+        },
+        {
+          "label": "Advertisers believe AI summaries reduce website traffic",
+          "pct": 74,
+          "type": "concern"
+        },
+        {
+          "label": "Expect AI to have accelerating/transformative impact on creative in next 12 months",
+          "pct": 63,
+          "type": "outcome"
+        },
+        {
+          "label": "Forecast share of UK digital ad spend that is AI-driven by 2030",
+          "pct": 32,
+          "type": "adoption"
+        }
+      ],
+      "notes": "Forecast GBP 18bn AI-driven ad spend by 2030. Sample sizes not on the news page."
+    },
+    {
+      "key": "csbs-2025-26",
+      "title": "Cyber Security Breaches Survey 2025/2026",
+      "publisher": "DSIT / Home Office (GOV.UK official statistics)",
+      "date": "Fieldwork Aug-Dec 2025; published 2026",
+      "audience": "UK businesses (also 1,085 charities, 577 education institutions; 44 qualitative interviews)",
+      "n": 2112,
+      "url": "https://www.gov.uk/government/statistics/cyber-security-breaches-survey-20252026/cyber-security-breaches-survey-20252026",
+      "grade": "A",
+      "items": [
+        {
+          "label": "Businesses using, adopting or actively considering AI",
+          "pct": 31,
+          "type": "adoption"
+        },
+        {
+          "label": "Of those, businesses with cyber security practices to manage AI-related risks",
+          "pct": 24,
+          "type": "concern"
+        },
+        {
+          "label": "Charities using, adopting or considering AI",
+          "pct": 25,
+          "type": "adoption"
+        },
+        {
+          "label": "Of those charities, with practices to manage AI risk",
+          "pct": 27,
+          "type": "concern"
+        },
+        {
+          "label": "Businesses experiencing any cyber breach/attack in last 12 months",
+          "pct": 43,
+          "type": "outcome"
+        }
+      ],
+      "notes": "Qualitative interviewees named AI among top cyber priorities alongside phishing and awareness training. 43% equates to ~612,000 UK businesses."
+    },
+    {
+      "key": "deloitte-state-of-genai-global-2024",
+      "title": "The State of Generative AI in the Enterprise (Q1-Q4 2024 series)",
+      "publisher": "Deloitte AI Institute (UK landing page, global data)",
+      "date": "Oct 2023 - Sept 2024 fieldwork",
+      "audience": "Global enterprise leaders (not UK-specific)",
+      "n": null,
+      "url": "https://www.deloitte.com/uk/en/issues/generative-ai/state-of-generative-ai-in-enterprise.html",
+      "grade": "B",
+      "items": [
+        {
+          "label": "Most advanced GenAI initiative meets or exceeds ROI expectations",
+          "pct": 74,
+          "type": "outcome"
+        },
+        {
+          "label": "Report ROI above 30%",
+          "pct": 20,
+          "type": "outcome"
+        },
+        {
+          "label": "Exploring agentic AI to a large or very large extent",
+          "pct": 26,
+          "type": "adoption"
+        }
+      ],
+      "notes": "Global only; regulation/risk barrier rose 10pp Q1 to Q4. Included for context, not as UK evidence."
+    }
+  ]
+}

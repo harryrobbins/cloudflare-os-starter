@@ -1,0 +1,7 @@
+  Countermand Labs         0.238
+  Seneschal Labs           0.200
+  Claustra Labs            0.170
+  Chary Labs               0.167
+  Penstock Labs            0.115
+  Imprimatur Labs          0.110
+finals: 285 judgements, position bias +0.044, flips 56/150, $0.331

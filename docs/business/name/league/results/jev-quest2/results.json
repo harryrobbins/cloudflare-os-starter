@@ -1,0 +1,2399 @@
+{
+ "rounds": [
+  {
+   "round": 1,
+   "new": 100,
+   "judgements": 922,
+   "cost": 0.13294535999999998,
+   "best_new": "Caveat",
+   "best_new_beats_yardstick": 0.5457459576022499,
+   "top10_new_mean_beats": 0.4981792969495501,
+   "mean_new_beats": 0.33182149229792446,
+   "leader": "Caveat",
+   "flip_rate": 0.12147505422993492,
+   "position_bias": 0.010748373101952313,
+   "style_mean": {
+    "coined words (invented, pronounceable, with a meaningful root)": 0.3327631368856976,
+    "Latin or Greek borrowings": 0.4075317774934206,
+    "Old or Middle English words and archaic crafts": 0.34658598400534557,
+    "British legal, constitutional or parliamentary terms": 0.41261618034141667,
+    "engineering, hydraulic or mechanical parts that meter or restrain": 0.2829590448120988,
+    "short understated phrases in the style of Iain M. Banks ship names": 0.3068603816898984,
+    "plain English verbs or nouns with a suffix such as Labs or Works": 0.29602008577644584,
+    "places, people or events from British history": 0.31176579845695274,
+    "nautical and navigation terms": 0.30036218260083164,
+    "heraldry, guild and craft vocabulary": 0.3207503509171365
+   }
+  },
+  {
+   "round": 2,
+   "new": 74,
+   "judgements": 1872,
+   "cost": 0.22787896000000002,
+   "best_new": "Precept",
+   "best_new_beats_yardstick": 0.5839808703210191,
+   "top10_new_mean_beats": 0.5074730781945888,
+   "mean_new_beats": 0.3255516975459067,
+   "leader": "Precept",
+   "flip_rate": 0.10897435897435898,
+   "position_bias": 0.01402777777777775,
+   "style_mean": {
+    "coined words (invented, pronounceable, with a meaningful root)": 0.33451880722182,
+    "Latin or Greek borrowings": 0.5034341565944255,
+    "Old or Middle English words and archaic crafts": 0.30452865543361973,
+    "British legal, constitutional or parliamentary terms": 0.3877686707906144,
+    "engineering, hydraulic or mechanical parts that meter or restrain": 0.26384838312538583,
+    "short understated phrases in the style of Iain M. Banks ship names": 0.23301589224198543,
+    "plain English verbs or nouns with a suffix such as Labs or Works": 0.2645913095968522,
+    "places, people or events from British history": 0.34003510788150343,
+    "nautical and navigation terms": 0.309444031064335,
+    "heraldry, guild and craft vocabulary": 0.34099659991288916
+   }
+  },
+  {
+   "round": 3,
+   "new": 60,
+   "judgements": 2652,
+   "cost": 0.30411171200000003,
+   "best_new": "Permissa",
+   "best_new_beats_yardstick": 0.5422757137532008,
+   "top10_new_mean_beats": 0.5131756761070077,
+   "mean_new_beats": 0.34228781031119615,
+   "leader": "Precept",
+   "flip_rate": 0.1191553544494721,
+   "position_bias": 0.01581825037707396,
+   "style_mean": {
+    "coined words (invented, pronounceable, with a meaningful root)": 0.3961337154370473,
+    "Latin or Greek borrowings": 0.4173884397072209,
+    "Old or Middle English words and archaic crafts": 0.4304301847510194,
+    "British legal, constitutional or parliamentary terms": 0.3722726373898554,
+    "engineering, hydraulic or mechanical parts that meter or restrain": 0.23945200539346145,
+    "short understated phrases in the style of Iain M. Banks ship names": 0.2823404121830276,
+    "plain English verbs or nouns with a suffix such as Labs or Works": 0.3209763492875739,
+    "places, people or events from British history": 0.25939156830587934,
+    "nautical and navigation terms": 0.37905082753125235,
+    "heraldry, guild and craft vocabulary": 0.28061447148337204
+   }
+  },
+  {
+   "round": 4,
+   "new": 48,
+   "judgements": 3242,
+   "cost": 0.406878132,
+   "best_new": "Binnacle",
+   "best_new_beats_yardstick": 0.5281151877303167,
+   "top10_new_mean_beats": 0.4586209658096738,
+   "mean_new_beats": 0.3214361697490947,
+   "leader": "Precept",
+   "flip_rate": 0.10857495373226403,
+   "position_bias": 0.015650832819247396,
+   "style_mean": {
+    "coined words (invented, pronounceable, with a meaningful root)": 0.3249671759737942,
+    "Latin or Greek borrowings": 0.39120247753828497,
+    "Old or Middle English words and archaic crafts": 0.3102708897877122,
+    "British legal, constitutional or parliamentary terms": 0.32997999461679234,
+    "engineering, hydraulic or mechanical parts that meter or restrain": 0.311281860181624,
+    "short understated phrases in the style of Iain M. Banks ship names": 0.27053737667237715,
+    "plain English verbs or nouns with a suffix such as Labs or Works": 0.265236252057589,
+    "places, people or events from British history": 0.3827203300941306,
+    "nautical and navigation terms": 0.36662666150182466,
+    "heraldry, guild and craft vocabulary": 0.34500830149924183
+   }
+  },
+  {
+   "round": 5,
+   "new": 38,
+   "judgements": 3708,
+   "cost": 0.5030298800000003,
+   "best_new": "Cautela",
+   "best_new_beats_yardstick": 0.5157350822513116,
+   "top10_new_mean_beats": 0.4643946603822742,
+   "mean_new_beats": 0.3274743237663916,
+   "leader": "Precept",
+   "flip_rate": 0.10355987055016182,
+   "position_bias": 0.015827939590075557,
+   "style_mean": {
+    "coined words (invented, pronounceable, with a meaningful root)": 0.3656602197597541,
+    "Latin or Greek borrowings": 0.42493134204544664,
+    "Old or Middle English words and archaic crafts": 0.3542185756378229,
+    "British legal, constitutional or parliamentary terms": 0.29487508965277914,
+    "short understated phrases in the style of Iain M. Banks ship names": 0.252857108036304,
+    "plain English verbs or nouns with a suffix such as Labs or Works": 0.2901986249420338,
+    "nautical and navigation terms": 0.41517405637244653,
+    "heraldry, guild and craft vocabulary": 0.18068369842507356
+   }
+  }
+ ],
+ "table": [
+  {
+   "name": "Precept",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 2,
+   "strength": 2.825557028124438,
+   "beats_yardstick": 0.5741384847227698
+  },
+  {
+   "name": "Phylax",
+   "style": "Latin or Greek borrowings",
+   "round": 2,
+   "strength": 2.5008027746932466,
+   "beats_yardstick": 0.5440511621154249
+  },
+  {
+   "name": "Tutela",
+   "style": "Latin or Greek borrowings",
+   "round": 2,
+   "strength": 2.460508729197498,
+   "beats_yardstick": 0.5400189711469282
+  },
+  {
+   "name": "Permissa",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 3,
+   "strength": 2.428234408686975,
+   "beats_yardstick": 0.5367375017420157
+  },
+  {
+   "name": "Mandatum",
+   "style": "Latin or Greek borrowings",
+   "round": 1,
+   "strength": 2.4059612053052333,
+   "beats_yardstick": 0.5344454490859029
+  },
+  {
+   "name": "Signet",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 3,
+   "strength": 2.402211475348676,
+   "beats_yardstick": 0.5340573458850609
+  },
+  {
+   "name": "Caveat",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 1,
+   "strength": 2.364617717425789,
+   "beats_yardstick": 0.5301302647961441
+  },
+  {
+   "name": "Wardence",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 3,
+   "strength": 2.339961886967282,
+   "beats_yardstick": 0.5275185481422443
+  },
+  {
+   "name": "Binnacle",
+   "style": "nautical and navigation terms",
+   "round": 4,
+   "strength": 2.299355527432259,
+   "beats_yardstick": 0.5231533725135179
+  },
+  {
+   "name": "Selden",
+   "style": "places, people or events from British history",
+   "round": 1,
+   "strength": 2.2959032807466695,
+   "beats_yardstick": 0.5227785335793539
+  },
+  {
+   "name": "Helm",
+   "style": "nautical and navigation terms",
+   "round": 3,
+   "strength": 2.2651739201525625,
+   "beats_yardstick": 0.5194158412552533
+  },
+  {
+   "name": "Cautela",
+   "style": "Latin or Greek borrowings",
+   "round": 5,
+   "strength": 2.2320271866045087,
+   "beats_yardstick": 0.5157350822513116
+  },
+  {
+   "name": "Custos",
+   "style": "Latin or Greek borrowings",
+   "round": 3,
+   "strength": 2.19591442320696,
+   "beats_yardstick": 0.511660247550789
+  },
+  {
+   "name": "Proviso",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 1,
+   "strength": 2.193810102210833,
+   "beats_yardstick": 0.5114206880897509
+  },
+  {
+   "name": "Capstan",
+   "style": "nautical and navigation terms",
+   "round": 5,
+   "strength": 2.1575105899191005,
+   "beats_yardstick": 0.5072509783809112
+  },
+  {
+   "name": "Warder",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 3,
+   "strength": 2.139437854444956,
+   "beats_yardstick": 0.5051483191261052
+  },
+  {
+   "name": "Arbiter",
+   "style": "Latin or Greek borrowings",
+   "round": 3,
+   "strength": 2.108359816693013,
+   "beats_yardstick": 0.5014902960314922
+  },
+  {
+   "name": "Countermand",
+   "style": "anchor",
+   "round": 0,
+   "strength": 2.0958288453356815,
+   "beats_yardstick": 0.5
+  },
+  {
+   "name": "Custodia",
+   "style": "Latin or Greek borrowings",
+   "round": 3,
+   "strength": 2.085197256030928,
+   "beats_yardstick": 0.4987285908952735
+  },
+  {
+   "name": "Limen",
+   "style": "Latin or Greek borrowings",
+   "round": 1,
+   "strength": 2.070123367730651,
+   "beats_yardstick": 0.49691481367400153
+  },
+  {
+   "name": "Vigilia",
+   "style": "Latin or Greek borrowings",
+   "round": 2,
+   "strength": 2.0663904189422264,
+   "beats_yardstick": 0.49646361417740414
+  },
+  {
+   "name": "Wardmote",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 3,
+   "strength": 2.056004019890175,
+   "beats_yardstick": 0.49520394645711013
+  },
+  {
+   "name": "Praesidium",
+   "style": "Latin or Greek borrowings",
+   "round": 2,
+   "strength": 2.039420773488508,
+   "beats_yardstick": 0.49317960497591284
+  },
+  {
+   "name": "Custodis",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 5,
+   "strength": 2.002907675180664,
+   "beats_yardstick": 0.4886646568168144
+  },
+  {
+   "name": "Vigilium",
+   "style": "Latin or Greek borrowings",
+   "round": 3,
+   "strength": 1.9819874987161925,
+   "beats_yardstick": 0.48604138379287926
+  },
+  {
+   "name": "Ballast",
+   "style": "nautical and navigation terms",
+   "round": 2,
+   "strength": 1.9324269731832526,
+   "beats_yardstick": 0.4797180368484509
+  },
+  {
+   "name": "Bezant",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 2,
+   "strength": 1.9298841181364366,
+   "beats_yardstick": 0.47938939900770766
+  },
+  {
+   "name": "Vigilis",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 5,
+   "strength": 1.9244034490015296,
+   "beats_yardstick": 0.4786796652800864
+  },
+  {
+   "name": "Warden",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 1,
+   "strength": 1.9005148132840899,
+   "beats_yardstick": 0.4755634088637102
+  },
+  {
+   "name": "Tutamen",
+   "style": "Latin or Greek borrowings",
+   "round": 5,
+   "strength": 1.8939196798257099,
+   "beats_yardstick": 0.4746965047750968
+  },
+  {
+   "name": "Quorum",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 2,
+   "strength": 1.881991000720573,
+   "beats_yardstick": 0.4731212255845228
+  },
+  {
+   "name": "Armiger",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 4,
+   "strength": 1.8658392221575368,
+   "beats_yardstick": 0.4709731331272697
+  },
+  {
+   "name": "Interlock",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 1,
+   "strength": 1.8615823822347302,
+   "beats_yardstick": 0.4704040786222811
+  },
+  {
+   "name": "Escutcheon",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 1,
+   "strength": 1.8553806801820099,
+   "beats_yardstick": 0.46957284046811365
+  },
+  {
+   "name": "Confinium",
+   "style": "Latin or Greek borrowings",
+   "round": 2,
+   "strength": 1.851959386925532,
+   "beats_yardstick": 0.4691131534846202
+  },
+  {
+   "name": "Fides",
+   "style": "Latin or Greek borrowings",
+   "round": 4,
+   "strength": 1.8490303293929917,
+   "beats_yardstick": 0.4687189700555452
+  },
+  {
+   "name": "Custovia",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 3,
+   "strength": 1.8465499682815554,
+   "beats_yardstick": 0.4683847127788557
+  },
+  {
+   "name": "Bracton",
+   "style": "places, people or events from British history",
+   "round": 2,
+   "strength": 1.8445898109667607,
+   "beats_yardstick": 0.4681202612865666
+  },
+  {
+   "name": "Warrant",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 3,
+   "strength": 1.8134775210822254,
+   "beats_yardstick": 0.4638872861591334
+  },
+  {
+   "name": "Vindrel",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 1,
+   "strength": 1.8051809880576486,
+   "beats_yardstick": 0.4627471001495515
+  },
+  {
+   "name": "Covenant",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 2,
+   "strength": 1.7968612078842394,
+   "beats_yardstick": 0.4615988386740238
+  },
+  {
+   "name": "Grith",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 1,
+   "strength": 1.7831656860002025,
+   "beats_yardstick": 0.4596979118158487
+  },
+  {
+   "name": "Frith",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 1,
+   "strength": 1.781226635192984,
+   "beats_yardstick": 0.4594276878777346
+  },
+  {
+   "name": "Backstop",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 2,
+   "strength": 1.7788342530255943,
+   "beats_yardstick": 0.45909391548852924
+  },
+  {
+   "name": "Attest Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 4,
+   "strength": 1.7724500011374273,
+   "beats_yardstick": 0.4582011978669669
+  },
+  {
+   "name": "Estoppel",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 1,
+   "strength": 1.7661641453393646,
+   "beats_yardstick": 0.4573193554736755
+  },
+  {
+   "name": "Vigilex",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 3,
+   "strength": 1.766020008871322,
+   "beats_yardstick": 0.45729910090796616
+  },
+  {
+   "name": "Assize",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 4,
+   "strength": 1.754996139544794,
+   "beats_yardstick": 0.45574549516933366
+  },
+  {
+   "name": "Sextant",
+   "style": "nautical and navigation terms",
+   "round": 3,
+   "strength": 1.7546877670315602,
+   "beats_yardstick": 0.455701907997432
+  },
+  {
+   "name": "Selborne",
+   "style": "places, people or events from British history",
+   "round": 4,
+   "strength": 1.7491153284522156,
+   "beats_yardstick": 0.45491306229527173
+  },
+  {
+   "name": "Portreeve",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 1,
+   "strength": 1.7487941673629235,
+   "beats_yardstick": 0.45486752838620076
+  },
+  {
+   "name": "Prerogative",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 1,
+   "strength": 1.7487941673629224,
+   "beats_yardstick": 0.45486752838620065
+  },
+  {
+   "name": "Wardmoot",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 2,
+   "strength": 1.7450724853137187,
+   "beats_yardstick": 0.4543393165006587
+  },
+  {
+   "name": "Claustra Labs",
+   "style": "anchor",
+   "round": 0,
+   "strength": 1.7423120415029651,
+   "beats_yardstick": 0.45394686981854165
+  },
+  {
+   "name": "Assent",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 3,
+   "strength": 1.730324883730541,
+   "beats_yardstick": 0.45223611131610986
+  },
+  {
+   "name": "Prior Restraint",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 4,
+   "strength": 1.7291225682991078,
+   "beats_yardstick": 0.4520639300502776
+  },
+  {
+   "name": "Custodex",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 2,
+   "strength": 1.7258387906474957,
+   "beats_yardstick": 0.4515931145863499
+  },
+  {
+   "name": "Cautio",
+   "style": "Latin or Greek borrowings",
+   "round": 1,
+   "strength": 1.7230690061775538,
+   "beats_yardstick": 0.4511953639961302
+  },
+  {
+   "name": "Sigillum",
+   "style": "Latin or Greek borrowings",
+   "round": 1,
+   "strength": 1.7230690061775538,
+   "beats_yardstick": 0.4511953639961302
+  },
+  {
+   "name": "Countermand Labs",
+   "style": "anchor",
+   "round": 0,
+   "strength": 1.7130162124200743,
+   "beats_yardstick": 0.44974688821535214
+  },
+  {
+   "name": "Lodestar",
+   "style": "nautical and navigation terms",
+   "round": 4,
+   "strength": 1.7005405455229858,
+   "beats_yardstick": 0.4479386409598976
+  },
+  {
+   "name": "Statute",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 1,
+   "strength": 1.6893706879226968,
+   "beats_yardstick": 0.44630954671719814
+  },
+  {
+   "name": "Assayer",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 5,
+   "strength": 1.6539483120192573,
+   "beats_yardstick": 0.441079094200344
+  },
+  {
+   "name": "Stopcock",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 1,
+   "strength": 1.648186689858885,
+   "beats_yardstick": 0.44021897728937526
+  },
+  {
+   "name": "Provisum",
+   "style": "Latin or Greek borrowings",
+   "round": 5,
+   "strength": 1.6315973142043865,
+   "beats_yardstick": 0.4377276019347655
+  },
+  {
+   "name": "Glanvill",
+   "style": "places, people or events from British history",
+   "round": 2,
+   "strength": 1.6268860166914925,
+   "beats_yardstick": 0.4370160157271849
+  },
+  {
+   "name": "Ordo",
+   "style": "Latin or Greek borrowings",
+   "round": 2,
+   "strength": 1.6186071622712763,
+   "beats_yardstick": 0.43576121891895814
+  },
+  {
+   "name": "Bletchley",
+   "style": "places, people or events from British history",
+   "round": 1,
+   "strength": 1.6159669253246078,
+   "beats_yardstick": 0.43535987030804346
+  },
+  {
+   "name": "Auctor",
+   "style": "Latin or Greek borrowings",
+   "round": 5,
+   "strength": 1.6129061233440127,
+   "beats_yardstick": 0.4348938753955248
+  },
+  {
+   "name": "Bulwark",
+   "style": "nautical and navigation terms",
+   "round": 5,
+   "strength": 1.611928008319147,
+   "beats_yardstick": 0.43474479906367897
+  },
+  {
+   "name": "Permit Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 1,
+   "strength": 1.5843735750201309,
+   "beats_yardstick": 0.4305126169845161
+  },
+  {
+   "name": "Arbitrix",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 1,
+   "strength": 1.58437357502013,
+   "beats_yardstick": 0.43051261698451593
+  },
+  {
+   "name": "Sanctio",
+   "style": "Latin or Greek borrowings",
+   "round": 5,
+   "strength": 1.5841262709983424,
+   "beats_yardstick": 0.43047434572420845
+  },
+  {
+   "name": "Assentum",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 2,
+   "strength": 1.571514117985073,
+   "beats_yardstick": 0.4285157220643682
+  },
+  {
+   "name": "Tetheron",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 2,
+   "strength": 1.5412231804955778,
+   "beats_yardstick": 0.4237561545860281
+  },
+  {
+   "name": "Necessary Friction",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 1,
+   "strength": 1.5229952488305232,
+   "beats_yardstick": 0.42085362791899644
+  },
+  {
+   "name": "Fathom",
+   "style": "nautical and navigation terms",
+   "round": 2,
+   "strength": 1.5214520783919516,
+   "beats_yardstick": 0.42060655792917645
+  },
+  {
+   "name": "Probitas",
+   "style": "Latin or Greek borrowings",
+   "round": 4,
+   "strength": 1.5142655722584704,
+   "beats_yardstick": 0.4194531768694324
+  },
+  {
+   "name": "Denning",
+   "style": "places, people or events from British history",
+   "round": 4,
+   "strength": 1.5035870722785085,
+   "beats_yardstick": 0.41773085041951336
+  },
+  {
+   "name": "Fiducia",
+   "style": "Latin or Greek borrowings",
+   "round": 1,
+   "strength": 1.4931764946886035,
+   "beats_yardstick": 0.4160418704416026
+  },
+  {
+   "name": "Tabard",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 2,
+   "strength": 1.4906476831433395,
+   "beats_yardstick": 0.4156301236900899
+  },
+  {
+   "name": "Detent",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 1,
+   "strength": 1.463916536931553,
+   "beats_yardstick": 0.4112419231510236
+  },
+  {
+   "name": "Latch",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 3,
+   "strength": 1.4504804344618032,
+   "beats_yardstick": 0.4090112621380373
+  },
+  {
+   "name": "Deadbolt",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 4,
+   "strength": 1.447415475904116,
+   "beats_yardstick": 0.4085000481698814
+  },
+  {
+   "name": "Measured Force",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 3,
+   "strength": 1.4451845814014377,
+   "beats_yardstick": 0.4081273938385229
+  },
+  {
+   "name": "Hampden",
+   "style": "places, people or events from British history",
+   "round": 1,
+   "strength": 1.4423290124995776,
+   "beats_yardstick": 0.4076497065571952
+  },
+  {
+   "name": "Cancellus",
+   "style": "Latin or Greek borrowings",
+   "round": 1,
+   "strength": 1.4352000072677702,
+   "beats_yardstick": 0.40645377513966996
+  },
+  {
+   "name": "Wapentake",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 1,
+   "strength": 1.4352000072677695,
+   "beats_yardstick": 0.40645377513966985
+  },
+  {
+   "name": "Frithgild",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 3,
+   "strength": 1.4278489699657493,
+   "beats_yardstick": 0.405215529003637
+  },
+  {
+   "name": "Consent",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 4,
+   "strength": 1.4272442337892168,
+   "beats_yardstick": 0.405113434133967
+  },
+  {
+   "name": "Nomos",
+   "style": "Latin or Greek borrowings",
+   "round": 3,
+   "strength": 1.418594200072605,
+   "beats_yardstick": 0.4036492424911812
+  },
+  {
+   "name": "Thegn",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 2,
+   "strength": 1.3970045470613834,
+   "beats_yardstick": 0.39996312165999015
+  },
+  {
+   "name": "Sponsio",
+   "style": "Latin or Greek borrowings",
+   "round": 1,
+   "strength": 1.3931118914366585,
+   "beats_yardstick": 0.39929365287111257
+  },
+  {
+   "name": "Reckoning",
+   "style": "nautical and navigation terms",
+   "round": 1,
+   "strength": 1.3862094619166956,
+   "beats_yardstick": 0.3981028752697819
+  },
+  {
+   "name": "Rudder",
+   "style": "nautical and navigation terms",
+   "round": 3,
+   "strength": 1.3748981365424617,
+   "beats_yardstick": 0.3961412533227986
+  },
+  {
+   "name": "Pursuivant",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 4,
+   "strength": 1.3580451284767188,
+   "beats_yardstick": 0.39319475428853096
+  },
+  {
+   "name": "Signum",
+   "style": "Latin or Greek borrowings",
+   "round": 3,
+   "strength": 1.351237012420638,
+   "beats_yardstick": 0.39199628558885513
+  },
+  {
+   "name": "Keel",
+   "style": "nautical and navigation terms",
+   "round": 3,
+   "strength": 1.3493611067076405,
+   "beats_yardstick": 0.3916652276044583
+  },
+  {
+   "name": "Warrant Works",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 3,
+   "strength": 1.3445607339790908,
+   "beats_yardstick": 0.3908164186007356
+  },
+  {
+   "name": "Mantling",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 2,
+   "strength": 1.3397234712853245,
+   "beats_yardstick": 0.3899586872258701
+  },
+  {
+   "name": "Probus",
+   "style": "Latin or Greek borrowings",
+   "round": 4,
+   "strength": 1.3326058125433755,
+   "beats_yardstick": 0.3886922008214003
+  },
+  {
+   "name": "Remit",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 1,
+   "strength": 1.332106292245542,
+   "beats_yardstick": 0.3886031207654314
+  },
+  {
+   "name": "Stowell",
+   "style": "places, people or events from British history",
+   "round": 2,
+   "strength": 1.3281795793386324,
+   "beats_yardstick": 0.3879019601024979
+  },
+  {
+   "name": "Boundworks",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 1,
+   "strength": 1.3254798449340026,
+   "beats_yardstick": 0.3874189571679725
+  },
+  {
+   "name": "Restrivo",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 4,
+   "strength": 1.3207309713617335,
+   "beats_yardstick": 0.38656749544002
+  },
+  {
+   "name": "Assent Works",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 3,
+   "strength": 1.3153401165345353,
+   "beats_yardstick": 0.3855980548713082
+  },
+  {
+   "name": "Hardwicke",
+   "style": "places, people or events from British history",
+   "round": 2,
+   "strength": 1.3138102825703886,
+   "beats_yardstick": 0.38532238553269615
+  },
+  {
+   "name": "Witan",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 1,
+   "strength": 1.2863370859905945,
+   "beats_yardstick": 0.38032938421982526
+  },
+  {
+   "name": "Measured Response",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 1,
+   "strength": 1.2671530769786357,
+   "beats_yardstick": 0.37679449555488953
+  },
+  {
+   "name": "Beadle",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 3,
+   "strength": 1.2652316817689364,
+   "beats_yardstick": 0.3764382317919365
+  },
+  {
+   "name": "Warrantis",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 4,
+   "strength": 1.253380812160583,
+   "beats_yardstick": 0.37423181596148875
+  },
+  {
+   "name": "Warrendel",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 1,
+   "strength": 1.2482206422646582,
+   "beats_yardstick": 0.37326619922732374
+  },
+  {
+   "name": "Thane",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 3,
+   "strength": 1.2429347966763193,
+   "beats_yardstick": 0.3722739702314788
+  },
+  {
+   "name": "Consent Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 2,
+   "strength": 1.2395216805618563,
+   "beats_yardstick": 0.3716316084134224
+  },
+  {
+   "name": "Bellman",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 4,
+   "strength": 1.2372530097125933,
+   "beats_yardstick": 0.37120390783042245
+  },
+  {
+   "name": "Quarterdeck",
+   "style": "nautical and navigation terms",
+   "round": 5,
+   "strength": 1.2359832640882351,
+   "beats_yardstick": 0.3709642751439371
+  },
+  {
+   "name": "Writ",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 2,
+   "strength": 1.2337953715122503,
+   "beats_yardstick": 0.3705509364297729
+  },
+  {
+   "name": "Bordure",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 1,
+   "strength": 1.2295349380935925,
+   "beats_yardstick": 0.36974449057890363
+  },
+  {
+   "name": "Rhumb",
+   "style": "nautical and navigation terms",
+   "round": 1,
+   "strength": 1.2295349380935925,
+   "beats_yardstick": 0.36974449057890363
+  },
+  {
+   "name": "Charter",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 1,
+   "strength": 1.2233603797433694,
+   "beats_yardstick": 0.36857205081889644
+  },
+  {
+   "name": "Assentia",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 4,
+   "strength": 1.217923448776541,
+   "beats_yardstick": 0.36753605601134137
+  },
+  {
+   "name": "Sufficient Grounds",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 4,
+   "strength": 1.2172557907287442,
+   "beats_yardstick": 0.36740860087857824
+  },
+  {
+   "name": "Chancery",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 1,
+   "strength": 1.2172125386298234,
+   "beats_yardstick": 0.36740034233224567
+  },
+  {
+   "name": "Ratify Works",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 5,
+   "strength": 1.2168743365112387,
+   "beats_yardstick": 0.36733575865761653
+  },
+  {
+   "name": "Mandate Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 3,
+   "strength": 1.2153221070876272,
+   "beats_yardstick": 0.36703917294926647
+  },
+  {
+   "name": "Deferred Trust",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 2,
+   "strength": 1.2122614342362281,
+   "beats_yardstick": 0.36645355228730436
+  },
+  {
+   "name": "Reasonable Grounds",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 5,
+   "strength": 1.193687931319302,
+   "beats_yardstick": 0.3628763774031058
+  },
+  {
+   "name": "Warrantex",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 2,
+   "strength": 1.1896310851925005,
+   "beats_yardstick": 0.36208966487113764
+  },
+  {
+   "name": "Franklin Gate",
+   "style": "anchor",
+   "round": 0,
+   "strength": 1.1881367459557726,
+   "beats_yardstick": 0.3617993894657481
+  },
+  {
+   "name": "Withhold Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 1,
+   "strength": 1.1868681790916147,
+   "beats_yardstick": 0.36155276294457217
+  },
+  {
+   "name": "Slow Yes",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 1,
+   "strength": 1.1808771138024474,
+   "beats_yardstick": 0.3603854384642598
+  },
+  {
+   "name": "Codicil",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 3,
+   "strength": 1.178257999626926,
+   "beats_yardstick": 0.3598737771540029
+  },
+  {
+   "name": "Gauger",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 5,
+   "strength": 1.1776655781325724,
+   "beats_yardstick": 0.3597579301463543
+  },
+  {
+   "name": "Reeve",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 1,
+   "strength": 1.1749116030369966,
+   "beats_yardstick": 0.35921884404540916
+  },
+  {
+   "name": "Wardex",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 2,
+   "strength": 1.1726238879385649,
+   "beats_yardstick": 0.35877033680210585
+  },
+  {
+   "name": "Considered Risk",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 1,
+   "strength": 1.1689714862415583,
+   "beats_yardstick": 0.35805297951462256
+  },
+  {
+   "name": "Guildmark",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 3,
+   "strength": 1.1681485419432378,
+   "beats_yardstick": 0.3578911258687023
+  },
+  {
+   "name": "Vires",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 2,
+   "strength": 1.1655934442488098,
+   "beats_yardstick": 0.3573880781925078
+  },
+  {
+   "name": "Limiter",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 2,
+   "strength": 1.152118600718416,
+   "beats_yardstick": 0.3547220575006885
+  },
+  {
+   "name": "Qualified Assent",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 2,
+   "strength": 1.1467181839726548,
+   "beats_yardstick": 0.35364735610858966
+  },
+  {
+   "name": "Ealdorman",
+   "style": "places, people or events from British history",
+   "round": 1,
+   "strength": 1.139646285706461,
+   "beats_yardstick": 0.35223459910797783
+  },
+  {
+   "name": "Waypoint",
+   "style": "nautical and navigation terms",
+   "round": 1,
+   "strength": 1.133855235372932,
+   "beats_yardstick": 0.35107311026041804
+  },
+  {
+   "name": "By Your Leave",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 5,
+   "strength": 1.1288286746068974,
+   "beats_yardstick": 0.3500615701437337
+  },
+  {
+   "name": "Windlass",
+   "style": "nautical and navigation terms",
+   "round": 5,
+   "strength": 1.117332391364956,
+   "beats_yardstick": 0.347736172901259
+  },
+  {
+   "name": "Tallyman",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 5,
+   "strength": 1.1069182397932118,
+   "beats_yardstick": 0.3456152516484655
+  },
+  {
+   "name": "Ermine",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 1,
+   "strength": 1.1052616025363629,
+   "beats_yardstick": 0.3452765926283327
+  },
+  {
+   "name": "Hale",
+   "style": "places, people or events from British history",
+   "round": 3,
+   "strength": 1.0992467716413081,
+   "beats_yardstick": 0.34404405510795294
+  },
+  {
+   "name": "Potestas",
+   "style": "Latin or Greek borrowings",
+   "round": 5,
+   "strength": 1.0982073527795044,
+   "beats_yardstick": 0.3438305907201556
+  },
+  {
+   "name": "Governor",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 2,
+   "strength": 1.093106415418975,
+   "beats_yardstick": 0.3427809993108148
+  },
+  {
+   "name": "Remit Works",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 3,
+   "strength": 1.0898674576521914,
+   "beats_yardstick": 0.3421127923054064
+  },
+  {
+   "name": "Licentia",
+   "style": "Latin or Greek borrowings",
+   "round": 5,
+   "strength": 1.0660703331932857,
+   "beats_yardstick": 0.33716139351706376
+  },
+  {
+   "name": "Bearing",
+   "style": "nautical and navigation terms",
+   "round": 2,
+   "strength": 1.063327548956028,
+   "beats_yardstick": 0.3365859160620722
+  },
+  {
+   "name": "Yeoman",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 4,
+   "strength": 1.0533154599471473,
+   "beats_yardstick": 0.33447672060634503
+  },
+  {
+   "name": "Permitas",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 4,
+   "strength": 1.050256051634354,
+   "beats_yardstick": 0.3338295329048004
+  },
+  {
+   "name": "Least Privilege",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 1,
+   "strength": 1.0444049116912677,
+   "beats_yardstick": 0.3325882696962247
+  },
+  {
+   "name": "Ordinance",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 3,
+   "strength": 1.0429971182827142,
+   "beats_yardstick": 0.3322889291639354
+  },
+  {
+   "name": "Athelstan",
+   "style": "places, people or events from British history",
+   "round": 3,
+   "strength": 1.042368630843679,
+   "beats_yardstick": 0.33215520653363223
+  },
+  {
+   "name": "Gate Works",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 2,
+   "strength": 1.0315245990141149,
+   "beats_yardstick": 0.3298394688575335
+  },
+  {
+   "name": "Horos",
+   "style": "Latin or Greek borrowings",
+   "round": 1,
+   "strength": 1.0229460848147331,
+   "beats_yardstick": 0.32799612274855555
+  },
+  {
+   "name": "Custovane",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 1,
+   "strength": 1.022946084814733,
+   "beats_yardstick": 0.3279961227485555
+  },
+  {
+   "name": "Burh",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 2,
+   "strength": 1.0197251174094353,
+   "beats_yardstick": 0.3273013819060784
+  },
+  {
+   "name": "Consentra",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 4,
+   "strength": 1.01316813397036,
+   "beats_yardstick": 0.32588263697718645
+  },
+  {
+   "name": "Ostium",
+   "style": "Latin or Greek borrowings",
+   "round": 1,
+   "strength": 1.0123463357301654,
+   "beats_yardstick": 0.32570440105728354
+  },
+  {
+   "name": "Considered Response",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 3,
+   "strength": 1.011262871003341,
+   "beats_yardstick": 0.32546926944109544
+  },
+  {
+   "name": "Mooring",
+   "style": "nautical and navigation terms",
+   "round": 1,
+   "strength": 1.0070784293862127,
+   "beats_yardstick": 0.32455962754364764
+  },
+  {
+   "name": "Cipher",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 4,
+   "strength": 1.005634524226538,
+   "beats_yardstick": 0.324245172164805
+  },
+  {
+   "name": "Gate Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 4,
+   "strength": 1.0052698088909868,
+   "beats_yardstick": 0.32416569770227915
+  },
+  {
+   "name": "Hawser",
+   "style": "nautical and navigation terms",
+   "round": 2,
+   "strength": 1.0013943190768577,
+   "beats_yardstick": 0.3233200405392149
+  },
+  {
+   "name": "Bindera",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 2,
+   "strength": 0.9987554816525103,
+   "beats_yardstick": 0.3227430168705567
+  },
+  {
+   "name": "Bindara",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 4,
+   "strength": 0.9986888385737724,
+   "beats_yardstick": 0.3227284315635516
+  },
+  {
+   "name": "Escapement",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 1,
+   "strength": 0.9966059245881599,
+   "beats_yardstick": 0.3222722543029432
+  },
+  {
+   "name": "Instrument",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 1,
+   "strength": 0.9966059245881598,
+   "beats_yardstick": 0.3222722543029432
+  },
+  {
+   "name": "Erskine",
+   "style": "places, people or events from British history",
+   "round": 2,
+   "strength": 0.9961584546230089,
+   "beats_yardstick": 0.3221741740777259
+  },
+  {
+   "name": "Landfall",
+   "style": "nautical and navigation terms",
+   "round": 1,
+   "strength": 0.9862170038032992,
+   "beats_yardstick": 0.31998777827358243
+  },
+  {
+   "name": "Cartouche",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 3,
+   "strength": 0.9754458352948701,
+   "beats_yardstick": 0.3176029293135725
+  },
+  {
+   "name": "Gradevo",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 1,
+   "strength": 0.9707882069055811,
+   "beats_yardstick": 0.316566493425083
+  },
+  {
+   "name": "Soke",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 2,
+   "strength": 0.9662003434610791,
+   "beats_yardstick": 0.31554249939751633
+  },
+  {
+   "name": "Eldon",
+   "style": "places, people or events from British history",
+   "round": 2,
+   "strength": 0.9636692646094878,
+   "beats_yardstick": 0.31497625753616115
+  },
+  {
+   "name": "Bindral",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 3,
+   "strength": 0.9612524665924798,
+   "beats_yardstick": 0.3144347070003836
+  },
+  {
+   "name": "Ferovane",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 1,
+   "strength": 0.9606039995466283,
+   "beats_yardstick": 0.31428925427073046
+  },
+  {
+   "name": "Charter Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 3,
+   "strength": 0.9588575825440848,
+   "beats_yardstick": 0.3138972215912912
+  },
+  {
+   "name": "Grantia",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 4,
+   "strength": 0.9471493909590335,
+   "beats_yardstick": 0.31125736610996296
+  },
+  {
+   "name": "Grantwell",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 2,
+   "strength": 0.9344580700639656,
+   "beats_yardstick": 0.3083728030224245
+  },
+  {
+   "name": "Provisional Trust",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 1,
+   "strength": 0.9305290434662403,
+   "beats_yardstick": 0.3074748848803931
+  },
+  {
+   "name": "Soundings",
+   "style": "nautical and navigation terms",
+   "round": 1,
+   "strength": 0.9305290434662402,
+   "beats_yardstick": 0.30747488488039304
+  },
+  {
+   "name": "Livery",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 1,
+   "strength": 0.9255850109976554,
+   "beats_yardstick": 0.30634168472402096
+  },
+  {
+   "name": "Clavory",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 1,
+   "strength": 0.9255850109976553,
+   "beats_yardstick": 0.30634168472402096
+  },
+  {
+   "name": "Quorata",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 5,
+   "strength": 0.920903783500225,
+   "beats_yardstick": 0.3052652975267425
+  },
+  {
+   "name": "Trustlock",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 3,
+   "strength": 0.9204848492428471,
+   "beats_yardstick": 0.3051688061813037
+  },
+  {
+   "name": "Tiller",
+   "style": "nautical and navigation terms",
+   "round": 4,
+   "strength": 0.9128690853811248,
+   "beats_yardstick": 0.30341001536290435
+  },
+  {
+   "name": "Not Without Reason",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 5,
+   "strength": 0.9055295581875354,
+   "beats_yardstick": 0.30170657297194425
+  },
+  {
+   "name": "Indemnity",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 1,
+   "strength": 0.9011515778515998,
+   "beats_yardstick": 0.30068650795297064
+  },
+  {
+   "name": "Assay",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 1,
+   "strength": 0.8963214778604822,
+   "beats_yardstick": 0.2995576361628272
+  },
+  {
+   "name": "Ealdor",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 2,
+   "strength": 0.8879515289353892,
+   "beats_yardstick": 0.2975927908743328
+  },
+  {
+   "name": "Routeworks",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 1,
+   "strength": 0.8867170115919315,
+   "beats_yardstick": 0.29730205473030297
+  },
+  {
+   "name": "Scopeworks",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 1,
+   "strength": 0.8867170115919315,
+   "beats_yardstick": 0.29730205473030297
+  },
+  {
+   "name": "Qualified Consent",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 3,
+   "strength": 0.8832321262571557,
+   "beats_yardstick": 0.29648004343627493
+  },
+  {
+   "name": "Codicil Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 3,
+   "strength": 0.8767186525193196,
+   "beats_yardstick": 0.2949384839609669
+  },
+  {
+   "name": "Rider",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 5,
+   "strength": 0.8764514054125779,
+   "beats_yardstick": 0.29487508965277914
+  },
+  {
+   "name": "Cessantra",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 1,
+   "strength": 0.8724480802456557,
+   "beats_yardstick": 0.29392408529227326
+  },
+  {
+   "name": "Runnymede",
+   "style": "places, people or events from British history",
+   "round": 1,
+   "strength": 0.8630261047582494,
+   "beats_yardstick": 0.29167570540450183
+  },
+  {
+   "name": "Domesday",
+   "style": "places, people or events from British history",
+   "round": 1,
+   "strength": 0.8583420066816935,
+   "beats_yardstick": 0.2905525948492586
+  },
+  {
+   "name": "Thesmos",
+   "style": "Latin or Greek borrowings",
+   "round": 1,
+   "strength": 0.8583420066816932,
+   "beats_yardstick": 0.29055259484925855
+  },
+  {
+   "name": "Assurex",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 3,
+   "strength": 0.8494321403311816,
+   "beats_yardstick": 0.28840640760358766
+  },
+  {
+   "name": "Blazon",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 1,
+   "strength": 0.8490270908028743,
+   "beats_yardstick": 0.28830853162758163
+  },
+  {
+   "name": "Withheld Judgement",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 1,
+   "strength": 0.8490270908028742,
+   "beats_yardstick": 0.28830853162758163
+  },
+  {
+   "name": "Beacon",
+   "style": "nautical and navigation terms",
+   "round": 3,
+   "strength": 0.8470829821987548,
+   "beats_yardstick": 0.2878383831527969
+  },
+  {
+   "name": "Septalis",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 1,
+   "strength": 0.8443960755988141,
+   "beats_yardstick": 0.2871875786055302
+  },
+  {
+   "name": "Confirm Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 5,
+   "strength": 0.8442277303800538,
+   "beats_yardstick": 0.2871467635531921
+  },
+  {
+   "name": "Datum",
+   "style": "nautical and navigation terms",
+   "round": 1,
+   "strength": 0.8351864426302488,
+   "beats_yardstick": 0.2849478288493857
+  },
+  {
+   "name": "Restrictor",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 1,
+   "strength": 0.8351864426302488,
+   "beats_yardstick": 0.2849478288493857
+  },
+  {
+   "name": "Bind Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 5,
+   "strength": 0.833917962937384,
+   "beats_yardstick": 0.2846382358306708
+  },
+  {
+   "name": "Duly Noted",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 5,
+   "strength": 0.8334579041256028,
+   "beats_yardstick": 0.28452588476661816
+  },
+  {
+   "name": "Provisional Consent",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 4,
+   "strength": 0.8308267219510315,
+   "beats_yardstick": 0.2838826444894185
+  },
+  {
+   "name": "Tally",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 1,
+   "strength": 0.8260460305948915,
+   "beats_yardstick": 0.28271095295680937
+  },
+  {
+   "name": "Cura",
+   "style": "Latin or Greek borrowings",
+   "round": 4,
+   "strength": 0.8248343383100081,
+   "beats_yardstick": 0.28241337204806227
+  },
+  {
+   "name": "Wardessa",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 5,
+   "strength": 0.8140676586891066,
+   "beats_yardstick": 0.27975828609819586
+  },
+  {
+   "name": "Spindle",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 4,
+   "strength": 0.8105998204882976,
+   "beats_yardstick": 0.2788989215596285
+  },
+  {
+   "name": "Crest",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 4,
+   "strength": 0.8063199781212304,
+   "beats_yardstick": 0.27783550299146187
+  },
+  {
+   "name": "Godwin",
+   "style": "places, people or events from British history",
+   "round": 3,
+   "strength": 0.7996358619077539,
+   "beats_yardstick": 0.27616840222826616
+  },
+  {
+   "name": "Leeway",
+   "style": "nautical and navigation terms",
+   "round": 1,
+   "strength": 0.7990325666936706,
+   "beats_yardstick": 0.27601755419909163
+  },
+  {
+   "name": "Trustia",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 5,
+   "strength": 0.7986952859968037,
+   "beats_yardstick": 0.2759331930769314
+  },
+  {
+   "name": "Sanction Works",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 1,
+   "strength": 0.790161539831645,
+   "beats_yardstick": 0.2737921594932245
+  },
+  {
+   "name": "Somers",
+   "style": "places, people or events from British history",
+   "round": 2,
+   "strength": 0.785632707163629,
+   "beats_yardstick": 0.27265076866362836
+  },
+  {
+   "name": "Holdrix",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 3,
+   "strength": 0.7821205394679049,
+   "beats_yardstick": 0.2717631323183548
+  },
+  {
+   "name": "Hold Works",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 2,
+   "strength": 0.7808859713695935,
+   "beats_yardstick": 0.27145060290124573
+  },
+  {
+   "name": "Journeyman",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 2,
+   "strength": 0.7808571330355154,
+   "beats_yardstick": 0.2714432993056973
+  },
+  {
+   "name": "Mansfield",
+   "style": "places, people or events from British history",
+   "round": 4,
+   "strength": 0.779313078864214,
+   "beats_yardstick": 0.2710520382680183
+  },
+  {
+   "name": "Dashpot",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 2,
+   "strength": 0.7784910676625274,
+   "beats_yardstick": 0.27084357038409196
+  },
+  {
+   "name": "Sealer",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 5,
+   "strength": 0.7768303105357736,
+   "beats_yardstick": 0.27042202655612757
+  },
+  {
+   "name": "Verify Works",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 4,
+   "strength": 0.7715170782500854,
+   "beats_yardstick": 0.2690701083199835
+  },
+  {
+   "name": "Vouch Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 5,
+   "strength": 0.7712234409716751,
+   "beats_yardstick": 0.26899524806538444
+  },
+  {
+   "name": "Sanction Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 4,
+   "strength": 0.7697985756201925,
+   "beats_yardstick": 0.26863177326919013
+  },
+  {
+   "name": "Bind Works",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 2,
+   "strength": 0.769328228297552,
+   "beats_yardstick": 0.26851171106021987
+  },
+  {
+   "name": "Permit Works",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 2,
+   "strength": 0.7693007498619445,
+   "beats_yardstick": 0.2685046956170515
+  },
+  {
+   "name": "Cognizance",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 1,
+   "strength": 0.7682691037528008,
+   "beats_yardstick": 0.2682412115120949
+  },
+  {
+   "name": "Standing",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 2,
+   "strength": 0.7655572408812673,
+   "beats_yardstick": 0.26754769115880267
+  },
+  {
+   "name": "Checkworks",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 1,
+   "strength": 0.763938795266301,
+   "beats_yardstick": 0.26713316998911546
+  },
+  {
+   "name": "Sober Judgement",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 3,
+   "strength": 0.7633387288049908,
+   "beats_yardstick": 0.26697935990492394
+  },
+  {
+   "name": "Mund",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 2,
+   "strength": 0.761387533356518,
+   "beats_yardstick": 0.2664787794983238
+  },
+  {
+   "name": "Sanctrix",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 2,
+   "strength": 0.7469123478620557,
+   "beats_yardstick": 0.2627437030318861
+  },
+  {
+   "name": "Borh",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 1,
+   "strength": 0.7467752992032537,
+   "beats_yardstick": 0.26270815816473075
+  },
+  {
+   "name": "Yieldence",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 4,
+   "strength": 0.7420087419444737,
+   "beats_yardstick": 0.26146977024701085
+  },
+  {
+   "name": "Indenture",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 3,
+   "strength": 0.7223790745257515,
+   "beats_yardstick": 0.2563256846433352
+  },
+  {
+   "name": "Withheld Judgment",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 2,
+   "strength": 0.7186133260688603,
+   "beats_yardstick": 0.25533064184802123
+  },
+  {
+   "name": "Verify Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 2,
+   "strength": 0.7161388946975364,
+   "beats_yardstick": 0.25467535935852403
+  },
+  {
+   "name": "Limendra",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 1,
+   "strength": 0.7131881798818209,
+   "beats_yardstick": 0.2538924376318433
+  },
+  {
+   "name": "Fortescue",
+   "style": "places, people or events from British history",
+   "round": 2,
+   "strength": 0.7114770211181052,
+   "beats_yardstick": 0.25343765694361237
+  },
+  {
+   "name": "Wessex",
+   "style": "places, people or events from British history",
+   "round": 3,
+   "strength": 0.7067542100265566,
+   "beats_yardstick": 0.2521795772204894
+  },
+  {
+   "name": "Chartered",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 4,
+   "strength": 0.7004910197417419,
+   "beats_yardstick": 0.2505046108959166
+  },
+  {
+   "name": "Admit Works",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 4,
+   "strength": 0.7001909117941977,
+   "beats_yardstick": 0.25042416456775873
+  },
+  {
+   "name": "Prudent Delay",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 3,
+   "strength": 0.6926642149309985,
+   "beats_yardstick": 0.24840091044184093
+  },
+  {
+   "name": "Allow Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 2,
+   "strength": 0.6903823434194438,
+   "beats_yardstick": 0.2477853603509164
+  },
+  {
+   "name": "Cinque Ports",
+   "style": "places, people or events from British history",
+   "round": 1,
+   "strength": 0.6725389229657655,
+   "beats_yardstick": 0.242936986431686
+  },
+  {
+   "name": "Second Opinion",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 1,
+   "strength": 0.6725389229657655,
+   "beats_yardstick": 0.242936986431686
+  },
+  {
+   "name": "Assure Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 5,
+   "strength": 0.6723200203668346,
+   "beats_yardstick": 0.24287711860330516
+  },
+  {
+   "name": "Gearing",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 4,
+   "strength": 0.6711143168711556,
+   "beats_yardstick": 0.24254720011519623
+  },
+  {
+   "name": "Moot",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 1,
+   "strength": 0.6685528917429979,
+   "beats_yardstick": 0.241845358322149
+  },
+  {
+   "name": "Baffle",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 1,
+   "strength": 0.6645809092529938,
+   "beats_yardstick": 0.2407544416723821
+  },
+  {
+   "name": "Meterworks",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 1,
+   "strength": 0.6566788018563234,
+   "beats_yardstick": 0.2385747420270531
+  },
+  {
+   "name": "Grant Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 2,
+   "strength": 0.6528791458403767,
+   "beats_yardstick": 0.23752219149369763
+  },
+  {
+   "name": "Gemot",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 2,
+   "strength": 0.6528507916144678,
+   "beats_yardstick": 0.23751432609252748
+  },
+  {
+   "name": "Licensia",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 4,
+   "strength": 0.6521658382021814,
+   "beats_yardstick": 0.23732427217164798
+  },
+  {
+   "name": "Camden",
+   "style": "places, people or events from British history",
+   "round": 2,
+   "strength": 0.6416603186274228,
+   "beats_yardstick": 0.23439739125706033
+  },
+  {
+   "name": "Grantworks",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 1,
+   "strength": 0.641040024625225,
+   "beats_yardstick": 0.23422387227283625
+  },
+  {
+   "name": "Marlborough",
+   "style": "places, people or events from British history",
+   "round": 1,
+   "strength": 0.641040024625225,
+   "beats_yardstick": 0.23422387227283625
+  },
+  {
+   "name": "Reasonable Doubt",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 1,
+   "strength": 0.625618105703311,
+   "beats_yardstick": 0.22988436554475655
+  },
+  {
+   "name": "Sluice",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 1,
+   "strength": 0.6141913495659012,
+   "beats_yardstick": 0.22663718547979536
+  },
+  {
+   "name": "Tincture",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 5,
+   "strength": 0.6131935677006778,
+   "beats_yardstick": 0.22635234199239818
+  },
+  {
+   "name": "Freeman",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 1,
+   "strength": 0.6104086801393825,
+   "beats_yardstick": 0.2255562101971182
+  },
+  {
+   "name": "Yieldra",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 2,
+   "strength": 0.6065345227368442,
+   "beats_yardstick": 0.22444595345793858
+  },
+  {
+   "name": "Under Advisement",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 5,
+   "strength": 0.5985705292463281,
+   "beats_yardstick": 0.2221536030972343
+  },
+  {
+   "name": "Sokeman",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 4,
+   "strength": 0.5903561440985656,
+   "beats_yardstick": 0.2197749397084167
+  },
+  {
+   "name": "Fairway",
+   "style": "nautical and navigation terms",
+   "round": 1,
+   "strength": 0.5879837044752747,
+   "beats_yardstick": 0.21908523548587303
+  },
+  {
+   "name": "Subject To Review",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 5,
+   "strength": 0.5855634394350661,
+   "beats_yardstick": 0.21838037006402825
+  },
+  {
+   "name": "Trustellar",
+   "style": "coined words (invented, pronounceable, with a meaningful root)",
+   "round": 2,
+   "strength": 0.5816671882112636,
+   "beats_yardstick": 0.21724296914857225
+  },
+  {
+   "name": "Calculated Risk",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 2,
+   "strength": 0.5808452086523421,
+   "beats_yardstick": 0.21700259237277347
+  },
+  {
+   "name": "Vetworks",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 1,
+   "strength": 0.5769425784352558,
+   "beats_yardstick": 0.21585930368159348
+  },
+  {
+   "name": "Trim",
+   "style": "nautical and navigation terms",
+   "round": 3,
+   "strength": 0.5662795115251175,
+   "beats_yardstick": 0.21271843051230394
+  },
+  {
+   "name": "Egbert",
+   "style": "places, people or events from British history",
+   "round": 3,
+   "strength": 0.5655725940675665,
+   "beats_yardstick": 0.21250931396294048
+  },
+  {
+   "name": "Cnut",
+   "style": "places, people or events from British history",
+   "round": 3,
+   "strength": 0.5650668750829699,
+   "beats_yardstick": 0.2123596466959875
+  },
+  {
+   "name": "Considered Delay",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 2,
+   "strength": 0.5642550592856975,
+   "beats_yardstick": 0.212119271240059
+  },
+  {
+   "name": "Approve Works",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 4,
+   "strength": 0.5504777999683632,
+   "beats_yardstick": 0.20801738942280312
+  },
+  {
+   "name": "Justified Caution",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 2,
+   "strength": 0.5404859443057973,
+   "beats_yardstick": 0.205015708453883
+  },
+  {
+   "name": "Domboc",
+   "style": "places, people or events from British history",
+   "round": 1,
+   "strength": 0.5374041283619997,
+   "beats_yardstick": 0.20408529504601994
+  },
+  {
+   "name": "Nothing Personal",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 5,
+   "strength": 0.5289143658750379,
+   "beats_yardstick": 0.20151089966285302
+  },
+  {
+   "name": "Qualified Approval",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 4,
+   "strength": 0.5141413089524441,
+   "beats_yardstick": 0.1969912598838423
+  },
+  {
+   "name": "Berth",
+   "style": "nautical and navigation terms",
+   "round": 1,
+   "strength": 0.5129909676491272,
+   "beats_yardstick": 0.1966371786567363
+  },
+  {
+   "name": "Regulator",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 2,
+   "strength": 0.5116937477120314,
+   "beats_yardstick": 0.19623751260155173
+  },
+  {
+   "name": "Polite Refusal",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 1,
+   "strength": 0.5095493999530829,
+   "beats_yardstick": 0.19557597860291012
+  },
+  {
+   "name": "Reluctant Approval",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 2,
+   "strength": 0.5069162988744845,
+   "beats_yardstick": 0.1947621725477522
+  },
+  {
+   "name": "Damper",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 3,
+   "strength": 0.5042860902480072,
+   "beats_yardstick": 0.19394761490987789
+  },
+  {
+   "name": "Tressure",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 1,
+   "strength": 0.49589599877965324,
+   "beats_yardstick": 0.1913382124285356
+  },
+  {
+   "name": "Alfred",
+   "style": "places, people or events from British history",
+   "round": 3,
+   "strength": 0.4917183839286492,
+   "beats_yardstick": 0.19003262176916877
+  },
+  {
+   "name": "Screen Works",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 4,
+   "strength": 0.48522092801303557,
+   "beats_yardstick": 0.18799363461460802
+  },
+  {
+   "name": "Mind How You Go",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 5,
+   "strength": 0.47712734317239025,
+   "beats_yardstick": 0.18543935777198461
+  },
+  {
+   "name": "Pilot",
+   "style": "nautical and navigation terms",
+   "round": 4,
+   "strength": 0.46768449957125124,
+   "beats_yardstick": 0.18243887846358386
+  },
+  {
+   "name": "Wite",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 1,
+   "strength": 0.46582163312684327,
+   "beats_yardstick": 0.18184433709567763
+  },
+  {
+   "name": "Chevron",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 3,
+   "strength": 0.4401439341469973,
+   "beats_yardstick": 0.17356019658727712
+  },
+  {
+   "name": "Pawl",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 1,
+   "strength": 0.4398151031941706,
+   "beats_yardstick": 0.1734530210557252
+  },
+  {
+   "name": "Device",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 5,
+   "strength": 0.4395478006249021,
+   "beats_yardstick": 0.1733658789218553
+  },
+  {
+   "name": "Chequers",
+   "style": "places, people or events from British history",
+   "round": 1,
+   "strength": 0.4366110090592884,
+   "beats_yardstick": 0.1724072570969706
+  },
+  {
+   "name": "Cautious Optimism",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 4,
+   "strength": 0.4116737412762776,
+   "beats_yardstick": 0.16417679625707396
+  },
+  {
+   "name": "Token",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 3,
+   "strength": 0.40956142263942263,
+   "beats_yardstick": 0.1634721056733555
+  },
+  {
+   "name": "Snubber",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 2,
+   "strength": 0.4084188684897991,
+   "beats_yardstick": 0.1630904427844719
+  },
+  {
+   "name": "Charge",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 2,
+   "strength": 0.39181346949022194,
+   "beats_yardstick": 0.157503941444911
+  },
+  {
+   "name": "Licence Works",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 3,
+   "strength": 0.38625334750194856,
+   "beats_yardstick": 0.155616662742488
+  },
+  {
+   "name": "Necessary Evil",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 4,
+   "strength": 0.3789311836229918,
+   "beats_yardstick": 0.15311835458342926
+  },
+  {
+   "name": "Tithing",
+   "style": "Old or Middle English words and archaic crafts",
+   "round": 2,
+   "strength": 0.37420054846896444,
+   "beats_yardstick": 0.15149639490426237
+  },
+  {
+   "name": "Sounding",
+   "style": "nautical and navigation terms",
+   "round": 2,
+   "strength": 0.37334870865021547,
+   "beats_yardstick": 0.15120367024539536
+  },
+  {
+   "name": "Careful Hesitation",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 3,
+   "strength": 0.3726261720980941,
+   "beats_yardstick": 0.15095522076212636
+  },
+  {
+   "name": "Drogue",
+   "style": "nautical and navigation terms",
+   "round": 2,
+   "strength": 0.367663131707016,
+   "beats_yardstick": 0.14924470431942619
+  },
+  {
+   "name": "Pending Approval",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 5,
+   "strength": 0.3671264876254342,
+   "beats_yardstick": 0.14905933644523398
+  },
+  {
+   "name": "Vet Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 4,
+   "strength": 0.3669247821042506,
+   "beats_yardstick": 0.14898964233205667
+  },
+  {
+   "name": "Ratchet",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 1,
+   "strength": 0.3656455425341225,
+   "beats_yardstick": 0.14854736833177354
+  },
+  {
+   "name": "Choke",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 1,
+   "strength": 0.3597122313823886,
+   "beats_yardstick": 0.14649000775957635
+  },
+  {
+   "name": "Yield Labs",
+   "style": "plain English verbs or nouns with a suffix such as Labs or Works",
+   "round": 2,
+   "strength": 0.3519195076238942,
+   "beats_yardstick": 0.14377274820689304
+  },
+  {
+   "name": "Hallmark",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 5,
+   "strength": 0.3478101641158187,
+   "beats_yardstick": 0.1423328743609672
+  },
+  {
+   "name": "Mint",
+   "style": "heraldry, guild and craft vocabulary",
+   "round": 3,
+   "strength": 0.34130540184864644,
+   "beats_yardstick": 0.14004374286847912
+  },
+  {
+   "name": "Sunset",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 2,
+   "strength": 0.3265810279371129,
+   "beats_yardstick": 0.13481658555820114
+  },
+  {
+   "name": "Whip",
+   "style": "British legal, constitutional or parliamentary terms",
+   "round": 4,
+   "strength": 0.30270476650931644,
+   "beats_yardstick": 0.12620409612541145
+  },
+  {
+   "name": "Tutor",
+   "style": "Latin or Greek borrowings",
+   "round": 3,
+   "strength": 0.2987303977907098,
+   "beats_yardstick": 0.12475381373345376
+  },
+  {
+   "name": "Trip",
+   "style": "engineering, hydraulic or mechanical parts that meter or restrain",
+   "round": 3,
+   "strength": 0.2764931677061775,
+   "beats_yardstick": 0.11654959410491246
+  },
+  {
+   "name": "Limited Liability",
+   "style": "short understated phrases in the style of Iain M. Banks ship names",
+   "round": 2,
+   "strength": 0.15783456300059892,
+   "beats_yardstick": 0.07003466552137746
+  }
+ ],
+ "cost": 0.5030298800000003,
+ "judgements": 3708
+}
