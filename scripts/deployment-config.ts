@@ -221,6 +221,22 @@ export interface JevConfig {
 }
 
 /**
+ * Records service connector: one RPC-only Gatekeeper Worker (`packages/gatekeeper-records-service`)
+ * bound to the Workshop as `GATEKEEPER_RECORDSERVICE`. Gadgets connect to operator-approved
+ * datastores of the standards-based Records service at `url`; each datastore's credential lives
+ * only in the Worker's `RECORDS_SERVICE_DATASTORES` secret, installed with `wrangler secret put`.
+ * Independent of the older `records` block, which serves the legacy Projects runtime.
+ *
+ * Absent or disabled generates nothing.
+ */
+export interface RecordsServiceConfig {
+  /** Whether the connector Worker is built, deployed and bound at all. */
+  enabled: boolean;
+  /** The Records service origin, e.g. "https://records.surprisingly.ltd" (https, no path). */
+  url: string;
+}
+
+/**
  * Omni-search: one Worker (`packages/gatekeeper-search`) holding a deployment-wide hybrid index --
  * a SQLite Durable Object for the lexical half and facets, a Vectorize index for the dense half, and
  * an embed queue with a dead-letter queue for the work it gives itself. Serves its own SPA and API
@@ -305,6 +321,8 @@ export interface DeploymentConfig {
     records?: { name: string };
     /** Jev decisions. Only required when `jev.enabled`. */
     jev?: { name: string };
+    /** Records service connector. Only required when `recordsService.enabled`. */
+    recordsService?: { name: string };
     /** Omni-search. Only required when `search.enabled`. */
     search?: { name: string };
   };
@@ -325,6 +343,8 @@ export interface DeploymentConfig {
   records?: RecordsConfig;
   /** Jev decisions. Absent means disabled, as does `enabled: false`. */
   jev?: JevConfig;
+  /** Records service connector. Absent means disabled, as does `enabled: false`. */
+  recordsService?: RecordsServiceConfig;
   /** Omni-search. Absent means disabled, as does `enabled: false`. */
   search?: SearchConfig;
   /** Workshop KV/R2. `null` requests Wrangler automatic provisioning. */
@@ -430,6 +450,8 @@ export interface GeneratedConfigs {
   records?: ProdWranglerConfig;
   /** Absent when `jev.enabled` is false or the block is missing. */
   jev?: ProdWranglerConfig;
+  /** Absent when `recordsService.enabled` is false or the block is missing. */
+  recordsService?: ProdWranglerConfig;
   /** Absent when `search.enabled` is false or the block is missing. */
   search?: ProdWranglerConfig;
 }
@@ -453,6 +475,8 @@ export interface BaseConfigs {
   records?: ProdWranglerConfig;
   /** Jev base; required only when Jev is enabled. */
   jev?: ProdWranglerConfig;
+  /** Records service connector base; required only when it is enabled. */
+  recordsService?: ProdWranglerConfig;
   /** Search base; required only when search is enabled. */
   search?: ProdWranglerConfig;
 }

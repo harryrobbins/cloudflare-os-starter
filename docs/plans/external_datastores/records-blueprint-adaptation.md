@@ -1,6 +1,6 @@
 # Adapt the board and report blueprints to the new Records service
 
-2026-09-25 · **New implementation plan; no blueprint or gatekeeper changes are made by this document.**
+2026-09-25 · **Implementation plan.** Board and connector implemented in `packages/blueprint-work-board` and `packages/gatekeeper-records-service`; the report and the acceptance gates below remain open.
 
 This plan follows [the Records direction](records-direction.md) and the new service's actual
 interfaces. It replaces the earlier assumption that the existing Projects blueprint can connect

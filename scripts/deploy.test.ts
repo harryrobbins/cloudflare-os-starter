@@ -91,6 +91,7 @@ async function baseConfigs(): Promise<BaseConfigs> {
     records: await baseConfig("../packages/gatekeeper-records/wrangler.jsonc"),
     jev: await baseConfig("../packages/gatekeeper-jev/wrangler.jsonc"),
     search: await baseConfig("../packages/gatekeeper-search/wrangler.jsonc"),
+    recordsService: await baseConfig("../packages/gatekeeper-records-service/wrangler.jsonc"),
   };
 }
 
@@ -591,6 +592,50 @@ test("requires a Jev Worker name only when Jev is enabled", () => {
     c.jev = { enabled: true };
     c.workers.jev = { name: c.workers.webSearch?.name ?? c.workers.procgen.name };
   })), /must be unique/);
+});
+
+test("deploys the Records service connector only when enabled, privately, bound as a vendor", async () => {
+  const bases = await baseConfigs();
+  const off = generateConfigs(validConfig, bases);
+  assert.equal(off.recordsService, undefined);
+  assert.equal(off.workshop.services!.some((s) => s.binding === "GATEKEEPER_RECORDSERVICE"), false);
+  assert.equal(deployOrder(validConfig).includes("recordsService"), false);
+  assert.equal(buildCommands(validConfig).some(({ args }) => args.includes("gatekeeper-records-service")), false);
+
+  const config = validateConfig(variant((c) => {
+    c.workers.recordsService = { name: "acme-cloudflare-os-records-service" };
+    c.recordsService = { enabled: true, url: "https://records.example.com" };
+  }));
+  const generated = generateConfigs(config, bases);
+  const connector = generated.recordsService!;
+  assert.equal(connector.name, "acme-cloudflare-os-records-service");
+  assert.equal(connector.workers_dev, false);
+  assert.equal(connector.preview_urls, false);
+  assert.equal(connector.routes, undefined);
+  assert.deepEqual(connector.vars, { RECORDS_SERVICE_URL: "https://records.example.com" });
+  assert.deepEqual(generated.workshop.services!.find((s) => s.binding === "GATEKEEPER_RECORDSERVICE"), {
+    binding: "GATEKEEPER_RECORDSERVICE",
+    service: "acme-cloudflare-os-records-service",
+    entrypoint: "GatekeeperVendor",
+  });
+  assert.equal(generated.router.services!.some((s) => s.service === "acme-cloudflare-os-records-service"), false);
+  const order = deployOrder(config);
+  assert.ok(order.indexOf("recordsService") < order.indexOf("workshop"));
+  assert.ok(buildCommands(config).some(({ args }) => args.includes("gatekeeper-records-service")));
+});
+
+test("validates the Records service connector block only when enabled", () => {
+  assert.throws(() => validateConfig(variant((c) => { c.recordsService = { enabled: true, url: "https://records.example.com" }; })), /workers\.recordsService\.name/);
+  for (const url of ["http://records.example.com", "https://records.example.com/", "https://records.example.com/v1"]) {
+    assert.throws(() => validateConfig(variant((c) => {
+      c.workers.recordsService = { name: "acme-records-service" };
+      c.recordsService = { enabled: true, url };
+    })), /bare https origin/);
+  }
+  assert.doesNotThrow(() => validateConfig(variant((c) => {
+    c.recordsService = { enabled: false, url: "<records-url>" };
+    c.workers.recordsService = { name: "<records-service-worker>" };
+  })));
 });
 
 test("keeps every Worker behind the router off the public internet", async () => {

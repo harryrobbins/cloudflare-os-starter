@@ -30,8 +30,8 @@ dated observation, not a promise about future data. Existing legacy Records data
 | API | Scoped credentials, reads, commands, revisions, idempotency, JSON Schema, constrained JSON-LD, OpenAPI | Tenant/admin provisioning and discovery APIs, general query language |
 | Sync | Atomic snapshot up to 5,000 records; sequence plus permission-epoch pull; SSE hints | Larger stable snapshots, deletions/tombstones, full process/network failure matrix |
 | Writes | One record per command; transactional journal/counter/outbox markers | Multi-record commands, erasure/retention, webhook delivery |
-| OS integration | Client, viewer-verifier/broker seams, tested ApprovalQueue bridge | Live vendor enrollment, credential broker, configurator, observer implementation, gadget rollout |
-| Blueprints | Existing project board/report use legacy Projects contracts | Work blueprint adaptation and generic explorer; plans below |
+| OS integration | Client, viewer-verifier/broker seams, tested ApprovalQueue bridge; `gatekeeper-records-service` connector (vendor `recordservice`) hosting that bridge with durable pending actions, a datastore configurator and observer registration | Deployment and signed-in qualification; per-person principals and a credential broker (the connector uses operator-approved datastore credentials, and all Access members may read approved datastores) |
+| Blueprints | Work Board (`format.work-board`) and read-only Records Explorer (`format.records-explorer`) on the new connector; legacy project board/report unchanged | Real-platform qualification, Work Report, explorer exports and approved explorer commands |
 | Operations | Pinned images, Compose, checksummed releases; local logical restore | Off-host backups, PITR/recovery objectives, rotation, monitoring, business-data qualification |
 
 Local qualification measured 35,840 successful commands in ten minutes (59.73/s), zero request
@@ -50,5 +50,5 @@ local machine/workload, not homeserver capacity or an enterprise SLA. See the
    first, approved commands later, with no owner credential or arbitrary SQL interface.
 3. Complete operational qualification before relying on the homeserver for business data.
 
-The blueprint documents are new plans, not delivered features. Complete their shared connector
+The Work Board, Records Explorer and connector are implemented and unit-tested (see their package READMEs), but not yet deployed or qualified on the real platform. Complete their shared connector
 work once, with both clients proving the same authority boundary.

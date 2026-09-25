@@ -1,0 +1,17 @@
+{
+  "blueprintId": "format.work-board",
+  "title": "Work Board",
+  "description": "A shared board of work items stored in a Records datastore. Several boards and explorers can use the same datastore; every change is approved and attributed to the person who made it.",
+  "output": {
+    "id": "work-board",
+    "noun": "Work board",
+    "plural": "Work boards",
+    "icon": "kanban"
+  },
+  "author": {
+    "type": "user",
+    "name": "Surprisingly Ltd",
+    "id": "harryrobbins@gmail.com"
+  },
+  "revision": 1
+}

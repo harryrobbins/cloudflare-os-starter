@@ -1,0 +1,7 @@
+{
+  "service": "records",
+  "moduleId": "work",
+  "apiMajor": 1,
+  "features": [],
+  "scopes": ["work.read", "work.write"]
+}

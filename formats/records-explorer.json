@@ -1,0 +1,17 @@
+{
+  "blueprintId": "format.records-explorer",
+  "title": "Records Explorer",
+  "description": "Browse any Records datastore: its entities, records, model definitions and recent changes. Read-only; several explorers and boards can share one datastore.",
+  "output": {
+    "id": "records-explorer",
+    "noun": "Records explorer",
+    "plural": "Records explorers",
+    "icon": "table"
+  },
+  "author": {
+    "type": "user",
+    "name": "Surprisingly Ltd",
+    "id": "harryrobbins@gmail.com"
+  },
+  "revision": 1
+}

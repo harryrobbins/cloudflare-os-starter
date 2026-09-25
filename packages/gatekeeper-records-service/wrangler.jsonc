@@ -1,0 +1,26 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "gatekeeper-records-service",
+  "main": ".wrangler/validate/src/index.ts",
+  "build": {
+    "command": "pnpm exec capnweb-validate build --out .wrangler/validate",
+    "watch_dir": "src"
+  },
+  "compatibility_date": "2026-08-08",
+  "compatibility_flags": ["allow_irrevocable_stub_storage", "nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["RecordsServiceGatekeeper"] }
+  ],
+  // scripts/deploy.ts fills RECORDS_SERVICE_URL from deployment.jsonc.
+  "vars": { "RECORDS_SERVICE_URL": "https://records.example.invalid" },
+  // Secret (wrangler secret put RECORDS_SERVICE_DATASTORES): a JSON array of
+  // { "id": "<datastore uuid>", "label": "Team work", "key": "rk_…" }, one per approved datastore.
+  // Without it the connector lists no datastores.
+  "observability": {
+    "enabled": true,
+    "logs": { "invocation_logs": false },
+    "traces": { "enabled": true }
+  }
+}

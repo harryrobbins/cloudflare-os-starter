@@ -46,6 +46,7 @@ const packageDirs = {
   webSearch: "packages/gatekeeper-websearch",
   records: "packages/gatekeeper-records",
   jev: "packages/gatekeeper-jev",
+  recordsService: "packages/gatekeeper-records-service",
   search: "packages/gatekeeper-search",
 } as const;
 const generatedPaths = Object.fromEntries(
@@ -124,6 +125,11 @@ const jevPaths = [
 
 const searchPaths = [
   "workers.search.name",
+];
+
+const recordsServicePaths = [
+  "workers.recordsService.name",
+  "recordsService.url",
 ];
 
 const resourcePaths = [
@@ -229,6 +235,7 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
     ...(config.records?.enabled === true ? recordsPaths : []),
     ...(config.jev?.enabled ? jevPaths : []),
     ...(config.search?.enabled === true ? searchPaths : []),
+    ...(config.recordsService?.enabled === true ? recordsServicePaths : []),
   ];
   for (const path of activePaths) {
     const value = valueAt(config, path);
@@ -291,6 +298,13 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
       search: undefined,
     };
   }
+  if (config.recordsService?.enabled !== true) {
+    activeConfig = {
+      ...activeConfig,
+      workers: { ...activeConfig.workers, recordsService: undefined },
+      recordsService: undefined,
+    };
+  }
   const placeholder = JSON.stringify(activeConfig).match(/<[^>]+>/)?.[0];
   if (placeholder) throw new Error(`Replace deployment placeholder ${placeholder}.`);
 
@@ -333,11 +347,12 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
     .filter(([key]) => key !== "records" || config.records?.enabled === true)
     .filter(([key]) => key !== "jev" || (config.jev?.enabled ?? false))
     .filter(([key]) => key !== "search" || config.search?.enabled === true)
+    .filter(([key]) => key !== "recordsService" || config.recordsService?.enabled === true)
     .map(([, worker]) => worker!.name);
   if (new Set(workerNames).size !== workerNames.length) {
     throw new Error(
       "Router, Workshop, Context, Scheduler, Synthetic Data, chat, web search, Records, Jev, " +
-      "search, and custom Gatekeeper names must be unique.");
+      "search, Records service, and custom Gatekeeper names must be unique.");
   }
   if (!workerNames.every((name) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(name))) {
     throw new Error("Worker names must use lowercase letters, numbers, and hyphens.");
@@ -386,6 +401,7 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
   validateChat(config);
   validateRecords(config);
   validateSearch(config);
+  validateRecordsService(config);
 
   if (typeof config.errorReporting.enabled !== "boolean") {
     throw new Error("Error reporting enabled must be a boolean.");
@@ -770,6 +786,24 @@ export function searchNames(config: DeploymentConfig): SearchResourceNames {
   };
 }
 
+/**
+ * The Records service connector block. Dormant unless enabled. Its datastore credentials are a
+ * Worker secret, never deployment configuration, so only the service origin is checked here.
+ */
+function validateRecordsService(config: DeploymentConfig): void {
+  const block = config.recordsService;
+  if (block === undefined) return;
+  if (block === null || typeof block !== "object" || Array.isArray(block) || typeof block.enabled !== "boolean") {
+    throw new Error('recordsService must be an object with a boolean "enabled".');
+  }
+  if (!block.enabled) return;
+  let url: URL | undefined;
+  try { url = new URL(block.url); } catch { url = undefined; }
+  if (!url || url.protocol !== "https:" || url.origin !== block.url || url.username || url.password) {
+    throw new Error("recordsService.url must be a bare https origin, e.g. https://records.example.com (no path or trailing slash).");
+  }
+}
+
 /** The Records change queue and its dead-letter queue, defaults applied. */
 export function recordsQueues(config: DeploymentConfig): { changes: string; deadLetter: string } {
   const worker = config.workers.records?.name;
@@ -849,6 +883,8 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
   if (config.jev?.enabled && !jev) throw new Error("Jev base configuration is required.");
   const search = config.search?.enabled ? structuredClone(bases.search) : undefined;
   if (config.search?.enabled && !search) throw new Error("Search base configuration is required.");
+  const recordsService = config.recordsService?.enabled ? structuredClone(bases.recordsService) : undefined;
+  if (config.recordsService?.enabled && !recordsService) throw new Error("Records service connector base configuration is required.");
   const origin = publicOrigin(config);
   // One value for every GATEKEEPER_CONTEXT vendor binding: the Workshop's and search's feed must
   // read the same Library, and a different domain would silently index an empty one.
@@ -983,6 +1019,13 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     ...(jev ? [{
       binding: "GATEKEEPER_JEV",
       service: config.workers.jev!.name,
+      entrypoint: "GatekeeperVendor",
+    }] : []),
+    // RPC only, like Synthetic Data. Vendor id "recordservice": the Workshop derives it from the
+    // binding name, and blueprints name it as their binding's gatekeeperName.
+    ...(recordsService ? [{
+      binding: "GATEKEEPER_RECORDSERVICE",
+      service: config.workers.recordsService!.name,
       entrypoint: "GatekeeperVendor",
     }] : []),
     // The agent's read-only SearchSession. Opt-in like chat's, and public content only in v1: the
@@ -1159,6 +1202,13 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     setCommon(jev, config, config.workers.jev!.name);
   }
 
+  if (recordsService && config.recordsService) {
+    // RPC only. RECORDS_SERVICE_DATASTORES (approved datastore credentials) is a Worker secret,
+    // never generated here; without it the connector lists no datastores.
+    setCommon(recordsService, config, config.workers.recordsService!.name);
+    recordsService.vars = { RECORDS_SERVICE_URL: config.recordsService.url };
+  }
+
   if (search && config.search) {
     setCommon(search, config, config.workers.search!.name);
     search.vars = {
@@ -1220,6 +1270,7 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     ...(records && { records }),
     ...(jev && { jev }),
     ...(search && { search }),
+    ...(recordsService && { recordsService }),
   };
   requireNoDevValues(generated, "generated production config");
   requireNoLocalConnectionStrings(generated);
@@ -1355,6 +1406,9 @@ export function buildCommandBatches(
       ...(config.jev?.enabled
         ? [{ args: ownBuild("gatekeeper-jev", "build", useCache) }]
         : []),
+      ...(config.recordsService?.enabled
+        ? [{ args: ownBuild("gatekeeper-records-service", "build", useCache) }]
+        : []),
       // Search's `build` is the Vite build of its SPA into `app/dist`, like chat's; the Worker bundle
       // is its capnweb-validate `build.command`, which wrangler runs at deploy time.
       ...(config.search?.enabled
@@ -1460,6 +1514,8 @@ export function deployOrder(config: DeploymentConfig): (keyof typeof packageDirs
     // Records binds nothing; the Workshop (vendor) and the router (/gatekeeper/records) bind it.
     ...(config.records?.enabled ? ["records" as const] : []),
     ...(config.jev?.enabled ? ["jev" as const] : []),
+    // Binds nothing; only the Workshop binds it (as a Gatekeeper vendor).
+    ...(config.recordsService?.enabled ? ["recordsService" as const] : []),
     ...(config.search?.enabled ? ["search" as const] : []),
     ...(chatFirst ? chat : []),
     "workshop",
@@ -1804,6 +1860,9 @@ async function main(): Promise<void> {
       ? { records: await readJsonc(join(root, packageDirs.records, "wrangler.jsonc")) }
       : {}),
     ...(config.jev?.enabled ? { jev: await readJsonc(join(root, packageDirs.jev, "wrangler.jsonc")) } : {}),
+    ...(config.recordsService?.enabled
+      ? { recordsService: await readJsonc(join(root, packageDirs.recordsService, "wrangler.jsonc")) }
+      : {}),
     ...(config.search?.enabled
       ? { search: await readJsonc(join(root, packageDirs.search, "wrangler.jsonc")) }
       : {}),

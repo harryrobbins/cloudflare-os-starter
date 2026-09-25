@@ -267,6 +267,21 @@ importers:
         specifier: 13.6.31
         version: 13.6.31
 
+  packages/blueprint-records-explorer:
+    devDependencies:
+      esbuild:
+        specifier: 0.28.1
+        version: 0.28.1
+      jsdom:
+        specifier: 26.1.0
+        version: 26.1.0(supports-color@10.2.2)
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@26.1.0)(@vitest/browser-preview@4.1.10)(jsdom@26.1.0(supports-color@10.2.2))(vite@7.3.6(@types/node@26.1.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2))
+      yjs:
+        specifier: 13.6.31
+        version: 13.6.31
+
   packages/blueprint-tessera:
     devDependencies:
       capnweb:
@@ -332,6 +347,21 @@ importers:
       wrangler:
         specifier: 'catalog:'
         version: 4.124.0(@cloudflare/workers-types@5.20260818.1)
+      yjs:
+        specifier: 13.6.31
+        version: 13.6.31
+
+  packages/blueprint-work-board:
+    devDependencies:
+      esbuild:
+        specifier: 0.28.1
+        version: 0.28.1
+      jsdom:
+        specifier: 26.1.0
+        version: 26.1.0(supports-color@10.2.2)
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@26.1.0)(@vitest/browser-preview@4.1.10)(jsdom@26.1.0(supports-color@10.2.2))(vite@7.3.6(@types/node@26.1.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2))
       yjs:
         specifier: 13.6.31
         version: 13.6.31
@@ -639,6 +669,40 @@ importers:
         specifier: 'catalog:'
         version: 4.124.0(@cloudflare/workers-types@5.20260818.1)
 
+  packages/gatekeeper-records-service:
+    dependencies:
+      '@gadgets/workshop-shared':
+        specifier: workspace:*
+        version: link:../../cloudflare-os/packages/workshop-shared
+      '@records/service':
+        specifier: workspace:*
+        version: link:../records-service
+      capnweb:
+        specifier: 'catalog:'
+        version: 0.11.1
+      capnweb-validate:
+        specifier: 'catalog:'
+        version: 0.2.4(capnweb@0.11.1)(esbuild@0.28.1)(rolldown@1.2.2)(rollup@4.62.4)(vite@7.3.6(@types/node@26.1.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2))
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^5.20260808.1
+        version: 5.20260818.1
+      esbuild:
+        specifier: 0.28.1
+        version: 0.28.1
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: 7.3.6
+        version: 7.3.6(@types/node@26.1.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2)
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@26.1.0)(@vitest/browser-preview@4.1.10)(jsdom@26.1.0(supports-color@10.2.2))(vite@7.3.6(@types/node@26.1.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2))
+      wrangler:
+        specifier: 'catalog:'
+        version: 4.124.0(@cloudflare/workers-types@5.20260818.1)
+
   packages/gatekeeper-runtime:
     dependencies:
       '@cloudflare/sandbox':
@@ -821,6 +885,15 @@ importers:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.0)(@vitest/browser-preview@4.1.10)(jsdom@26.1.0(supports-color@10.2.2))(vite@7.3.6(@types/node@26.1.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2))
 
+  packages/records-edge:
+    devDependencies:
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      wrangler:
+        specifier: 'catalog:'
+        version: 4.124.0(@cloudflare/workers-types@5.20260818.1)
+
   packages/records-identity:
     dependencies:
       '@records/contracts':
@@ -870,6 +943,8 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.0)(@vitest/browser-preview@4.1.10)(jsdom@26.1.0(supports-color@10.2.2))(vite@7.3.6(@types/node@26.1.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2))
+
+  packages/records-model: {}
 
   packages/records-node:
     dependencies:
@@ -950,6 +1025,28 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.0)(@vitest/browser-preview@4.1.10)(jsdom@26.1.0(supports-color@10.2.2))(vite@7.3.6(@types/node@26.1.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2))
+
+  packages/records-service:
+    dependencies:
+      '@records/model':
+        specifier: workspace:*
+        version: link:../records-model
+      jose:
+        specifier: 'catalog:'
+        version: 6.2.12
+      postgres:
+        specifier: ^3.4.7
+        version: 3.4.9
+    devDependencies:
+      '@types/node':
+        specifier: 26.1.0
+        version: 26.1.0
+      embedded-postgres:
+        specifier: 17.9.0-beta.17
+        version: 17.9.0-beta.17
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
 
   packages/records-sync-client:
     dependencies:

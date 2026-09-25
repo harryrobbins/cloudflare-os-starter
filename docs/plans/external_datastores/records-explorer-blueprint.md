@@ -1,6 +1,6 @@
 # Records Explorer blueprint
 
-2026-09-25 · **Proposed delivery plan, not implemented.** No new blueprint, connector, API or
+2026-09-25 · **Delivery plan; E1 read-only explorer implemented** in `packages/blueprint-records-explorer` (no exports yet); E0 uses the known-binding option; E2–E4 remain open. No new blueprint, connector, API or
 administrative authority is introduced by this document. This extends the locked
 [Records direction](records-direction.md) and depends on the shared connector work in
 [blueprint adaptation](records-blueprint-adaptation.md). The deployed Records service and product

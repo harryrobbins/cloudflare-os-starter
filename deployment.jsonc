@@ -55,7 +55,11 @@
 
     // Omni-search: serves /gatekeeper/search/ through the router, and is bound to chat and the
     // Workshop. Only deployed while the "search" block below is enabled.
-    "search": { "name": "cfos-search" }
+    "search": { "name": "cfos-search" },
+
+    // Connector to the standards-based Records service. RPC-only; only deployed while the
+    // "recordsService" block below is enabled.
+    "recordsService": { "name": "cfos-records-service" }
   },
 
   // This starter deploys Cloudflare Access mode. Cloudflare OS also supports built-in password
@@ -306,5 +310,17 @@
     // <workers.search.name>-embed-dlq. To set them, add a comma above and uncomment:
     // "embedQueue": "cfos-search-embed",
     // "deadLetterQueue": "cfos-search-embed-dlq"
+  },
+
+  // Records service connector: lets gadgets (Work Board, Records Explorer, ...) share datastores of
+  // the standards-based Records service at "url". Separate from the older "records" block above,
+  // which serves the legacy Projects runtime. Datastores are approved by the operator, never by a
+  // gadget: each one's credential goes in a Worker secret, never in this file:
+  //   CLOUDFLARE_ACCOUNT_ID=<id> pnpm exec wrangler secret put RECORDS_SERVICE_DATASTORES --name cfos-records-service
+  // with a JSON array of { "id": "<datastore uuid>", "label": "Team work", "key": "rk_..." }.
+  // Reference: packages/gatekeeper-records-service/README.md
+  "recordsService": {
+    "enabled": true,
+    "url": "https://records.surprisingly.ltd"
   }
 }
