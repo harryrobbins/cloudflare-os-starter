@@ -40,6 +40,8 @@ export const CANVAS_CSS = `
   fill: none; stroke: var(--wb-accent, #2563eb); stroke-width: 2; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke;
 }
 .wb-canvas .wb-preview-stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.wb-canvas .wb-connect-handle circle { fill: var(--wb-accent, #2563eb); stroke: #fff; stroke-width: 2; }
+.wb-canvas .wb-connect-handle path { fill: none; stroke: #fff; stroke-width: 1.5; stroke-linecap: round; }
 .wb-canvas .wb-handle { fill: #ffffff; stroke: var(--wb-accent, #2563eb); stroke-width: 1.5; }
 .wb-canvas .wb-rotate-stem { stroke: var(--wb-accent, #2563eb); stroke-width: 1; }
 .wb-canvas .wb-group-box { fill: none; stroke: var(--wb-accent, #2563eb); stroke-width: 1; stroke-dasharray: 5 4; }

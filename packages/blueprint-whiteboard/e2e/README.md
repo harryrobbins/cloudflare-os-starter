@@ -136,3 +136,7 @@ fixed) and its platform log showed one "An RPC result was not disposed properly"
 "An RPC stub was not disposed properly" during T10. The second run passed 13/13 in 106 s with no
 log problems. Bob's frame reloaded itself and was live again 4.3 s after the code edit, and alice's
 rebuilt owner iframe came back under her account name with no dialog.
+
+## Flagship usability regressions
+
+After `node scripts/build.mjs`, run `node --test e2e/harness.test.mjs e2e/connection-handles.test.mjs e2e/media.test.mjs e2e/help.test.mjs` from this package. The added suites cover selected-shape connection handles and click/keyboard alternatives, local URL cards with no external preview requests, and viewer-local shortcut preferences with searchable Help. The main harness also covers filtered additive selection in the Objects panel. These use the local simulator, not production authentication.

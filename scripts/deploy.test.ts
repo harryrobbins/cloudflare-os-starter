@@ -6,7 +6,7 @@ import test from "node:test";
 import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import { parse, type ParseError } from "jsonc-parser";
 import {
-  aiGatewayPlan, buildCommandBatches, buildCommands, deployOrder, formatBlueprintsPath,
+  aiGatewayPlan, buildCommandBatches, buildCommands, deployOrder, deployTargets, formatBlueprintsPath,
   generateConfigs, recordsQueues, runWithConcurrency, searchNames, validateConfig,
 } from "./deploy.ts";
 import type {
@@ -1687,4 +1687,12 @@ test("the repository's deployment.jsonc search block is valid", async () => {
   assert.equal(typeof config.workers.search?.name, "string");
   validateConfig(config);
   generateConfigs(config, await baseConfigs());
+});
+
+
+test("Workshop-only releases select no router, Gatekeeper or infrastructure Worker", () => {
+  assert.deepEqual(deployTargets(validConfig, true), ["workshop"]);
+  assert.deepEqual(deployTargets(validConfig), deployOrder(validConfig));
+  assert.deepEqual(deployTargets(searchVariant(), true), ["workshop"]);
+  assert.deepEqual(deployTargets(searchVariant(), false), deployOrder(searchVariant()));
 });

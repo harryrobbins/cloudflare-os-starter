@@ -34,7 +34,7 @@ import {
   frameAtPoint, canEditText, EDIT_ON_CREATE, round2, resizeUpdates, rotateUpdates,
   HIT_TOLERANCE_PX, stackOrder, snapTargets, alignUpdates, distributeUpdates, reconnectUpdate,
 } from "./model.js";
-import { handleForPress, visibleHandles, cursorForHandle, endpointForPress, endpointHandlePositions, endpointRadius } from "./handles.js";
+import { connectionHandlePositions, connectionHandleForPress, handleForPress, visibleHandles, cursorForHandle, endpointForPress, endpointHandlePositions, endpointRadius } from "./handles.js";
 import { SpatialIndex, applyStoreChange } from "../../model/spatial-index.js";
 import { SNAP_PX } from "../../model/alignment.js";
 import { guideElements, endpointHandleElements, routeHandleElements } from "./guide-layer.js";
@@ -488,6 +488,14 @@ export function createCanvas(store, options = {}) {
           const top = handles.find((hd) => hd.name === "n");
           if (top) children.push(svgEl("line", { class: "wb-rotate-stem", x1: r1(top.x), y1: r1(top.y), x2: r1(rotateHandle.x), y2: r1(rotateHandle.y) }));
         }
+        for (const hd of connectionHandlePositions(o, camera, lastPointerType)) {
+          const dot = svgEl("g", { class: "wb-connect-handle", "data-side": hd.side });
+          const title = svgEl("title");
+          title.textContent = `Connect from ${hd.side}: drag to an object or click to choose (Shift+C)`;
+          dot.append(title, svgEl("circle", { cx: r1(hd.x), cy: r1(hd.y), r: 7 }),
+            svgEl("path", { d: `M${r1(hd.x - 3)} ${r1(hd.y)}h6M${r1(hd.x)} ${r1(hd.y - 3)}v6` }));
+          children.push(dot);
+        }
         for (const hd of handles) {
           if (hd.name === "rotate") {
             children.push(svgEl("circle", { class: "wb-handle", cx: r1(hd.x), cy: r1(hd.y), r: 5 }));
@@ -537,6 +545,8 @@ export function createCanvas(store, options = {}) {
       }
       return null;
     }
+    const side = connectionHandleForPress(o, camera, { x: s.sx, y: s.sy }, s.pointerType);
+    if (side) return { id: o.id, name: "connect", side, rot: 0, endpoint: false };
     const name = handleForPress(o, camera, { x: s.sx, y: s.sy }, handleRadius(s.pointerType));
     return name ? { id: o.id, name, rot: o.rot || 0, endpoint: /** @type {const} */ (false) } : null;
   }
@@ -549,6 +559,7 @@ export function createCanvas(store, options = {}) {
     const hd = handleUnder(hoverPoint);
     let cursor = "";
     if (hd?.name === "route") cursor = hd.axis === "x" ? "ew-resize" : hd.axis === "y" ? "ns-resize" : "move";
+    else if (hd?.name === "connect") cursor = "crosshair";
     else if (hd) cursor = hd.endpoint ? "crosshair" : cursorForHandle(/** @type {any} */ (hd.name), hd.rot);
     else {
       const w = screenToWorld(camera, { x: hoverPoint.sx, y: hoverPoint.sy });
@@ -852,6 +863,14 @@ export function createCanvas(store, options = {}) {
     switch (tool) {
       case "select": {
         const hd = handleUnder(p);
+        if (hd?.name === "connect" && hd.side) {
+          const source = resolve(hd.id);
+          if (source) gesture = connectGesture(ctx, p, source, {
+            side: hd.side,
+            onTap: () => element.dispatchEvent(new CustomEvent("wb-connect", { detail: { id: source.id, side: hd.side } })),
+          });
+          break;
+        }
         if (hd?.endpoint) { gesture = endpointGesture(ctx, p, hd.id, /** @type {"from"|"to"} */ (hd.name)); break; }
         if (hd?.name === "route" && hd.route !== undefined) {
           exitRouteEdit(false);

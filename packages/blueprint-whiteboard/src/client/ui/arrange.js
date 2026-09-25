@@ -120,6 +120,12 @@ export function createArrange(app) {
     const objects = store.getState().board.objects;
     const can = arrangeAvailability(objects, objs.map((o) => o.id));
     const out = [];
+    if (objs.length === 1 && objs[0].type !== "connector") {
+      out.push(h("div", { class: "style-group connect-group" }, btn("connect-to", {
+        class: "btn small connect-to-btn", title: "Connect to another object (Shift+C)",
+        "aria-haspopup": "dialog", onclick: () => openConnectPicker(app),
+      }, arrangeIcon("reconnect-end"), "Connect…")));
+    }
     if (can.align) {
       const modes = /** @type {AlignMode[]} */ (["left", "center", "right", "top", "middle", "bottom"]);
       out.push(h("div", { class: "style-group arrange-align-group", role: "group", "aria-label": "Align and distribute" },
@@ -162,6 +168,9 @@ export function createArrange(app) {
     const can = arrangeAvailability(objects, objs.map((o) => o.id));
     /** @type {MenuItem[]} */
     const items = [];
+    if (objs.length === 1 && objs[0].type !== "connector") {
+      items.push({ label: "Connect to…", className: "ctx-connect-to", onSelect: () => { openConnectPicker(app); } });
+    }
     if (can.reconnect) {
       items.push({ label: "Reconnect start…", className: "ctx-reconnect-from", onSelect: () => { reconnect("from"); } });
       items.push({ label: "Reconnect end…", className: "ctx-reconnect-to", onSelect: () => { reconnect("to"); } });
@@ -192,4 +201,27 @@ export function createArrange(app) {
   }
 
   return { align, distribute, reconnect, groups, menuItems };
+}
+
+/** Searchable, non-drag equivalent of the shape connection handles.
+ * Revalidate endpoints after the dialog because collaborators may delete them.
+ * @param {App} app @param {string} [sourceId]
+ * @param {"auto"|"top"|"right"|"bottom"|"left"} [side]
+ */
+export async function openConnectPicker(app, sourceId, side = "auto") {
+  const ids = app.canvas.getSelection();
+  const objects = app.store.getState().board.objects;
+  const source = objects[sourceId ?? (ids.length === 1 ? ids[0] : "")];
+  if (!source || source.type === "connector") { app.announce("Select one object to connect first"); return; }
+  const choices = reconnectOptions(objects, /** @type {WhiteboardObject} */ ({ from: source.id }), "to");
+  if (!choices.length) { app.announce("Add another object to connect to"); return; }
+  const chosen = await openObjectPicker({ title: "Connect to", options: choices, returnFocus: app.canvas.element });
+  if (!chosen) return;
+  const now = app.store.getState().board.objects;
+  if (!now[source.id] || !now[chosen] || now[chosen].type === "connector") {
+    app.announce("Connection not created: an object is no longer available"); return;
+  }
+  const [id] = app.store.createObjects([{ type: "connector", from: source.id, to: chosen, fromSide: side,
+    style: /** @type {any} */ (app.toolStyle?.("connector") ?? {}) }]);
+  if (id) { app.canvas.setSelection([id]); app.announce("Connected objects"); }
 }

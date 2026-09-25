@@ -16,6 +16,8 @@ import { openMenu } from "./dialogs.js";
 import { expandMoveIds, moveUpdates, resizeUpdates, rotateUpdates } from "./canvas/index.js";
 import { createArrange } from "./arrange.js";
 import { canEditText } from "./canvas/model.js";
+import { objectLink } from "../../shared/link-card.js";
+import { openWebsiteDialog } from "./share.js";
 import { createCodeControls } from "./code-block.js";
 import { canResetRoute, hasRouteHandles } from "./canvas/route-edit.js";
 
@@ -314,6 +316,10 @@ export function createStyleBar(app) {
     const count = h("span", { class: "style-group-label selection-count", "aria-live": "off" },
       objs.length === 1 ? typeLabel(objs[0].type) : `${objs.length} selected`);
     groups.push(count);
+    const website = objs.length === 1 ? objectLink(objs[0]) : null;
+    if (website) groups.push(h("div", { class: "style-group", role: "group", "aria-label": "Website" },
+      btn("open-website", { class: "btn small open-website-btn", "aria-haspopup": "dialog", onclick: () => { openWebsiteDialog(website, canvas.element); } }, "Open website…"),
+    ));
 
     const colors = h("div", { class: "style-group", role: "group", "aria-label": "Colours" },
       colorButton("fill", "Fill colour", FILL_TYPES, objs, "fill", [...Object.values(COLORS), ...(noSticky ? ["none"] : [])]),

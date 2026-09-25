@@ -2,7 +2,7 @@
 
 Source of the **Whiteboard** format: a live, shared, Miro-style whiteboard gadget for Cloudflare OS.
 
-The plans are in [whiteboard-blueprint.md](../../docs/plans/whiteboard-blueprint.md) (scope, design and how it was built). The gadget's own user guide and RPC reference is [`src/README.md`](src/README.md), which ships inside the gadget as its `README.md`.
+The current usability work and enterprise roadmap are in [whiteboard-flagship.md](../../docs/plans/whiteboard-flagship.md) and [the flagship review](../../docs/research/whiteboard-flagship-review.md). The original plans are in [whiteboard-blueprint.md](../../docs/plans/whiteboard-blueprint.md) (scope, design and how it was built). The gadget's own user guide and RPC reference is [`src/README.md`](src/README.md), which ships inside the gadget as its `README.md`.
 
 This package started as a copy of [`blueprint-kanban`](../blueprint-kanban/README.md) and keeps its structure: storage-agnostic rules behind a `Repository`, a transport-agnostic hub, a sync store, a multi-pane harness and a local-platform e2e suite.
 
@@ -43,6 +43,10 @@ The same script also writes `src/client/generated/unicode-data.js` (by `scripts/
 
 Budget: the generated module must stay under 160 KiB (today about 101 KiB, 29 KiB gzipped, for 260 icons and shapes); it ships in both `client.js` and `server.js` (the server draws icons in `exportSvg`), which grows the packed archive from about 107 KiB to about 175 KiB. To add icons, list them in `packs.mjs` and rebuild. To change a published glyph (for example after a Tabler upgrade), add a new pack version instead and keep the old one.
 
+## Help and input preferences
+
+Open **Board menu → Keyboard shortcuts** to search commands by name or key. Turn off **Enable single-character shortcuts** to avoid accidental actions with speech input or assistive technology; navigation and Ctrl/⌘ shortcuts remain available. This preference applies only to the current viewer until the board reloads, and the Board menu remains available to turn it back on.
+
 ## Code highlighting
 
 Code blocks (`type: "code"`) are highlighted by small hand-written lexers in `src/shared/code/` (`lexer.js`; languages and the paste-time language guess in `languages.js`, layout in `layout.js`, WCAG-AA palettes in `theme.js`), not by Prism or highlight.js: those are regular-expression grammars, and one catastrophic-backtracking pattern cannot be interrupted once it runs, which would stall the Durable Object while it exports. The lexers use no regular expressions on the code, look at a bounded number of characters per step and consume what they look at, so they are linear; every scan is also counted, and a block past 8 units of work per character (plus 4,096) is drawn plain from that point on. Tokens are memoised by (language, text), so re-rendering an unchanged block never re-tokenizes. The renderer draws tokens as `<tspan>` text only (escaped on export, `textContent` in the canvas), so code can never become markup. No third-party code or data is involved, so there is nothing to add to `THIRD_PARTY_NOTICES.md`.
@@ -58,7 +62,7 @@ Bundle growth: `dist/client.js` 564 KB → 633 KB (149 KB → 167 KB gzipped), `
 
 | Axis | Current | Where |
 | --- | --- | --- |
-| Bundled archive revision | 6 | `gadget.lock.json`, `formats/whiteboard.json` |
+| Bundled archive revision | 8 | `gadget.lock.json`, `formats/whiteboard.json` |
 | Stored schema version | 1 (the `icon` and `code` types are additive; no migration) | `SCHEMA_VERSION` in `src/shared/protocol.js` |
 | Wire protocol | subscribe + `applyOperation` + presence, unchanged since revision 4; new RPCs are additive (`findIcons`, `addIcons`, `exportData`, `importData`, `addCode`) | `src/server/index.js` |
 | Backup format | `cloudflare-os-whiteboard` version 1 (version 0 = a `getBoard()` result) | `src/shared/backup.js` |

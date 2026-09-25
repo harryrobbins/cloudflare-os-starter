@@ -107,7 +107,11 @@ describe("cubic Bézier geometry", () => {
         expect(poly[0]).toEqual(c[0]);
         expect(poly[poly.length - 1]).toEqual(c[3]);
         const flat = poly.flatMap((p) => [p.x, p.y]);
-        for (const q of sampled(c, 2000)) expect(distanceToPolyline(q, flat)).toBeLessThanOrEqual(tol + 1e-9);
+        // Check every sample, but avoid constructing 180,000 assertion wrappers
+        // across the fixture: that can time out under the full workspace suite.
+        let worstDistance = 0;
+        for (const q of sampled(c, 2000)) worstDistance = Math.max(worstDistance, distanceToPolyline(q, flat));
+        expect(worstDistance).toBeLessThanOrEqual(tol + 1e-9);
       }
     }
   });

@@ -1,7 +1,8 @@
 // @ts-check
 // The Objects panel: every object as a list (type and a text excerpt) with Select and Show
 // buttons, so keyboard and screen-reader users can find, select and reach any object without
-// pointing at the canvas.
+// pointing at the canvas. Type filtering and additive selection keep multi-object editing
+// available without dragging or modifier keys.
 //
 // Like the Activity panel, it is a non-modal side panel (a complementary landmark): the board stays
 // usable beside it, Tab moves in and out of it freely, and Escape or the close button closes it.
@@ -11,7 +12,7 @@
 // one row, the arrow keys move between rows. Select pans the object into view (without animation)
 // before focus moves to the style bar, so an off-screen object is on screen when its controls are.
 
-import { sortedObjects } from "../../shared/protocol.js";
+import { sortedObjects, TYPE_DEFAULTS } from "../../shared/protocol.js";
 import { h, icon } from "./dom.js";
 import { typeLabel } from "./stylebar.js";
 import { languageLabel } from "../../shared/code/languages.js";
@@ -57,13 +58,14 @@ function excerpt(text) {
 
 /**
  * The rows the panel lists for filter `query`: top of the stack first.
- * @param {Record<string, WhiteboardObject>} objects @param {string} query
+ * @param {Record<string, WhiteboardObject>} objects @param {string} query @param {string} [type]
  */
-export function outlineRows(objects, query) {
+export function outlineRows(objects, query, type = "") {
   const q = query.trim().toLowerCase();
   const all = sortedObjects(objects).reverse();
-  const rows = q ? all.filter((o) => typeLabel(o.type).toLowerCase().includes(q) || String(o.text || "").toLowerCase().includes(q) ||
-    ((o.type === "icon" || o.type === "code") && describeObject(o, objects).toLowerCase().includes(q))) : all;
+  const candidates = type ? all.filter((o) => o.type === type) : all;
+  const rows = q ? candidates.filter((o) => typeLabel(o.type).toLowerCase().includes(q) || String(o.text || "").toLowerCase().includes(q) ||
+    ((o.type === "icon" || o.type === "code") && describeObject(o, objects).toLowerCase().includes(q))) : candidates;
   return { all: all.length, rows };
 }
 
@@ -76,6 +78,10 @@ export function createOutline(app) {
   let list = null;
   /** @type {HTMLInputElement|null} */
   let filter = null;
+  /** @type {HTMLSelectElement|null} */
+  let typeFilter = null;
+  /** @type {HTMLElement|null} */
+  let selectionActions = null;
   /** @type {ReturnType<typeof createVirtualList>|null} */
   let vlist = null;
   /** @type {WhiteboardObject[]} */
@@ -93,11 +99,31 @@ export function createOutline(app) {
     const closeBtn = h("button", { type: "button", class: "btn icon-only outline-close", "aria-label": "Close objects list", onclick: () => close() }, icon("close", 18));
     filter = /** @type {HTMLInputElement} */ (h("input", { type: "text", class: "outline-filter", placeholder: "Filter by text or type", "aria-label": "Filter objects", autocomplete: "off" }));
     filter.addEventListener("input", () => { if (list) list.scrollTop = 0; render(store.getState()); });
-    const hint = h("p", { id: "outline-hint", class: "sr-only" }, "Up and down arrows move between objects; Home and End jump to the first and last.");
+    typeFilter = /** @type {HTMLSelectElement} */ (h("select", { class: "outline-type", "aria-label": "Filter by object type" },
+      h("option", { value: "" }, "All types"),
+      Object.keys(TYPE_DEFAULTS).map((type) => h("option", { value: type }, typeLabel(type)))));
+    typeFilter.addEventListener("change", () => { if (list) list.scrollTop = 0; render(store.getState()); announceResults(); });
+    filter.addEventListener("keydown", (e) => {
+      if ((e.key === "ArrowDown" || e.key === "Enter") && rows.length) { e.preventDefault(); vlist?.focusRow(0, 0); }
+    });
+    const done = h("button", { type: "button", class: "btn small primary outline-edit-selection", onclick: () => {
+      const ids = canvas.getSelection();
+      if (!ids.length) return;
+      canvas.focusObjects(ids, { animate: false });
+      close(false);
+      app.focusStyleBar();
+    } }, "Edit selection");
+    const clear = h("button", { type: "button", class: "btn small outline outline-clear-selection", onclick: () => {
+      if (!canvas.getSelection().length) return;
+      canvas.setSelection([]); render(store.getState()); app.announce("Selection cleared");
+    } }, "Clear selection");
+    selectionActions = h("div", { class: "outline-selection-actions" }, done, clear);
+    const hint = h("p", { id: "outline-hint", class: "sr-only" }, "Up and down arrows move between objects; Home and End jump to the first and last. Use Include in selection to select several objects, then Edit selection.");
     list = h("ul", { class: "panel-list outline-list", "aria-label": "Objects", "aria-describedby": "outline-hint", tabindex: "-1" });
     panel = h("aside", { class: "wb-panel outline-panel", "aria-label": "Objects", tabindex: "-1" },
-      h("div", { class: "panel-head" }, h("h2", null, "Objects"), h("span", { class: "muted outline-count" }), closeBtn),
-      h("div", { class: "panel-filter" }, filter),
+      h("div", { class: "panel-head" }, h("h2", null, "Objects"), h("span", { class: "muted outline-count", role: "status", "aria-live": "polite", "aria-atomic": "true" }), closeBtn),
+      h("div", { class: "panel-filter" }, filter, typeFilter),
+      selectionActions,
       hint,
       list);
     panel.addEventListener("keydown", (e) => {
@@ -125,6 +151,8 @@ export function createOutline(app) {
     panel = null;
     list = null;
     filter = null;
+    typeFilter = null;
+    selectionActions = null;
     vlist = null;
     rows = [];
     app.outlineOpen = false;
@@ -133,6 +161,10 @@ export function createOutline(app) {
       const target = returnFocus?.isConnected ? returnFocus : document.querySelector(".outline-toggle");
       /** @type {HTMLElement|null} */ (target)?.focus();
     }
+  }
+
+  function announceResults() {
+    app.announce(`${rows.length} ${rows.length === 1 ? "object" : "objects"} found`);
   }
 
   /** What a row shows: rebuild when it changes. @param {WhiteboardObject} o */
@@ -165,6 +197,17 @@ export function createOutline(app) {
           app.focusStyleBar();
         },
       }, "Select"),
+      h("button", {
+        type: "button", class: "btn small outline outline-toggle-selection",
+        "aria-label": "Include in selection: " + label, "aria-pressed": String(selection.has(o.id)),
+        onclick: () => {
+          const ids = canvas.getSelection();
+          const selected = ids.includes(o.id);
+          canvas.setSelection(selected ? ids.filter((id) => id !== o.id) : [...ids, o.id]);
+          render(store.getState());
+          app.announce(`${selected ? "Removed" : "Added"} ${label}. ${canvas.getSelection().length} selected.`);
+        },
+      }, selection.has(o.id) ? "−" : "+"),
     );
   }
 
@@ -173,10 +216,17 @@ export function createOutline(app) {
     if (!panel || !list || !vlist) return;
     objects = state.board.objects;
     selection = new Set(canvas.getSelection());
-    const result = outlineRows(objects, filter?.value ?? "");
+    const result = outlineRows(objects, filter?.value ?? "", typeFilter?.value ?? "");
     rows = result.rows;
     const countEl = panel.querySelector(".outline-count");
-    const text = rows.length === result.all ? `${result.all}` : `${rows.length} of ${result.all}`;
+    const text = rows.length === result.all ? `${result.all} objects` : `${rows.length} of ${result.all} objects`;
+    if (selectionActions) {
+      const done = selectionActions.querySelector(".outline-edit-selection");
+      const clear = selectionActions.querySelector(".outline-clear-selection");
+      done?.setAttribute("aria-disabled", String(!selection.size));
+      clear?.setAttribute("aria-disabled", String(!selection.size));
+      if (done) done.textContent = selection.size ? `Edit selection (${selection.size})` : "Edit selection";
+    }
     if (countEl && countEl.textContent !== text) countEl.textContent = text;
     vlist.update(rows.length, rows.length ? null : h("li", { class: "muted" }, result.all ? "No objects match." : "The whiteboard is empty."));
   }

@@ -62,7 +62,12 @@ describe("App", () => {
     window.dispatchEvent(new PopStateEvent("popstate"));
     await flush(10);
     expect(input().value).toBe("holiday");
-    expect(view.container.textContent).toContain("Holiday and leave");
+    // React may start the async search at the end of the first act/flush. Wait for
+    // the observable result rather than assuming a 10 ms delay completes both phases.
+    await vi.waitFor(async () => {
+      await flush();
+      expect(view!.container.textContent).toContain("Holiday and leave");
+    });
   });
 
   it("clicking a facet adds its qualifier", async () => {

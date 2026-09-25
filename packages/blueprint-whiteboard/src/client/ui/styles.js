@@ -210,6 +210,10 @@ input:focus { border-color: var(--accent); }
 .panel-list .when { font-size: 12px; color: var(--text-3); }
 .panel-filter { margin: 10px 12px 0; }
 .panel-filter input { width: 100%; }
+.outline-panel .panel-filter { display: flex; flex-direction: column; gap: 8px; }
+.outline-type { width: 100%; min-height: 32px; }
+.outline-selection-actions { display: flex; gap: 6px; margin: 8px 12px; }
+.outline-toggle-selection { min-width: 28px; }
 .outline-item .kind { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-3); letter-spacing: .04em; display: block; }
 .outline-item .excerpt { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .outline-item[aria-current="true"] { background: var(--accent-soft); border-radius: var(--radius-sm); }

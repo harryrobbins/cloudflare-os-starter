@@ -17,6 +17,7 @@ import {
   BACKUP_FORMAT, BACKUP_LIMITS, CLIPBOARD_MIME, buildClipboard, offsetToCenter, parseBackup, planCreates,
   plainTextOf, textToEntries, codeFenceToEntry,
 } from "../../shared/backup.js";
+import { linkToEntry } from "../../shared/link-card.js";
 import { detectLanguage, languageLabel } from "../../shared/code/languages.js";
 import { expandMoveIds, frameAtPoint, validIds } from "./canvas/model.js";
 
@@ -73,7 +74,7 @@ export function clipboardPayload(objects, ids) {
  * @param {{json?: string, text?: string}} data
  * @param {{doc: BackupDocument, text: string}|null} memory
  * A fenced Markdown code block (```lang ... ```) becomes one code block in that language.
- * @returns {{kind: "objects", entries: Entry[], skipped: number}|{kind: "text", entries: Entry[], truncated: number}|{kind: "code", entries: Entry[]}|{kind: "none"}|{kind: "error", message: string}}
+ * @returns {{kind: "objects", entries: Entry[], skipped: number}|{kind: "text", entries: Entry[], truncated: number}|{kind: "code", entries: Entry[]}|{kind: "link", entries: Entry[]}|{kind: "none"}|{kind: "error", message: string}}
  */
 export function readPaste({ json, text }, memory) {
   if (json) {
@@ -92,6 +93,8 @@ export function readPaste({ json, text }, memory) {
   if (typeof text === "string" && text.trim()) {
     const fence = codeFenceToEntry(text, detectLanguage);
     if (fence) return { kind: "code", entries: [fence] };
+    const link = linkToEntry(text);
+    if (link) return { kind: "link", entries: [link] };
     const { entries, truncated } = textToEntries(text);
     if (entries.length) return { kind: "text", entries, truncated };
   }
@@ -163,7 +166,7 @@ export function createClipboard(app, { showToast }) {
 
   /**
    * Creates `entries` near the pointer (or the view centre), as one undo step, and selects them.
-   * @param {Entry[]} entries @param {{what?: "objects"|"text"|"code", skipped?: number, truncated?: number}} [info]
+   * @param {Entry[]} entries @param {{what?: "objects"|"text"|"code"|"link", skipped?: number, truncated?: number}} [info]
    */
   function place(entries, { what = "objects", skipped = 0, truncated = 0 } = {}) {
     if (!entries.length) return [];
@@ -180,7 +183,9 @@ export function createClipboard(app, { showToast }) {
     const ids = store.createObjects(/** @type {any} */ (creates));
     canvas.setSelection(ids);
     const left = dropped + truncated;
-    app.announce(what === "code"
+    app.announce(what === "link"
+      ? "Added a website card. Select Open website to view or copy its link."
+      : what === "code"
       ? `Added a ${languageLabel(entries[0]?.object.language ?? "plain")} code block from the pasted text`
       : what === "text"
       ? `Added ${ids.length === 1 ? "1 sticky note" : `${ids.length} sticky notes`} from the pasted text`
@@ -198,7 +203,7 @@ export function createClipboard(app, { showToast }) {
     if (r.kind === "none") return false;
     if (r.kind === "error") { showToast(r.message); return true; }
     if (r.kind === "text") place(r.entries, { what: "text", truncated: r.truncated });
-    else if (r.kind === "code") place(r.entries, { what: "code" });
+    else if (r.kind === "code" || r.kind === "link") place(r.entries, { what: r.kind });
     else place(r.entries, { skipped: r.skipped });
     return true;
   }

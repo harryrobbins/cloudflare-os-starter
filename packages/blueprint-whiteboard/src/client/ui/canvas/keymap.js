@@ -3,6 +3,8 @@
 // mapping from a key event to an action) and by the shortcuts dialog (src/client/ui/help.js), so
 // the help cannot drift from what the keys do.
 
+import { shortcutAllowed } from "../shortcut-preferences.js";
+
 /** @typedef {import("../ui-contract.js").Tool} Tool */
 
 /**
@@ -22,7 +24,7 @@
  * "route*" actions apply only while editing a connector's route (scope "route", after "editRoute").
  */
 
-/** @typedef {"addMenu"|"outline"|"icons"|"help"|"present"|"emoji"|"code"} ShellCommand */
+/** @typedef {"addMenu"|"outline"|"icons"|"help"|"present"|"emoji"|"code"|"connect"} ShellCommand */
 
 /**
  * How a key event matches: `key` (one-character keys compared lower-cased) or `code`. `mod` (Ctrl
@@ -91,6 +93,7 @@ export const COMMANDS = Object.freeze([
     id: `tool-${tool}`, group: "Tools", label: `${TOOL_LABELS[tool]} tool`, keys: [k.toUpperCase()],
     match: [{ key: k, shift: false }], action: { type: "tool", tool },
   })),
+  { id: "connect-selection", group: "Edit", label: "Connect the selected object to another object", keys: ["Shift+C"], match: [{ key: "c", shift: true }], action: { type: "command", command: "connect" } },
   { id: "add-menu", group: "Tools", label: "Add menu: add an object at the centre of the view", keys: ["A"], match: [{ key: "a", shift: false }], action: { type: "command", command: "addMenu" } },
 
   // Edit
@@ -195,6 +198,7 @@ function matches(e, key, m) {
  * @returns {KeyAction|null}
  */
 export function keyAction(e, scope = "canvas") {
+  if (!shortcutAllowed(e)) return null;
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   for (const c of COMMANDS) {
     if (!c.match || !c.action || (c.scope ?? "canvas") !== scope) continue;

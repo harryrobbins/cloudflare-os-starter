@@ -12,7 +12,7 @@ import {
   hitObject, topObjectAt, objectsInRect, frameAtPoint, expandMoveIds, moveUpdates, buildDuplicates,
   creationBox, validIds, withFrameMembership,
 } from "../../src/client/ui/canvas/model.js";
-import { handlePositions, handleAt, resizeBox, rotationToward, cursorForHandle } from "../../src/client/ui/canvas/handles.js";
+import { connectionHandlePositions, connectionHandleForPress, handlePositions, handleAt, resizeBox, rotationToward, cursorForHandle } from "../../src/client/ui/canvas/handles.js";
 import { keyAction } from "../../src/client/ui/canvas/keymap.js";
 import { editorBox, textPatch } from "../../src/client/ui/canvas/text-editor.js";
 
@@ -103,6 +103,26 @@ describe("camera", () => {
 });
 
 describe("handles", () => {
+  it("keeps connection handles outside resize and rotate targets at every zoom and rotation", () => {
+    for (const zoom of [0.1, 1, 4]) for (const rot of [0, 45, 90]) for (const pointer of ["mouse", "touch"]) {
+      const o = obj("rect", { x: 40, y: 50, w: 120, h: 100, rot });
+      const cam = { x: 10, y: 20, zoom };
+      const hs = connectionHandlePositions(o, cam, pointer);
+      expect(hs).toHaveLength(4);
+      for (const hd of hs) {
+        expect(connectionHandleForPress(o, cam, hd, pointer)).toBe(hd.side);
+        for (const resize of handlePositions(o, cam)) {
+          expect(Math.hypot(hd.x - resize.x, hd.y - resize.y)).toBeGreaterThanOrEqual(pointer === "touch" ? 40 : 20);
+        }
+      }
+      expect(connectionHandleForPress(o, cam, worldToScreen(cam, center(o)), pointer)).toBeNull();
+    }
+    expect(connectionHandlePositions(obj("connector"), { x: 0, y: 0, zoom: 1 })).toEqual([]);
+  });
+  it("offers a discoverable keyboard equivalent without changing the connector tool shortcut", () => {
+    expect(keyAction({ key: "C", shiftKey: true })).toEqual({ type: "command", command: "connect" });
+    expect(keyAction({ key: "c" })).toEqual({ type: "tool", tool: "connector" });
+  });
   it("places 8 resize handles plus rotate for rotatable objects, none for connectors", () => {
     const cam = { x: 0, y: 0, zoom: 1 };
     expect(handlePositions(obj("sticky", { x: 0, y: 0, w: 100, h: 100 }), cam)).toHaveLength(9);
@@ -541,6 +561,20 @@ describe("gestures", () => {
     g.move(pt(2100, 2050));
     g.up(pt(2100, 2050));
     expect(calls[0][1][0]).toEqual({ type: "rect", x: 2000, y: 2000, w: 100, h: 50, frameId: null });
+  });
+
+  it("connection start handles pin the source side, support tap and cancel without writes", () => {
+    const a = obj("rect", { x: 0, y: 0, w: 100, h: 100 });
+    const b = obj("rect", { x: 300, y: 0, w: 100, h: 100 });
+    const { ctx, calls } = setup(board(a, b));
+    const onTap = vi.fn();
+    G.connectGesture(ctx, pt(132, 50), a, { side: "right", onTap }).up(pt(132, 50));
+    expect(onTap).toHaveBeenCalledOnce();
+    expect(calls).toHaveLength(0);
+    G.connectGesture(ctx, pt(132, 50), a, { side: "right" }).cancel();
+    expect(calls).toHaveLength(0);
+    G.connectGesture(ctx, pt(132, 50), a, { side: "right" }).up(pt(350, 50));
+    expect(calls[0][1][0]).toEqual({ type: "connector", from: a.id, to: b.id, fromSide: "right" });
   });
 
   it("connector: creates only over a valid target", () => {

@@ -9,6 +9,7 @@ import { createCanvas, CANVAS_CSS } from "./canvas/index.js";
 import { h, inlineEditable } from "./dom.js";
 import { SHELL_CSS } from "./styles.js";
 import { createToolbar } from "./toolbar.js";
+import { openConnectPicker } from "./arrange.js";
 import { createStyleBar } from "./stylebar.js";
 import { createPeople } from "./people.js";
 import { createMinimap } from "./minimap.js";
@@ -192,6 +193,7 @@ export function mountApp(root, store) {
     if (command === "addMenu") toolbar.openAddMenu();
     else if (command === "outline") outline.toggle();
     else if (command === "icons") iconPicker.toggle();
+    else if (command === "connect") openConnectPicker(app);
     else if (command === "code") canvas.addAtCenter("code");
     else if (command === "emoji") iconPicker.open("unicode");
     else share.command(command);
@@ -221,6 +223,10 @@ export function mountApp(root, store) {
         runCommand(/** @type {any} */ (event).command);
         break;
     }
+  });
+  canvas.element.addEventListener("wb-connect", (e) => {
+    const { id, side } = /** @type {CustomEvent} */ (e).detail;
+    openConnectPicker(app, id, side);
   });
   // Long-press on touch (and right-click) opens the selection's actions as a menu.
   canvas.element.addEventListener("wb-contextmenu", (e) => {

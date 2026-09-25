@@ -98,6 +98,11 @@ processes, then deploys Workers serially in dependency order with the router las
 per-stage timings. Unlike the older `pnpm check && pnpm deploy` sequence, it does not repeat the
 repository's pre-build steps between validation and deployment.
 
+For a bundled-format update on an **existing** deployment, `pnpm run release --workshop-only`
+keeps the full tests and builds, dry-runs and deploys only the Workshop Worker. Its service
+bindings must already exist and remain compatible; use the normal full release for first
+installation or changes to dependent Workers, routing, or infrastructure. `pnpm run deploy --workshop-only` supports the same scope after a completed `pnpm check`.
+
 For validation without changing Cloudflare, use:
 
 ```sh

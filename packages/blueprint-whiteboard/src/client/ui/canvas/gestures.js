@@ -526,16 +526,17 @@ export function penGesture(ctx, p) {
 /**
  * Drag from one object to another to connect them.
  * @param {GestureContext} ctx @param {PointerSample} p @param {WhiteboardObject} from
+ * @param {{side?: "top"|"right"|"bottom"|"left", onTap?: () => void}} [options]
  * @returns {Gesture}
  */
-export function connectGesture(ctx, p, from) {
+export function connectGesture(ctx, p, from, options = {}) {
   const line = svgEl("path", { class: "wb-preview-line" });
   const dots = /** @type {SVGGElement} */ (svgEl("g", { class: "wb-side-dots" }));
   ctx.preview.appendChild(line);
   ctx.preview.appendChild(dots);
   let last = p;
   // Starting on a side's anchor pins that side (see sideNear); elsewhere it stays automatic.
-  const fromSide = pinnedSideAt(ctx, from, p);
+  const fromSide = options.side ?? pinnedSideAt(ctx, from, p);
   /** @param {PointerSample} q */
   const targetAt = (q) => objectAt(ctx, q, (o) => o.type !== "connector" && o.id !== from.id);
   const clear = () => { line.remove(); dots.remove(); ctx.setOverlay({ hoverId: null }); };
@@ -560,7 +561,9 @@ export function connectGesture(ctx, p, from) {
       const target = targetAt(q);
       const toSide = target ? pinnedSideAt(ctx, target, q) : null;
       clear();
-      if (!target || !ctx.objects()[from.id]) return;
+      if (!ctx.objects()[from.id]) return;
+      if (options.onTap && Math.hypot(q.sx - p.sx, q.sy - p.sy) < 5) { options.onTap(); return; }
+      if (!target) return;
       /** @type {Partial<WhiteboardObject> & {type: ObjectType}} */
       const obj = { type: "connector", from: from.id, to: target.id };
       if (fromSide) obj.fromSide = fromSide;

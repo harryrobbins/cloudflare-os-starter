@@ -4,6 +4,7 @@
 // shell commands (keymap.js "command" actions), store changes, and asks for extra context-menu
 // items.
 
+import { objectLink } from "../../shared/link-card.js";
 import { h, icon } from "./dom.js";
 import { modal, openMenu, showToast } from "./dialogs.js";
 import { createClipboard, writeClipboard } from "./clipboard.js";
@@ -31,6 +32,28 @@ function showLinkDialog(link, returnFocus) {
       h("p", null, "Copying was blocked here. Copy this link yourself; it opens this whiteboard at the same place."),
       input,
       h("div", { class: "modal-actions" }, h("button", { type: "button", class: "btn primary", onclick: () => close(null) }, "Done")),
+    );
+  }, null, returnFocus);
+}
+
+/** @param {NonNullable<ReturnType<typeof objectLink>>} link @param {HTMLElement} returnFocus */
+export function openWebsiteDialog(link, returnFocus) {
+  return modal((close) => {
+    const input = /** @type {HTMLInputElement} */ (h("input", { class: "wb-link-input", readonly: true, value: link.url, "aria-label": "Website address", "data-autofocus": true }));
+    input.addEventListener("focus", () => input.select());
+    return h("div", { class: "modal wb-link", "aria-labelledby": "wb-website-title" },
+      h("h2", { id: "wb-website-title" }, link.videoId ? "YouTube video" : "Open website"),
+      h("p", null, `Destination: ${link.host}`),
+      h("p", null, "This card keeps a link only. Open the website in a new tab to view it, or copy its address."),
+      input,
+      h("div", { class: "modal-actions" },
+        h("button", { type: "button", class: "btn outline", onclick: () => {
+          if (writeClipboard(link.url)) showToast("Website address copied", { timeout: 3000 });
+          else { input.focus(); input.select(); showToast("Copy the selected address with Ctrl+C or ⌘C."); }
+        } }, "Copy address"),
+        h("a", { class: "btn primary", href: link.url, target: "_blank", rel: "noopener noreferrer", referrerpolicy: "no-referrer" }, "Open in new tab"),
+        h("button", { type: "button", class: "btn outline", onclick: () => close(null) }, "Done"),
+      ),
     );
   }, null, returnFocus);
 }
@@ -139,6 +162,8 @@ export function mountShare(app, { topbar }) {
         items.push({ label: "Copy", className: "ctx-copy", onSelect: () => { clipboard.copySelection(false); } });
         items.push({ label: "Cut", className: "ctx-cut", onSelect: () => { clipboard.copySelection(true); } });
         if (objs.length === 1) {
+          const website = objectLink(objs[0]);
+          if (website) items.push({ label: "Open website…", className: "ctx-website", onSelect: () => { openWebsiteDialog(website, canvas.element); } });
           const kind = objs[0].type === "frame" ? "frame" : "object";
           items.push({ label: `Copy link to ${kind}`, className: "ctx-link", onSelect: () => copyLink(objs[0].id) });
           if (kind === "frame") items.push({ label: "Present from this frame", className: "ctx-present", onSelect: () => present(objs[0].id) });

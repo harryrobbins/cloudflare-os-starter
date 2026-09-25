@@ -73,7 +73,7 @@ describe("Objects panel", () => {
     const list = document.querySelector(".outline-list");
     list.clientHeight = 580;
     outline.render(app.store.getState());
-    expect(document.querySelector(".outline-count").textContent).toBe("5000");
+    expect(document.querySelector(".outline-count").textContent).toBe("5000 objects");
     const rows = rowsIn(list);
     expect(rows.length).toBeLessThanOrEqual(11 + 2 * ROW_OVERSCAN);
     expect(rows[0].getAttribute("aria-setsize")).toBe("5000");
@@ -82,7 +82,7 @@ describe("Objects panel", () => {
     expect(rows[0].dataset.id).toBe(outlineRows(objects, "").rows[0].id);
     // Roving tabindex: only the first row's two buttons are tabbable.
     const tabbable = list.querySelectorAll("button").filter((b) => b.tabIndex === 0);
-    expect(tabbable).toHaveLength(2);
+    expect(tabbable).toHaveLength(3);
     expect(tabbable.every((b) => rows[0].contains(b))).toBe(true);
     outline.close(false);
   });
@@ -141,8 +141,39 @@ describe("Objects panel", () => {
     filter.value = "no such text";
     outline.render(state);
     expect(active()).toBe(filter);
-    expect(document.querySelector(".outline-count").textContent).toBe("0 of 2999");
+    expect(document.querySelector(".outline-count").textContent).toBe("0 of 2999 objects");
     outline.close(false);
+  });
+
+  it("filters by type and text while retaining selection across filters", () => {
+    const objects = simpleObjects(400);
+    const { app, state, calls } = outlineApp(objects);
+    const outline = createOutline(app);
+    outline.open();
+    const first = document.querySelector(".outline-toggle-selection");
+    const id = first.closest("li").dataset.id;
+    first.focus();
+    first.dispatchEvent({ type: "click" });
+    expect(app.canvas.getSelection()).toEqual([id]);
+    expect(document.activeElement.getAttribute("aria-pressed")).toBe("true");
+    const type = document.querySelector(".outline-type");
+    type.value = "code";
+    type.dispatchEvent({ type: "change" });
+    expect(document.querySelector(".outline-count").textContent).toBe("0 of 400 objects");
+    expect(app.canvas.getSelection()).toEqual([id]);
+    type.value = "";
+    type.dispatchEvent({ type: "change" });
+    const second = document.querySelectorAll(".outline-toggle-selection")[1];
+    const secondId = second.closest("li").dataset.id;
+    second.dispatchEvent({ type: "click" });
+    expect(app.canvas.getSelection()).toEqual([id, secondId]);
+    document.querySelector(".outline-edit-selection").dispatchEvent({ type: "click" });
+    expect(calls.at(-2)).toEqual(["focusObjects", [id, secondId], { animate: false }]);
+    expect(calls.at(-1)).toEqual(["focusStyleBar"]);
+    expect(outline.isOpen).toBe(false);
+    const typeName = objects[id].type;
+    expect(outlineRows(objects, "", typeName).rows.every((o) => o.type === typeName)).toBe(true);
+    expect(outlineRows(objects, "not present", typeName).rows).toHaveLength(0);
   });
 
   it("Select pans the object into view without animation before focus moves to the style bar", () => {

@@ -556,6 +556,38 @@ describe("whiteboard harness", { concurrency: false }, () => {
     });
   });
 
+  test("Objects panel: keyboard selection survives type and text filtering", async () => {
+    await withHarness({}, async ({ page, frames }) => {
+      const { A } = frames;
+      const ids = await h.createObjects(page, [
+        { type: "sticky", x: 300, y: 250, text: "Planning" },
+        { type: "rect", x: 550, y: 250, text: "Delivery" },
+      ]);
+      await h.inPane(A, (_, canvas) => canvas.element.focus());
+      await page.keyboard.press("Shift+O");
+      const panel = A.locator(SEL.outlinePanel);
+      const filter = panel.locator(".outline-filter");
+      await filter.fill("Planning");
+      await page.keyboard.press("ArrowDown");
+      await page.keyboard.press("ArrowRight");
+      await page.keyboard.press("ArrowRight");
+      await page.keyboard.press("Space");
+      assert.deepEqual(await h.inPane(A, (_, canvas) => canvas.getSelection()), [ids[0]]);
+      assert.equal(await panel.locator(".outline-toggle-selection").getAttribute("aria-pressed"), "true");
+      await panel.locator(".outline-type").selectOption("rect");
+      await filter.fill("Delivery");
+      await page.keyboard.press("Enter");
+      await page.keyboard.press("ArrowRight");
+      await page.keyboard.press("ArrowRight");
+      await page.keyboard.press("Space");
+      assert.deepEqual(await h.inPane(A, (_, canvas) => canvas.getSelection()), ids);
+      await panel.locator(".outline-edit-selection").focus();
+      await page.keyboard.press("Enter");
+      await panel.waitFor({ state: "detached" });
+      assert.ok(await A.locator(".wb-stylebar").evaluate((el) => el.contains(document.activeElement)));
+    });
+  });
+
   test("style bar: one colour click recolours every selected object in one change", async () => {
     await withHarness({}, async ({ page, frames }) => {
       const { A, B } = frames;

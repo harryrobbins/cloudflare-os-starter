@@ -1469,6 +1469,13 @@ export function deployOrder(config: DeploymentConfig): (keyof typeof packageDirs
   ];
 }
 
+/** A format-only release can update the existing Workshop without redeploying its dependencies.
+ * This is for existing deployments only: it does not provision the services the Workshop binds.
+ */
+export function deployTargets(config: DeploymentConfig, workshopOnly = false): (keyof typeof packageDirs)[] {
+  return workshopOnly ? ["workshop"] : deployOrder(config);
+}
+
 /** `formatBlueprintsDir` resolved against the repository root. */
 export function formatBlueprintsPath(dir: string): string {
   return resolve(root, dir);
@@ -1688,8 +1695,9 @@ async function deployWorkers(
   config: DeploymentConfig,
   extraArgs: string[],
   concurrency: number,
+  workshopOnly = false,
 ): Promise<void> {
-  await runWithConcurrency(deployOrder(config), concurrency, async (name) => {
+  await runWithConcurrency(deployTargets(config, workshopOnly), concurrency, async (name) => {
     await deployWorker(packageDirs[name], extraArgs);
   });
 }
@@ -1766,6 +1774,7 @@ async function main(): Promise<void> {
   const timings: Timing[] = [];
   const check = process.argv.includes("--check");
   const release = process.argv.includes("--release");
+  const workshopOnly = process.argv.includes("--workshop-only");
   const useCache = process.argv.includes("--use-cache");
   if (check && release) throw new Error("Choose either --check or --release, not both.");
   if (useCache && !check) {
@@ -1824,14 +1833,14 @@ async function main(): Promise<void> {
     }
     if (check || release) {
       await timed(timings, `Wrangler dry-runs (up to ${localConcurrency} concurrent)`, async () => {
-        await deployWorkers(config, ["--dry-run"], localConcurrency);
+        await deployWorkers(config, ["--dry-run"], localConcurrency, workshopOnly);
       });
     }
     if (!check) {
       requireChatAssets(config);
       requireSearchAssets(config);
-      await timed(timings, "production deploy (serial, router last)", async () => {
-        await deployWorkers(config, [], 1);
+      await timed(timings, workshopOnly ? "production deploy (Workshop only)" : "production deploy (serial, router last)", async () => {
+        await deployWorkers(config, [], 1, workshopOnly);
       });
     }
   } finally {

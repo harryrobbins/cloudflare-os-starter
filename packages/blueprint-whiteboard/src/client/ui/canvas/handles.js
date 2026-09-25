@@ -3,7 +3,7 @@
 // rotate produces. Pure. Handles live in the object's rotated frame; resizing keeps the handle
 // opposite the dragged one fixed in world space, whatever the rotation.
 
-import { center, rotatePoint } from "../../../shared/geometry.js";
+import { anchor, center, rotatePoint } from "../../../shared/geometry.js";
 import { ROTATABLE, LIMITS } from "../../../shared/protocol.js";
 import { worldToScreen } from "./camera.js";
 
@@ -261,4 +261,32 @@ export function endpointHandlePositions(route, cam) {
  */
 export function endpointForPress(route, cam, s, radius) {
   return /** @type {EndpointHandle|null} */ (handleAt(endpointHandlePositions(route, cam), s, radius));
+}
+
+/** Connection handles sit outside resize targets, and beyond the top rotation target.
+ * Geometry stays in screen pixels at every zoom; only four handles exist for one selection.
+ * @param {WhiteboardObject|Box & {type: string}} o
+ * @param {{x: number, y: number, zoom: number}} cam
+ * @param {string} [pointerType]
+ */
+export function connectionHandlePositions(o, cam, pointerType = "mouse") {
+  if (o.type === "connector" || o.type === "pen") return [];
+  const gap = pointerType === "touch" ? 44 : 32;
+  return /** @type {const} */ (["top", "right", "bottom", "left"]).map((side) => {
+    const a = anchor(o, side);
+    const p = worldToScreen(cam, a.point);
+    const offset = gap + (side === "top" && isRotatable(o.type) ? ROTATE_OFFSET_PX : 0);
+    return { side, x: p.x + a.normal.x * offset, y: p.y + a.normal.y * offset };
+  });
+}
+
+/** @param {WhiteboardObject} o @param {{x: number, y: number, zoom: number}} cam
+ * @param {Point} p @param {string} pointerType
+ */
+export function connectionHandleForPress(o, cam, p, pointerType) {
+  // An interior press must always remain available for moving even tiny objects.
+  if (insideBox(o, { x: p.x / cam.zoom + cam.x, y: p.y / cam.zoom + cam.y })) return null;
+  const radius = pointerType === "touch" ? 22 : 12;
+  return connectionHandlePositions(o, cam, pointerType)
+    .find((h) => Math.hypot(h.x - p.x, h.y - p.y) <= radius)?.side ?? null;
 }
