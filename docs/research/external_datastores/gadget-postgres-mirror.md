@@ -1,5 +1,7 @@
 # "Backed by Postgres" for gadgets: mirror options
 
+> **Records direction superseded — 2026-09-25.** The current recommendation and delivery plan is [Records: shared application data](../../plans/external_datastores/records-direction.md). This document is retained as historical research, implementation evidence or a separate gadget-HTTP proposal; it is not the specification for the new Records service. Existing deployment records remain historical facts, not instructions to deploy the new design.
+
 Written 2026-09-24 against starter `main` `5f8c12c`. Records the analysis behind the question "can a
 blueprint tick *backed by Postgres* and have its data synced there automatically, while keeping
 Durable Object realtime?" Nothing was built. The conclusion feeds the

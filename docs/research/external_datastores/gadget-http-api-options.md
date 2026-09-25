@@ -1,5 +1,7 @@
 # Giving a gadget an HTTP API
 
+> **Records direction superseded — 2026-09-25.** The current recommendation and delivery plan is [Records: shared application data](../../plans/external_datastores/records-direction.md). This document is retained as historical research, implementation evidence or a separate gadget-HTTP proposal; it is not the specification for the new Records service. Existing deployment records remain historical facts, not instructions to deploy the new design.
+
 Can a gadget expose a REST-style interface that a command line (curl, a script, another service) can call? Written 2026-09-23 against starter `main` 3157780 and the pinned submodule `cloudflare-os` e50a9058 (fork, `feat/websafe` on top of `starter-openrouter`). Paths without a prefix are relative to `cloudflare-os/`.
 
 ## Answer

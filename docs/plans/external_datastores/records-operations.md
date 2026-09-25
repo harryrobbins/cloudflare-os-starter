@@ -1,5 +1,15 @@
 # Records operations runbook
 
+> **Records direction superseded — 2026-09-25.** The current recommendation and delivery plan is [Records: shared application data](records-direction.md). This document is retained as historical research, implementation evidence or a separate gadget-HTTP proposal; it is not the specification for the new Records service. Existing deployment records remain historical facts, not instructions to deploy the new design.
+
+> **Framing superseded (2026-09-25)** by [App datastore service: reframing](app-datastore-service.md). Records is a
+> generic, schema-driven datastore for apps built on cloudflare-os. It was never meant to be a
+> Jira-like product or a Projects service: project management with a Jira mapping is one example
+> module. The concepts may inform later operational work, but these commands target legacy tables/functions
+> and must not be run on the new service. Its redaction and retention commands are not implemented.
+> Use [the current deployment runbook](../../../packages/records-service/deploy/README.md) and
+> [status](records-status.md); Neon branch operations do not apply to the homeserver database.
+
 Written 2026-09-25 against starter `main` `019df76`, with Phase 6 of the
 [canonical Postgres datastore](canonical-postgres-datastore.md) plan (§8, §10 Phase 6, acceptance
 §11.7) built on top. Status: **code, migration and local tests only. Nothing here has been run

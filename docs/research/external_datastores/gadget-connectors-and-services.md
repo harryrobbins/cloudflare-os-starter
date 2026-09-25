@@ -1,5 +1,7 @@
 # Inter-Gadget Connectivity, Data Connectors, and Service APIs in Cloudflare OS
 
+> **Records direction superseded — 2026-09-25.** The current recommendation and delivery plan is [Records: shared application data](../../plans/external_datastores/records-direction.md). This document is retained as historical research, implementation evidence or a separate gadget-HTTP proposal; it is not the specification for the new Records service. Existing deployment records remain historical facts, not instructions to deploy the new design.
+
 Code trace and architecture analysis of inter-gadget communication, data sharing/connectors, and service APIs in Cloudflare OS. Written 2026-09-17 against the pinned submodule at `cloudflare-os` commit `90f0591` and starter integrations in `packages/custom-gatekeeper/`. Paths are relative to `cloudflare-os/` unless prefixed with repository root paths.
 
 ---

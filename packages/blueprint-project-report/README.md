@@ -1,5 +1,13 @@
 # blueprint-project-report
 
+> **Legacy implementation; not migrated.** This package still targets the earlier Projects runtime.
+> The standards-based service is implemented separately in [records-service](../records-service/README.md)
+> and is deployed at [records.surprisingly.ltd](https://records.surprisingly.ltd).
+> See the [current direction](../../docs/plans/external_datastores/records-direction.md) and
+> [homeserver deployment record](../records-service/deploy/homeserver.md).
+> Routes, credentials, schemas, sync and operator steps below apply to this legacy implementation;
+> they are not a deployment or migration runbook for the current service.
+
 Source of the **Project Report** blueprint: a read-only report over an organisation Projects datastore. It shows counts by state, priority and assignee, recently updated issues, CSS bar charts with table views, and a CSV download of the current view. It is the second demonstration client in [organisation-datastores.md](../../docs/plans/external_datastores/organisation-datastores.md). The writable one is [`blueprint-project-board`](../blueprint-project-board).
 
 It requests only `projects.read` and `issues.read` (`src/service-requirement.json`). The gadget server (`src/server/proxy.js`) has **no write methods** (no `syncPush` either), and never calls `$createViewerAssertion`. Tests assert both of these. The report reads by sync pull (`syncPull` from its cookie, canonical-postgres-datastore plan §6 and §9), so a poke costs one delta read rather than a full re-read.

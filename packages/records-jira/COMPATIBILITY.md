@@ -1,5 +1,12 @@
 # Jira client compatibility
 
+> **Existing implementation.** The new generic Records direction is documented in
+> [records-direction.md](../../docs/plans/external_datastores/records-direction.md).
+> This package documentation describes the earlier runtime; it does not claim the new service is built.
+
+> This package is an optional compatibility adapter for the Projects example module. It is not part of
+> the datastore core; see [the reframing](../../docs/plans/external_datastores/app-datastore-service.md).
+
 What real Jira clients call on this surface, and what they assume about the answers. The evidence is
 the request log of the compatibility tests, which serve `handleJira` from a local `node:http` server
 over an in-memory `JiraPort` (`__tests__/support/`).

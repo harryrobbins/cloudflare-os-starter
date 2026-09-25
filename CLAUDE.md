@@ -37,3 +37,27 @@ time; use a separate worktree when another agent or operator is already checking
 Before any production mutation, follow `.agents/skills/cloudflare-os-operator/SKILL.md`: verify the
 account and route, current root and submodule commits, affected Workers and resources, Access/AI/
 observability state, last-known-good versions, rollback limitations, and a passing validation.
+
+# Records / external datastores: intent
+
+Records is a generic, schema-driven **app datastore service** for cloudflare-os apps: shared data that
+must outlive or reach beyond one gadget, starting with open work and messaging profiles. Jira/Linear and Slack/Matrix compatibility is an
+optional per-module adapter, never a core
+concern, and Neon is not a production requirement. Read
+`docs/plans/external_datastores/records-direction.md` before planning Records work. That is the
+current recommendation; earlier plans are historical. The new product site is `sites/records/`;
+the new service and website run at https://records.surprisingly.ltd on ms:~/containers/records.
+Read `docs/plans/external_datastores/records-status.md` for implemented APIs versus remaining gates.
+Preserve the archived earlier site for comparison.
+
+The product centre is a **standards-based datastore**: a complete pinned Schema.org vocabulary
+catalogue, open application profiles, custom extensions or a blank model, and explicit mappings
+from physical schemas to semantic models. Apps and independently authored compatibility SDKs are
+views/adapters over those models. Schema.org is not a complete universal ontology; catalogue
+coverage is not executable-profile coverage, and standards alone do not guarantee security.
+
+Records implementation is now authorised. Use `docs/plans/external_datastores/records-delivery.md`
+as the live checklist and `records-direction.md` as the accepted design. New work lives in
+`packages/records-model` and `packages/records-service`; do not replace the legacy OS runtime until
+qualification and migration gates pass. Use broader vendor examples whenever discussing optional
+compatibility (work: Jira/Linear; messaging: Slack/Matrix; knowledge: Notion/Confluence).

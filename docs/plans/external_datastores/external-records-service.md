@@ -1,5 +1,7 @@
 # Alternative: an external Postgres "records service" with a headless API
 
+> **Records direction superseded — 2026-09-25.** The current recommendation and delivery plan is [Records: shared application data](records-direction.md). This document is retained as historical research, implementation evidence or a separate gadget-HTTP proposal; it is not the specification for the new Records service. Existing deployment records remain historical facts, not instructions to deploy the new design.
+
 > **Superseded (2026-09-23)** by [Organisation datastores: implementation plan](organisation-datastores.md).
 > Retained as historical design input, not current implementation instructions. The replacement
 > selects a domain service, separates publication from provisioning, adds organisation ownership

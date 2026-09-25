@@ -1,5 +1,13 @@
 # @records/sync-client
 
+> **Legacy implementation; not migrated.** This package still targets the earlier Projects runtime.
+> The standards-based service is implemented separately in [records-service](../records-service/README.md)
+> and is deployed at [records.surprisingly.ltd](https://records.surprisingly.ltd).
+> See the [current direction](../../docs/plans/external_datastores/records-direction.md) and
+> [homeserver deployment record](../records-service/deploy/homeserver.md).
+> Routes, credentials, schemas, sync and operator steps below apply to this legacy implementation;
+> they are not a deployment or migration runbook for the current service.
+
 Browser sync client for Records datastores: optimistic mutations, push/pull, and rebase over
 server state (canonical Postgres datastore plan §6). No runtime dependencies. It imports only types
 from `@records/contracts`, so zod stays out of gadget bundles (about 7.5 kB gzipped).

@@ -1,5 +1,7 @@
 # Immutable datastores: event-sourced shards and an R2 lake
 
+> **Records direction superseded — 2026-09-25.** The current recommendation and delivery plan is [Records: shared application data](records-direction.md). This document is retained as historical research, implementation evidence or a separate gadget-HTTP proposal; it is not the specification for the new Records service. Existing deployment records remain historical facts, not instructions to deploy the new design.
+
 Written 2026-09-24 against starter `main` `5f8c12c`. Status: **not pursued (2026-09-24).** The owner's
 verdict: an eventually consistent lake does not solve the actual problem, which is a strongly consistent
 source of truth; analytics can be fed from Postgres. The direction is the

@@ -160,3 +160,10 @@ The complete control reference and recipes live in [Customization](docs/customiz
 ### Moving here from the hosted deploy (os.cloudflare.app/deploy)
 
 Ejecting an instance created by the hosted flow means redeploying over Workers that already hold your data. Worker names, storage IDs, the public URL, and AI Gateway all have to be carried across by hand, and each one fails quietly if it is not: the deploy succeeds against empty storage. [Migrating from the hosted deploy](docs/migrate-from-hosted.md) is the checklist.
+
+## Records datastore
+
+The standards-based Records alpha is live at [records.surprisingly.ltd](https://records.surprisingly.ltd/),
+separate from the legacy OS Records integration. Read [current status](docs/plans/external_datastores/records-status.md),
+[blueprint adaptation](docs/plans/external_datastores/records-blueprint-adaptation.md), and
+[Records Explorer](docs/plans/external_datastores/records-explorer-blueprint.md).

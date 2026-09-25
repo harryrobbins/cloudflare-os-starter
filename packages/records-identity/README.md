@@ -1,5 +1,13 @@
 # @records/identity
 
+> **Legacy implementation; not migrated.** This package still targets the earlier Projects runtime.
+> The standards-based service is implemented separately in [records-service](../records-service/README.md)
+> and is deployed at [records.surprisingly.ltd](https://records.surprisingly.ltd).
+> See the [current direction](../../docs/plans/external_datastores/records-direction.md) and
+> [homeserver deployment record](../records-service/deploy/homeserver.md).
+> Routes, credentials, schemas, sync and operator steps below apply to this legacy implementation;
+> they are not a deployment or migration runbook for the current service.
+
 Credential verification for the portable Records datastore service (canonical Postgres plan §5). It
 uses Web Crypto and `jose` only, so it runs on Workers and Node. It does not touch a database: the
 principal lookup through `records.identity_mappings` belongs to the integrator.

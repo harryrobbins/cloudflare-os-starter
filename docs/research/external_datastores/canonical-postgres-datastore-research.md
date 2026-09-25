@@ -1,5 +1,12 @@
 # Canonical Postgres datastore: research
 
+> **Records direction superseded — 2026-09-25.** The current recommendation and delivery plan is [Records: shared application data](../../plans/external_datastores/records-direction.md). This document is retained as historical research, implementation evidence or a separate gadget-HTTP proposal; it is not the specification for the new Records service. Existing deployment records remain historical facts, not instructions to deploy the new design.
+
+> **Framing superseded (2026-09-25)** by [App datastore service: reframing](../../plans/external_datastores/app-datastore-service.md). Records is a
+> generic, schema-driven datastore for apps built on cloudflare-os. It was never meant to be a
+> Jira-like product or a Projects service: project management with a Jira mapping is one example
+> module. The evidence stays valid. Its focus on the Jira Cloud surface reflects the superseded framing: Jira compatibility is an optional adapter for one example module.
+
 Written 2026-09-24 against starter `main` `5f8c12c`. Evidence for the
 [canonical Postgres datastore plan](../../plans/external_datastores/canonical-postgres-datastore.md).
 Confidence: **V** = checked in primary documentation, **S** = secondary source, **I** = inference or

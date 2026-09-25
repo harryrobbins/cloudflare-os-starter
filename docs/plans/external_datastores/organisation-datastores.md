@@ -1,5 +1,12 @@
 # Organisation datastores: implementation plan
 
+> **Records direction superseded — 2026-09-25.** The current recommendation and delivery plan is [Records: shared application data](records-direction.md). This document is retained as historical research, implementation evidence or a separate gadget-HTTP proposal; it is not the specification for the new Records service. Existing deployment records remain historical facts, not instructions to deploy the new design.
+
+> **Framing superseded (2026-09-25)** by [App datastore service: reframing](app-datastore-service.md). Records is a
+> generic, schema-driven datastore for apps built on cloudflare-os. It was never meant to be a
+> Jira-like product or a Projects service: project management with a Jira mapping is one example
+> module. The registry, ownership, approval and credential decisions still stand, and §12 remains the accurate record of what is deployed. Treat "Projects module" as one example module, not as the product.
+
 Written 2026-09-23 against starter `7d39f48` and pinned `cloudflare-os` `e50a9058`.
 Status (2026-09-24): **implemented and tested through Phase 3, and deployed to
 `cfos.surprisingly.ltd` against Neon, with the machine API switched off** (see the

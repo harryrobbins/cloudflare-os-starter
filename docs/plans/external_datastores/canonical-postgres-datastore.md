@@ -1,5 +1,12 @@
 # Canonical Postgres datastore
 
+> **Records direction superseded — 2026-09-25.** The current recommendation and delivery plan is [Records: shared application data](records-direction.md). This document is retained as historical research, implementation evidence or a separate gadget-HTTP proposal; it is not the specification for the new Records service. Existing deployment records remain historical facts, not instructions to deploy the new design.
+
+> **Framing superseded (2026-09-25)** by [App datastore service: reframing](app-datastore-service.md). Records is a
+> generic, schema-driven datastore for apps built on cloudflare-os. It was never meant to be a
+> Jira-like product or a Projects service: project management with a Jira mapping is one example
+> module. The mechanisms here (journal, per-datastore clock, identity and delegated tokens, RLS, sync) remain valid design input. The Projects-first and Jira-first scope, and the assumption that Neon hosts production, do not.
+
 Written 2026-09-24 against starter `main` `5f8c12c`. Status (2026-09-25): **phases 1–5 built and tested
 locally, phase 6 built as code and a [runbook](records-operations.md); remote phase 0 measurements
 open.** See §10 for what each item left open. This is the

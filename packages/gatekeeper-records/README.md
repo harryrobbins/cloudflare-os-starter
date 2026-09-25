@@ -1,9 +1,17 @@
 # Organisation records (`gatekeeper-records`)
 
-The Postgres-backed Records service and its Gatekeeper, implementing
+> **Legacy implementation; not migrated.** This package still targets the earlier Projects runtime.
+> The standards-based service is implemented separately in [records-service](../records-service/README.md)
+> and is deployed at [records.surprisingly.ltd](https://records.surprisingly.ltd).
+> See the [current direction](../../docs/plans/external_datastores/records-direction.md) and
+> [homeserver deployment record](../records-service/deploy/homeserver.md).
+> Routes, credentials, schemas, sync and operator steps below apply to this legacy implementation;
+> they are not a deployment or migration runbook for the current service.
+
+The earlier Postgres-backed Records service and its Gatekeeper, implementing
 [docs/plans/organisation-datastores.md](../../docs/plans/external_datastores/organisation-datastores.md). It is
-disabled by default in the template; this deployment runs it against Neon (see the plan's
-deployment record). Configuration keys are documented in
+disabled by default in the template. The linked historical deployment record describes its Neon
+configuration; it does not describe the current homeserver service. Configuration keys are documented in
 [docs/customization.md](../../docs/customization.md#organisation-records).
 
 Organisation-owned datastores (Projects module, API v1) are shared by any number of gadgets and
@@ -56,9 +64,10 @@ pnpm --filter gatekeeper-records test:workerd  # facet, session, viewer assertio
 Every suite starts its own disposable Postgres 17 (`embedded-postgres`); no Docker or shared
 database is needed, and no production data is ever used.
 
-## Enabling it (operator)
+## Enabling the legacy runtime (operator)
 
-Nothing here provisions infrastructure. In order:
+These steps are retained for the earlier Worker/Projects deployment only. They do not configure
+the new PostgREST service or migrate its clients. Nothing here provisions infrastructure. In order:
 
 1. Create a managed Postgres database per environment (Neon is the recommended first evaluation
    target; see the decisions record). Use its **direct** (non-pooler) endpoint.
@@ -95,7 +104,7 @@ The sync protocol (plan §6; server side in `records-core/src/sync`) is served t
 Full-state pulls are bounded (200 projects, 5 000 issues, 20 000 comments, 8 MiB); a larger
 datastore gets `payload_too_large` rather than a truncated state.
 
-## Operations
+## Legacy operations
 
 - The cron logs `records.outbox.tick` with `pending`, `oldestPendingSeconds` and `dead` (outbox age
   and dead-letter metrics). Dead rows need a person: fix the cause, then set them back to `pending`.

@@ -1,5 +1,13 @@
 # blueprint-project-board
 
+> **Legacy implementation; not migrated.** This package still targets the earlier Projects runtime.
+> The standards-based service is implemented separately in [records-service](../records-service/README.md)
+> and is deployed at [records.surprisingly.ltd](https://records.surprisingly.ltd).
+> See the [current direction](../../docs/plans/external_datastores/records-direction.md) and
+> [homeserver deployment record](../records-service/deploy/homeserver.md).
+> Routes, credentials, schemas, sync and operator steps below apply to this legacy implementation;
+> they are not a deployment or migration runbook for the current service.
+
 Source of the **Project Board** blueprint: a writable board over an organisation Projects datastore, served by the Records service (`packages/gatekeeper-records`). It is one of the two demonstration clients in [organisation-datastores.md](../../docs/plans/external_datastores/organisation-datastores.md) §1 and §9 Phase 3. The other is [`blueprint-project-report`](../blueprint-project-report).
 
 The gadget's own user guide and RPC reference is [`src/README.md`](src/README.md). It ships inside the gadget as `README.md`.

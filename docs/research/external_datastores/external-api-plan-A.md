@@ -1,5 +1,7 @@
 # External API Plan A: Postgres as the system of record
 
+> **Records direction superseded — 2026-09-25.** The current recommendation and delivery plan is [Records: shared application data](../../plans/external_datastores/records-direction.md). This document is retained as historical research, implementation evidence or a separate gadget-HTTP proposal; it is not the specification for the new Records service. Existing deployment records remain historical facts, not instructions to deploy the new design.
+
 > **Superseded (2026-09-23)** by [Organisation datastores: implementation plan](../../plans/external_datastores/organisation-datastores.md)
 > and its [research and decisions](organisation-datastores-decisions.md). Retained as historical
 > analysis. The replacement develops this domain-service direction into an ownership, lifecycle,
