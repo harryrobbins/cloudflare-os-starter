@@ -35,19 +35,19 @@ const generated = [
 export default {
   run: {
     tasks: {
-      // Codegen (agent types, configurator iframe, Data app) and then the type checks. The Worker
-      // imports all three generated modules, so `build` must produce them.
-      build: {
-        command: [
-          'node scripts/gen-types.mjs',
-          'node scripts/build-configurator.mjs',
-          'node build-app.mjs',
-          'tsc --noEmit',
-          'tsc --noEmit -p tsconfig.node.json',
-          'tsc --noEmit -p tsconfig.app.json',
-        ],
+      // Agent types, configurator iframe and Data app. All three are gitignored and imported by the
+      // Worker, so both `build` and `test` depend on this: `vp run test` never triggers `build`, and
+      // the deploy runs the tests before the build, so a fresh worktree had no src/generated/.
+      codegen: {
+        command: ['node scripts/gen-types.mjs', 'node scripts/build-configurator.mjs', 'node build-app.mjs'],
         input: [{ auto: true }, ownDist, ...generated],
         output: ['src/generated/**', 'src/configurator/html.ts', 'src/vendor/types-code.ts'],
+      },
+      build: {
+        command: ['tsc --noEmit', 'tsc --noEmit -p tsconfig.node.json', 'tsc --noEmit -p tsconfig.app.json'],
+        dependsOn: ['codegen'],
+        input: [{ auto: true }, ownDist, ...generated],
+        output: [],
       },
       // Node (domain, HTTP, feed against embedded Postgres), workerd (facet and session) and the
       // Data app's component tests.
@@ -57,6 +57,7 @@ export default {
           'vitest run --config vitest.worker.config.ts',
           'vitest run --config app/vitest.config.ts',
         ],
+        dependsOn: ['codegen'],
         input: [{ auto: true }, ownDist, ...vitestScratch, ...generated],
         output: [{ auto: true }, ownDist, ...vitestScratch],
       },

@@ -34,6 +34,9 @@ const props = (owner: string, scopes = WRITE_SCOPES, datastoreId = seed.ds1): Re
 const viewer = (k: string, role: "build" | "use" = "use") => ({ id: person(k).email, displayName: k[0]!.toUpperCase() + k.slice(1), role });
 let n = 0;
 const facetName = () => `facet-${n++}-${Date.now()}`;
+// A Workers RPC promise handed straight to expect().rejects leaves a copy that vitest reports as an
+// unhandled rejection even though the assertion saw it; adopting it in a native promise does not.
+const settled = <T>(rpc: Promise<T>): Promise<T> => (async () => rpc)();
 
 async function write(operation: MutatingRecordOperation, input: unknown, who: ReturnType<typeof viewer>, idempotencyKey = `key-${crypto.randomUUID()}`) {
   const token = await hooks.mintAssertion(await intentDigest({ operation, input, idempotencyKey }), who);
@@ -50,12 +53,12 @@ describe("describe and binding", () => {
   });
 
   it("refuses to describe a datastore the connecting person cannot read", async () => {
-    await expect(hooks.describe(facetName(), props("nia"))).rejects.toThrow(/not_found/);
+    await expect(settled(hooks.describe(facetName(), props("nia")))).rejects.toThrow(/not_found/);
   });
 
   it("refuses to bind scopes beyond the connecting person's rights", async () => {
     // The binding is created when the first session starts, so the session itself is refused.
-    await expect(hooks.session(facetName(), props("rae"), [{ method: "listProjects", args: [] }])).rejects.toThrow(/forbidden/);
+    await expect(settled(hooks.session(facetName(), props("rae"), [{ method: "listProjects", args: [] }]))).rejects.toThrow(/forbidden/);
   });
 });
 
