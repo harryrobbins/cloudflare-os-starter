@@ -209,9 +209,11 @@ schema names. Clear caller-supplied internal identity/profile headers before for
 gets a short-lived, narrowly scoped internal token. Browsers never receive database credentials.
 
 Expose approved read views and command RPCs only. Runtime roles get no raw table DML or DDL.
-Use `security_invoker` read views where appropriate, explicit schema grants, revoke public function
-execution, and tightly reviewed command functions with fixed search paths and least-privileged
-owners. Definer functions must explicitly enforce current rights; owner bypass is not an auth model.
+Reads go through the per-module presentation schema, whose views are owned by a non-bypassing
+presenter role (see [Authority, attribution and permissions](#authority-attribution-and-permissions)).
+Use explicit schema grants, revoke public function execution, and tightly review command functions
+with fixed search paths and least-privileged, non-owner roles. Definer functions must explicitly
+enforce current rights; owner bypass is not an auth model.
 Cross-datastore foreign keys include the datastore key so a valid record ID cannot cross a boundary.
 
 External credentials map to service principals. On cloudflare-os, the requesting viewer and exact
@@ -266,52 +268,139 @@ Do not claim permanence or tamper resistance against the database operator. Idem
 exports, backups and client caches belong in the erasure policy too. Per-datastore undo creates a new
 command; disaster recovery is a separate backup procedure.
 
-## Authority, attribution and record-level permissions
+## Authority, attribution and permissions
 
-**Decided (owner, 2026-09-25).** For cloudflare-os, the organisation's connector
-(`gatekeeper-records-service`) holds each datastore's Records credential and decides, through the
-gatekeeper, who may read and who may request a command. Records does not receive a credential per
-person. This is delegation: Records trusts the connector's statement of who acted. The connector
-makes that statement only after redeeming a one-use Workshop viewer assertion for the exact intent.
-Other clients (external systems, SDK users, other connectors) get their own bindings. Any rule that
-must hold for every client therefore lives in Records, not only in the connector.
+**Decided by the owner.** On 2026-09-25: the organisation's connector (`gatekeeper-records-service`)
+holds each datastore's Records credential and decides, through the gatekeeper, who may read and who
+may request a command. On 2026-09-26:
 
-### Attribution (next increment)
+- Postgres enforces permissions, as part of each data model.
+- A **presentation schema** of views is the only data surface granted to clients.
+- The gateway stays in front of PostgREST.
+- Every write remains a command.
 
-Today every journal row stores `principal_id`, `binding_id` and `created_at`. Through a shared
-connector credential the principal is always the connector's, so the journal cannot say which person
-acted. Record `extensions` are not a substitute, because any later update can overwrite them.
+Any rule that must hold for every client (cloudflare-os, external systems, SDK users, other
+connectors) therefore lives in Postgres, not in a connector.
 
-- Journal rows gain an `actor` (for example `cloudflare-os:<email>`). Records gain server-set
-  `created_by` and `updated_by`. Client input can never write these fields.
-- A binding may name an actor only if it holds an explicit "may attribute" grant. Other bindings are
-  their own actor.
+### Layers
+
+| Layer | Holds | Who may use it |
+| --- | --- | --- |
+| Storage | Core tables (registry, bindings, journal, idempotency, outbox) and module tables. RLS enabled and **forced** on every table. | No client grants. Only the presentation owner, command owner and migration roles. |
+| Presentation | One schema per module and API major, e.g. `present_work_v1`. Views over storage: entities, restricted-field masks, history. | `SELECT` for the runtime role. The only readable surface. |
+| API | `records_api` read functions (`SECURITY INVOKER`, reading presentation views) and command RPCs. | `EXECUTE` for the runtime role. |
+| Gateway | Credential check, the short-lived PostgREST token, limits, error mapping, SSE. | Public, behind its own checks. PostgREST stays private. |
+| Connector | Datastore credential, Workshop approval, viewer identity. | cloudflare-os gadgets and agents, through their bindings. |
+
+### Identity in the token
+
+Today the gateway signs a 60-second PostgREST token with the binding's principal, organisation,
+datastore, binding, scopes and permission epoch. It will also carry the **actor**, the person the
+binding acts for, in the standard `act` claim (OAuth token exchange, RFC 8693):
+
+- A binding may name an actor only if it holds an explicit "may attribute" grant. The connector names
+  the viewer it verified from a one-use Workshop viewer assertion, for example
+  `cloudflare-os:<email>`. Other bindings act as themselves.
+- `records.actor()` returns the delegated actor, or the binding's own principal when there is none.
+  `records.has_role(role)` looks up the actor's roles in a Records table, never in the token, so
+  revoking a role takes effect on the next request.
+- Roles (`member`, `admin`, and roles a module defines) are keyed by actor identity and managed by
+  operator/admin tooling. A gadget never grants a role.
+- The actor is only as trustworthy as the binding that names it, so only the operator's connector
+  receives the grant.
+
+### Presentation schema
+
+Each module/API major gets a presentation schema, generated at publication and starting as 1:1 views
+of its storage entities. This separates the public model from physical storage. Storage can later be
+remodelled (tables split or merged, columns moved) while the views keep an API major's shape. A new
+API major gets its own presentation schema beside the old one.
+
+- Views are owned by a dedicated `records_presenter` role. It has `NOBYPASSRLS`, does not own the
+  storage tables, and has only `SELECT` on them. Views run with their owner's rights, so the runtime
+  role needs grants on the views alone. Storage RLS (tenant isolation, and any storage-level rule)
+  still applies underneath, because the owner cannot bypass it.
+- Views are `security_barrier`, so a caller's filters and functions cannot observe rows the view
+  hides. `records.actor()` and `records.has_role()` are `STABLE`, and rule columns (owner, datastore)
+  are indexed. The performance gate is a measured benchmark of view reads against today's reads.
+- Profiles, JSON Schema, JSON-LD and OpenAPI describe the presentation, not the storage tables.
+- The current generic `records_private.records` projection becomes an internal detail. Reads,
+  snapshots and changes move to presentation views.
+
+### Row, field and history rules
+
+Rules are ordinary Postgres, reviewed with the module:
+
+- **Read rules** live in view definitions: row filters in `WHERE`, and field rules as masks. A
+  restricted field such as a profile's contact details appears only when
+  `owner = records.actor() OR records.has_role('admin')`, and is otherwise absent. The profile marks
+  such fields restricted, so schemas and clients know they may be missing.
+- **Write rules** are RLS `INSERT`/`UPDATE` policies on storage tables, for example
+  `USING (owner = records.actor() OR records.has_role('admin'))`. Command handlers run as a dedicated
+  `records_commander` role (`NOBYPASSRLS`, not a table owner), so Postgres enforces these policies on
+  every command. The command still does validation, revisions, idempotency and journalling.
+- **Ownership** is a storage column set from `records.actor()` at create. It changes only through an
+  explicit, journalled transfer command.
+- **History** is a presentation view over the journal. Each journal row keeps the actor and the
+  record's owner at that point (`owner_at_change`). The history view returns rows only to
+  `records.actor() = owner_at_change` or `records.has_role('admin')` (or a module-defined rule), and
+  applies the same field masks to the stored data. `changes`, snapshots and exports read these views.
+  Filtered readers therefore see sequence gaps, which the sync contract already allows.
+- A change to roles or ownership bumps the datastore's permission epoch, forcing clients to reset
+  their caches.
+- Hiding history from readers is not erasure. Erasure is a privileged, journalled redaction that also
+  covers idempotency results, exports, backups and client caches.
+
+### Attribution
+
+Attribution needs no separate mechanism:
+
+- The journal gains `actor` and `owner_at_change`. Storage rows gain server-set `created_by` and
+  `updated_by`. All of these are `records.actor()` or derived from it at write time. Client input can
+  never set them.
 - The actor is part of the idempotency digest, so a retry cannot re-attribute a change.
-- Reads and the change feed return the attribution. Blueprints show "created by" and "last changed by".
-- A trigger refuses `UPDATE` and `DELETE` on the journal. Privileged redaction (below) is the only
-  exception, and it is itself journalled.
+- Presentation views expose "created by" and "last changed by". The history view exposes each
+  change's actor.
+- A trigger refuses `UPDATE` and `DELETE` on the journal. Privileged redaction is the only exception,
+  and it is itself journalled.
 
-### Record-level permissions and history visibility (planned, not yet scheduled)
+### Publication checks
 
-Apps will quickly need rules such as: anyone can see profiles, but only a profile's owner (or an
-admin) can edit it; most people cannot see a profile's history, but the owner and admins can. The
-current model cannot express this. Scopes are per binding and module (`work.read`, `work.write`), so
-every reader through a binding sees every record and the whole journal. The design has these parts:
+Publishing a module refuses any storage table without RLS enabled and forced and a tenant policy.
+It also refuses:
 
-| Concern | Direction |
-| --- | --- |
-| Subjects | The attributed actor, plus roles held in Records: `member`, `admin`, and module-defined roles. Roles are keyed by actor identity, managed by operator/admin tooling, and never granted by a gadget. |
-| Ownership | An owner field set server-side from the actor at create. It changes only through an explicit, journalled transfer command. |
-| Rules | Declared by the module, per entity and per command, as part of its reviewed profile. Examples: `profile.update` requires owner or admin; `profile.read` is open to members; history reads require owner or admin. Enforced in the SQL command and read functions, using the actor and role claims. |
-| Field visibility | Fields can be marked restricted (for example contact details). Reads, snapshots and JSON-LD omit them for readers without the right, and schemas describe the omission. |
-| History | A separate `history.read` right. `changes`, snapshots and exports filter journal entries per reader. Filtered readers see sequence gaps (already allowed by the sync contract). A role or ownership change bumps the permission epoch and forces a cache reset. |
-| Connector | Requests reads and commands as the actor, not as one shared view. Shared gadgets use `excludeObservers` for any observation that some observers may not see. The connector may pre-check for fast UI feedback, but Records has the final say. |
-| Redaction | Hiding history from readers is not erasure. Erasure is a privileged, journalled redaction that also covers idempotency results, exports, backups and caches. |
+- any grant on storage to the runtime role;
+- a presentation schema missing any profile entity;
+- a view not owned by `records_presenter` or not `security_barrier`;
+- a command handler not owned by `records_commander`.
 
-Acceptance for that stage: an owner edits their own profile while a non-owner is refused, including
-through a replayed or altered intent. A non-admin's `changes` and snapshots contain no other person's
-restricted fields or history. Shared-gadget observations exclude observers correctly. Role revocation
-resets caches. External bindings obey the same rules.
+Module tests must cover each declared rule with an allowed and a refused actor, for reads, writes and
+history.
+
+### Delivery stages
+
+1. **Actor and attribution.** Add the `act` claim, the "may attribute" grant, `records.actor()`,
+   journal `actor` and `owner_at_change`, `created_by`/`updated_by`, actor in the idempotency digest,
+   and the append-only journal trigger. The connector sends the verified viewer, and the blueprints
+   show who created or changed a record.
+2. **Presentation schema.** Generate 1:1 views for `work` and `messaging`. Add the presenter and
+   commander roles, move reads, snapshots and changes to invoker functions over the views, remove
+   client access to storage, and add the publication checks. Behaviour must match stage 1.
+3. **Rules.** Roles table and `has_role()`, ownership and transfer, restricted fields, history views,
+   epoch bumps on role or ownership change. Run a first rule-bearing module (for example
+   `people.profile`) through the acceptance tests below.
+4. **Connector reads as the actor.** Shared gadgets use `excludeObservers` for observations some
+   observers may not see.
+
+Acceptance for stages 3–4:
+
+- An owner edits their own profile, and a non-owner is refused, including through a replayed or
+  altered intent.
+- Only the owner and admins see a profile's history and restricted fields, in reads, snapshots,
+  `changes`, JSON-LD and exports.
+- Shared-gadget observations exclude the right observers.
+- Revoking a role resets caches.
+- External bindings obey the same rules.
 
 ### Where attribution lives today
 
@@ -339,7 +428,8 @@ modules/messaging/
   module.json             # id, semver, API majors, entities, scopes, limits
   model/                  # profile, pinned vocabulary refs, JSON-LD context, constraints
   mappings/               # semantic fields ↔ physical schema, identifier and enum rules
-  migrations/             # checksummed SQL, private tables and API schema
+  migrations/             # checksummed SQL: storage tables, RLS write policies, command handlers
+  presentation/           # presentation views per API major (generated 1:1 first), field masks
   api/openapi.json        # reviewed public contract, including gateway errors
   tests/                  # commands, permissions, isolation, upgrades
   examples/               # blueprint requirement and external HTTP client

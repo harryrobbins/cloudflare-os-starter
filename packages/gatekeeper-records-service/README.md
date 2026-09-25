@@ -45,7 +45,7 @@ Read-only connections cannot submit commands.
 The owner approved this model on 2026-09-25: the organisation's connector holds each datastore's
 credential and controls access through the gatekeeper. Planned next steps are journal attribution
 and record-level permissions; see
-[the design](../../docs/plans/external_datastores/records-direction.md#authority-attribution-and-record-level-permissions).
+[the design](../../docs/plans/external_datastores/records-direction.md#authority-attribution-and-permissions).
 
 The Records service has no per-person principals yet. Each approved datastore is reached with its
 operator-issued datastore credential. The connection narrows that credential to one module, API

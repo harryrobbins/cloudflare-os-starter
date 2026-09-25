@@ -97,24 +97,41 @@ Launch preparation and operator inputs are tracked in [Records launch](records-l
 - [ ] Production inventory, hosting/region/operator/recovery objectives decided.
 - [ ] Existing-data migration rehearsal, staged cutover and production review.
 
-## 5. Attribution and record-level permissions
+## 5. Authority, attribution and permissions
 
-Design: [Authority, attribution and record-level permissions](records-direction.md#authority-attribution-and-record-level-permissions).
-The connector-held credential model was decided by the owner on 2026-09-25.
+Design: [Authority, attribution and permissions](records-direction.md#authority-attribution-and-permissions).
+Owner decisions: the connector holds the datastore credential (2026-09-25); Postgres enforces
+permissions through a presentation schema of views, with the gateway retained and writes kept as
+commands (2026-09-26).
 
 - [x] Connector holds each datastore credential; the gatekeeper controls reads and command requests
   (`gatekeeper-records-service`).
-- [ ] Journal `actor`, server-set `created_by`/`updated_by`, per-binding "may attribute" grant,
-  actor in the idempotency digest, attribution in reads and the change feed.
-- [ ] Journal append-only trigger; privileged, journalled redaction as the only exception.
-- [ ] Connector sends the verified viewer as actor; blueprints show created/changed by.
-- [ ] Actor roles (`member`, `admin`, module-defined) held in Records and managed by operator tooling.
-- [ ] Module-declared per-entity/per-command rules, server-set ownership and transfer command.
-- [ ] Restricted fields and a separate `history.read` right; per-reader filtering of `changes`,
-  snapshots and exports; epoch reset on role/ownership change.
-- [ ] Connector reads as the actor, with `excludeObservers` for shared gadgets.
-- [ ] Acceptance: owner-only edit, owner/admin-only history, no restricted-data leaks to other
-  readers or shared-gadget observers, and external bindings obeying the same rules.
+- [ ] **Stage 1, actor and attribution:**
+  - [ ] `act` claim, the "may attribute" binding grant and `records.actor()`.
+  - [ ] Journal `actor` and `owner_at_change`; storage `created_by`/`updated_by`.
+  - [ ] Actor in the idempotency digest; append-only journal trigger.
+  - [ ] Connector sends the verified viewer; blueprints show created/changed by.
+- [ ] **Stage 2, presentation schema:**
+  - [ ] Generated 1:1 views for `work` and `messaging`.
+  - [ ] `records_presenter` and `records_commander` roles; forced RLS on all storage.
+  - [ ] Reads, snapshots and changes via invoker functions over the views; no client grants on
+    storage.
+  - [ ] Publication checks. Behaviour unchanged from stage 1.
+- [ ] **Stage 3, rules:**
+  - [ ] Roles table and `records.has_role()`, managed by operator tooling.
+  - [ ] Server-set ownership and a transfer command.
+  - [ ] Restricted-field masks and history views.
+  - [ ] Epoch bump on role/ownership change.
+  - [ ] A first rule-bearing module (for example `people.profile`) with allowed and refused actors
+    per rule.
+- [ ] **Stage 4, connector reads as the actor:** `excludeObservers` for shared gadgets.
+- [ ] **Acceptance:**
+  - [ ] Owner-only edit, including through replayed or altered intents.
+  - [ ] Owner/admin-only history and restricted fields across reads, snapshots, `changes`, JSON-LD
+    and exports.
+  - [ ] Correct observer exclusion; cache reset on role revocation.
+  - [ ] External bindings obey the same rules.
+  - [ ] Measured view-read performance against today's reads.
 
 ## Evidence log
 
