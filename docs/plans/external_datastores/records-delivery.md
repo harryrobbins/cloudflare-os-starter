@@ -97,6 +97,25 @@ Launch preparation and operator inputs are tracked in [Records launch](records-l
 - [ ] Production inventory, hosting/region/operator/recovery objectives decided.
 - [ ] Existing-data migration rehearsal, staged cutover and production review.
 
+## 5. Attribution and record-level permissions
+
+Design: [Authority, attribution and record-level permissions](records-direction.md#authority-attribution-and-record-level-permissions).
+The connector-held credential model was decided by the owner on 2026-09-25.
+
+- [x] Connector holds each datastore credential; the gatekeeper controls reads and command requests
+  (`gatekeeper-records-service`).
+- [ ] Journal `actor`, server-set `created_by`/`updated_by`, per-binding "may attribute" grant,
+  actor in the idempotency digest, attribution in reads and the change feed.
+- [ ] Journal append-only trigger; privileged, journalled redaction as the only exception.
+- [ ] Connector sends the verified viewer as actor; blueprints show created/changed by.
+- [ ] Actor roles (`member`, `admin`, module-defined) held in Records and managed by operator tooling.
+- [ ] Module-declared per-entity/per-command rules, server-set ownership and transfer command.
+- [ ] Restricted fields and a separate `history.read` right; per-reader filtering of `changes`,
+  snapshots and exports; epoch reset on role/ownership change.
+- [ ] Connector reads as the actor, with `excludeObservers` for shared gadgets.
+- [ ] Acceptance: owner-only edit, owner/admin-only history, no restricted-data leaks to other
+  readers or shared-gadget observers, and external bindings obeying the same rules.
+
 ## Evidence log
 
 Implementation begins with three delegated workstreams: catalogue/model semantics, SQL authority,

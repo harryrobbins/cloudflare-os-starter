@@ -266,6 +266,70 @@ Do not claim permanence or tamper resistance against the database operator. Idem
 exports, backups and client caches belong in the erasure policy too. Per-datastore undo creates a new
 command; disaster recovery is a separate backup procedure.
 
+## Authority, attribution and record-level permissions
+
+**Decided (owner, 2026-09-25).** For cloudflare-os, the organisation's connector
+(`gatekeeper-records-service`) holds each datastore's Records credential and decides, through the
+gatekeeper, who may read and who may request a command. Records does not receive a credential per
+person. This is delegation: Records trusts the connector's statement of who acted. The connector
+makes that statement only after redeeming a one-use Workshop viewer assertion for the exact intent.
+Other clients (external systems, SDK users, other connectors) get their own bindings. Any rule that
+must hold for every client therefore lives in Records, not only in the connector.
+
+### Attribution (next increment)
+
+Today every journal row stores `principal_id`, `binding_id` and `created_at`. Through a shared
+connector credential the principal is always the connector's, so the journal cannot say which person
+acted. Record `extensions` are not a substitute, because any later update can overwrite them.
+
+- Journal rows gain an `actor` (for example `cloudflare-os:<email>`). Records gain server-set
+  `created_by` and `updated_by`. Client input can never write these fields.
+- A binding may name an actor only if it holds an explicit "may attribute" grant. Other bindings are
+  their own actor.
+- The actor is part of the idempotency digest, so a retry cannot re-attribute a change.
+- Reads and the change feed return the attribution. Blueprints show "created by" and "last changed by".
+- A trigger refuses `UPDATE` and `DELETE` on the journal. Privileged redaction (below) is the only
+  exception, and it is itself journalled.
+
+### Record-level permissions and history visibility (planned, not yet scheduled)
+
+Apps will quickly need rules such as: anyone can see profiles, but only a profile's owner (or an
+admin) can edit it; most people cannot see a profile's history, but the owner and admins can. The
+current model cannot express this. Scopes are per binding and module (`work.read`, `work.write`), so
+every reader through a binding sees every record and the whole journal. The design has these parts:
+
+| Concern | Direction |
+| --- | --- |
+| Subjects | The attributed actor, plus roles held in Records: `member`, `admin`, and module-defined roles. Roles are keyed by actor identity, managed by operator/admin tooling, and never granted by a gadget. |
+| Ownership | An owner field set server-side from the actor at create. It changes only through an explicit, journalled transfer command. |
+| Rules | Declared by the module, per entity and per command, as part of its reviewed profile. Examples: `profile.update` requires owner or admin; `profile.read` is open to members; history reads require owner or admin. Enforced in the SQL command and read functions, using the actor and role claims. |
+| Field visibility | Fields can be marked restricted (for example contact details). Reads, snapshots and JSON-LD omit them for readers without the right, and schemas describe the omission. |
+| History | A separate `history.read` right. `changes`, snapshots and exports filter journal entries per reader. Filtered readers see sequence gaps (already allowed by the sync contract). A role or ownership change bumps the permission epoch and forces a cache reset. |
+| Connector | Requests reads and commands as the actor, not as one shared view. Shared gadgets use `excludeObservers` for any observation that some observers may not see. The connector may pre-check for fast UI feedback, but Records has the final say. |
+| Redaction | Hiding history from readers is not erasure. Erasure is a privileged, journalled redaction that also covers idempotency results, exports, backups and caches. |
+
+Acceptance for that stage: an owner edits their own profile while a non-owner is refused, including
+through a replayed or altered intent. A non-admin's `changes` and snapshots contain no other person's
+restricted fields or history. Shared-gadget observations exclude observers correctly. Role revocation
+resets caches. External bindings obey the same rules.
+
+### Where attribution lives today
+
+Durable Objects store only what their code writes; the platform keeps no native record of who
+changed what. What exists now:
+
+- **Workshop action records** (per workspace, in the Overseer's storage) hold the gadget or agent that
+  called, who resolved the action (`resolvedBy`) and whether it was auto-approved. The person who
+  *requested* the action appears only in the gatekeeper-written description text, not as a field.
+  These records live and die with the workspace.
+- **The connector facet** stores each pending command with its verified `viewerId` and outcome. Only
+  the last 1,000 settled actions per gadget binding are kept.
+- **Gadget state** (for example Yjs documents) has no per-user authorship unless the app records it,
+  as the Whiteboard does with the signed-in account.
+
+None of these is a durable, queryable, cross-app audit. That is why attribution belongs in the
+Records journal.
+
 ## Module publication and API design
 
 Module package layout (the alpha implements the initial profile/SQL format; see the package READMEs):
