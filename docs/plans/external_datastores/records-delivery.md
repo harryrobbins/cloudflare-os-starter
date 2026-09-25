@@ -106,32 +106,39 @@ commands (2026-09-26).
 
 - [x] Connector holds each datastore credential; the gatekeeper controls reads and command requests
   (`gatekeeper-records-service`).
-- [ ] **Stage 1, actor and attribution:**
-  - [ ] `act` claim, the "may attribute" binding grant and `records.actor()`.
-  - [ ] Journal `actor` and `owner_at_change`; storage `created_by`/`updated_by`.
-  - [ ] Actor in the idempotency digest; append-only journal trigger.
-  - [ ] Connector sends the verified viewer; blueprints show created/changed by.
-- [ ] **Stage 2, presentation schema:**
-  - [ ] Generated 1:1 views for `work` and `messaging`.
-  - [ ] `records_presenter` and `records_commander` roles; forced RLS on all storage.
-  - [ ] Reads, snapshots and changes via invoker functions over the views; no client grants on
+- [x] **Stage 1, actor and attribution** (migration 007, 2026-09-26):
+  - [x] `act` claim (gateway `Records-Actor` header), the "may attribute" binding grant
+    (`bindings.attribution_namespace`, `manage.ts attribution`) and `records.actor()`.
+  - [x] Journal `actor` and `owner_at_change`; storage `created_by`/`updated_by` via `records.stamp_row()`.
+  - [x] Actor in the idempotency digest; append-only journal trigger (UPDATE, DELETE, TRUNCATE).
+  - [x] Connector sends the verified viewer (`cloudflare-os:<viewer>`); Work Board and Records
+    Explorer show created/changed by.
+- [x] **Stage 2, presentation schema** (migration 008):
+  - [x] Generated 1:1 views for `work` and `messaging` (`present_work_v1`, `present_messaging_v1`).
+  - [x] `records_presenter` and `records_commander` roles; forced RLS with a restrictive tenant
+    policy on all storage.
+  - [x] Reads, snapshots and changes via invoker functions over the views; no client grants on
     storage.
-  - [ ] Publication checks. Behaviour unchanged from stage 1.
-- [ ] **Stage 3, rules:**
-  - [ ] Roles table and `records.has_role()`, managed by operator tooling.
-  - [ ] Server-set ownership and a transfer command.
-  - [ ] Restricted-field masks and history views.
-  - [ ] Epoch bump on role/ownership change.
-  - [ ] A first rule-bearing module (for example `people.profile`) with allowed and refused actors
-    per rule.
-- [ ] **Stage 4, connector reads as the actor:** `excludeObservers` for shared gadgets.
+  - [x] Publication checks (`records_private.publication_errors`), run by the publisher and by 008.
+    Existing tests pass unchanged apart from inventory's new migration.
+- [x] **Stage 3, rules** (migration 009 and `records-model/examples/people`):
+  - [x] Roles table and `records.has_role()`, managed by `manage.ts role grant|revoke`.
+  - [x] Server-set ownership and the `people.transfer` command.
+  - [x] Restricted-field masks (profile `restricted: true`) and history views.
+  - [x] Epoch bump on role/ownership change.
+  - [x] `people.profile` with allowed and refused actors per rule (`test/permissions.test.ts`).
+- [ ] **Stage 4, connector reads as the actor:** `excludeObservers` for shared gadgets. Writes are
+  attributed; shared-gadget reads still use the binding's own identity.
 - [ ] **Acceptance:**
-  - [ ] Owner-only edit, including through replayed or altered intents.
-  - [ ] Owner/admin-only history and restricted fields across reads, snapshots, `changes`, JSON-LD
-    and exports.
-  - [ ] Correct observer exclusion; cache reset on role revocation.
-  - [ ] External bindings obey the same rules.
-  - [ ] Measured view-read performance against today's reads.
+  - [x] Owner-only edit, including through replayed or altered intents (database tests).
+  - [x] Owner/admin-only history and restricted fields across reads, snapshots and `changes`
+    (database tests). JSON-LD and exports are built from those reads; not separately tested.
+  - [ ] Correct observer exclusion (stage 4). [x] Cache reset on role revocation.
+  - [ ] External bindings obey the same rules: enforced in SQL for every binding; not yet exercised
+    through a live external client.
+  - [x] Measured view-read performance against today's reads
+    ([benchmark](../../../packages/records-service/docs/benchmark-views.md)): page of 100 at
+    6.8 ms p50 vs 3.3 ms; 5,000-record snapshot at 104 ms vs 42 ms.
 
 ## Evidence log
 

@@ -1,7 +1,7 @@
 // Records Explorer UI: a read-only browser over one Records datastore (see ../README.md).
 // Every value shown comes from the service or its public model and is treated as untrusted text:
 // nothing here parses HTML, fetches IRIs or executes record content.
-import { LIMITS, TABS, isUuid } from '../shared/validation.js'
+import { LIMITS, TABS, actorLabel, isUuid } from '../shared/validation.js'
 
 const ACTIVITY_MS = 5_000
 const TAB_LABELS = { records: 'Records', model: 'Model', activity: 'Activity', connection: 'Connection' }
@@ -251,13 +251,13 @@ export function createExplorer({ gadget, root, doc = document, timers = true }) 
     const fields = columns(s.entity)
     const wrap = el('div', 'table-wrap'); const table = el('table')
     table.append(el('caption', 'sr', `${s.entity} records, current page`))
-    const head = el('tr'); for (const name of ['id', 'revision', ...fields]) { const th = el('th', '', name); th.scope = 'col'; head.append(th) }
+    const head = el('tr'); for (const name of ['id', 'revision', 'changed by', ...fields]) { const th = el('th', '', name); th.scope = 'col'; head.append(th) }
     const thead = el('thead'); thead.append(head); table.append(thead)
     const body = el('tbody')
     for (const record of rows) {
       const row = el('tr'); const idCell = el('td')
       idCell.append(button(shortId(record.id), () => { s.inspected = record; render() }, 'link', { 'aria-label': `Inspect record ${record.id}` })); idCell.title = display(record.id)
-      row.append(idCell, el('td', '', display(record.revision)))
+      row.append(idCell, el('td', '', display(record.revision)), el('td', '', actorLabel(record.updated_by)))
       for (const field of fields) { const value = display(record.data?.[field]); const cell = el('td', '', value); cell.title = value; row.append(cell) }
       body.append(row)
     }
@@ -272,9 +272,12 @@ export function createExplorer({ gadget, root, doc = document, timers = true }) 
     const data = plain(record.data) ? record.data : {}
     const add = (name, value, note) => { const dt = el('dt', '', name); if (note) dt.append(el('small', 'field-note', note)); list.append(dt, el('dd', '', display(value))) }
     add('id', record.id); add('entity', record.entity); add('revision', record.revision)
+    if (record.created_by) add('created by', actorLabel(record.created_by))
+    if (record.updated_by) add('last changed by', actorLabel(record.updated_by))
+    if (record.owner) add('owner', actorLabel(record.owner))
     for (const [name, definition] of Object.entries(definitions)) {
-      const facts = [definition.type, definition.required ? 'required' : null, Array.isArray(definition.enum) ? `one of ${definition.enum.join(', ')}` : null, definition.term].filter(Boolean).join(' · ')
-      add(name, name in data ? data[name] : '(not returned)', facts)
+      const facts = [definition.type, definition.required ? 'required' : null, definition.restricted ? 'restricted' : null, Array.isArray(definition.enum) ? `one of ${definition.enum.join(', ')}` : null, definition.term].filter(Boolean).join(' · ')
+      add(name, name in data ? data[name] : definition.restricted ? '(hidden: only its owner and admins see this)' : '(not returned)', facts)
     }
     for (const [name, value] of Object.entries(data)) if (!(name in definitions)) add(name, value, 'not in profile')
     return list
@@ -326,8 +329,8 @@ export function createExplorer({ gadget, root, doc = document, timers = true }) 
     if (!s.activity.items.length) { panel.append(emptyBox('No changes seen yet', 'Changes made by any gadget or client connected to this datastore appear here.')); return }
     const list = el('ol', 'activity')
     for (const change of s.activity.items) {
-      const item = el('li'); const open = button(`${change.entity} ${shortId(change.record_id)}`, () => { s.inspected = { id: change.record_id, entity: change.entity, revision: change.revision, data: change.data }; render() }, 'link')
-      item.append(el('span', 'seq', `#${display(change.seq)}`), open, el('span', 'summary', `revision ${display(change.revision)} · ${display(change.data?.title ?? change.data?.name ?? '')}`))
+      const item = el('li'); const open = button(`${change.entity} ${shortId(change.record_id)}`, () => { s.inspected = { id: change.record_id, entity: change.entity, revision: change.revision, updated_by: change.actor, data: change.data }; render() }, 'link')
+      item.append(el('span', 'seq', `#${display(change.seq)}`), open, el('span', 'summary', `revision ${display(change.revision)}${change.actor ? ` by ${actorLabel(change.actor)}` : ''} · ${display(change.data?.title ?? change.data?.name ?? '')}`))
       list.append(item)
     }
     panel.append(list)

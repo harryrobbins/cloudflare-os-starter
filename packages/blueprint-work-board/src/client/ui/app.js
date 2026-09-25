@@ -9,7 +9,7 @@
 
 import { h, option } from "./dom.js";
 import { CSS } from "./styles.js";
-import { STATUSES, STATUS_LABELS, applyChanges, changedFields, columns, emptyState, fromSnapshot, isWorkV1, statusOf, validTitle } from "../model.js";
+import { STATUSES, STATUS_LABELS, actorLabel, applyChanges, changedFields, columns, emptyState, fromSnapshot, isWorkV1, statusOf, validTitle } from "../model.js";
 import { intentDigest } from "../intent.js";
 import { BINDING_NAME, errorCode, errorDetail } from "../../shared/records.js";
 
@@ -418,6 +418,7 @@ export function createBoardApp(options) {
     const children = [
       h("h2", { tabindex: "-1" }, title || "(untitled)"),
       h("div", { class: "sub" }, `Revision ${target.revision} · ${target.id}`),
+      ...(target.created_by || target.updated_by ? [h("div", { class: "sub attribution" }, `Created by ${actorLabel(target.created_by)} · last changed by ${actorLabel(target.updated_by)}`)] : []),
     ];
     if (canWrite()) {
       const d = draft;

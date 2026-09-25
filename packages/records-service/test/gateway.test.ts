@@ -209,3 +209,26 @@ test('approved command snapshots intent and binds every execution field into dig
   const digest = await intentDigest(result);
   for (const changed of [{ ...result, binding: 'other' }, { ...result, idempotencyKey: 'different' }, { ...result, expectedRevision: 2 }, { ...result, command: 'work.update' }]) assert.notEqual(await intentDigest(changed), digest);
 });
+
+test('delegated actor is signed into the token only within the credential attribution namespace', async () => {
+  const signed: Identity[] = [];
+  const handler = (namespace: string | null) => createGateway({
+    postgrest: 'http://private', credentials: { authenticate: async () => ({ ...identity, attribution_namespace: namespace }) },
+    sign: async claims => { signed.push(claims); return 'token'; }, fetch: async () => Response.json({ records: [] }),
+  });
+  const read = (namespace: string | null, actor?: string) => handler(namespace)(new Request(`http://gateway/v1/datastores/${datastore}/modules/work/v1/records`, { headers: { authorization: 'Bearer secret', ...(actor ? { 'records-actor': actor } : {}) } }));
+  assert.equal((await read(null, 'cloudflare-os:ada@example.com')).status, 403);
+  assert.equal((await read('cloudflare-os', 'other:ada@example.com')).status, 403);
+  assert.equal((await read('cloudflare-os', 'cloudflare-os:has space')).status, 403);
+  assert.equal(signed.length, 0);
+  assert.equal((await read('cloudflare-os', 'cloudflare-os:ada@example.com')).status, 200);
+  assert.deepEqual(signed[0]!.act, { sub: 'cloudflare-os:ada@example.com' });
+  assert.equal('attribution_namespace' in signed[0]!, false);
+  assert.equal((await read('cloudflare-os')).status, 200);
+  assert.equal(signed[1]!.act, undefined);
+  // The client sends the actor on every request.
+  const seen: (string | null)[] = [];
+  const client = new RecordsClient({ url: 'http://gateway', datastore, token: () => 'secret', actor: 'cloudflare-os:ada@example.com', fetch: async (_url, init) => { seen.push(new Headers(init?.headers).get('records-actor')); return Response.json({ records: [] }); } });
+  await client.records('work', 1);
+  assert.deepEqual(seen, ['cloudflare-os:ada@example.com']);
+});

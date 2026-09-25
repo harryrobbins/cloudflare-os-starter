@@ -121,6 +121,10 @@ describe("approved commands", () => {
     expect(env.service.rows.size).toBe(1);
     const applied = await env.session.getOutcome(1);
     expect(applied).toMatchObject({ status: "applied", result: { record: { data: { title: "Ship the board" } } } });
+    // Records attributes the write (and its binding check) to the verified viewer; shared reads carry no actor.
+    const writes = env.service.requests.filter((r) => r.method === "POST");
+    expect(writes.map((r) => r.headers["records-actor"])).toEqual(["cloudflare-os:ada@example.com"]);
+    expect(env.service.requests.filter((r) => r.method === "GET" && r.headers["records-actor"] && !r.path.endsWith("/describe"))).toEqual([]);
   });
 
   it("refuses an assertion made for a different intent", async () => {

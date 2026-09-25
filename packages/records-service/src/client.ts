@@ -5,15 +5,21 @@ export class RecordsError extends Error {
   readonly status: number; readonly detail: unknown;
   constructor(status: number, detail: unknown) { super(`Records request failed (${status})`); this.status = status; this.detail = detail; }
 }
+export interface RecordsClientOptions {
+  url: string; datastore: string; token: () => string | Promise<string>; fetch?: typeof fetch;
+  /** Delegated actor, e.g. `cloudflare-os:<viewer>`. Needs the credential's attribution grant. */
+  actor?: string;
+}
 export class RecordsClient {
   private transport: typeof fetch;
-  private options: { url: string; datastore: string; token: () => string | Promise<string>; fetch?: typeof fetch };
-  constructor(options: { url: string; datastore: string; token: () => string | Promise<string>; fetch?: typeof fetch }) { this.options = options; this.transport = options.fetch ?? fetch; }
+  private options: RecordsClientOptions;
+  constructor(options: RecordsClientOptions) { this.options = options; this.transport = options.fetch ?? fetch; }
   private async request(path: string, init: RequestInit = {}, retry = false): Promise<any> {
     let response: Response | undefined;
     for (let attempt = 0; attempt < (retry ? 3 : 1); attempt++) {
       try {
         const headers = new Headers(init.headers); headers.set('authorization', `Bearer ${await this.options.token()}`);
+        if (this.options.actor) headers.set('records-actor', this.options.actor);
         response = await this.transport(`${this.options.url.replace(/\/$/, '')}/v1/datastores/${encodeURIComponent(this.options.datastore)}/${path}`, { ...init, headers });
         if (response.ok) return await response.json();
         if (![429, 502, 503, 504].includes(response.status) || attempt === 2 || !retry) throw new RecordsError(response.status, await response.json());

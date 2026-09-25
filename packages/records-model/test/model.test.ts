@@ -73,8 +73,8 @@ test('upgrade rejects migration edits and same-major constraints, accepts additi
 });
 test('independent inventory module prepares with trusted SQL and no Schema.org dependency',()=>{
   const manifest=read('examples/inventory/module.json');
-  const sql=readFileSync(new URL('../examples/inventory/migrations/0001_initial.sql',import.meta.url),'utf8');
-  assert.equal(preparePublication(manifest,{'0001_initial':sql},catalogue).manifest.id,'inventory');
+  const sources=Object.fromEntries(manifest.migrations.map((m:{id:string})=>[m.id,readFileSync(new URL(`../examples/inventory/migrations/${m.id}.sql`,import.meta.url),'utf8')]));
+  assert.equal(preparePublication(manifest,sources,catalogue).manifest.id,'inventory');
   assert.deepEqual(validateRecord(manifest.profile,'asset',{label:'Laptop',serial:'SN42'}),[]);
   assert.ok(validateRecord(manifest.profile,'asset',{label:'Laptop',serial:''}).length);
 });
@@ -95,4 +95,18 @@ test('malformed manifests and prototype names fail closed with actionable valida
  const profile=structuredClone(baseline.profile);profile.entities.asset.fields.serial=null;assert.ok(validateProfile(profile).length);
  assert.ok(validateRecord(baseline.profile,'constructor',{}).length);
  assert.throws(()=>recordJsonSchema(baseline.profile,'constructor'),/unknown entity/);
+});
+test('restricted fields are optional, marked in JSON Schema, and metadata names are reserved',()=>{
+  const manifest=read('examples/people/module.json');
+  const sources={'0001_initial':readFileSync(new URL('../examples/people/migrations/0001_initial.sql',import.meta.url),'utf8')};
+  assert.equal(preparePublication(manifest,sources,catalogue).manifest.id,'people');
+  assert.deepEqual(validateRecord(manifest.profile,'profile',{name:'Ada'}),[],'a masked record is still valid');
+  const schema=recordJsonSchema(manifest.profile,'profile') as {required:string[];properties:Record<string,Record<string,unknown>>};
+  assert.equal(schema.properties.email['x-records-restricted'],true); assert.ok(!schema.required.includes('email'));
+  const required=structuredClone(manifest.profile);required.entities.profile.fields.email.required=true;
+  assert.ok(validateProfile(required).some(e=>/restricted field cannot be required/.test(e)));
+  for(const name of ['owner','created_by','updated_by','revision']){
+    const clash=structuredClone(manifest.profile);clash.entities.profile.fields[name]={term:`urn:test:${name}`,type:'string'};
+    assert.ok(validateProfile(clash).some(e=>/reserved/.test(e)),name);
+  }
 });

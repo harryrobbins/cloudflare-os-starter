@@ -49,3 +49,12 @@ export function explorerState(input) {
   if (JSON.stringify(state).length > LIMITS.stateBytes) throw new Error('Explorer state is too large.')
   return state
 }
+
+/** A readable name for a Records actor: Cloudflare OS viewers by their account, others by kind. */
+export function actorLabel(actor) {
+  if (typeof actor !== 'string' || !actor) return 'unknown'
+  if (actor.startsWith('cloudflare-os:')) return actor.slice('cloudflare-os:'.length)
+  if (actor.startsWith('records:principal:')) return 'a service credential'
+  if (actor.startsWith('records:operator:')) return 'an operator'
+  return actor
+}

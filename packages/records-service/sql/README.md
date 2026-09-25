@@ -18,8 +18,8 @@ object input, idempotency key and optional expected revision. Creation returns
 `{record:{id,entity,revision,data},seq,permission_epoch}`. Updates require a matching revision.
 Work commands are `work.create` and `work.update`; messaging commands are `messaging.send`
 and `messaging.edit`. Data uses typed module columns; extensions are bounded JSON objects.
-The generic projection supports reads and each mutation adds one immutable journal row and
-an outbox marker. No module names or domain branches exist in the command dispatcher.
+Each mutation adds one immutable journal row and an outbox marker. The generic
+`records_private.records` projection is still written but is internal: no read uses it. No module names or domain branches exist in the command dispatcher.
 
 Authorization takes shared locks on principal, membership and binding, in that order. Writers
 then lock their datastore counter before domain rows. Revocation updates take the corresponding
@@ -27,13 +27,56 @@ row lock and bump the permission epoch. Transactions serialize per datastore; co
 writes roll back together. A slow transaction cannot be overtaken by another writer. Retry lookup
 happens after fresh authorization and before revision checks. Idempotency is scoped to datastore,
 principal, binding, module, API major and command. The input digest includes the expected revision.
-Only owners may change registry entries or history. RLS is defence in depth on physical tables;
-security-definer RPCs explicitly authorize because their owner bypasses RLS.
+Only owners may change registry entries or history. The journal is append-only (a trigger refuses
+UPDATE, DELETE and TRUNCATE).
+
+## Permissions: storage, presentation and commands (007–009)
+
+Postgres enforces permissions as part of each data model; see the
+[design](../../../docs/plans/external_datastores/records-direction.md#authority-attribution-and-permissions).
+
+- **Storage.** Every table has RLS enabled and forced. Tables with `datastore_id` carry a
+  RESTRICTIVE `tenant` policy (`datastore_id = records.current_datastore()`), so module rules, which
+  are permissive policies, can only narrow it. No client role holds any storage grant.
+- **Presentation.** `present_<module>_v<major>` holds one security-barrier view per profile entity
+  plus a `history` view over the journal, all owned by `records_presenter` (NOBYPASSRLS, owns no
+  table). `records_runtime` has SELECT on these views only. Read rules are view `WHERE` clauses and
+  column masks; a masked (NULL) field is absent from the record.
+- **API.** `read_records`, `snapshot_records` and `pull_changes` are SECURITY INVOKER: they run as
+  `records_runtime` and read only views. `records.read_plan()` authorizes and names the views;
+  `records.datastore_state()` returns the counter and epoch in the reading statement's snapshot.
+  Readers filtered by a history rule see sequence gaps; the change cursor still advances past them.
+- **Commands.** `execute_command` (owner-run) authorizes, handles idempotency and journals; the
+  module handler is SECURITY DEFINER owned by `records_commander` (NOBYPASSRLS, owns no table), so
+  RLS INSERT/UPDATE policies apply to every write.
+- **Actor.** A binding with an `attribution_namespace` may name a delegated actor
+  (`<namespace>:<id>`) through the gateway, carried as the RFC 8693 `act` claim and re-checked by
+  `authorize`. `records.actor()` returns it, or `records:principal:<uuid>`. `records.stamp_row()`
+  sets `created_by`, `updated_by` and (where present) `owner`; owner changes only when a transfer
+  handler sets `records.ownership_transfer` to the new owner, and bumps the permission epoch. The
+  journal records `actor` and `owner_at_change`; a delegated actor joins the idempotency digest.
+- **Roles.** `records_private.actor_roles` (per datastore, per actor) backs `records.has_role()`;
+  every change bumps the permission epoch.
+
+Module migrations use `records_private.isolate()`, `present_table()`, `present_history()`,
+`register_presentation()` and `register_history()`. Publication runs
+`records_private.publication_errors()` and refuses: storage without forced RLS or tenant policy,
+any client grant on storage, a profile entity without a view, a view not security-barrier or not
+owned by `records_presenter`, a missing history view, a handler not SECURITY DEFINER owned by
+`records_commander` with a fixed search path, or a presenter/commander that bypasses RLS. The
+check covers every storage table in the database, not only the module being published.
+
+The migration role must be a superuser (or BYPASSRLS): core definer functions (authorization,
+journal, registry) run as the owner and enforce rights explicitly. Owner bypass is never how client
+data access is granted.
 
 Current limits are explicit:
 
 - A handler changes exactly one record. Multi-record commands and tombstone/delete semantics are
   not implemented; extending them requires whole-commit pagination before enabling batches.
+- Presentation reads cost more than the old projection (see
+  [the view benchmark](../docs/benchmark-views.md)): about 2× for a 100-record page and 2.5× for a
+  5,000-record snapshot.
 - Read pages use UUID keyset pagination. They are not a stable multi-page snapshot under concurrent
   writes. `snapshot_records` returns a complete atomic bootstrap with its sequence and epoch,
   bounded to 5,000 records and rejects oversized snapshots with PT413. Streaming exports are pending.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyChanges, changedFields, columns, fromSnapshot, isWorkV1, validTitle } from "../src/client/model.js";
+import { actorLabel, applyChanges, changedFields, columns, emptyState, fromSnapshot, isWorkV1, validTitle } from "../src/client/model.js";
 
 const rec = (id, revision, data) => ({ id, entity: "work_item", revision, data });
 
@@ -35,5 +35,19 @@ describe("board model", () => {
     expect(changedFields(rec("a", 1, { title: "A", status: "open" }), { title: "A", description: "", status: "done" })).toEqual({ status: "done" });
     expect(isWorkV1({ module_id: "work", api_major: 1 })).toBe(true);
     expect(isWorkV1({ module_id: "messaging", api_major: 1 })).toBe(false);
+  });
+});
+
+describe("attribution", () => {
+  it("keeps the creator and records the latest actor from the journal", () => {
+    let state = emptyState();
+    state = applyChanges(state, { changes: [{ entity: "work_item", record_id: "a", revision: 1, actor: "cloudflare-os:ada@example.com", data: { title: "A" } }], cursor: 1, permission_epoch: 1 });
+    state = applyChanges(state, { changes: [{ entity: "work_item", record_id: "a", revision: 2, actor: "cloudflare-os:bob@example.com", data: { title: "B" } }], cursor: 2, permission_epoch: 1 });
+    expect(state.items.get("a")).toMatchObject({ created_by: "cloudflare-os:ada@example.com", updated_by: "cloudflare-os:bob@example.com" });
+  });
+  it("labels actors for people", () => {
+    expect(actorLabel("cloudflare-os:ada@example.com")).toBe("ada@example.com");
+    expect(actorLabel("records:principal:1234")).toBe("a service credential");
+    expect(actorLabel(undefined)).toBe("unknown");
   });
 });

@@ -1,6 +1,10 @@
 export interface Identity {
   sub: string; org_id: string; datastore_id: string; binding_id: string;
   scope: string[]; permission_epoch: number; module_id?: string;
+  /** The "may attribute" grant: the namespace in which this binding may name delegated actors. */
+  attribution_namespace?: string | null;
+  /** RFC 8693 actor claim: the person this request acts for. Set only by the gateway. */
+  act?: { sub: string };
 }
 export interface ModelRegistry {
   term(name: string): unknown | Promise<unknown>;
@@ -77,6 +81,13 @@ export function createGateway(options: GatewayOptions): (request: Request) => Pr
       return problem(503, 'Authentication temporarily unavailable');
     }
     if (!identity || identity.datastore_id !== datastore) return problem(401, 'Invalid or revoked credentials');
+    const { attribution_namespace: namespace, ...claims } = identity;
+    const actor = request.headers.get('records-actor');
+    if (actor !== null) {
+      // SQL re-checks this against the binding's current grant on every request.
+      if (!namespace || !/^[a-z][a-z0-9-]{0,39}:[!-~]{1,255}$/.test(actor) || !actor.startsWith(`${namespace}:`)) return problem(403, 'This credential may not attribute requests to that actor');
+      claims.act = { sub: actor };
+    }
     if (globalAction === 'events') {
       if (!identity.module_id || !identity.scope.includes(`${identity.module_id}.read`)) return problem(403, 'Read permission required');
       if (!options.relay) return problem(404, 'Event stream unavailable; use changes');
@@ -115,7 +126,7 @@ export function createGateway(options: GatewayOptions): (request: Request) => Pr
       }
     } catch (error) { return problem(error instanceof RangeError ? 413 : 400, error instanceof RangeError ? 'Request too large' : 'Invalid request'); }
     try {
-      const token = await options.sign(identity);
+      const token = await options.sign(claims);
       const response = await transport(new URL(`/rpc/${rpc}`, options.postgrest), {
         method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', 'content-profile': 'records_api', 'accept-profile': 'records_api' },
         body: JSON.stringify(args), signal: AbortSignal.any([request.signal, AbortSignal.timeout(15000)]),

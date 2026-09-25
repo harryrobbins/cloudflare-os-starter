@@ -6,9 +6,10 @@
 //   readClient / resolveViewer  a RecordsClient holding the operator-approved datastore credential
 //                               from the Worker secret. The credential is the datastore's service
 //                               binding, narrowed by this connection's module/API major/scopes.
-//                               The service has no per-person principals yet, so every approved
-//                               write runs as that binding; the viewer who asked is established by
-//                               the Workshop's one-use viewer assertion and recorded on the action.
+//                               Approved writes run as that binding, attributed to the viewer the
+//                               Workshop's one-use assertion verified (`cloudflare-os:<viewer>`), so
+//                               Records stamps and journals that person and applies their row rules.
+//                               The binding needs the operator's "cloudflare-os" attribution grant.
 //   pending                     the gatekeeper facet's Durable Object storage (atomic allocate).
 //   queue                       the session's ApprovalQueue, via an adapter that writes a readable
 //                               approval description and lets the owner opt into auto-approval.
@@ -81,6 +82,9 @@ export function bindingId(storage: SyncStorage): string {
   });
 }
 
+/** The Records actor for a Workshop viewer. */
+export function viewerActor(viewerId: string): string { return `cloudflare-os:${viewerId}`; }
+
 export function observerPrincipal(): string { return "cloudflare-os-member"; }
 
 export function addObserver(storage: SyncStorage, id: string): void {
@@ -146,10 +150,10 @@ export interface HostOptions {
 
 export function recordsHost(options: HostOptions): RecordsOsHost {
   const { resource, storage } = options;
-  const client = () => {
+  const client = (actor?: string) => {
     const approved = options.datastore();
     if (!approved) throw new Error("forbidden: This datastore is no longer approved for Cloudflare OS.");
-    return new RecordsClient({ url: options.serviceUrl, datastore: approved.id, token: () => approved.key, ...(options.fetch ? { fetch: options.fetch } : {}) });
+    return new RecordsClient({ url: options.serviceUrl, datastore: approved.id, token: () => approved.key, ...(actor ? { actor } : {}), ...(options.fetch ? { fetch: options.fetch } : {}) });
   };
   return {
     datastore: resource.datastore,
@@ -160,7 +164,8 @@ export function recordsHost(options: HostOptions): RecordsOsHost {
     readClient: async () => client(),
     async resolveViewer(viewerId: string) {
       if (!viewerId || resource.access !== "write" || !options.datastore()) return null;
-      return { principal: `cloudflare-os:${viewerId}`, client: client() };
+      const principal = viewerActor(viewerId);
+      return { principal, client: client(principal) };
     },
     async observers() {
       return [...storage.kv.list<{ principal: string }>({ prefix: "observer:" })].map(([key, value]) => ({ observerId: key.slice("observer:".length), principal: value.principal }));

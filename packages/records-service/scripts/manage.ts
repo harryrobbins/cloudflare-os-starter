@@ -60,8 +60,28 @@ export async function publish(sql: Sql, directory: string): Promise<void> {
       await tx`INSERT INTO records_private.commands VALUES(${manifest.id},${manifest.apiMajor},${name},${command.scope},${command.handler!}::regprocedure)
         ON CONFLICT(module_id,api_major,command) DO UPDATE SET required_scope=excluded.required_scope,handler=excluded.handler`;
     }
+    // Refuse storage without forced RLS or with client grants, missing or misowned views, and
+    // handlers that would not run as records_commander. The whole publication rolls back.
+    const [{ errors }] = await tx`SELECT records_private.publication_errors(${manifest.id},${manifest.apiMajor}) errors`;
+    if (errors.length) throw new Error(`Publication checks failed: ${errors.join('; ')}`);
     await tx`SELECT pg_notify('pgrst','reload schema')`;
   });
+}
+
+const actorPattern = /^[a-z][a-z0-9-]{0,39}:[!-~]{1,255}$/;
+/** Operator tooling: roles live in Records, keyed by actor; every change bumps the permission epoch. */
+export async function setRole(sql: Sql, action: 'grant' | 'revoke', datastore: string, actor: string, role: string): Promise<void> {
+  if (!actorPattern.test(actor)) throw new Error('Actor must look like <namespace>:<identity>');
+  if (!/^[a-z][a-z0-9_.-]{0,62}$/.test(role)) throw new Error('Invalid role name');
+  if (action === 'grant') await sql`INSERT INTO records_private.actor_roles(datastore_id,actor,role) VALUES(${datastore},${actor},${role}) ON CONFLICT DO NOTHING`;
+  else await sql`DELETE FROM records_private.actor_roles WHERE datastore_id=${datastore} AND actor=${actor} AND role=${role}`;
+}
+
+/** The "may attribute" grant: this binding may name delegated actors within one namespace. */
+export async function setAttribution(sql: Sql, binding: string, namespace: string | null): Promise<void> {
+  if (namespace !== null && (!/^[a-z][a-z0-9-]{0,39}$/.test(namespace) || namespace === 'records')) throw new Error('Invalid attribution namespace');
+  const rows = await sql`UPDATE records_private.bindings SET attribution_namespace=${namespace} WHERE id=${binding} RETURNING id`;
+  if (!rows.length) throw new Error('Unknown binding');
 }
 
 export async function provision(sql: Sql, module: string, output: string): Promise<void> {
@@ -92,7 +112,9 @@ if (process.argv[1] && resolve(process.argv[1]) === new URL(import.meta.url).pat
     if (command === 'migrate') await migrate(sql);
     else if (command === 'publish' && process.argv[3]) await publish(sql, process.argv[3]);
     else if (command === 'bootstrap' && process.argv[3] && process.argv[4]) await provision(sql, process.argv[3], resolve(process.argv[4]));
-    else throw new Error('Usage: manage.ts migrate | publish <module-dir> | bootstrap <module> <new-credential-file>');
+    else if (command === 'role' && (process.argv[3] === 'grant' || process.argv[3] === 'revoke') && process.argv[6]) await setRole(sql, process.argv[3], process.argv[4]!, process.argv[5]!, process.argv[6]);
+    else if (command === 'attribution' && process.argv[3] && process.argv[4]) await setAttribution(sql, process.argv[3], process.argv[4] === 'none' ? null : process.argv[4]);
+    else throw new Error('Usage: manage.ts migrate | publish <module-dir> | bootstrap <module> <new-credential-file> | role grant|revoke <datastore> <actor> <role> | attribution <binding> <namespace|none>');
     console.log(`Records ${command} completed. Credentials, if created, are in the requested file.`);
   } finally { await sql.end(); }
 }

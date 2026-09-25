@@ -84,6 +84,17 @@ Available interfaces:
 
 Datastore routes require `Authorization: Bearer <credential>`. Writes also require a unique
 `Idempotency-Key`; preserve it across retries. Credentials are scoped to a principal and datastore.
+Records carry `created_by` and `updated_by` (and `owner` for modules with ownership), set by
+Postgres from the acting identity; change entries carry each change's `actor`. A credential with
+an attribution grant may send `Records-Actor: <namespace>:<id>` to act for a person (for example
+`cloudflare-os:ada@example.com`); any other value is refused with 403.
+
+Permissions live in Postgres. Clients only ever read presentation views; storage tables have
+forced row-level security and no client grants, and command handlers cannot bypass it. A module can
+therefore declare row rules, restricted fields (absent for readers who may not see them) and
+history rules that hold for every client. See [sql/README.md](sql/README.md#permissions-storage-presentation-and-commands-007009)
+and the [people module](../records-model/examples/people/README.md).
+
 Ordinary REST clients use JSON. JSON-LD export uses full IRIs and datastore-scoped record identities;
 it is a constrained mapping, not an arbitrary JSON-LD processor or a remote-context fetcher.
 
@@ -112,6 +123,20 @@ pnpm --filter @records/service module:publish ../records-model/examples/inventor
 pnpm --filter @records/service db:bootstrap inventory /secure/new-credential.json
 ```
 
+Publication also runs the permission checks: forced RLS with a tenant policy on every storage
+table, no client grants, a security-barrier presentation view per entity plus a history view, and
+handlers owned by `records_commander`. A module that fails any check is not installed.
+
+Operator permission tooling (same `RECORDS_MIGRATION_URL`):
+
+```sh
+node scripts/manage.ts attribution <binding-id> cloudflare-os   # "may attribute" grant; `none` removes it
+node scripts/manage.ts role grant <datastore-id> cloudflare-os:ada@example.com admin
+node scripts/manage.ts role revoke <datastore-id> cloudflare-os:ada@example.com admin
+```
+
+Role and attribution changes bump the datastore's permission epoch, so clients reset caches.
+
 Bootstrap creates an organisation, service principal, datastore and scoped credential, expiring in
 90 days, and writes that credential only to a new file with mode 0600. It refuses to overwrite a
 file. Never point these commands at the earlier Records database. Installed profile metadata is
@@ -132,7 +157,9 @@ separate qualification gate. No generated frontend may bypass those checks.
 `src/cloudflare-os.ts` implements the concrete kernel ApprovalQueue bridge: consume viewer assertion,
 persist the pending command, submit its action, execute only through host `applyAction`, and recheck
 the viewer's current authority. It requires a durable pending store and observer authority checks.
-The gadget-facing session exposes no credentials or apply capability. Tests cover this lifecycle;
+The gadget-facing session exposes no credentials or apply capability. The cloudflare-os host sends
+approved commands with `Records-Actor: cloudflare-os:<viewer>`, so its binding needs the
+`cloudflare-os` attribution grant; shared-gadget reads do not yet run as each viewer. Tests cover this lifecycle;
 the live OS vendor still needs registration, configuration and deployment qualification.
 
 ## Verification and operations

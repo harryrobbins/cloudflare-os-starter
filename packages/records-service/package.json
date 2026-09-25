@@ -6,7 +6,7 @@
   "description": "Standards-based Records: PostgREST gateway, SQL commands and portable model modules",
   "scripts": {
     "start": "node src/server.ts",
-    "test:run": "node --test test/gateway.test.ts test/gateway-os.test.ts test/database.test.mjs test/publication.test.ts test/sql-policy.test.ts test/config.test.ts test/gateway-stream.test.ts test/site.test.ts",
+    "test:run": "node --test test/gateway.test.ts test/gateway-os.test.ts test/database.test.mjs test/publication.test.ts test/permissions.test.ts test/sql-policy.test.ts test/config.test.ts test/gateway-stream.test.ts test/site.test.ts",
     "types:check": "tsc --noEmit",
     "db:migrate": "node scripts/manage.ts migrate",
     "db:bootstrap": "node scripts/manage.ts bootstrap",

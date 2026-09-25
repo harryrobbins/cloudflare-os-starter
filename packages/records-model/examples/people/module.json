@@ -1,0 +1,74 @@
+{
+  "id": "people",
+  "version": "1.0.0",
+  "apiMajor": 1,
+  "profile": {
+    "id": "urn:records:profile:people",
+    "version": "1.0.0",
+    "vocabulary": {
+      "id": "https://schema.org/",
+      "version": "30.1"
+    },
+    "entities": {
+      "profile": {
+        "term": "https://schema.org/Person",
+        "fields": {
+          "name": {
+            "term": "https://schema.org/name",
+            "type": "string",
+            "required": true,
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "job_title": {
+            "term": "https://schema.org/jobTitle",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "email": {
+            "term": "https://schema.org/email",
+            "type": "string",
+            "restricted": true,
+            "minLength": 3,
+            "maxLength": 320
+          },
+          "telephone": {
+            "term": "https://schema.org/telephone",
+            "type": "string",
+            "restricted": true,
+            "minLength": 1,
+            "maxLength": 50
+          }
+        }
+      }
+    }
+  },
+  "scopes": [
+    "people.read",
+    "people.write"
+  ],
+  "commands": {
+    "people.create": {
+      "entity": "profile",
+      "scope": "people.write",
+      "handler": "records_people.apply(uuid,text,jsonb,bigint,bigint)"
+    },
+    "people.update": {
+      "entity": "profile",
+      "scope": "people.write",
+      "handler": "records_people.apply(uuid,text,jsonb,bigint,bigint)"
+    },
+    "people.transfer": {
+      "entity": "profile",
+      "scope": "people.write",
+      "handler": "records_people.apply(uuid,text,jsonb,bigint,bigint)"
+    }
+  },
+  "migrations": [
+    {
+      "id": "0001_initial",
+      "sha256": "80a54b687515669788ae3af8ef2ca3cdaa7bc4ce3aead554dca2bbd6a9ce90f0"
+    }
+  ]
+}
