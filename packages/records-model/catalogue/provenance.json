@@ -1,0 +1,13 @@
+{
+  "id": "https://schema.org/",
+  "version": "30.1",
+  "published": "2026-09-16",
+  "file": "schemaorg-30.1.jsonld",
+  "source": "https://raw.githubusercontent.com/schemaorg/schemaorg/main/data/releases/30.1/schemaorg-all-https.jsonld",
+  "sha256": "07e7c663dbc12a0937581745e59a98ed12b8698f38e8e3b03650287d9df88ae5",
+  "license": "CC-BY-SA-3.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+  "attribution": "Schema.org vocabulary; Schema.org sponsors and contributors",
+  "terms": "https://schema.org/docs/terms.html",
+  "modifications": "None. Original complete all-https JSON-LD including retired terms."
+}

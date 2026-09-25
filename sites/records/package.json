@@ -1,0 +1,10 @@
+{
+  "name": "records-website",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/serve.mjs public",
+    "preview": "node scripts/serve.mjs dist"
+  }
+}

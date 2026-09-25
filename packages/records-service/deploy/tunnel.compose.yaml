@@ -1,0 +1,16 @@
+# Optional remotely managed named tunnel; configuration is owned by reviewed Cloudflare IaC.
+services:
+  tunnel:
+    image: ${CLOUDFLARED_IMAGE:?Set an immutable cloudflare/cloudflared image digest}
+    user: "1000:1000"
+    command: [tunnel, --no-autoupdate, run, --token-file, /run/secrets/tunnel_token]
+    secrets: [tunnel_token]
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    restart: unless-stopped
+    depends_on:
+      gateway: {condition: service_healthy}
+    networks: [ingress]
+secrets:
+  tunnel_token: {file: '${RECORDS_SECRETS_DIR}/tunnel_token'}

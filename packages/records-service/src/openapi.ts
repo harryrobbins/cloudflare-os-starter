@@ -1,0 +1,34 @@
+export interface PublicModule {
+  id: string; api_majors: number[]; scopes: string[]; commands?: string[]; profile?: unknown; entities?: string[]; features?: string[];
+}
+/** Public gateway contract. Deliberately contains no SQL schema, roles, function names or storage mappings. */
+export function publicOpenApi(modules: PublicModule[] = [], grantedScopes?: string[]) {
+  const parameter = (name: string, location: 'path' | 'query' | 'header', schema: object, required = false) => ({ name, in: location, required, schema });
+  const pathParams = [parameter('datastore', 'path', { type: 'string', format: 'uuid' }, true)];
+  const moduleParams = [...pathParams, parameter('module', 'path', { type: 'string', pattern: '^[a-z][a-z0-9_-]{0,62}$' }, true), parameter('major', 'path', { type: 'integer', minimum: 1 }, true)];
+  const errors = Object.fromEntries([400, 401, 403, 404, 409, 412, 413, 428, 502, 503].map(status => [status, { description: ({ 409: 'Idempotency conflict or permission epoch reset required', 412: 'Stale revision', 413: 'Body or snapshot exceeds bound', 428: 'Revision precondition required' } as Record<number, string>)[status] ?? 'Request failed', content: { 'application/problem+json': { schema: { $ref: '#/components/schemas/Problem' } } } }]));
+  const responses = (schema: object) => ({ 200: { description: 'Success', content: { 'application/json': { schema } } }, ...errors });
+  const authenticated = { security: [{ bearerCredential: [] }] };
+  const record = { type: 'object', required: ['id', 'entity', 'revision', 'data'], properties: { id: { type: 'string', format: 'uuid' }, entity: { type: 'string' }, revision: { type: 'integer', minimum: 1 }, data: { type: 'object' } } };
+  const records = { type: 'array', items: { $ref: '#/components/schemas/Record' } };
+  const base = '/v1/datastores/{datastore}';
+  const moduleBase = `${base}/modules/{module}/v{major}`;
+  const paths: Record<string, unknown> = {
+    [`${moduleBase}/records`]: { get: { ...authenticated, summary: 'Read authorised module records', parameters: [...moduleParams, parameter('entity', 'query', { type: 'string' }), parameter('id', 'query', { type: 'string', format: 'uuid' }), parameter('after', 'query', { type: 'string', format: 'uuid' }), parameter('limit', 'query', { type: 'integer', minimum: 1, maximum: 500, default: 100 }), parameter('format', 'query', { type: 'string', enum: ['jsonld'] })], responses: { ...responses({ type: 'object', properties: { records, permission_epoch: { type: 'integer' } } }), 200: { description: 'Authorised records; JSON-LD is selected explicitly with format=jsonld', content: { 'application/json': { schema: { type: 'object', properties: { records, permission_epoch: { type: 'integer' } } } }, 'application/ld+json': { schema: { type: 'object', properties: { '@graph': { type: 'array', items: { type: 'object' } } } } } } } } } },
+    [`${moduleBase}/snapshot`]: { get: { ...authenticated, summary: 'Complete atomic snapshot and journal watermark; oversized snapshots fail', parameters: [...moduleParams, parameter('limit', 'query', { type: 'integer', minimum: 1, maximum: 5000, default: 1000 })], responses: responses({ type: 'object', properties: { records, seq: { type: 'integer' }, permission_epoch: { type: 'integer' }, complete: { const: true } } }) } },
+    [`${moduleBase}/rpc/{command}`]: { post: { ...authenticated, summary: 'Execute a registered command', description: 'Use the same key and identical input after an ambiguous failure. Updates require If-Match with one quoted revision. A valid replay returns its original outcome.', parameters: [...moduleParams, parameter('command', 'path', { type: 'string' }, true), parameter('Idempotency-Key', 'header', { type: 'string', minLength: 1, maxLength: 128 }, true), parameter('If-Match', 'header', { type: 'string', pattern: '^"[1-9][0-9]*"$' })], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } }, responses: responses({ type: 'object' }) } },
+    [`${base}/changes`]: { get: { ...authenticated, summary: 'Pull the durable journal after a snapshot watermark', description: 'Persist cursor only after applying a complete page. A permission epoch conflict requires purging cached data and taking a new snapshot.', parameters: [...pathParams, parameter('after', 'query', { type: 'integer', minimum: 0 }), parameter('epoch', 'query', { type: 'integer', minimum: 0 }), parameter('limit', 'query', { type: 'integer', minimum: 1, maximum: 500 })], responses: responses({ type: 'object', properties: { changes: { type: 'array', items: { type: 'object' } }, cursor: { type: 'integer' }, permission_epoch: { type: 'integer' } } }) } },
+    [`${base}/events`]: { get: { ...authenticated, summary: 'Bounded SSE hints; pull changes to retrieve data', description: 'Requires module read scope. Hints are not durable. Periodic reconciliation remains required. Streams expire after five minutes.', parameters: pathParams, responses: { 200: { description: 'No record data is included in hints', content: { 'text/event-stream': { schema: { type: 'string' } } } }, ...errors } } },
+    [`${base}/describe`]: { get: { ...authenticated, summary: 'Installed modules and effective binding scopes', parameters: pathParams, responses: responses({ type: 'object' }) } },
+    [`${base}/openapi`]: { get: { ...authenticated, summary: 'This API description with installed module profiles, scopes and commands', parameters: pathParams, responses: responses({ type: 'object' }) } },
+    '/v1/models/{module}/v{major}/profile': { get: { summary: 'Public published semantic profile', parameters: moduleParams.slice(1), responses: responses({ type: 'object' }) } },
+    '/v1/models/{module}/v{major}/schema/{entity}': { get: { summary: 'Public entity JSON Schema', parameters: [...moduleParams.slice(1), parameter('entity', 'path', { type: 'string' }, true)], responses: responses({ type: 'object' }) } },
+    '/v1/vocabulary/schemaorg/terms/{term}': { get: { summary: 'Pinned Schema.org vocabulary term and provenance', parameters: [parameter('term', 'path', { type: 'string' }, true)], responses: responses({ type: 'object' }) } },
+  };
+  return {
+    openapi: '3.1.0', info: { title: 'Records public API', version: '0.1.0' }, paths,
+    components: { securitySchemes: { bearerCredential: { type: 'http', scheme: 'bearer', description: 'Scoped Records API credential, never a database login' } }, schemas: { Record: record, Problem: { type: 'object', required: ['type', 'title', 'status'], properties: { type: { type: 'string' }, title: { type: 'string' }, status: { type: 'integer' } } } } },
+    'x-records-modules': modules.map(module => ({ id: module.id, api_majors: module.api_majors, scopes: module.scopes, commands: module.commands ?? [], features: module.features ?? [], profile: module.profile })),
+    ...(grantedScopes ? { 'x-records-granted-scopes': grantedScopes } : {}),
+  };
+}

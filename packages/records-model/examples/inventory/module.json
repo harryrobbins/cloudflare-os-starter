@@ -1,0 +1,47 @@
+{
+  "id": "inventory",
+  "version": "1.0.0",
+  "apiMajor": 1,
+  "profile": {
+    "id": "urn:records:profile:inventory",
+    "version": "1.0.0",
+    "entities": {
+      "asset": {
+        "term": "urn:inventory:Asset",
+        "fields": {
+          "label": {
+            "term": "urn:inventory:label",
+            "type": "string",
+            "required": true,
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "serial": {
+            "term": "urn:inventory:serial",
+            "type": "string",
+            "required": true,
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      }
+    }
+  },
+  "scopes": [
+    "inventory.read",
+    "inventory.write"
+  ],
+  "commands": {
+    "inventory.register": {
+      "entity": "asset",
+      "scope": "inventory.write",
+      "handler": "records_inventory.apply(uuid,text,jsonb,bigint,bigint)"
+    }
+  },
+  "migrations": [
+    {
+      "id": "0001_initial",
+      "sha256": "7d56bb4dd9c196623a8b712b0f61977acf35c4938bfd034221066b963d061be5"
+    }
+  ]
+}

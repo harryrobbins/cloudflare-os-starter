@@ -1,0 +1,9 @@
+# ms has exhausted Docker's automatic address pools. These subnets were checked against
+# its routes and Docker networks before initial deployment; recheck before moving hosts.
+networks:
+  database:
+    ipam:
+      config: [{subnet: '10.214.1.0/24'}]
+  ingress:
+    ipam:
+      config: [{subnet: '10.214.2.0/24'}]

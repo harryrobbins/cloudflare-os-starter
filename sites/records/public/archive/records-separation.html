@@ -1,0 +1,357 @@
+<title>Records Separation Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,650&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#F5F6F8; --surface:#FFFFFF; --ink:#1A1F2B; --muted:#586174; --rule:#DCE0E7; --soft:#EDF0F4;
+  --accent:#0E6E5C; --accent-soft:#E1F1EC;
+  --t-port:#1F7A4D; --t-port-bg:#E3F3EA;
+  --t-cf:#9A5B00; --t-cf-bg:#FBEFD9;
+  --t-os:#6A3FB5; --t-os-bg:#EEE7FA;
+  --t-none:#A33A3A; --t-none-bg:#F8E4E4;
+  --f-head:"Literata",Georgia,"Times New Roman",serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#11141B; --surface:#171B24; --ink:#E4E8F0; --muted:#9AA3B5; --rule:#2A303C; --soft:#1E2330;
+    --accent:#5CC4A9; --accent-soft:#16302A;
+    --t-port:#6FD19C; --t-port-bg:#16301F;
+    --t-cf:#F0B25A; --t-cf-bg:#33260F;
+    --t-os:#B99BF0; --t-os-bg:#2A2140;
+    --t-none:#F08A8A; --t-none-bg:#3A1C1C;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#11141B; --surface:#171B24; --ink:#E4E8F0; --muted:#9AA3B5; --rule:#2A303C; --soft:#1E2330;
+  --accent:#5CC4A9; --accent-soft:#16302A;
+  --t-port:#6FD19C; --t-port-bg:#16301F;
+  --t-cf:#F0B25A; --t-cf-bg:#33260F;
+  --t-os:#B99BF0; --t-os-bg:#2A2140;
+  --t-none:#F08A8A; --t-none-bg:#3A1C1C;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:16px/1.6 var(--f-body);padding-inline:16px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.prose{max-width:68ch}
+header.top{padding-block:48px 28px;border-bottom:1px solid var(--rule);margin-bottom:8px}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font:650 clamp(30px,5vw,44px)/1.1 var(--f-head);margin:14px 0 14px;text-wrap:balance}
+h2{font:650 26px/1.2 var(--f-head);margin:56px 0 12px;text-wrap:balance}
+h3{font:600 17px/1.35 var(--f-body);margin:28px 0 8px}
+p{margin:0 0 14px}
+.lede{font-size:18px;color:var(--ink)}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;color:var(--muted);font-size:13px}
+.meta code{font-size:12px}
+code{font:13px/1.4 var(--f-mono);background:var(--soft);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+nav.toc{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:14px;margin:18px 0 0}
+nav.toc a{text-decoration:none;color:var(--muted)}
+nav.toc a:hover{color:var(--accent)}
+.verdict{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:22px 24px;margin-top:28px;display:grid;gap:14px}
+.verdict h2{margin:0;font-size:22px}
+.verdict ul{margin:0;padding-left:20px;display:grid;gap:6px}
+.pill{display:inline-block;font:500 11.5px/1 var(--f-mono);letter-spacing:.03em;padding:4px 7px;border-radius:999px;white-space:nowrap}
+.p-port{color:var(--t-port);background:var(--t-port-bg)}
+.p-cf{color:var(--t-cf);background:var(--t-cf-bg)}
+.p-os{color:var(--t-os);background:var(--t-os-bg)}
+.p-none{color:var(--t-none);background:var(--t-none-bg)}
+.p-acc{color:var(--accent);background:var(--accent-soft)}
+/* seam map */
+.seams{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0 10px}
+@media (max-width:760px){.seams{grid-template-columns:1fr}}
+.col{border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;border:1px solid var(--rule);background:var(--surface)}
+.col h4{margin:0 0 2px;font:600 14px/1.3 var(--f-body);display:flex;justify-content:space-between;gap:8px;align-items:center}
+.col .sub{font-size:12.5px;color:var(--muted);margin:0 0 4px}
+.box{border-radius:7px;padding:8px 10px;font-size:13px;line-height:1.4}
+.box b{font:500 12.5px/1.3 var(--f-mono);display:block;margin-bottom:2px;overflow-wrap:anywhere}
+.col.port{border-top:4px solid var(--t-port)} .col.port .box{background:var(--t-port-bg)}
+.col.cf{border-top:4px solid var(--t-cf)} .col.cf .box{background:var(--t-cf-bg)}
+.col.os{border-top:4px solid var(--t-os)} .col.os .box{background:var(--t-os-bg)}
+.caption{font-size:13px;color:var(--muted)}
+/* tables */
+.tbl{overflow-x:auto;margin:14px 0 8px;border:1px solid var(--rule);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--rule)}
+tr:last-child td{border-bottom:0}
+th{font:600 12px/1.3 var(--f-body);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--soft)}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+td ul{margin:0;padding-left:18px}
+/* levels */
+.levels{display:grid;gap:14px;margin-top:16px}
+.level{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:18px 20px;display:grid;grid-template-columns:120px 1fr;gap:6px 20px}
+@media (max-width:640px){.level{grid-template-columns:1fr}}
+.level .tag{font:650 30px/1 var(--f-head);color:var(--accent)}
+.level .tag small{display:block;font:500 12px/1.4 var(--f-body);color:var(--muted);margin-top:6px}
+.level h3{margin:0 0 6px}
+.level dl{display:grid;grid-template-columns:130px 1fr;gap:6px 14px;margin:8px 0 0;font-size:14.5px}
+@media (max-width:640px){.level dl{grid-template-columns:1fr}.level dt{margin-top:6px}}
+.level dt{color:var(--muted);font-weight:500}
+.level dd{margin:0}
+.level.now{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+/* compromises */
+.comp{display:grid;gap:0;margin-top:10px;border-top:1px solid var(--rule)}
+.comp article{display:grid;grid-template-columns:minmax(0,220px) 1fr;gap:6px 22px;padding:16px 0;border-bottom:1px solid var(--rule)}
+@media (max-width:640px){.comp article{grid-template-columns:1fr}}
+.comp h3{margin:0;font-size:15.5px}
+.comp .sev{margin-top:6px}
+.comp p{margin:0 0 6px;font-size:15px}
+.comp p:last-child{margin-bottom:0}
+ol.steps{padding-left:22px;display:grid;gap:10px}
+ol.steps li{padding-left:4px}
+.note{font-size:13.5px;color:var(--muted);border-left:3px solid var(--rule);padding-left:12px}
+footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--rule);font-size:13px;color:var(--muted)}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div class="eyebrow">Architecture review · Records datastore service</div>
+  <h1>What it would cost to pull Records out of cloudflare-os</h1>
+  <p class="lede prose">Records is already built to be portable in its core. The coupling that remains sits in three places: how people get an identity, how data is managed, and how gadget writes are approved. This report maps those seams, prices four levels of separation, and lists what the core platform gives up at each one.</p>
+  <div class="meta">
+    <span>Written 2026-09-25</span>
+    <span>Against starter <code>main 1343158</code> (unpushed)</span>
+    <span>Effort figures are estimates, not measurements</span>
+  </div>
+  <nav class="toc" aria-label="Sections">
+    <a href="#verdict">Verdict</a><a href="#seams">Seams today</a><a href="#levels">Levels of separation</a><a href="#compromises">Compromises for cfos</a><a href="#gains">What it buys</a><a href="#next">Next steps</a>
+  </nav>
+</header>
+
+<section class="verdict" id="verdict" aria-labelledby="v-h">
+  <h2 id="v-h">Verdict</h2>
+  <p class="prose" style="margin:0">Separate the <strong>code</strong> now and keep one <strong>deployment</strong>. Records should stay a Worker inside the cloudflare-os deploy (level 0) while its package boundaries are hardened to the point where lifting it out (level 1) is a configuration change. Do not start a standalone product (level 2) or a hosted service (level 3) until a second real consumer exists. Those levels are mostly new product work that cloudflare-os does not need, and they add running cost and a security surface that one team would carry alone.</p>
+  <ul>
+    <li><strong>Low regret, about 4 to 6 engineer-weeks:</strong> move the HTTP adapters into their own package, add an HTTP management API behind the existing permission matrix, and give the Node runtime an outbox publisher and scheduler.</li>
+    <li><strong>The hardest seam is approvals.</strong> A gadget write is gated by a viewer assertion consumed from the Workshop's approval queue in-process. Out of process, that becomes a cross-service contract with no equivalent outside cfos.</li>
+    <li><strong>The largest new cost is identity.</strong> Outside cfos there is no login, no sign-up and no self-service identity mapping. Organisations are created by an operator CLI.</li>
+  </ul>
+</section>
+
+<section id="seams" aria-labelledby="s-h">
+  <h2 id="s-h">Where the seams are today</h2>
+  <p class="prose">About 14,000 lines of Records code have no Cloudflare imports. The Cloudflare Worker package, <code>gatekeeper-records</code>, is about 8,900 lines. Roughly a third of that is the Data management page, a third is the gadget vendor and connect flow, and the rest is HTTP adapters and Cloudflare runtime glue. Counts are source lines excluding tests and generated code.</p>
+
+  <div class="seams" role="figure" aria-label="Records components grouped by what they depend on">
+    <div class="col port">
+      <h4>Portable <span class="pill p-port">runs anywhere</span></h4>
+      <p class="sub">No Cloudflare imports. Runs on Node beside any Postgres 17.</p>
+      <div class="box"><b>@records/contracts</b>Zod DTOs, role and scope matrix, error codes, sync types</div>
+      <div class="box"><b>@records/core</b>Command bus, journal, per-datastore clock, sync push/pull, webhooks domain, ops (restore, redact, archive)</div>
+      <div class="box"><b>@records/identity</b>Delegated-token and OIDC verification, <code>rk1_</code> parsing, replay guard</div>
+      <div class="box"><b>@records/jira</b>JQL subset, ADF, Jira v2/v3 routes</div>
+      <div class="box"><b>@records/schema</b>Migrations 0001 to 0009, RLS by principal, bootstrap and ops CLIs</div>
+      <div class="box"><b>@records/sync-client · sdk · node</b>Browser sync, TS and Python SDKs, the Node server</div>
+    </div>
+    <div class="col cf">
+      <h4>Cloudflare runtime <span class="pill p-cf">has a Node stand-in</span></h4>
+      <p class="sub">Swappable, but each swap needs work or loses a feature.</p>
+      <div class="box"><b>Hyperdrive ×2</b>App and publisher pools. Node uses one postgres.js pool.</div>
+      <div class="box"><b>DatastorePokeHub DO</b>WebSocket pokes. Node uses SSE plus optional LISTEN/NOTIFY.</div>
+      <div class="box"><b>Queue + cron</b>Outbox publish, webhook fan-out, partitions, token pruning. <strong>No Node equivalent yet.</strong></div>
+      <div class="box"><b>Workers rate limiter</b>Node uses an in-process fixed window.</div>
+      <div class="box"><b>Access assertion check</b>Node takes an issuer and audience, a custom check, or <code>"none"</code>.</div>
+      <div class="box"><b>DatastoreFeed DO</b>Legacy identifier hooks for older gadgets.</div>
+    </div>
+    <div class="col os">
+      <h4>cloudflare-os only <span class="pill p-os">no substitute</span></h4>
+      <p class="sub">Exists only because Records runs inside cfos.</p>
+      <div class="box"><b>Data management page</b>Datastores, members, credentials, webhooks and audit. Reached over the <code>DataManagement</code> RPC capability. <strong>There is no HTTP management API.</strong></div>
+      <div class="box"><b>Connect flow</b>Access-verified, same-origin, opened by the Workshop</div>
+      <div class="box"><b>Viewer assertions + approvals</b>Kernel fork feature; <code>pending</code> outcomes come from the Workshop queue</div>
+      <div class="box"><b>Delegated-token minting</b>The gatekeeper signs 60-second tokens after redeeming an assertion</div>
+      <div class="box"><b>Bindings and observations</b>Gadget connections and agent read records</div>
+      <div class="box"><b>Router, Access, deploy order</b>Single public entrypoint; Records deploys before the router</div>
+    </div>
+  </div>
+  <p class="caption">Green is already separable. Amber needs a stand-in per host. Purple has to be rebuilt, replaced or dropped in any separate product.</p>
+
+  <h3>Evidence for the coupling</h3>
+  <div class="tbl"><table>
+    <thead><tr><th style="width:30%">Finding</th><th>Where</th><th style="width:34%">Consequence</th></tr></thead>
+    <tbody>
+      <tr><td>The Node server imports its HTTP adapters from the Worker package.</td><td><code>packages/records-node/package.json</code> depends on <code>gatekeeper-records</code>; <code>records-node/src/server.ts</code> imports <code>gatekeeper-records/http/api</code>, <code>/http/openapi</code>, <code>/jira/handler</code></td><td>A standalone build drags in the cfos package. The adapters belong in their own package.</td></tr>
+      <tr><td>Node does not run the outbox publisher or the webhook consumer. Partition creation and token pruning run on the Worker cron.</td><td><code>records-node/src/server.ts</code> header comment; <code>gatekeeper-records/src/index.ts</code> <code>scheduled()</code></td><td>On Node, webhooks never fire, journal partitions stop being created three months ahead, and the replay table grows.</td></tr>
+      <tr><td>Management is an RPC capability handed to a Workshop-hosted page.</td><td><code>gatekeeper-records/src/vendor/management.ts</code> (<code>DataManagementApi</code>, 30 methods)</td><td>Outside cfos nobody can create a datastore, add a member or mint a credential except with SQL or the operator CLI.</td></tr>
+      <tr><td>Organisations and first admins are created by an operator script, mapped to the <code>workshop-email</code> issuer.</td><td><code>records-schema/src/bootstrap.ts</code>; migration <code>0007_identity.sql</code> ("Operators add mappings by hand")</td><td>No sign-up, no self-service login mapping. Identity for non-cfos people is a manual step.</td></tr>
+      <tr><td>The gadget write path consumes the viewer assertion from the Workshop's <code>ApprovalQueue</code>.</td><td><code>gatekeeper-records/src/vendor/session.ts</code> (<code>consumeViewerAssertion</code>)</td><td>Approval gating is in-process. The code already names this: the sync push "approval gate … only an in-process caller can supply" (<code>src/identity/client.ts</code>).</td></tr>
+      <tr><td>Delegated tokens already replace the trusted in-process caller.</td><td><code>src/identity/client.ts</code>, <code>@records/identity</code>, JWKS at <code>/gatekeeper/records/.well-known/jwks.json</code></td><td>The identity half of level 1 is done. Only the transport between gatekeeper and service is still in-process.</td></tr>
+      <tr><td>Records binds nothing; the Workshop and router bind it.</td><td><code>scripts/deploy.ts</code> <code>deployOrder()</code>, line 1460</td><td>Moving Records out changes two bindings to URLs. The router-last rule stops covering Records.</td></tr>
+      <tr><td>The deployed machine API is switched off.</td><td><code>organisation-datastores.md</code> §12: no Access application for <code>/v1</code>, so <code>apiAccessAudience</code> is null</td><td>No external client has used Records yet. There is no demand signal for separation today.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="levels" aria-labelledby="l-h">
+  <h2 id="l-h">Four levels of separation</h2>
+  <p class="prose">Each level includes the ones before it. Effort is in engineer-weeks for one engineer who knows the codebase, and is an estimate. Running costs describe what drives the bill rather than quoting prices.</p>
+
+  <div class="levels">
+    <div class="level now">
+      <div class="tag">L0<small>Today</small></div>
+      <div>
+        <h3>One Worker inside the cfos deploy</h3>
+        <p>Records is <code>cfos-records</code>, deployed by <code>pnpm release</code> with everything else, reached through the router under <code>/gatekeeper/records/*</code>. The portable packages exist and a Node entry point passes the same contract suite.</p>
+        <dl>
+          <dt>Build</dt><dd>Nothing new. Outstanding work is operational: migrations 0003 to 0009, a paid Neon plan (the Free plan keeps 6 hours of history), the R2 backup bucket and a restore rehearsal.</dd>
+          <dt>Running cost</dt><dd>Neon plus a share of the Workers plan. Hyperdrive, Queues, the rate limiter and Durable Objects ride on the existing account.</dd>
+          <dt>cfos gives up</dt><dd>Nothing. Records shares Access, the router, deploy order and observability.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="level">
+      <div class="tag">L1<small>Own service</small></div>
+      <div>
+        <h3>Separate package tree, Worker and release train</h3>
+        <p>Records moves to its own workspace or repository and deploys on its own schedule. The cfos gatekeeper talks to it over HTTP with delegated tokens only, exactly as the canonical plan intends.</p>
+        <dl>
+          <dt>Build</dt><dd><ul>
+            <li>Extract <code>@records/http</code> from <code>gatekeeper-records</code>: 1 week</li>
+            <li>Own CI, release and deploy script, own Access application and route: 1 to 2 weeks</li>
+            <li>Replace the in-process <code>DatastoreHandle</code> with an HTTP client, including a design for the sync push approval gate across services: 2 to 3 weeks</li>
+            <li>Contract versioning policy and cross-version tests between gadgets, gatekeeper and service: 1 week</li>
+          </ul><strong>Total: about 5 to 7 weeks.</strong></dd>
+          <dt>Running cost</dt><dd>Small. Another Worker, possibly on the same account. A second Access application. Extra requests per gadget call, because gatekeeper to service becomes a network hop.</dd>
+          <dt>cfos gives up</dt><dd>In-process calls, one release, and one deploy order. Gains a clean contract.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="level">
+      <div class="tag">L2<small>Product</small></div>
+      <div>
+        <h3>A standalone Records product that anyone can run</h3>
+        <p>Records works fully without cfos: people sign in, organisations create themselves, admins manage datastores in a console, and webhooks fire on any host.</p>
+        <dl>
+          <dt>Build</dt><dd><ul>
+            <li>HTTP management API for the 30 <code>DataManagement</code> methods, in OpenAPI and the SDKs: 2 to 3 weeks</li>
+            <li>Admin console, porting the Data page off its Workshop bridge: 4 to 6 weeks</li>
+            <li>People identity: OIDC sign-in, sessions, invitation e-mail, self-service identity mapping, organisation sign-up: 4 to 6 weeks</li>
+            <li>Node outbox publisher, webhook delivery and a scheduler for partitions and pruning: 2 weeks</li>
+            <li>An approvals story: either none (every write applies or fails) or a native approval queue with its own UI: 0 or 3 to 5 weeks</li>
+            <li>Self-hosting guide, Docker image, upgrade policy for migrations: 2 weeks</li>
+          </ul><strong>Total: about 14 to 24 weeks on top of L1.</strong></dd>
+          <dt>Running cost</dt><dd>An e-mail sender, an identity provider or Access for SaaS seats, a separate Neon project per environment, R2 for backups, and uptime monitoring for a public endpoint.</dd>
+          <dt>cfos gives up</dt><dd>Its management page becomes one of two front ends, and identity exists in two directories that must be kept in step.</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="level">
+      <div class="tag">L3<small>Hosted SaaS</small></div>
+      <div>
+        <h3>Multi-tenant service with cfos as one integration</h3>
+        <p>Records is sold and operated as a service. cfos is a customer of it, on the same terms as any other integration.</p>
+        <dl>
+          <dt>Build</dt><dd><ul>
+            <li>Billing, usage metering and plan limits: 4 to 8 weeks</li>
+            <li>Tenant isolation beyond RLS on <code>org_id</code>, such as a database or branch per large tenant: 4 to 6 weeks</li>
+            <li>Regions and data residency (per-region deploys and Neon projects): 4 weeks or more</li>
+            <li>Security programme: penetration test, access reviews, incident process, audit readiness: months of calendar time plus external fees</li>
+            <li>Status page, support tooling, abuse controls and rate tiers: 3 to 4 weeks</li>
+          </ul><strong>Total: 6 to 12 months before launch, then a standing on-call rota.</strong></dd>
+          <dt>Running cost</dt><dd>Grows with tenants and regions. The largest items are people (on-call, support), audits and per-region databases, not compute.</dd>
+          <dt>cfos gives up</dt><dd>Control of the roadmap and of its own data plane. Its organisation data lives in a service run on someone else's priorities, even if that someone is the same team.</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="compromises" aria-labelledby="c-h">
+  <h2 id="c-h">What the core platform gives up</h2>
+  <p class="prose">These costs fall on cloudflare-os and its users, not on Records. The first level at which each one appears is marked.</p>
+
+  <div class="comp">
+    <article>
+      <div><h3>Approvals become an integration contract</h3><div class="sev"><span class="pill p-none">L1 · hardest</span></div></div>
+      <div><p>Today a gadget write is checked by consuming a one-use viewer assertion from the Workshop's approval queue, in the same call stack as the write. Out of process, Records has to trust a token saying "approved" or call back into the Workshop. Either way the <code>pending</code> outcome, its action ID and the later <code>syncApprovals</code> check become a versioned protocol between two services.</p>
+      <p>Outside cfos there is no approval queue at all, so a standalone Records either drops approvals or builds its own.</p></div>
+    </article>
+    <article>
+      <div><h3>Access stops being the only front door</h3><div class="sev"><span class="pill p-os">L2</span></div></div>
+      <div><p>Every Records route is currently behind the router and Cloudflare Access. A standalone service has a public endpoint that relies on its own credential checks alone, as the Node server's <code>access: "none"</code> option allows. The attack surface grows to include sign-in, invitation links and the management API, and the pen-test and monitoring work grows with it.</p></div>
+    </article>
+    <article>
+      <div><h3>Two identity directories</h3><div class="sev"><span class="pill p-os">L2</span></div></div>
+      <div><p>Records keeps its own principals, mapped from issuers through <code>records.identity_mappings</code>. cfos keeps Workshop accounts. Separate sign-in means a person can exist in one and not the other, change e-mail in one, or leave the organisation in one first. Offboarding needs to reach both, or SCIM, which is more work again.</p></div>
+    </article>
+    <article>
+      <div><h3>Extra network hop on every gadget call</h3><div class="sev"><span class="pill p-cf">L1</span></div></div>
+      <div><p>Gatekeeper to service becomes an HTTP request with token verification on each side. The service already sits a network hop from Neon in <code>eu-west-2</code>; placement and Hyperdrive latency are still unmeasured (canonical plan §10, phase 0). The optimistic sync client hides most of this for the board, but reads in gadget server code will feel it.</p></div>
+    </article>
+    <article>
+      <div><h3>Version skew between gadgets and the service</h3><div class="sev"><span class="pill p-cf">L1</span></div></div>
+      <div><p>With one release, contracts, SDK, gatekeeper and blueprints always match. With two release trains, a published blueprint may call a service one version ahead or behind. That needs a compatibility window, deprecation notices and tests that run old clients against new servers.</p></div>
+    </article>
+    <article>
+      <div><h3>Deploy coordination</h3><div class="sev"><span class="pill p-cf">L1</span></div></div>
+      <div><p>Today migrations run before <code>pnpm release</code>, and <code>deployOrder()</code> deploys Records before the router that binds it. Across two pipelines, the order becomes a runbook step: Records migrations, then Records, then cfos. A mistake leaves cfos pointing at a service without the routes it needs, and the release gate in <code>CLAUDE.md</code> no longer covers it.</p></div>
+    </article>
+    <article>
+      <div><h3>Management UX splits</h3><div class="sev"><span class="pill p-os">L2</span></div></div>
+      <div><p>The Data page lives inside the Workshop, next to the gadgets that use the data. A standalone console duplicates it. Keeping both means shipping each management feature twice; dropping the Data page sends cfos users to another site with another sign-in.</p></div>
+    </article>
+    <article>
+      <div><h3>Failure isolation cuts both ways</h3><div class="sev"><span class="pill p-cf">L1</span></div></div>
+      <div><p>A Records outage no longer shares a deploy with the rest of cfos, and a bad cfos deploy cannot break Records. But gadgets that depend on Records now fail on a dependency cfos cannot roll back itself, and a partial outage needs a clear error in every gadget that uses it.</p></div>
+    </article>
+    <article>
+      <div><h3>Observability and on-call across two systems</h3><div class="sev"><span class="pill p-cf">L1</span></div></div>
+      <div><p>One user action crosses the Workshop, the gatekeeper, the service and Postgres. Following it needs a shared trace or request ID through the token exchange. With two services, someone has to own each pager.</p></div>
+    </article>
+    <article>
+      <div><h3>Keeping the gadget path fast</h3><div class="sev"><span class="pill p-cf">L1</span></div></div>
+      <div><p>Board and report rely on pokes from the <code>DatastorePokeHub</code> Durable Object, which the gatekeeper reaches today through a direct binding. In a separate service, gadget poke hooks need a subscription across the boundary, or the gatekeeper polls. Either adds latency or moving parts.</p></div>
+    </article>
+    <article>
+      <div><h3>Residency and compliance</h3><div class="sev"><span class="pill p-os">L3</span></div></div>
+      <div><p>Organisation data already leaves Cloudflare for Neon on AWS London. A hosted product must state where each tenant's data lives, offer regions, and answer customer security questionnaires. cfos inherits those promises as a tenant rather than setting its own.</p></div>
+    </article>
+    <article>
+      <div><h3>A larger test matrix</h3><div class="sev"><span class="pill p-cf">L1</span></div></div>
+      <div><p>The contract suite already runs on workerd and Node against one database. Separation adds cross-version tests, management API tests, identity-provider tests and, at L2, a self-hosted upgrade path. <code>pnpm check</code> gets slower or splits in two.</p></div>
+    </article>
+    <article>
+      <div><h3>Focus</h3><div class="sev"><span class="pill p-acc">every level</span></div></div>
+      <div><p>L2 and L3 are mostly generic SaaS plumbing: sign-up, billing, e-mail, consoles, audits. None of it improves cfos. Every week spent there is a week not spent on the signed-in production checks, the pending migrations, or the next module.</p></div>
+    </article>
+  </div>
+</section>
+
+<section id="gains" aria-labelledby="g-h">
+  <h2 id="g-h">What separation buys</h2>
+  <div class="tbl"><table>
+    <thead><tr><th style="width:26%">Gain</th><th>Detail</th><th style="width:14%">From</th></tr></thead>
+    <tbody>
+      <tr><td>Reuse outside cfos</td><td>Scripts, agents, Jira tools and other apps use Records without a cfos account. The Node runtime and SDKs already make this possible for machine clients.</td><td><span class="pill p-cf">L1</span></td></tr>
+      <tr><td>Clearer contracts</td><td>An HTTP boundary forces the gatekeeper to use the public API, so nothing relies on in-process shortcuts. The delegated-token design already points this way.</td><td><span class="pill p-cf">L1</span></td></tr>
+      <tr><td>Smaller blast radius</td><td>Records and cfos deploy, fail and roll back separately. A schema migration cannot take down unrelated gadgets.</td><td><span class="pill p-cf">L1</span></td></tr>
+      <tr><td>Sellable on its own</td><td>A Jira-compatible system of record with an immutable journal is a product in its own right, and could fund itself.</td><td><span class="pill p-os">L2</span></td></tr>
+      <tr><td>Portability as a promise</td><td>Customers who distrust a platform can run the data layer themselves, beside their own Postgres.</td><td><span class="pill p-os">L2</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="next" aria-labelledby="n-h">
+  <h2 id="n-h">Recommendation and next steps</h2>
+  <p class="prose">Hold at L0 for deployment. Do the following, which make L1 cheap later and improve Records now, whatever happens.</p>
+  <ol class="steps prose">
+    <li><strong>Extract <code>@records/http</code></strong> (native API, OpenAPI, Jira handler, Access check) from <code>gatekeeper-records</code>, so <code>records-node</code> no longer depends on the cfos package. About 1 week.</li>
+    <li><strong>Add an HTTP management API</strong> for the <code>DataManagement</code> methods, behind the same permission matrix, and have the Data page call it through the existing capability. Useful for automation and scripts now. About 2 to 3 weeks.</li>
+    <li><strong>Give Node an outbox publisher and scheduler</strong> for webhooks, partition creation and replay-table pruning, so the portable runtime is complete. About 1 to 2 weeks.</li>
+    <li><strong>Write down the approval contract</strong> between gatekeeper and service before anything is split: what a <code>pending</code> outcome means, who holds the action ID, how approval reaches the service. Design only, a few days.</li>
+    <li><strong>Measure the hop.</strong> Finish the phase 0 latency measurements through deployed Hyperdrive with and without placement, so L1's latency cost is a number rather than a guess.</li>
+    <li><strong>Set a trigger for L1:</strong> a second consumer that is not cfos, or a need to deploy Records on a different schedule. Until then, one deployment is cheaper and safer.</li>
+  </ol>
+  <p class="note prose">Before any of this, the operational backlog still comes first: migrations 0003 to 0009 on Neon, a paid Neon plan, the R2 backup bucket, a restore rehearsal and the signed-in checks.</p>
+</section>
+
+<footer>Sources: <code>docs/plans/external_datastores/</code> (canonical-postgres-datastore.md, organisation-datastores.md, records-operations.md), <code>packages/gatekeeper-records/src/</code>, <code>packages/records-node/src/server.ts</code>, <code>packages/records-schema/</code>, <code>scripts/deploy.ts</code>. Effort ranges are planning estimates for one engineer familiar with the code.</footer>
+</div>

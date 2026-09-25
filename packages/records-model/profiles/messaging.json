@@ -1,0 +1,33 @@
+{
+  "version": "1.0.0",
+  "vocabulary": {
+    "id": "https://schema.org/",
+    "version": "30.1"
+  },
+  "id": "urn:records:profile:messaging",
+  "entities": {
+    "message": {
+      "term": "https://schema.org/Message",
+      "fields": {
+        "channel": {
+          "term": "urn:records:messaging:channel",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "body": {
+          "term": "https://schema.org/text",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "maxLength": 20000
+        },
+        "extensions": {
+          "term": "urn:records:extensions",
+          "type": "object"
+        }
+      }
+    }
+  }
+}

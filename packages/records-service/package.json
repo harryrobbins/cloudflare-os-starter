@@ -1,0 +1,28 @@
+{
+  "name": "@records/service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standards-based Records: PostgREST gateway, SQL commands and portable model modules",
+  "scripts": {
+    "start": "node src/server.ts",
+    "test:run": "node --test test/gateway.test.ts test/gateway-os.test.ts test/database.test.mjs test/publication.test.ts test/sql-policy.test.ts test/config.test.ts test/gateway-stream.test.ts test/site.test.ts",
+    "types:check": "tsc --noEmit",
+    "db:migrate": "node scripts/manage.ts migrate",
+    "db:bootstrap": "node scripts/manage.ts bootstrap",
+    "module:publish": "node scripts/manage.ts publish",
+    "dev:prepare": "node scripts/dev-prepare.ts",
+    "test:integration": "node --test test/integration.test.ts",
+    "test:access": "node --env-file-if-exists=../../.env --env-file-if-exists=../../.env.local scripts/access-smoke.ts"
+  },
+  "dependencies": {
+    "@records/model": "workspace:*",
+    "jose": "catalog:",
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.0",
+    "embedded-postgres": "17.9.0-beta.17",
+    "typescript": "catalog:"
+  }
+}

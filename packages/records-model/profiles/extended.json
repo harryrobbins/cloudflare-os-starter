@@ -1,0 +1,63 @@
+{
+  "id": "urn:records:profile:work-priority",
+  "version": "1.0.0",
+  "vocabulary": {
+    "id": "https://schema.org/",
+    "version": "30.1"
+  },
+  "entities": {
+    "project": {
+      "term": "https://schema.org/Project",
+      "fields": {
+        "name": {
+          "term": "https://schema.org/name",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "description": {
+          "term": "https://schema.org/description",
+          "type": "string",
+          "maxLength": 10000
+        }
+      }
+    },
+    "work_item": {
+      "term": "urn:records:work:WorkItem",
+      "fields": {
+        "name": {
+          "term": "https://schema.org/name",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "status": {
+          "term": "urn:records:work:status",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "todo",
+            "doing",
+            "done"
+          ]
+        },
+        "project": {
+          "term": "urn:records:work:project",
+          "type": "iri",
+          "reference": "project"
+        },
+        "priority": {
+          "term": "urn:records:work:priority",
+          "type": "integer",
+          "enum": [
+            1,
+            2,
+            3
+          ]
+        }
+      }
+    }
+  }
+}

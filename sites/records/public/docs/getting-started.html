@@ -1,0 +1,24 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="Records is a standards-based app datastore with a deployed alpha, open models and independent apps."><meta name="theme-color" content="#213c32"><title>Getting started — Records local alpha</title><link rel="stylesheet" href="../styles.css"></head><body><a class="skip" href="#main">Skip to content</a><header class="wrap nav"><a class="brand" href="../index.html"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>records</a><nav class="nav-links" aria-label="Main navigation"><a href="../index.html#possibilities">Possibilities</a><a href="../index.html#integration">Integration</a><a href="../compare.html">Compare editions ↗</a><a class="nav-doc" href="../docs/index.html">Read the docs <span aria-hidden="true">↗</span></a></nav></header><main class="wrap doc-shell" id="main"><aside class="doc-nav"><div class="eyebrow">Records / Alpha docs</div><a href="use-cases.html">Use cases</a><a href="index.html">Start here</a><a href="getting-started.html" aria-current="page">Run locally</a><a href="standards.html">Standards &amp; mappings</a><a href="modules.html">Modules</a><a href="cloudflare-os.html">cloudflare-os</a><a href="api.html">HTTP API</a><a href="hosting.html">Hosting</a><a href="blueprints.html">Blueprint plans</a><a href="roadmap.html">Status & roadmap</a></aside><article class="doc-content"><span class="eyebrow">Runnable local alpha</span><h1>Start with a shared datastore.</h1><p>Use Node 24.19+, pnpm and Docker Compose from the repository root. This starts the new service alongside the preserved earlier implementation.</p><h2>1. Install and prepare</h2><pre>pnpm install --filter @records/service...
+pnpm --filter @records/service dev:prepare</pre><p>Preparation creates local keys, datastore IDs and configuration under <code>packages/records-service/.eval/</code>. It retains existing configuration on repeat runs. The files are credentials for your local instance; the commands do not print them.</p><h2>2. Start the stack</h2><pre>docker compose --env-file packages/records-service/.eval/compose.env \
+  -f packages/records-service/compose.yaml up -d
+curl --fail http://127.0.0.1:8788/healthz
+curl --fail http://127.0.0.1:8788/v1/models/work/profile
+curl --fail http://127.0.0.1:8788/v1/vocabulary/schemaorg/terms/Project</pre><p>Wait for initialization and health checks before calling the API. Only the gateway is exposed on localhost; Postgres and PostgREST stay on the private Compose network.</p><h2>3. Create a work item</h2><p>This Node example reads the generated local credential without displaying it. Run from the repository root. It prints the command result, which contains the created record and revision.</p><pre>node --input-type=module &lt;&lt;'JS'
+import { readFile } from 'node:fs/promises';
+const config = JSON.parse(await readFile(
+  'packages/records-service/.eval/client.json', 'utf8'));
+const url = `${config.baseUrl}/v1/datastores/${config.work.datastoreId}`
+  + '/modules/work/v1/rpc/work.create';
+const response = await fetch(url, {
+  method: 'POST',
+  headers: {
+    authorization: `Bearer ${config.work.key}`,
+    'content-type': 'application/json',
+    'idempotency-key': 'getting-started-work-001'
+  },
+  body: JSON.stringify({title: 'Build our own workflow', status: 'open'})
+});
+if (!response.ok) throw new Error(`Records returned ${response.status}`);
+console.log(await response.json());
+JS</pre><p>Repeating this exact command returns the same committed result. To create a different item, use a new idempotency key. Messaging uses its own generated datastore/key and <code>/modules/messaging/v1/rpc/messaging.send</code> with <code>{"channel":"general","body":"Hello"}</code>.</p><h2>4. Explore and stop</h2><p>Read <code>/modules/work/v1/records</code> with the same credential, inspect the <a href="api.html">HTTP API</a>, or review the independently publishable <a href="modules.html">inventory module</a>.</p><pre>docker compose --env-file packages/records-service/.eval/compose.env \
+  -f packages/records-service/compose.yaml down</pre><p>The named database volume is retained. The website’s interactive explorer is a separate illustrative demo. This local setup does not configure production hosting or complete cloudflare-os enrollment.</p></article></main><footer class="wrap footer"><span>Records · Shared data. Independent apps.</span><div class="footer-links"><a href="../docs/roadmap.html">Project status</a><a href="../previous.html">Earlier site</a><a href="../architecture-plan.md">Architecture plan</a></div></footer></body></html>

@@ -1,0 +1,871 @@
+<title>Records Developer Docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,500..800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#F2F3EF; --surface:#FFFFFF; --sunk:#E8EAE4; --ink:#141A18; --muted:#58625D; --rule:#D6DAD2;
+  --accent:#2446C9; --accent-soft:#E2E7FA;
+  --p-port:#1C7A4A; --p-port-bg:#E0F1E7;
+  --p-cf:#A35F00;   --p-cf-bg:#FBEBD2;
+  --p-cfos:#6A3DC0; --p-cfos-bg:#ECE4FA;
+  --p-stub:#6E7470; --p-stub-bg:#ECEDEA;
+  --code-bg:#161C1A; --code-ink:#DCE4DF; --code-muted:#7F8C86; --code-key:#9EB3FF; --code-str:#A8D8B4; --code-num:#F0C68A;
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0E1311; --surface:#151B19; --sunk:#1B2320; --ink:#E4EAE6; --muted:#95A29C; --rule:#27312D;
+    --accent:#90A7FF; --accent-soft:#1C2547;
+    --p-port:#6FD39C; --p-port-bg:#16301F;
+    --p-cf:#F2B35B;   --p-cf-bg:#33250F;
+    --p-cfos:#BFA2FF; --p-cfos-bg:#271C40;
+    --p-stub:#A3AAA6; --p-stub-bg:#222826;
+    --code-bg:#0A0E0D;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0E1311; --surface:#151B19; --sunk:#1B2320; --ink:#E4EAE6; --muted:#95A29C; --rule:#27312D;
+  --accent:#90A7FF; --accent-soft:#1C2547;
+  --p-port:#6FD39C; --p-port-bg:#16301F;
+  --p-cf:#F2B35B;   --p-cf-bg:#33250F;
+  --p-cfos:#BFA2FF; --p-cfos-bg:#271C40;
+  --p-stub:#A3AAA6; --p-stub-bg:#222826;
+  --code-bg:#0A0E0D;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.6;margin:0}
+a{color:var(--accent);text-underline-offset:2px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+code,pre,.mono{font-family:var(--mono);font-size:.86em}
+:not(pre)>code{background:var(--sunk);padding:.1em .35em;border-radius:3px}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--surface);border-bottom:1px solid var(--rule)}
+.top-in{display:flex;align-items:center;gap:20px;padding:10px 20px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px;text-decoration:none;color:var(--ink)}
+.brand b{font-family:var(--display);font-variation-settings:"wdth" 125;font-weight:800;font-size:19px;letter-spacing:-.01em}
+.brand span{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.top nav{display:flex;gap:16px;font-size:14px;flex-wrap:wrap}
+.top nav a{color:var(--muted);text-decoration:none}
+.top nav a[aria-current]{color:var(--ink);font-weight:600}
+.top .spacer{flex:1}
+.mockflag{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border:1px dashed var(--rule);padding:3px 8px;border-radius:4px}
+
+/* layout */
+.shell{display:grid;grid-template-columns:250px minmax(0,1fr);gap:0;max-width:1320px;margin:0 auto}
+.side{position:sticky;top:calc(env(safe-area-inset-top,0px) + 53px);align-self:start;height:calc(100vh - 53px);overflow:auto;padding:22px 16px 40px 20px;border-right:1px solid var(--rule)}
+.side h4{font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:18px 0 6px}
+.side h4:first-child{margin-top:0}
+.side a{display:flex;align-items:center;gap:8px;color:var(--ink);text-decoration:none;font-size:14px;padding:3px 6px;border-radius:4px}
+.side a:hover{background:var(--sunk)}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.dot.port{background:var(--p-port)} .dot.cf{background:var(--p-cf)} .dot.cfos{background:var(--p-cfos)}
+.dot.stub{background:transparent;border:1.5px dashed var(--p-stub)}
+.main{padding:28px 40px 80px;min-width:0}
+.main>section{max-width:820px;scroll-margin-top:70px}
+.main>section+section{margin-top:56px;padding-top:36px;border-top:1px solid var(--rule)}
+
+h1,h2,h3{font-family:var(--display);text-wrap:balance;letter-spacing:-.01em;line-height:1.2}
+h1{font-size:38px;font-variation-settings:"wdth" 112;font-weight:800;margin:6px 0 12px}
+h2{font-size:26px;font-variation-settings:"wdth" 108;font-weight:750;margin:0 0 10px}
+h3{font-size:17px;font-variation-settings:"wdth" 100;font-weight:700;margin:28px 0 8px}
+p,li{max-width:68ch}
+.lede{font-size:17px;color:var(--muted);max-width:62ch}
+.eyebrow{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+
+/* provenance badges */
+.prov{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11.5px;font-weight:500;padding:2px 8px;border-radius:999px;white-space:nowrap;vertical-align:middle}
+.prov.port{color:var(--p-port);background:var(--p-port-bg)}
+.prov.cf{color:var(--p-cf);background:var(--p-cf-bg)}
+.prov.cfos{color:var(--p-cfos);background:var(--p-cfos-bg)}
+.prov.stub{color:var(--p-stub);background:var(--p-stub-bg);outline:1.5px dashed var(--p-stub);outline-offset:-1.5px}
+.badges{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.where{font-size:13px;color:var(--muted);border-left:2px solid var(--rule);padding:2px 0 2px 12px;margin:10px 0 16px}
+.where b{color:var(--ink);font-weight:600}
+
+/* legend + filter */
+.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:20px 0 8px}
+.legend button{all:unset;cursor:pointer;display:block;background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:12px 14px}
+.legend button[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.legend button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.legend .n{font-family:var(--display);font-variation-settings:"wdth" 118;font-weight:800;font-size:26px;display:block;line-height:1.1;margin-top:6px;font-variant-numeric:tabular-nums}
+.legend small{display:block;color:var(--muted);font-size:12.5px;line-height:1.4;margin-top:4px}
+.filterhint{font-size:13px;color:var(--muted)}
+body.filtering [data-prov]{transition:opacity .15s}
+body.filtering [data-prov].dim{opacity:.28}
+@media (prefers-reduced-motion: reduce){body.filtering [data-prov]{transition:none}}
+
+/* bar */
+.meter{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:14px 0 4px;background:var(--sunk)}
+.meter i{display:block;height:100%}
+.meter .port{background:var(--p-port)} .meter .cf{background:var(--p-cf)} .meter .cfos{background:var(--p-cfos)}
+.meter .stub{background:repeating-linear-gradient(135deg,var(--p-stub) 0 3px,transparent 3px 6px)}
+
+/* tables */
+.tbl{overflow-x:auto;margin:12px 0 18px;border:1px solid var(--rule);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-family:var(--mono);font-size:11.5px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--sunk)}
+tr:last-child td{border-bottom:0}
+td code{white-space:nowrap}
+
+/* endpoints */
+.ep{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;font-family:var(--mono);font-size:13.5px;margin:22px 0 6px}
+.verb{font-weight:500;font-size:11.5px;padding:2px 7px;border-radius:4px;letter-spacing:.04em;color:var(--surface)}
+.verb.get{background:var(--p-port)} .verb.post{background:var(--accent)} .verb.patch{background:var(--p-cf)} .verb.del{background:#B3261E}
+.ep .path{word-break:break-all}
+
+/* code */
+.code{position:relative;margin:10px 0 18px;background:var(--code-bg);border-radius:8px;overflow:hidden}
+.code .tabs{display:flex;gap:2px;padding:6px 8px 0;border-bottom:1px solid #26302C}
+.code .tabs button{all:unset;cursor:pointer;font-family:var(--mono);font-size:12px;color:var(--code-muted);padding:5px 10px;border-radius:5px 5px 0 0}
+.code .tabs button[aria-selected="true"]{color:var(--code-ink);background:#1F2826}
+.code .tabs button:focus-visible{outline:2px solid var(--code-key)}
+pre{margin:0;padding:14px 16px;overflow-x:auto;color:var(--code-ink);font-size:12.8px;line-height:1.55}
+.code .copy{position:absolute;top:6px;right:8px;all:unset;cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--code-muted);padding:4px 8px;border:1px solid #2B3531;border-radius:4px}
+.code .copy{position:absolute;top:6px;right:8px}
+.k{color:var(--code-key)} .s{color:var(--code-str)} .n{color:var(--code-num)} .c{color:var(--code-muted)}
+
+/* stub cards */
+.stubgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:14px 0}
+.stubcard{border:1.5px dashed var(--p-stub);border-radius:8px;padding:14px 16px;background:transparent}
+.stubcard h3{margin:0 0 4px;font-size:15.5px}
+.stubcard p{font-size:13.5px;margin:4px 0;color:var(--muted)}
+.stubcard .today{font-size:12.5px;color:var(--ink)}
+.note{background:var(--accent-soft);border-radius:8px;padding:12px 16px;font-size:14px;margin:14px 0}
+.note b{font-weight:600}
+
+.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0}
+.steps>li{counter-increment:s;position:relative;padding-left:40px;margin:0 0 18px}
+.steps>li::before{content:counter(s);position:absolute;left:0;top:0;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--ink);display:grid;place-items:center;font-family:var(--mono);font-size:12px}
+
+@media (max-width:900px){
+  .shell{grid-template-columns:1fr}
+  .side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--rule);padding:16px}
+  .side .grp{display:flex;flex-wrap:wrap;gap:2px 8px}
+  .main{padding:24px 16px 60px}
+  h1{font-size:30px}
+}
+</style>
+
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="#top"><b>Records</b><span>docs · v1</span></a>
+    <nav aria-label="Site">
+      <a href="#" data-product>Product</a>
+      <a href="#top" aria-current="page">Docs</a>
+      <a href="#api-issues">API reference</a>
+      <a href="#self-hosting">Self-host</a>
+    </nav>
+    <span class="spacer"></span>
+    <span class="mockflag">Mock documentation</span>
+  </div>
+</header>
+
+<div class="shell" id="top">
+  <aside class="side" aria-label="Documentation">
+    <h4>Start</h4>
+    <div class="grp">
+      <a href="#overview"><span class="dot port"></span>Overview</a>
+      <a href="#isolation"><span class="dot port"></span>Isolation map</a>
+      <a href="#quickstart"><span class="dot stub"></span>Quickstart</a>
+    </div>
+    <h4>Concepts</h4>
+    <div class="grp">
+      <a href="#datastores"><span class="dot port"></span>Datastores &amp; modules</a>
+      <a href="#roles"><span class="dot port"></span>Roles &amp; scopes</a>
+      <a href="#journal"><span class="dot port"></span>Journal &amp; clock</a>
+      <a href="#writes"><span class="dot port"></span>Revisions &amp; idempotency</a>
+    </div>
+    <h4>Authentication</h4>
+    <div class="grp">
+      <a href="#auth-credentials"><span class="dot port"></span>Service credentials</a>
+      <a href="#auth-issuers"><span class="dot port"></span>Trusted issuers</a>
+      <a href="#auth-front-door"><span class="dot cf"></span>Front door</a>
+      <a href="#auth-people"><span class="dot stub"></span>Sign-in for people</a>
+    </div>
+    <h4>Projects API</h4>
+    <div class="grp">
+      <a href="#api-projects"><span class="dot port"></span>Projects &amp; workflow</a>
+      <a href="#api-issues"><span class="dot port"></span>Issues</a>
+      <a href="#api-comments"><span class="dot port"></span>Comments</a>
+      <a href="#api-changes"><span class="dot port"></span>Changes &amp; history</a>
+    </div>
+    <h4>Realtime</h4>
+    <div class="grp">
+      <a href="#sync"><span class="dot port"></span>Sync protocol</a>
+      <a href="#pokes"><span class="dot cf"></span>Pokes</a>
+      <a href="#sync-client"><span class="dot port"></span>Browser sync client</a>
+    </div>
+    <h4>Compatibility</h4>
+    <div class="grp">
+      <a href="#jira"><span class="dot port"></span>Jira REST subset</a>
+      <a href="#webhooks"><span class="dot cf"></span>Webhooks</a>
+      <a href="#analytics"><span class="dot port"></span>SQL analytics</a>
+    </div>
+    <h4>Reference</h4>
+    <div class="grp">
+      <a href="#errors"><span class="dot port"></span>Errors &amp; limits</a>
+      <a href="#sdks"><span class="dot port"></span>SDKs</a>
+      <a href="#self-hosting"><span class="dot port"></span>Self-hosting</a>
+      <a href="#operations"><span class="dot port"></span>Operations</a>
+    </div>
+    <h4>Integrations</h4>
+    <div class="grp">
+      <a href="#cfos"><span class="dot cfos"></span>cloudflare-os</a>
+    </div>
+    <h4>Management &amp; platform</h4>
+    <div class="grp">
+      <a href="#management"><span class="dot stub"></span>Management API</a>
+      <a href="#platform"><span class="dot stub"></span>Accounts, billing, SSO…</a>
+    </div>
+  </aside>
+
+  <main class="main">
+
+  <!-- OVERVIEW -->
+  <section id="overview" data-prov="port">
+    <div class="eyebrow">Records developer documentation</div>
+    <h1>Build on a system of record with a journal</h1>
+    <p class="lede">Records is a Postgres-backed datastore service. Each datastore is an instance of a module with its own data model and REST API. The first module is Projects, and its API also speaks a subset of Jira's.</p>
+    <p>Every write goes through one command bus, in one transaction, and lands in an append-only journal ordered by a per-datastore clock. That single sequence number is your cursor for change feeds, the cookie for optimistic sync, the key for webhooks and the point you restore to.</p>
+    <h3>Records in plain words</h3>
+    <p>Records keeps an organisation's projects and tasks in one place that many tools can read and write: your own apps, Jira scripts and clients, and cloudflare-os gadgets. It keeps a history of every change, with who made it, when and from which tool. It has no board of its own; the tools your team already uses sit on top of it.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Word</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>Datastore</td><td>One shared set of projects and tasks, owned by the organisation rather than by any tool. Usually one per department.</td></tr>
+        <tr><td>Project, issue</td><td>A project groups tasks under a key such as <code>ENG</code>. Tasks are called issues, as in Jira, and are numbered <code>ENG-12</code>.</td></tr>
+        <tr><td>History (journal)</td><td>Every change, in order, with the old and new values, the person and the tool. Each change gets the next number in the datastore, called its <code>seq</code>.</td></tr>
+        <tr><td>Member, role</td><td>A person with access to a datastore, as reader, editor, admin or owner. A data administrator creates datastores and picks their owners.</td></tr>
+        <tr><td>Principal</td><td>Anyone who can act: a person (a member) or a service key.</td></tr>
+        <tr><td>Connection, binding</td><td>A tool's limited permission to use one datastore. In cloudflare-os a gadget's connection is called a binding.</td></tr>
+        <tr><td>Module</td><td>The kind of data a datastore holds. Projects is the only module today.</td></tr>
+      </tbody>
+    </table></div>
+    <div class="note"><b>How to read these docs.</b> This is a mock of Records sold as its own product. Each section carries a provenance badge that says where that part really stands in the codebase today. Use the isolation map below to see the whole picture, or press a legend tile to highlight one kind of section.</div>
+  </section>
+
+  <!-- ISOLATION MAP -->
+  <section id="isolation" data-prov="port">
+    <h2>Isolation map</h2>
+    <p>What already runs on its own, what leans on Cloudflare's runtime, what exists only through cloudflare-os, and what a standalone product would still have to build.</p>
+    <div class="legend" role="group" aria-label="Highlight sections by provenance">
+      <button type="button" data-filter="port" aria-pressed="false"><span class="prov port">Portable</span><span class="n" data-count="port">0</span><small>Built and tested. Runs on Workers or Node beside any Postgres 17.</small></button>
+      <button type="button" data-filter="cf" aria-pressed="false"><span class="prov cf">Cloudflare runtime</span><span class="n" data-count="cf">0</span><small>Built, but the production path uses Hyperdrive, Queues, Durable Objects, cron or Access.</small></button>
+      <button type="button" data-filter="cfos" aria-pressed="false"><span class="prov cfos">Via cloudflare-os</span><span class="n" data-count="cfos">0</span><small>Built, but reachable only through the cloudflare-os gatekeeper or Workshop.</small></button>
+      <button type="button" data-filter="stub" aria-pressed="false"><span class="prov stub">Stub</span><span class="n" data-count="stub">0</span><small>Not built. A standalone product needs it. Documented here as a placeholder.</small></button>
+    </div>
+    <p class="filterhint" id="filterhint">Counts are components in the table below. Press a tile to highlight matching sections; press it again to clear.</p>
+    <div class="meter" id="meter" aria-hidden="true"></div>
+
+    <div class="tbl">
+      <table id="maptable">
+        <thead><tr><th>Component</th><th>Provenance</th><th>Where it lives today</th></tr></thead>
+        <tbody>
+          <tr data-prov="port"><td>Contracts: DTOs, role matrix, error codes, sync &amp; journal types</td><td><span class="prov port">Portable</span></td><td><code>@records/contracts</code></td></tr>
+          <tr data-prov="port"><td>Command bus, journal, clock, RLS helpers, Projects handlers</td><td><span class="prov port">Portable</span></td><td><code>@records/core</code> (no Cloudflare imports)</td></tr>
+          <tr data-prov="port"><td>Schema, migrations, bootstrap and ops CLIs</td><td><span class="prov port">Portable</span></td><td><code>@records/schema</code>, migrations 0001–0009</td></tr>
+          <tr data-prov="port"><td>Credential and JWT verification, replay guard</td><td><span class="prov port">Portable</span></td><td><code>@records/identity</code> (Web Crypto + jose)</td></tr>
+          <tr data-prov="port"><td>Jira REST subset: JQL, ADF, mapping</td><td><span class="prov port">Portable</span></td><td><code>@records/jira</code></td></tr>
+          <tr data-prov="port"><td>Browser sync client and shared mutators</td><td><span class="prov port">Portable</span></td><td><code>@records/sync-client</code> (~7.5 kB gz)</td></tr>
+          <tr data-prov="port"><td>TypeScript and Python SDKs</td><td><span class="prov port">Portable</span></td><td><code>@records/sdk</code>, generated from OpenAPI 3.1</td></tr>
+          <tr data-prov="port"><td>Node server with SSE pokes and in-process rate limit</td><td><span class="prov port">Portable</span></td><td><code>@records/node</code>, but it imports the HTTP adapters from <code>gatekeeper-records</code></td></tr>
+          <tr data-prov="cf"><td>Native HTTP and Jira adapters, OpenAPI document</td><td><span class="prov cf">Cloudflare runtime</span></td><td><code>gatekeeper-records/src/http</code>, <code>/jira</code>. Runtime-neutral code in a Cloudflare package</td></tr>
+          <tr data-prov="cf"><td>Database connection pooling</td><td><span class="prov cf">Cloudflare runtime</span></td><td>Two Hyperdrive configs (app, publisher), caching off</td></tr>
+          <tr data-prov="cf"><td>WebSocket poke hub</td><td><span class="prov cf">Cloudflare runtime</span></td><td><code>DatastorePokeHub</code> Durable Object. Node uses SSE instead</td></tr>
+          <tr data-prov="cf"><td>Outbox publisher and webhook delivery</td><td><span class="prov cf">Cloudflare runtime</span></td><td>Queue + one-minute cron. <b>Does not run on Node</b></td></tr>
+          <tr data-prov="cf"><td>Maintenance: partitions, token-claim pruning, outbox pruning</td><td><span class="prov cf">Cloudflare runtime</span></td><td>Hourly branch of the Worker cron</td></tr>
+          <tr data-prov="cf"><td>First-factor check on the API</td><td><span class="prov cf">Cloudflare runtime</span></td><td>Path-specific Cloudflare Access app. Node can plug another check or none</td></tr>
+          <tr data-prov="cfos"><td>Management: datastores, members, credentials, webhooks, audit</td><td><span class="prov cfos">Via cloudflare-os</span></td><td>Workshop-hosted Data page over the <code>DataManagement</code> RPC capability. No HTTP route</td></tr>
+          <tr data-prov="cfos"><td>People connecting to a datastore</td><td><span class="prov cfos">Via cloudflare-os</span></td><td>Access-verified connect flow at <code>/gatekeeper/records/connect</code></td></tr>
+          <tr data-prov="cfos"><td>Delegated-token issuer and JWKS</td><td><span class="prov cfos">Via cloudflare-os</span></td><td>Records gatekeeper, after it redeems a kernel viewer assertion</td></tr>
+          <tr data-prov="cfos"><td>Approvals (<code>pending</code> outcomes)</td><td><span class="prov cfos">Via cloudflare-os</span></td><td>cloudflare-os approval queue. Nothing outside cfos returns <code>pending</code></td></tr>
+          <tr data-prov="cfos"><td>Gadget bindings and agent observations</td><td><span class="prov cfos">Via cloudflare-os</span></td><td>Gatekeeper vendor, facet session, observers</td></tr>
+          <tr data-prov="stub"><td>HTTP management API</td><td><span class="prov stub">Stub</span></td><td>Only the RPC capability above</td></tr>
+          <tr data-prov="stub"><td>Sign-in, SSO and SCIM for people</td><td><span class="prov stub">Stub</span></td><td>Access for SaaS if the operator configures it; mappings added by hand</td></tr>
+          <tr data-prov="stub"><td>Organisation sign-up and tenant provisioning</td><td><span class="prov stub">Stub</span></td><td><code>db:bootstrap</code> CLI, one organisation per run</td></tr>
+          <tr data-prov="stub"><td>Invitations and email delivery</td><td><span class="prov stub">Stub</span></td><td><code>invitePrincipal</code> creates a row; nothing is sent</td></tr>
+          <tr data-prov="stub"><td>Web console</td><td><span class="prov stub">Stub</span></td><td>The Data page, inside the Workshop</td></tr>
+          <tr data-prov="stub"><td>Billing, plans and usage metering</td><td><span class="prov stub">Stub</span></td><td>None</td></tr>
+          <tr data-prov="stub"><td>Regions and data residency</td><td><span class="prov stub">Stub</span></td><td>One Neon project in aws-eu-west-2</td></tr>
+          <tr data-prov="stub"><td>Status page, SLA, support</td><td><span class="prov stub">Stub</span></td><td>None</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- QUICKSTART -->
+  <section id="quickstart" data-prov="stub">
+    <h2>Quickstart</h2>
+    <div class="badges"><span class="prov stub">Stub: steps 1–2</span><span class="prov port">Portable: steps 3–4</span></div>
+    <p>Create an issue from the command line in four steps.</p>
+    <ol class="steps">
+      <li><b>Create an organisation.</b> Sign up at the console and name your organisation. You become its data administrator.
+        <div class="where"><b>Today:</b> there is no sign-up. An operator runs <code>pnpm --filter @records/schema db:bootstrap "&lt;Org&gt;" admin@example.com "Admin Name"</code> with the migration-owner URL.</div></li>
+      <li><b>Create a datastore.</b> Choose the Projects module, give it a name, and create a project with a key such as <code>ENG</code>.
+        <div class="where"><b>Today:</b> done in the cloudflare-os Data page. The standalone equivalent is <a href="#management"><code>POST /v1/datastores</code></a>, which does not exist yet.</div></li>
+      <li><b>Create a service credential.</b> In the datastore's Credentials tab, pick scopes and an expiry of up to 365 days. The <code>rk1_…</code> secret is shown once and stored as a SHA-256 digest.</li>
+      <li><b>Call the API.</b>
+        <div class="code" data-tabs>
+          <div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-tab="curl">curl</button><button role="tab" aria-selected="false" data-tab="ts">TypeScript</button><button role="tab" aria-selected="false" data-tab="py">Python</button></div>
+          <button class="copy" type="button">Copy</button>
+<pre data-pane="curl"><span class="k">export</span> RECORDS=https://api.records.example.com/v1/datastores/0192f3a4-7c1e-7b52-9d0a-4e6f1a2b3c4d
+<span class="k">export</span> RK=rk1_<span class="c">&lt;32 hex&gt;</span>_<span class="c">&lt;43 base64url&gt;</span>
+
+curl -sS -X POST "$RECORDS/issues" \
+  -H "Authorization: Bearer $RK" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d <span class="s">'{"projectId":"0192f3a4-8810-7a01-b1c2-0f3e5d6c7b8a","title":"Fix login redirect","priority":"high"}'</span>
+
+<span class="c"># 201 Created   ETag: "r1"
+# {"id":"…","key":"ENG-12","number":12,"state":"todo","revision":1,…}</span></pre>
+<pre data-pane="ts" hidden><span class="k">import</span> { RecordsClient } <span class="k">from</span> <span class="s">"@records/sdk"</span>;
+
+<span class="k">const</span> records = <span class="k">new</span> RecordsClient({
+  baseUrl: <span class="s">"https://api.records.example.com"</span>,
+  credential: process.env.RECORDS_RK!,          <span class="c">// rk1_…</span>
+  datastoreId: <span class="s">"0192f3a4-7c1e-7b52-9d0a-4e6f1a2b3c4d"</span>,
+});
+
+<span class="c">// The SDK sends an Idempotency-Key for you and retries only idempotent calls.</span>
+<span class="k">const</span> issue = <span class="k">await</span> records.issues.create({
+  projectId: <span class="s">"0192f3a4-8810-7a01-b1c2-0f3e5d6c7b8a"</span>,
+  title: <span class="s">"Fix login redirect"</span>,
+  priority: <span class="s">"high"</span>,
+});
+console.log(issue.key); <span class="c">// ENG-12</span></pre>
+<pre data-pane="py" hidden><span class="k">from</span> records_sdk <span class="k">import</span> RecordsClient
+
+records = RecordsClient(
+    base_url=<span class="s">"https://api.records.example.com"</span>,
+    credential=os.environ[<span class="s">"RECORDS_RK"</span>],
+    datastore_id=<span class="s">"0192f3a4-7c1e-7b52-9d0a-4e6f1a2b3c4d"</span>,
+)
+issue = records.issues.create(
+    project_id=<span class="s">"0192f3a4-8810-7a01-b1c2-0f3e5d6c7b8a"</span>,
+    title=<span class="s">"Fix login redirect"</span>,
+    priority=<span class="s">"high"</span>,
+)
+print(issue.key)  <span class="c"># ENG-12</span></pre>
+        </div>
+        <div class="where"><b>Today:</b> the same call works against <code>https://cfos.surprisingly.ltd/gatekeeper/records/v1/…</code>, but it also needs a Cloudflare Access service token for the API's own Access application. That application has not been created yet, so the deployed API refuses every request.</div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- DATASTORES -->
+  <section id="datastores" data-prov="port">
+    <h2>Datastores and modules</h2>
+    <div class="badges"><span class="prov port">Portable</span></div>
+    <p>An <b>organisation</b> owns <b>datastores</b>. A datastore is an instance of a <b>module</b>. The module owns the tables, commands, permissions and API. The core underneath is shared: registry, memberships, credentials, journal, clock, identity, idempotency and sync.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Module</th><th>Data model</th><th>API modelled on</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Projects</td><td>Projects, issues, workflow states and transitions, comments, custom fields</td><td>Jira</td><td><span class="prov port">Built</span></td></tr>
+        <tr><td>Finance</td><td>Accounts, contacts, invoices, payments</td><td>Xero</td><td><span class="prov stub">Illustration only</span></td></tr>
+        <tr><td>Message board</td><td>Channels, threads, messages, reactions</td><td>Slack</td><td><span class="prov stub">Illustration only</span></td></tr>
+      </tbody>
+    </table></div>
+    <p>Records belong to the organisation. Removing a client, a connection or the person who created a datastore never deletes its records. A datastore is archived, not deleted; purging is a separate administrative workflow recorded in the audit log.</p>
+    <p>Every row carries <code>org_id</code> and <code>datastore_id</code>, and row-level security keys on both. The schema is multi-organisation, so one database can hold many tenants.</p>
+  </section>
+
+  <!-- ROLES -->
+  <section id="roles" data-prov="port">
+    <h2>Roles and scopes</h2>
+    <div class="badges"><span class="prov port">Portable</span></div>
+    <p>Effective authority for any call is the intersection of three sets:</p>
+    <pre style="background:var(--sunk);color:var(--ink);border-radius:8px">principal's role  ∩  credential or binding scopes  ∩  the operation's permission</pre>
+    <p>Scopes only ever narrow what the principal already holds. There is no catch-all write scope. The same check runs twice: once in the command bus and again in Postgres through <code>records.can()</code>, so a service bug that skips a check still cannot read rows the principal has no grant for.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Permission</th><th>reader</th><th>editor</th><th>admin</th><th>owner</th></tr></thead>
+      <tbody>
+        <tr><td><code>projects.read</code>, <code>issues.read</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+        <tr><td><code>issues.create</code>, <code>issues.edit</code>, <code>issues.transition</code>, <code>comments.create</code></td><td></td><td>✓</td><td>✓</td><td>✓</td></tr>
+        <tr><td><code>projects.manage</code>, <code>members.manage</code>, <code>bindings.manage</code>, <code>credentials.manage</code>, <code>audit.read</code>, <code>export.run</code></td><td></td><td></td><td>✓</td><td>✓</td></tr>
+        <tr><td><code>lifecycle.manage</code>, <code>ownership.transfer</code>, <code>datastore.purge</code></td><td></td><td></td><td></td><td>✓</td></tr>
+      </tbody>
+    </table></div>
+    <p>The organisation <code>data_admin</code> role creates datastores and assigns owners. It holds no record permission by itself: reading records needs a membership like anyone else.</p>
+  </section>
+
+  <!-- JOURNAL -->
+  <section id="journal" data-prov="port">
+    <h2>Journal and clock</h2>
+    <div class="badges"><span class="prov port">Portable</span></div>
+    <p>Each write transaction takes the datastore's clock as its last step, so <code>seq</code> is gapless and in commit order within a datastore. A client that has seen <code>seq 41</code> has seen everything up to 41. Writes to different datastores never contend.</p>
+    <p>Current tables stay cheap to read. Each change also writes immutable journal rows in the same transaction. A deferred constraint refuses any current-row write that lacks its journal row, whichever code path made it.</p>
+    <div class="code"><button class="copy" type="button">Copy</button>
+<pre>{
+  <span class="k">"seq"</span>: <span class="n">42</span>, <span class="k">"ordinal"</span>: <span class="n">0</span>,
+  <span class="k">"changeId"</span>: <span class="s">"0192f3b0-…"</span>,
+  <span class="k">"command"</span>: <span class="s">"projects.transitionIssue"</span>,
+  <span class="k">"entityType"</span>: <span class="s">"issue"</span>, <span class="k">"entityId"</span>: <span class="s">"0192f3a9-…"</span>, <span class="k">"entityRev"</span>: <span class="n">4</span>,
+  <span class="k">"op"</span>: <span class="s">"update"</span>,
+  <span class="k">"before"</span>: { <span class="k">"state"</span>: <span class="s">"in_progress"</span> },
+  <span class="k">"after"</span>:  { <span class="k">"state"</span>: <span class="s">"done"</span> },
+  <span class="k">"actorId"</span>: <span class="s">"…principal"</span>, <span class="k">"actId"</span>: <span class="s">"…binding or null"</span>,
+  <span class="k">"via"</span>: <span class="s">"http"</span>,            <span class="c">// gadget | http | sync | jira | management | system</span>
+  <span class="k">"occurredAt"</span>: <span class="s">"2026-09-25T10:14:03.221Z"</span>
+}</pre></div>
+    <p>Journal ops are <code>create</code>, <code>update</code>, <code>archive</code>, <code>restore</code> and <code>redact</code>. The journal stores principal IDs, not names or emails, so erasing a person means removing their registry details. Redaction of free text is the one sanctioned exception to immutability, and it writes its own journal entry.</p>
+  </section>
+
+  <!-- WRITES -->
+  <section id="writes" data-prov="port">
+    <h2>Revisions and idempotency</h2>
+    <div class="badges"><span class="prov port">Portable</span></div>
+    <ul>
+      <li>Every mutation needs an <code>Idempotency-Key</code> of 8–128 characters. The same key with the same body returns the saved outcome and <code>Idempotent-Replayed: true</code>. The same key with a different body is <code>409 idempotency_conflict</code>. Outcomes are kept for 7 days.</li>
+      <li>Every record has a <code>revision</code> that increments on each change. Reads return it as <code>ETag: "r&lt;revision&gt;"</code>. Changes to an existing record need <code>If-Match</code> with that ETag. A missing header is <code>428 revision_required</code>; a stale one is <code>412 revision_conflict</code>, and the response's ETag carries the current revision.</li>
+      <li>Creates may carry a client-chosen <code>id</code>, so an optimistic create keeps its identity after the server confirms it.</li>
+    </ul>
+  </section>
+
+  <!-- AUTH -->
+  <section id="auth-credentials" data-prov="port">
+    <h2>Service credentials</h2>
+    <div class="badges"><span class="prov port">Portable</span></div>
+    <p>A service credential is a service principal with fixed scopes on one datastore. Its format is <code>rk1_&lt;32 hex&gt;_&lt;43 base64url&gt;</code>. It is shown once, stored as a SHA-256 digest, expires in 1–365 days, and stops working when revoked or when its human owner loses <code>credentials.manage</code>.</p>
+    <p>Send it as <code>Authorization: Bearer rk1_…</code>. Jira clients may send HTTP Basic with any email as the user and the credential as the password. Basic with any other password is refused.</p>
+    <p>The datastore ID in the path is only a selector. It must equal the credential's datastore, or the request is refused.</p>
+  </section>
+
+  <section id="auth-issuers" data-prov="port">
+    <h2>Trusted issuers</h2>
+    <div class="badges"><span class="prov port">Portable</span></div>
+    <p>Records also accepts JWTs from issuers listed in <code>records.trusted_issuers</code>. Each subject must be mapped to a principal in <code>records.identity_mappings (issuer, subject)</code>. An unmapped subject is refused; nothing is provisioned from a token.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Caller</th><th>Credential</th><th>Becomes</th></tr></thead>
+      <tbody>
+        <tr><td>A person in a partner app</td><td>Delegated token: ES256 JWT, <code>typ: records-delegated+jwt</code>, 60 s, single-use <code>jti</code>, <code>aud: records-datastore</code></td><td>That person, narrowed to the <code>act</code> binding's scopes</td></tr>
+        <tr><td>A person in a browser UI</td><td>OIDC token from Cloudflare Access for SaaS</td><td>That person</td></tr>
+        <tr><td>A script behind Access</td><td><code>Cf-Access-Jwt-Assertion</code> for the API's Access app</td><td>The mapped person or service principal</td></tr>
+        <tr><td>A backend service</td><td><code>rk1_…</code></td><td>A service principal</td></tr>
+      </tbody>
+    </table></div>
+    <p>Precedence: an <code>Authorization</code> header wins. If it is present but invalid, the request is refused and never falls back to the Access header. A JWKS or replay store that cannot be reached fails closed with <code>503 unavailable</code>.</p>
+    <div class="where"><b>Today:</b> the only delegated-token issuer is the cloudflare-os Records gatekeeper. The token format is open, so another platform could become an issuer by publishing a JWKS and being added to <code>trusted_issuers</code>.</div>
+  </section>
+
+  <section id="auth-front-door" data-prov="cf">
+    <h2>Front door</h2>
+    <div class="badges"><span class="prov cf">Cloudflare runtime</span></div>
+    <p>On Cloudflare, a service credential needs two independent checks: the <code>rk1_</code> credential and a Cloudflare Access assertion for the API's own path-specific Access application. Scripts usually get the assertion by sending an Access service token (<code>CF-Access-Client-Id</code> and <code>CF-Access-Client-Secret</code>).</p>
+    <p>The Node server makes the first factor a choice with no default: verify Access with an issuer and audience, plug in another check, or pass <code>access: "none"</code> to rely on the credential alone.</p>
+    <div class="where"><b>Standalone consequence:</b> a public product cannot ask every customer to hold a Cloudflare Access service token. It would run with <code>access: "none"</code> or its own gateway, which makes the credential the only factor.</div>
+  </section>
+
+  <section id="auth-people" data-prov="stub">
+    <h2>Sign-in for people</h2>
+    <div class="badges"><span class="prov stub">Stub</span></div>
+    <p>People sign in to the Records console with email, Google, Microsoft or SAML SSO, and are provisioned by SCIM from your identity provider.</p>
+    <div class="where"><b>Today:</b> nothing here exists. People reach Records through cloudflare-os (Access login, then the connect flow), or through an Access for SaaS token whose subject an operator mapped by hand. A standalone product needs its own login, session handling, SSO connections, SCIM, and account recovery.</div>
+  </section>
+
+  <!-- API: PROJECTS -->
+  <section id="api-projects" data-prov="port">
+    <div class="eyebrow">Projects API · base <code>/v1/datastores/{datastoreId}</code></div>
+    <h2>Projects and workflow</h2>
+    <div class="badges"><span class="prov port">Portable</span></div>
+    <div class="where"><b>Path today:</b> <code>/gatekeeper/records/v1/datastores/{datastoreId}/…</code> on the cloudflare-os router. A standalone deployment would drop the <code>/gatekeeper/records</code> prefix.</div>
+    <div class="ep"><span class="verb get">GET</span><span class="path">/v1/datastores/{datastoreId}</span></div>
+    <p>The datastore the credential is bound to: name, module, API major version, lifecycle and your role.</p>
+    <div class="ep"><span class="verb get">GET</span><span class="path">/v1/datastores/{datastoreId}/projects</span></div>
+    <p>Projects in the datastore. A project key is 2–10 capitals and digits (<code>ENG</code>); issue keys are <code>ENG-12</code>.</p>
+    <div class="ep"><span class="verb get">GET</span><span class="path">/v1/datastores/{datastoreId}/workflow</span></div>
+    <p>Workflow states, each with a category of <code>todo</code>, <code>in_progress</code> or <code>done</code>, and the allowed transitions. A transition not in the list is <code>409 workflow_conflict</code>.</p>
+    <div class="where"><b>Not in the machine API:</b> creating projects and editing workflows. Those are management operations, reachable today only through the Data page (<a href="#management">see Management API</a>).</div>
+  </section>
+
+  <section id="api-issues" data-prov="port">
+    <h2>Issues</h2>
+    <div class="badges"><span class="prov port">Portable</span></div>
+    <div class="ep"><span class="verb get">GET</span><span class="path">/v1/datastores/{datastoreId}/issues</span></div>
+    <p>Search issues. Query: <code>projectId</code>, <code>state</code>, <code>assigneeId</code>, <code>query</code> (text, up to 200 characters), <code>order</code> (<code>updated_desc</code> or <code>number_asc</code>), <code>limit</code> (1–100, default 50), <code>cursor</code>. Returns <code>{ items, nextCursor }</code>; the cursor is opaque and valid only for the same query.</p>
+
+    <div class="ep"><span class="verb post">POST</span><span class="path">/v1/datastores/{datastoreId}/issues</span></div>
+    <p>Create an issue. Needs <code>issues.create</code> and an <code>Idempotency-Key</code>.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>projectId</code></td><td>uuid</td><td>Required</td></tr>
+        <tr><td><code>title</code></td><td>string</td><td>1–200 characters</td></tr>
+        <tr><td><code>description</code></td><td>string</td><td>Up to 20,000 characters, default empty</td></tr>
+        <tr><td><code>state</code></td><td>string</td><td>A workflow state key; defaults to the first state</td></tr>
+        <tr><td><code>priority</code></td><td>enum</td><td><code>none</code>, <code>low</code>, <code>medium</code>, <code>high</code>, <code>urgent</code></td></tr>
+        <tr><td><code>assigneeId</code></td><td>uuid | null</td><td>Must be a member</td></tr>
+        <tr><td><code>customFields</code></td><td>object</td><td>Up to 50 keys matching <code>^[a-z][a-z0-9_]{0,39}$</code>; string, number, boolean or null values</td></tr>
+        <tr><td><code>id</code></td><td>uuid</td><td>Optional, client-chosen</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="ep"><span class="verb get">GET</span><span class="path">/v1/datastores/{datastoreId}/issues/{issueId}</span></div>
+    <p>One issue, with <code>ETag: "r&lt;revision&gt;"</code>.</p>
+
+    <div class="ep"><span class="verb patch">PATCH</span><span class="path">/v1/datastores/{datastoreId}/issues/{issueId}</span></div>
+    <p>Edit fields. The body is the patch itself: any of <code>title</code>, <code>description</code>, <code>priority</code>, <code>assigneeId</code>, <code>customFields</code>. Unknown keys are refused and an empty patch is <code>400</code>. Needs <code>If-Match</code>.</p>
+    <div class="code"><button class="copy" type="button">Copy</button>
+<pre>curl -sS -X PATCH "$RECORDS/issues/0192f3a9-…" \
+  -H "Authorization: Bearer $RK" \
+  -H "Idempotency-Key: 7f1c2e0a-edit-1" \
+  -H <span class="s">'If-Match: "r3"'</span> \
+  -H "Content-Type: application/json" \
+  -d <span class="s">'{"priority":"urgent","customFields":{"customer":"Acme"}}'</span>
+
+<span class="c"># 412 when someone else changed it first:
+# {"type":"…/problems/revision_conflict","status":412,"code":"revision_conflict",…}
+# ETag: "r4"</span></pre></div>
+
+    <div class="ep"><span class="verb post">POST</span><span class="path">/v1/datastores/{datastoreId}/issues/{issueId}/transitions</span></div>
+    <p>Move an issue to another workflow state. Body <code>{"toState":"done"}</code>, with <code>If-Match</code> and an <code>Idempotency-Key</code>. Needs <code>issues.transition</code>.</p>
+  </section>
+
+  <section id="api-comments" data-prov="port">
+    <h2>Comments</h2>
+    <div class="badges"><span class="prov port">Portable</span></div>
+    <div class="ep"><span class="verb get">GET</span><span class="path">/v1/datastores/{datastoreId}/issues/{issueId}/comments</span></div>
+    <p>A page of comments, oldest first.</p>
+    <div class="ep"><span class="verb post">POST</span><span class="path">/v1/datastores/{datastoreId}/issues/{issueId}/comments</span></div>
+    <p>Body <code>{"body":"…"}</code>, 1–10,000 characters, plus an optional client-chosen <code>id</code>. Needs <code>comments.create</code>.</p>
+  </section>
+
+  <section id="api-changes" data-prov="port">
+    <h2>Changes and history</h2>
+    <div class="badges"><span class="prov port">Portable</span></div>
+    <div class="ep"><span class="verb get">GET</span><span class="path">/v1/datastores/{datastoreId}/changes?after={seq}&amp;limit={n}</span></div>
+    <p>The commit-ordered journal after a sequence number. <code>limit</code> is 1–1000, default 200. Because <code>seq</code> is gapless and in commit order, polling this route never misses a change.</p>
+    <div class="code"><button class="copy" type="button">Copy</button>
+<pre>{
+  <span class="k">"entries"</span>: [ <span class="c">/* JournalEntry, see Journal and clock */</span> ],
+  <span class="k">"nextAfter"</span>: <span class="n">42</span>,       <span class="c">// pass as ?after= next time</span>
+  <span class="k">"head"</span>: <span class="n">42</span>,            <span class="c">// the clock when this page was read</span>
+  <span class="k">"resetRequired"</span>: <span class="k">false</span>  <span class="c">// true: your cursor is older than retention, reload</span>
+}</pre></div>
+    <div class="ep"><span class="verb get">GET</span><span class="path">/v1/datastores/{datastoreId}/issues/{issueId}/history</span></div>
+    <p>One issue's journal entries, with <code>before</code> and <code>after</code> values and who made each change.</p>
+    <div class="ep"><span class="verb get">GET</span><span class="path">/v1/datastores/{datastoreId}/audit</span></div>
+    <p>Management events (grants, credentials, lifecycle). Needs <code>audit.read</code>, the one management permission a service credential may hold.</p>
+  </section>
+
+  <!-- SYNC -->
+  <section id="sync" data-prov="port">
+    <h2>Sync protocol</h2>
+    <div class="badges"><span class="prov port">Portable</span></div>
+    <p>Records implements Replicache-style push and pull semantics against its own backend, without depending on the library. Local changes apply at once; the server's decision always wins; unsent edits are replayed on top.</p>
+    <div class="ep"><span class="verb post">POST</span><span class="path">/v1/datastores/{datastoreId}/sync/push</span></div>
+    <div class="code"><button class="copy" type="button">Copy</button>
+<pre><span class="c">// request</span>
+{ <span class="k">"clientGroupId"</span>: <span class="s">"tab-group-8f2c"</span>, <span class="k">"clientId"</span>: <span class="s">"page-1c9e0d"</span>,
+  <span class="k">"mutations"</span>: [ { <span class="k">"id"</span>: <span class="n">7</span>, <span class="k">"name"</span>: <span class="s">"projects.transitionIssue"</span>,
+                   <span class="k">"args"</span>: { <span class="k">"issueId"</span>: <span class="s">"…"</span>, <span class="k">"expectedRevision"</span>: <span class="n">3</span>, <span class="k">"toState"</span>: <span class="s">"done"</span> } } ] }
+
+<span class="c">// response: one outcome per mutation</span>
+{ <span class="k">"outcomes"</span>: [ { <span class="k">"id"</span>: <span class="n">7</span>, <span class="k">"status"</span>: <span class="s">"applied"</span>, <span class="k">"seq"</span>: <span class="n">42</span> } ], <span class="k">"head"</span>: <span class="n">42</span> }
+<span class="c">// other statuses: skipped | rejected {code,message} | conflict {code,currentRevision}
+//                 pending {actionId}   ← cloudflare-os approvals only</span></pre></div>
+    <div class="ep"><span class="verb post">POST</span><span class="path">/v1/datastores/{datastoreId}/sync/pull</span></div>
+    <p>Body <code>{"clientGroupId", "cookie"}</code>, where the cookie is the last <code>seq</code> you saw, or <code>null</code>. The response is <code>{cookie, lastMutationIdChanges, patch}</code>, and the patch is a list of <code>put</code>, <code>del</code> and <code>clear</code> operations over keys such as <code>issue/&lt;id&gt;</code>. It is built from the journal, or from current tables when the cookie is older than retention. Full-state pulls are bounded to 200 projects, 5,000 issues, 20,000 comments and 8 MiB; a larger datastore gets <code>413 payload_too_large</code> rather than a truncated state.</p>
+    <div class="where"><b>Standalone note:</b> the <code>pending</code> outcome exists because cloudflare-os can hold a write for human approval. Outside cloudflare-os nothing produces it. A standalone product would either drop it from the public contract or build its own approval rules.</div>
+  </section>
+
+  <section id="pokes" data-prov="cf">
+    <h2>Pokes</h2>
+    <div class="badges"><span class="prov cf">Cloudflare runtime: WebSocket</span><span class="prov port">Portable: SSE</span></div>
+    <div class="ep"><span class="verb get">GET</span><span class="path">/v1/datastores/{datastoreId}/poke</span></div>
+    <p>After each commit, subscribers receive <code>{"datastoreId","head"}</code>. A poke carries no data: pull to get it. Subscriptions are authorised with <code>issues.read</code> on connect and closed after 10 minutes, so a revoked credential stops receiving pokes within that bound.</p>
+    <ul>
+      <li><b>Cloudflare:</b> a WebSocket upgrade, served by one <code>DatastorePokeHub</code> Durable Object per datastore with hibernating sockets.</li>
+      <li><b>Node:</b> Server-Sent Events with <code>Accept: text/event-stream</code>, from an in-process hub. Several instances share pokes through Postgres <code>LISTEN/NOTIFY</code> with <code>pokes.pubsub: "postgres"</code>.</li>
+    </ul>
+    <p>Pokes are best effort. Clients also pull on reconnect and on a 30-second safety timer.</p>
+  </section>
+
+  <section id="sync-client" data-prov="port">
+    <h2>Browser sync client</h2>
+    <div class="badges"><span class="prov port">Portable</span></div>
+    <p><code>@records/sync-client</code> has no runtime dependencies and imports only types from the contracts, so it adds about 7.5 kB gzipped.</p>
+    <div class="code"><button class="copy" type="button">Copy</button>
+<pre><span class="k">import</span> { SyncClient, httpTransport, pokeSource, guardUnload } <span class="k">from</span> <span class="s">"@records/sync-client"</span>;
+
+<span class="k">const</span> client = <span class="k">new</span> SyncClient({
+  principal: viewer,
+  transport: httpTransport(<span class="s">`${base}/v1/datastores/${id}`</span>, fetch,
+                           () => ({ authorization: <span class="s">`Bearer ${token()}`</span> })),
+  onPoke: pokeSource(<span class="k">new</span> EventSource(pokeUrl), { datastoreId: id }),
+});
+<span class="k">await</span> client.start();
+guardUnload(client);           <span class="c">// warns before closing with unsynced changes</span>
+
+client.subscribe(() => render(client.scan(<span class="s">"issue/"</span>)));
+<span class="k">const</span> h = client.mutate.projects.createIssue({ projectId, title: <span class="s">"Fix login"</span> });
+<span class="c">// Shows at once as ENG-? until the server's number arrives by pull.</span>
+<span class="k">await</span> h.result;               <span class="c">// confirmed | processed | pending | rejected | conflict</span></pre></div>
+    <p>Pending mutations live in memory only. Records deliberately does not persist offline business writes in the browser.</p>
+  </section>
+
+  <!-- JIRA -->
+  <section id="jira" data-prov="port">
+    <h2>Jira REST subset</h2>
+    <div class="badges"><span class="prov port">Portable</span></div>
+    <p>Each Projects datastore serves a Jira-compatible surface at <code>/v1/datastores/{id}/jira/rest/api/{2|3}/…</code>. Point a Jira client's base URL at <code>…/jira</code>. Writes through it are ordinary commands with <code>via: "jira"</code>, the same authorisation and journal entries.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Jira surface</th><th>Maps to</th></tr></thead>
+      <tbody>
+        <tr><td><code>serverInfo</code>, <code>myself</code>, <code>user/search</code>, <code>user?accountId=</code></td><td>Deployment info; the caller; datastore members (<code>accountId</code> = principal ID)</td></tr>
+        <tr><td><code>project/search</code>, <code>project/{key}</code></td><td>Projects</td></tr>
+        <tr><td><code>field</code>, <code>priority</code>, <code>status</code>, <code>issuetype</code></td><td>System fields and <code>customfield_&lt;n&gt;</code>; five priorities; workflow states; one type, <code>Task</code></td></tr>
+        <tr><td><code>POST /issue</code>, <code>GET|PUT /issue/{key}</code></td><td>Create, get, edit</td></tr>
+        <tr><td><code>issue/{key}/transitions</code></td><td>Transition ID = target state's ID</td></tr>
+        <tr><td><code>issue/{key}/comment</code></td><td>List and add comments</td></tr>
+        <tr><td><code>search/jql</code> with <code>nextPageToken</code></td><td>JQL subset. <code>/search</code> returns 410, as Jira does</td></tr>
+      </tbody>
+    </table></div>
+    <p><b>JQL subset:</b> <code>project</code>, <code>key</code>, <code>status</code>, <code>statusCategory</code>, <code>assignee</code> (with <code>currentUser()</code> and <code>EMPTY</code>), <code>priority</code>, <code>created</code>/<code>updated</code> comparisons, <code>text ~</code>, <code>AND</code>/<code>OR</code>/<code>NOT</code>, parentheses, <code>ORDER BY created|updated|priority|key</code>. Anything else returns Jira's 400 shape.</p>
+    <p><b>Rich text:</b> v2 is plain text. v3 is ADF, converted to and from Markdown: paragraphs, headings, lists, code, links, emphasis, mentions. Other nodes are refused with 400 rather than dropped.</p>
+    <p><b>Tested clients:</b> jira.js 6.2.0 (strict schema mode) and Python <code>jira</code> 3.10.5 pass. jira-cli and go-jira are untested.</p>
+    <p><b>Out of scope:</b> the Agile API (boards, sprints), attachments, worklogs, issue links, the permissions API and most <code>expand</code> options.</p>
+  </section>
+
+  <!-- WEBHOOKS -->
+  <section id="webhooks" data-prov="cf">
+    <h2>Webhooks</h2>
+    <div class="badges"><span class="prov cf">Cloudflare runtime: delivery</span><span class="prov cfos">Via cloudflare-os: configuration</span></div>
+    <p>Events: <code>project.created</code>, <code>project.updated</code>, <code>issue.created</code>, <code>issue.updated</code>, <code>comment.created</code>. A Jira format sends <code>jira:issue_created</code>, <code>jira:issue_updated</code> with a changelog built from the journal, and <code>comment_created</code>.</p>
+    <p>Delivery is at least once, from the transactional outbox. De-duplicate on <code>X-Records-Delivery</code>.</p>
+    <div class="code"><button class="copy" type="button">Copy</button>
+<pre>X-Records-Delivery:  <span class="s">0192f3c1-…</span>
+X-Records-Timestamp: <span class="n">1790000123</span>
+X-Records-Signature: sha256=<span class="c">&lt;hex HMAC-SHA256(secret, "&lt;timestamp&gt;.&lt;raw body&gt;")&gt;</span>
+X-Hub-Signature:     sha256=<span class="c">&lt;hex HMAC(secret, body)&gt;     ← Jira format only</span></pre></div>
+    <p>Reject a timestamp outside your tolerance; five minutes is the reference default.</p>
+    <div class="where"><b>Today:</b> the outbox is drained by a Cloudflare Queue consumer and a one-minute cron. The Node server does not deliver webhooks: events accumulate in the outbox until a Worker drains them. Webhooks are created, paused, pinged and inspected only in the cloudflare-os Data page.</div>
+  </section>
+
+  <section id="analytics" data-prov="port">
+    <h2>SQL analytics</h2>
+    <div class="badges"><span class="prov port">Portable</span></div>
+    <p>A read-only <code>records_analytics</code> role sees a versioned <code>analytics</code> schema of views through the same row-level policies, intended for a read replica. The journal's <code>seq</code> gives incremental extraction if you feed a warehouse.</p>
+  </section>
+
+  <!-- ERRORS -->
+  <section id="errors" data-prov="port">
+    <h2>Errors and limits</h2>
+    <div class="badges"><span class="prov port">Portable</span></div>
+    <p>Errors are RFC 9457 problem documents with a stable <code>code</code>.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Status</th><th>code</th><th>When</th></tr></thead>
+      <tbody>
+        <tr><td>400</td><td><code>validation_failed</code></td><td>Body or query failed validation; <code>issues</code> lists paths</td></tr>
+        <tr><td>401</td><td><code>unauthenticated</code></td><td>Missing, malformed, expired, replayed or wrong-audience credential</td></tr>
+        <tr><td>403</td><td><code>forbidden</code></td><td>No permission, or a token for another datastore</td></tr>
+        <tr><td>404</td><td><code>not_found</code></td><td>No such record, or not visible to you</td></tr>
+        <tr><td>409</td><td><code>workflow_conflict</code>, <code>duplicate</code>, <code>idempotency_conflict</code>, <code>datastore_archived</code></td><td>The write conflicts with rules or state</td></tr>
+        <tr><td>412</td><td><code>revision_conflict</code></td><td><code>If-Match</code> is stale; ETag carries the current revision</td></tr>
+        <tr><td>413</td><td><code>payload_too_large</code></td><td>Body over 64 KiB, or a full pull over its bounds</td></tr>
+        <tr><td>428</td><td><code>revision_required</code></td><td>A change without <code>If-Match</code></td></tr>
+        <tr><td>429</td><td><code>rate_limited</code></td><td>Honour <code>Retry-After</code></td></tr>
+        <tr><td>503</td><td><code>unavailable</code></td><td>Database, JWKS or replay store unreachable; fails closed</td></tr>
+      </tbody>
+    </table></div>
+    <p><b>Limits:</b> request bodies 64 KiB; responses 1 MiB (pulls 8 MiB); statement timeout 5 s; request deadline 15 s. Rate limit per credential: 300 a minute on Cloudflare (Workers rate limiter), 600 a minute by default on Node (in-process window).</p>
+  </section>
+
+  <section id="sdks" data-prov="port">
+    <h2>SDKs</h2>
+    <div class="badges"><span class="prov port">Portable</span></div>
+    <p>Both SDKs are generated from <code>GET /v1/openapi.json</code> (OpenAPI 3.1, produced from the Zod contracts). They send idempotency keys automatically, retry only idempotent calls, honour <code>Retry-After</code>, and surface a 412 with the current revision.</p>
+    <ul><li><b>TypeScript:</b> <code>@records/sdk</code></li><li><b>Python:</b> <code>records-sdk</code>, in the same package's <code>python/</code> directory</li></ul>
+    <div class="where"><b>Standalone gap:</b> neither package is published to npm or PyPI, and there is no versioning or deprecation policy for the public contract yet.</div>
+  </section>
+
+  <!-- SELF-HOSTING -->
+  <section id="self-hosting" data-prov="port">
+    <h2>Self-hosting</h2>
+    <div class="badges"><span class="prov port">Portable</span><span class="prov cf">Gaps: webhooks, maintenance</span></div>
+    <p>The same adapters and contract suite run on Node beside any Postgres 17. The contract suite passes on both workerd and Node against one database.</p>
+    <div class="code"><button class="copy" type="button">Copy</button>
+<pre><span class="k">import</span> { createRecordsServer } <span class="k">from</span> <span class="s">"@records/node"</span>;
+
+<span class="k">const</span> server = <span class="k">await</span> createRecordsServer({
+  databaseUrl: process.env.RECORDS_APP_URL,        <span class="c">// a login in records_app, not the owner</span>
+  publicBaseUrl: <span class="s">"https://records.internal.example"</span>,
+  access: <span class="s">"none"</span>,                                   <span class="c">// or { issuer, audience } for Cloudflare Access</span>
+  rateLimit: { limit: <span class="n">600</span>, windowMs: <span class="n">60_000</span> },
+  pokes: { pubsub: <span class="s">"postgres"</span> },                     <span class="c">// share pokes across instances</span>
+});
+console.log(<span class="k">await</span> server.listen(<span class="n">8787</span>, <span class="s">"0.0.0.0"</span>));</pre></div>
+    <ol>
+      <li>Create a Postgres 17 database and apply migrations as the owner: <code>RECORDS_MIGRATION_URL=… pnpm --filter @records/schema db:migrate</code>. Runtime logins cannot run DDL.</li>
+      <li>Create two logins: <code>GRANT records_app TO …</code> and <code>GRANT records_publisher TO …</code>. Neither may own objects or hold <code>BYPASSRLS</code>.</li>
+      <li>Bootstrap the organisation and first data administrator with <code>db:bootstrap</code>.</li>
+      <li>Run migrations before deploying code that depends on them. Rollback never reverses SQL; migrations are additive and roll forward.</li>
+    </ol>
+    <div class="where"><b>Missing on Node:</b> the outbox publisher and webhook delivery, and the hourly maintenance (journal partitions three months ahead, token-claim and outbox pruning). A self-hoster would run these from cron through the ops CLI or a small worker process that does not exist yet. There is also no management UI outside cloudflare-os.</div>
+  </section>
+
+  <section id="operations" data-prov="port">
+    <h2>Operations</h2>
+    <div class="badges"><span class="prov port">Portable: scripts</span><span class="prov stub">Stub: managed backups</span></div>
+    <ul>
+      <li><b>Backups:</b> nightly <code>pg_dump</code> to object storage with a lifecycle rule and bucket lock. Scripts exist; no bucket or schedule is set up.</li>
+      <li><b>Restore one datastore:</b> restore a database branch to a point in time, read that datastore's journal up to a chosen <code>seq</code>, and replay it into production as <code>system</code> commands. Other datastores are not rewound. Tested locally.</li>
+      <li><b>Redaction:</b> an audited procedure that masks named fields in the current row and past journal entries, and records a <code>redact</code> entry.</li>
+      <li><b>Retention:</b> journal partitions past the window move to cold storage and are detached. Pulls with older cookies get a full reset. No window has been chosen.</li>
+    </ul>
+    <div class="where"><b>Today:</b> the Neon project is on the Free plan with a 6-hour restore window, which the runbook calls inadequate before a team relies on it.</div>
+  </section>
+
+  <!-- CFOS -->
+  <section id="cfos" data-prov="cfos">
+    <div class="eyebrow">Integration</div>
+    <h2>cloudflare-os</h2>
+    <div class="badges"><span class="prov cfos">Via cloudflare-os</span></div>
+    <p>The cloudflare-os integration lets gadgets read and write Records datastores on behalf of the person using them, with approvals and audit handled by the platform.</p>
+    <h3>How a gadget connects</h3>
+    <ol>
+      <li>A person with a membership connects a gadget to a datastore and picks scopes. That creates a <b>binding</b>, revocable from the Data page.</li>
+      <li>Reads act as the binding (the connecting person's role ∩ its scopes). Every viewer is checked as a datastore reader, and each read is recorded as an observation.</li>
+      <li>Writes act as the <b>viewer who asked</b>. The gadget UI obtains a one-use, 60-second viewer assertion for the exact intent digest, and the gadget server passes it through.</li>
+      <li>The gatekeeper redeems the assertion, runs the platform's approval queue, and mints a 60-second delegated token for the Records service. The journal records the viewer as <code>actorId</code>, the binding as <code>actId</code> and <code>via: "gadget"</code>.</li>
+    </ol>
+    <div class="code"><button class="copy" type="button">Copy</button>
+<pre><span class="c">// gadget UI</span>
+<span class="k">const</span> idempotencyKey = crypto.randomUUID();
+<span class="k">const</span> digest = <span class="k">await</span> recordsIntentDigest(<span class="s">"createIssue"</span>, input, idempotencyKey);
+<span class="k">const</span> viewerAssertion = <span class="k">await</span> gadget.$createViewerAssertion(<span class="s">"RECORDS"</span>, digest);
+<span class="k">const</span> outcome = <span class="k">await</span> gadget.createIssue(input, { idempotencyKey, viewerAssertion });
+
+<span class="c">// gadget server: pass both through unchanged</span>
+<span class="k">return</span> env.RECORDS.createIssue(input, options);
+<span class="c">// outcome.status: "applied" | "pending" (awaiting approval in the Workshop) | …</span></pre></div>
+    <h3>What the integration adds</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>Capability</th><th>Standalone equivalent</th></tr></thead>
+      <tbody>
+        <tr><td>Access login and the connect flow</td><td>Console sign-in (<a href="#auth-people">stub</a>)</td></tr>
+        <tr><td>Viewer assertions (kernel fork feature)</td><td>None. A partner app proves the user with its own delegated tokens</td></tr>
+        <tr><td>Human approval of writes, pre-approvable per binding</td><td>None (<code>pending</code> never occurs)</td></tr>
+        <tr><td>Agent reads through observations</td><td>A service credential with read scopes</td></tr>
+        <tr><td>Data page for management</td><td><a href="#management">Management API</a> and console (stub)</td></tr>
+        <tr><td>Router and Access as the single front door</td><td>A public API endpoint</td></tr>
+      </tbody>
+    </table></div>
+    <div class="where"><b>Deployment today:</b> the Records Worker ships inside the cloudflare-os release, before the router, which binds it and owns the public route. The service code already talks to the gatekeeper through delegated tokens rather than in-process trust, so it could run as its own deployment.</div>
+  </section>
+
+  <!-- MANAGEMENT -->
+  <section id="management" data-prov="stub">
+    <div class="eyebrow">Stub</div>
+    <h2>Management API</h2>
+    <div class="badges"><span class="prov stub">Stub</span><span class="prov cfos">Logic exists behind the cloudflare-os Data page</span></div>
+    <p>Every management operation below already exists as a domain function with its permission checks and audit events. What is missing is an HTTP route, request schemas in OpenAPI, and a caller identity other than a cloudflare-os account. The table maps the would-be route to the RPC method the Data page calls today.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Proposed route</th><th>Permission</th><th>Today: <code>DataManagement</code> method</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /v1/datastores</code></td><td>membership</td><td><code>searchDatastores</code></td></tr>
+        <tr><td><code>POST /v1/datastores</code></td><td>org <code>data_admin</code></td><td><code>createDatastore</code></td></tr>
+        <tr><td><code>POST /v1/datastores/{id}/archive</code></td><td><code>lifecycle.manage</code></td><td><code>setLifecycle</code></td></tr>
+        <tr><td><code>GET /v1/datastores/{id}/export</code></td><td><code>export.run</code></td><td><code>exportDatastore</code> (synchronous, 10,000 issues)</td></tr>
+        <tr><td><code>GET|POST|PATCH|DELETE /v1/datastores/{id}/members</code></td><td><code>members.manage</code></td><td><code>listMembers</code>, <code>addMember</code>, <code>setMemberRole</code>, <code>removeMember</code></td></tr>
+        <tr><td><code>POST /v1/datastores/{id}/transfer</code></td><td><code>ownership.transfer</code></td><td><code>transferOwnership</code></td></tr>
+        <tr><td><code>GET|POST /v1/principals</code></td><td>org member / <code>data_admin</code></td><td><code>searchPrincipals</code>, <code>invitePrincipal</code></td></tr>
+        <tr><td><code>GET|POST|DELETE /v1/datastores/{id}/credentials</code></td><td><code>credentials.manage</code></td><td><code>listCredentials</code>, <code>createCredential</code>, <code>revokeCredential</code></td></tr>
+        <tr><td><code>GET|DELETE /v1/datastores/{id}/bindings</code></td><td><code>bindings.manage</code></td><td><code>listBindings</code>, <code>revokeBinding</code></td></tr>
+        <tr><td><code>POST /v1/datastores/{id}/projects</code></td><td><code>projects.manage</code></td><td><code>createProject</code></td></tr>
+        <tr><td><code>…/webhooks</code>, <code>…/webhooks/{id}/ping</code>, <code>…/deliveries</code></td><td><code>bindings.manage</code></td><td><code>createWebhook</code>, <code>setWebhookEnabled</code>, <code>deleteWebhook</code>, <code>pingWebhook</code>, <code>listWebhookDeliveries</code></td></tr>
+      </tbody>
+    </table></div>
+    <div class="where"><b>Design question left open:</b> management calls act as a person, not a service principal. An HTTP management API needs a person-level credential (console session or OIDC token), which depends on <a href="#auth-people">sign-in for people</a>.</div>
+  </section>
+
+  <!-- PLATFORM STUBS -->
+  <section id="platform" data-prov="stub">
+    <div class="eyebrow">Stub</div>
+    <h2>Accounts, billing and platform services</h2>
+    <div class="badges"><span class="prov stub">Stub</span></div>
+    <p>A standalone product needs these. None exist, and none are needed while Records runs inside one cloudflare-os deployment for one organisation.</p>
+    <div class="stubgrid">
+      <div class="stubcard"><h3>Organisations and sign-up</h3><p>Self-serve organisation creation, domain verification, tenant provisioning.</p><p class="today">Today: <code>db:bootstrap</code> CLI.</p></div>
+      <div class="stubcard"><h3>Invitations and email</h3><p>Invite emails, acceptance links, bounce handling.</p><p class="today">Today: <code>invitePrincipal</code> writes a row; no email.</p></div>
+      <div class="stubcard"><h3>SSO and SCIM</h3><p>SAML and OIDC connections per organisation; deprovisioning from the IdP.</p><p class="today">Today: Cloudflare Access in front of cloudflare-os.</p></div>
+      <div class="stubcard"><h3>Web console</h3><p>Datastores, members, credentials, webhooks, audit, record inspector.</p><p class="today">Today: the Data page, a React app hosted inside the Workshop.</p></div>
+      <div class="stubcard"><h3>Plans, billing and metering</h3><p>Usage counting per organisation (commands, storage, pulls), invoices, limits per plan.</p><p class="today">Today: none.</p></div>
+      <div class="stubcard"><h3>Regions and residency</h3><p>EU and US data regions; a database per region or per large tenant.</p><p class="today">Today: one Neon project in London.</p></div>
+      <div class="stubcard"><h3>Status, SLA and support</h3><p>Public status page, uptime targets, incident process, support channel.</p><p class="today">Today: Worker logs and an operator runbook.</p></div>
+      <div class="stubcard"><h3>Import</h3><p>Import from Jira Cloud and CSV into a Projects datastore.</p><p class="today">Today: export only, capped at 10,000 issues.</p></div>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<script>
+(function(){
+  // counts + meter from the isolation table
+  var rows = document.querySelectorAll('#maptable tbody tr');
+  var counts = {port:0,cf:0,cfos:0,stub:0};
+  rows.forEach(function(r){ counts[r.dataset.prov]++; });
+  var total = rows.length;
+  Object.keys(counts).forEach(function(k){
+    var el = document.querySelector('[data-count="'+k+'"]'); if (el) el.textContent = counts[k];
+  });
+  var meter = document.getElementById('meter');
+  ['port','cf','cfos','stub'].forEach(function(k){
+    var i = document.createElement('i'); i.className = k; i.style.width = (counts[k]/total*100)+'%'; meter.appendChild(i);
+  });
+
+  // provenance filter
+  var buttons = document.querySelectorAll('.legend button');
+  var active = null;
+  function apply(){
+    document.body.classList.toggle('filtering', !!active);
+    document.querySelectorAll('.main > section[data-prov], #maptable tbody tr').forEach(function(el){
+      var match = !active || el.dataset.prov === active || (el.id === 'isolation');
+      el.classList.toggle('dim', !match);
+    });
+    buttons.forEach(function(b){ b.setAttribute('aria-pressed', String(b.dataset.filter === active)); });
+  }
+  buttons.forEach(function(b){
+    b.addEventListener('click', function(){ active = (active === b.dataset.filter) ? null : b.dataset.filter; apply(); });
+  });
+
+  // code tabs
+  document.querySelectorAll('[data-tabs]').forEach(function(box){
+    var tabs = box.querySelectorAll('[role="tab"]');
+    tabs.forEach(function(t){
+      t.addEventListener('click', function(){
+        tabs.forEach(function(x){ x.setAttribute('aria-selected', String(x === t)); });
+        box.querySelectorAll('pre[data-pane]').forEach(function(p){ p.hidden = p.dataset.pane !== t.dataset.tab; });
+      });
+    });
+  });
+
+  // copy buttons
+  document.querySelectorAll('.code .copy').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var box = btn.closest('.code');
+      var pre = Array.prototype.find.call(box.querySelectorAll('pre'), function(p){ return !p.hidden; });
+      var text = pre ? pre.innerText : '';
+      function done(){ btn.textContent = 'Copied'; setTimeout(function(){ btn.textContent = 'Copy'; }, 1400); }
+      try {
+        navigator.clipboard.writeText(text).then(done, function(){ select(pre); });
+      } catch (e) { select(pre); }
+    });
+  });
+  function select(el){ var r = document.createRange(); r.selectNodeContents(el); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+
+  // product link (filled after publish)
+  var PRODUCT_URL = 'https://claude.ai/artifact/E6iYxf2aAY1p5BKLRJJ6Fg';
+  document.querySelectorAll('[data-product]').forEach(function(a){ if (PRODUCT_URL) { a.href = PRODUCT_URL; a.target = '_blank'; a.rel = 'noopener'; } });
+})();
+</script>

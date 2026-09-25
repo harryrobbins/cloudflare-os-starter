@@ -1,0 +1,40 @@
+{
+  "id": "urn:records:profile:messaging",
+  "version": "1.0.0",
+  "vocabulary": {
+    "id": "https://schema.org/",
+    "version": "30.1"
+  },
+  "entities": {
+    "channel": {
+      "term": "https://schema.org/Conversation",
+      "fields": {
+        "name": {
+          "term": "https://schema.org/name",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    },
+    "message": {
+      "term": "https://schema.org/Message",
+      "fields": {
+        "text": {
+          "term": "https://schema.org/text",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "maxLength": 20000
+        },
+        "channel": {
+          "term": "urn:records:messaging:channel",
+          "type": "iri",
+          "required": true,
+          "reference": "channel"
+        }
+      }
+    }
+  }
+}

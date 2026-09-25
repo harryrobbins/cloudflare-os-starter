@@ -1,0 +1,26 @@
+{
+  "id": "urn:records:profile:observatory",
+  "version": "1.0.0",
+  "entities": {
+    "reading": {
+      "term": "urn:observatory:Reading",
+      "fields": {
+        "sensor": {
+          "term": "urn:observatory:sensor",
+          "type": "iri",
+          "required": true
+        },
+        "value": {
+          "term": "urn:observatory:value",
+          "type": "number",
+          "required": true
+        },
+        "unit": {
+          "term": "urn:observatory:unit",
+          "type": "string",
+          "required": true
+        }
+      }
+    }
+  }
+}
