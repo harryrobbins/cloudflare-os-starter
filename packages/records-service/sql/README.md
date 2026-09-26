@@ -60,6 +60,10 @@ Postgres enforces permissions as part of each data model; see the
 - **Roles.** `records_private.actor_roles` (per datastore, per actor) backs `records.has_role()`;
   every change bumps the permission epoch.
 
+Records of the bundled modules carry server-set `created_at`/`updated_at` (migration 011; set by
+`records.stamp_row()` when a table has those columns) and change entries carry the journal's
+`created_at`. Like attribution, they are record metadata, never data fields.
+
 Module migrations use `records_private.isolate()`, `present_table()`, `present_history()`,
 `register_presentation()` and `register_history()`. Publication runs
 `records_private.publication_errors()` and refuses: storage without forced RLS or tenant policy,

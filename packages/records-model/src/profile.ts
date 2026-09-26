@@ -6,7 +6,7 @@ export const isObject = (value: unknown): value is Record<string, unknown> => va
 export const safeName = (value: unknown): value is string => typeof value === 'string' && identifier.test(value) && !['__proto__','prototype','constructor'].includes(value);
 export const identifier = /^[a-z][a-z0-9_]{0,62}$/;
 /** Record metadata set by the service (revision, attribution, ownership), never data fields. */
-export const reservedFields = ['id', 'revision', 'created_by', 'updated_by', 'owner', 'datastore_id', '__proto__', 'constructor', 'prototype'];
+export const reservedFields = ['id', 'revision', 'created_by', 'updated_by', 'created_at', 'updated_at', 'owner', 'datastore_id', '__proto__', 'constructor', 'prototype'];
 export const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 export const absoluteIri = (s: unknown): s is string => typeof s === 'string' && /^[a-z][a-z0-9+.-]*:[^\s]+$/i.test(s);
 export function validateProfile(profile: Profile, catalogue?: Catalogue): string[] {
