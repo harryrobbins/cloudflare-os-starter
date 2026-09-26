@@ -5,7 +5,7 @@ import { createServer } from 'node:net';
 import EmbeddedPostgres from 'embedded-postgres';
 import postgres from 'postgres';
 
-export const migrations=['001-core.sql','002-modules.sql','003-permission-epochs.sql','004-snapshot-and-rpc-validation.sql','005-public-model.sql','006-describe-qualification.sql','007-actor-attribution.sql','008-presentation-schema.sql','009-actor-roles.sql','010-work-planning.sql'];
+export const migrations=['001-core.sql','002-modules.sql','003-permission-epochs.sql','004-snapshot-and-rpc-validation.sql','005-public-model.sql','006-describe-qualification.sql','007-actor-attribution.sql','008-presentation-schema.sql','009-actor-roles.sql','010-work-planning.sql','011-record-timestamps.sql'];
 
 export async function startDatabase({until}={}) {
  const dir=await mkdtemp(join(tmpdir(),'records-new-pg-'));

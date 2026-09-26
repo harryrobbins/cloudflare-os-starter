@@ -126,6 +126,9 @@ export interface RecordsRecord {
   updated_by?: string;
   /** Present on modules with ownership rules. */
   owner?: string;
+  /** Server-set ISO timestamps (work and messaging, migration 011). */
+  created_at?: string;
+  updated_at?: string;
   /** Fields per the module's profile; empty (null) fields are absent. */
   data: Record<string, unknown>;
 }
@@ -142,6 +145,8 @@ export interface RecordsChange {
   revision: number;
   /** Actor who made this change, e.g. `cloudflare-os:ada@example.com`. */
   actor: string;
+  /** When the change was committed (ISO timestamp). */
+  created_at?: string;
   /** The record's data after this change. */
   data: Record<string, unknown>;
 }

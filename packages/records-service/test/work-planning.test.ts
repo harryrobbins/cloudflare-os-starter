@@ -367,3 +367,20 @@ test('work planning: runtime cannot touch storage or handlers, and publication c
     assert.ok(handlers.every(h => h.prosecdef && h.owner === 'records_commander'));
   } finally { await db.stop(); }
 });
+
+test('record timestamps: server-set created_at/updated_at on records, created_at on changes, never data', async () => {
+  const db = await startDatabase(); const sql: Sql = db.sql;
+  try {
+    const t = await tenant(sql);
+    const made = await t.run('work.create', { title: 'Timed' });
+    assert.equal(made.record.data.created_at, undefined, 'timestamps are not data');
+    await sql`select pg_sleep(0.02)`;
+    await t.run('work.update', { id: made.record.id, title: 'Timed 2' }, made.seq);
+    const item = (await t.read('work_item')).records[0];
+    assert.ok(Date.parse(item.created_at) < Date.parse(item.updated_at), 'updated_at advances, created_at stays');
+    assert.equal(item.data.created_at, undefined);
+    const feed = await t.changes();
+    assert.ok(feed.changes.every((c: any) => typeof c.created_at === 'string' && !('created_at' in c.data)));
+    await assert.rejects(t.run('work.update', { id: made.record.id, created_at: '2020-01-01T00:00:00Z' }, made.seq + 1), (e: any) => e.code === 'PT400');
+  } finally { await db.stop(); }
+});
