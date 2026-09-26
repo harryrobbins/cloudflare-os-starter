@@ -14,6 +14,10 @@ const platformViewer = typeof gadgetViewer !== "undefined" ? gadgetViewer : null
 
 document.documentElement.lang = "en";
 document.title = "Work board";
+const meta = document.createElement("meta");
+meta.name = "viewport";
+meta.content = "width=device-width, initial-scale=1";
+document.head.append(meta);
 const root = document.createElement("div");
 root.style.height = "100%";
 document.body.append(root);
@@ -21,5 +25,7 @@ document.body.append(root);
 if (!platformGadget) {
   root.textContent = "This board runs inside a Cloudflare OS Workshop.";
 } else {
-  createBoardApp({ gadget: platformGadget, root, viewer: platformViewer });
+  const app = createBoardApp({ gadget: platformGadget, root, viewer: platformViewer });
+  // For the harness and end-to-end tests (and curious developers): the app and its store.
+  /** @type {any} */ (globalThis).workBoard = { app, store: app.store };
 }

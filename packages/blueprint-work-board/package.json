@@ -6,11 +6,18 @@
   "scripts": {
     "build:gadget": "node scripts/build.mjs",
     "pack:gadget": "node scripts/build.mjs && node scripts/pack-gadget.mjs",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "test:e2e": "node scripts/build.mjs && node --test --test-concurrency=1 e2e/harness.test.mjs",
+    "harness": "node harness/serve.mjs",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
+    "axe-core": "4.13.0",
+    "capnweb": "catalog:",
     "esbuild": "0.28.1",
     "jsdom": "26.1.0",
+    "playwright": "1.61.0",
+    "typescript": "catalog:",
     "vitest": "catalog:",
     "yjs": "13.6.31"
   }
