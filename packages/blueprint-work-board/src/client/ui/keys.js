@@ -4,7 +4,7 @@
 // shortcuts (Ctrl/⌘+K etc.) always work.
 
 /**
- * @typedef {{ id: string, keys: string[], label: string, group: string, single?: boolean }} Shortcut
+ * @typedef {{ id: string, keys: string[], label: string, group: string, single?: boolean, display?: string[] }} Shortcut
  */
 
 /** @type {Shortcut[]} */
@@ -36,7 +36,7 @@ export const SHORTCUTS = [
   { id: "estimate", keys: ["e"], label: "Estimate", group: "Edit", single: true },
   { id: "due", keys: ["d"], label: "Due date", group: "Edit", single: true },
   { id: "move", keys: ["m"], label: "Move to… (menu)", group: "Edit", single: true },
-  { id: "moveMode", keys: ["Shift+ArrowLeft", "Shift+ArrowRight", "Shift+ArrowUp", "Shift+ArrowDown"], label: "Move with the keyboard", group: "Edit" },
+  { id: "moveMode", keys: ["Shift+ArrowLeft", "Shift+ArrowRight", "Shift+ArrowUp", "Shift+ArrowDown"], label: "Move with the keyboard", group: "Edit", display: ["Shift+Arrows"] },
 ];
 
 // "l" is both "next column" (vim) and "labels" (Linear). Labels wins; arrows move.
@@ -89,7 +89,7 @@ export function matchShortcut(event, opts) {
 
 /** Display text for a key combination. @param {string} combo @param {boolean} mac */
 export function keyLabel(combo, mac) {
-  return combo.split("+").map((k) => ({ Mod: mac ? "⌘" : "Ctrl", Shift: "⇧", ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→", Escape: "Esc", " ": "Space", Enter: "↵", PageUp: "PgUp", PageDown: "PgDn" })[k] ?? (k.length === 1 ? k.toUpperCase() : k)).join(mac ? "" : "+");
+  return combo.split("+").map((k) => ({ Mod: mac ? "⌘" : "Ctrl", Shift: "⇧", ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→", Arrows: "arrows", Escape: "Esc", " ": "Space", Enter: "↵", PageUp: "PgUp", PageDown: "PgDn" })[k] ?? (k.length === 1 ? k.toUpperCase() : k)).join(mac ? "" : "+");
 }
 
 /** @param {string} id */

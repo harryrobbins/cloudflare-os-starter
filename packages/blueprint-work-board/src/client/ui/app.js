@@ -25,7 +25,7 @@ import { createStore } from "../store/store.js";
 import { SINGLE_LANE, movePatch, project } from "../board/projection.js";
 import { registerLayout, layoutDef } from "../views/registry.js";
 import { BINDING_NAME } from "../../shared/records.js";
-import { itemByKey, personName } from "../../shared/model/index.js";
+import { itemByKey, personName, projectItem } from "../../shared/model/index.js";
 import { NONE, groupableFields, property } from "../../shared/model/properties.js";
 import { PRIORITIES, localDay } from "../../shared/model/work.js";
 import { rankAt } from "../../shared/rank.js";
@@ -590,6 +590,18 @@ export function createBoardApp(options) {
     return `Move ${item.key} ${parts.join(", ")}`;
   }
 
+  /** New items land at the top of their cell when the board is in manual order (as in Linear). @param {Record<string, unknown>} fields */
+  function withTopRank(fields) {
+    if (!store.planning || !manualOrder() || fields.rank) return fields;
+    const index = store.index();
+    const c = { index, today: today(), viewer: store.me };
+    const ghost = projectItem(index, null, fields);
+    const col = property(view.columnsBy)?.keysOf(ghost, c)[0] ?? NONE;
+    const lane = view.swimlanesBy ? property(view.swimlanesBy)?.keysOf(ghost, c)[0] ?? NONE : SINGLE_LANE;
+    const cell = computeProjection().lanes.find((l) => l.key === lane)?.cells.get(col) ?? [];
+    return { ...fields, rank: rankAt(cell.filter((e) => e.kind === "card").map((e) => e.item), 0) };
+  }
+
   function defaultCreateState() {
     const index = store.index();
     const s = index.states.find((x) => x.kind === "unstarted") ?? index.states.find((x) => x.category === "open") ?? index.states[0];
@@ -971,7 +983,7 @@ export function createBoardApp(options) {
       openCreate({
         layers, index: () => store.index(), me: store.me, today: () => today(), defaults: fields, context,
         summarize: (prop, fs) => pickers.summarize(prop, fs), choose: (prop, fs, anchor, done) => pickers.chooseForDraft(prop, fs, anchor, done),
-        submit: (fs) => { const r = store.createItem(fs); if (r.ok) live.announce(`Sent: ${r.change.label}.`); return r.ok ? { ok: true } : r; },
+        submit: (fs) => { const r = store.createItem(withTopRank(fs)); if (r.ok) live.announce(`Sent: ${r.change.label}.`); return r.ok ? { ok: true } : r; },
         draft: store.prefs.draft ?? null, saveDraft: (d) => store.setPrefs({ draft: d }), announce: (t) => live.announce(t),
       });
     } },
@@ -1040,10 +1052,13 @@ export function createBoardApp(options) {
         const index = store.index();
         const exact = itemByKey(index, q.trim());
         const scored = [];
+        const words = q.toLowerCase().split(/\s+/).filter(Boolean);
         for (const i of index.itemList) {
           if (exact && i.id === exact.id) continue;
-          const s = fuzzyScore(q, `${i.key} ${i.title}`);
-          if (s !== null && s > 20) scored.push({ i, s });
+          // Items match on whole words (every typed word appears); commands keep the fuzzy match.
+          const hay = `${i.key} ${i.title}`.toLowerCase();
+          if (!words.every((w) => hay.includes(w))) continue;
+          scored.push({ i, s: fuzzyScore(q, hay) ?? 0 });
         }
         scored.sort((a, b) => b.s - a.s);
         return [...(exact ? [exact] : []), ...scored.slice(0, 20).map((x) => x.i)].map((i) => ({
@@ -1062,7 +1077,7 @@ export function createBoardApp(options) {
       content: () => [h("label", { class: "check-label", for: "wb-sc-toggle" }, box, "Single-key shortcuts (letters, / and ?)"),
         h("p", { class: "hint" }, "They never fire while you type. Arrow keys, Enter, Space, Escape and Ctrl/⌘ shortcuts always work. Every action is also in the command palette."),
         h("div", { class: "sc-grid" }, groups.map((g) => h("section", null, h("h3", null, g), h("dl", null, SHORTCUTS.filter((s) => s.group === g).flatMap((s) => [
-          h("dt", null, s.keys.map((k) => h("kbd", null, keyLabel(k, mac)))), h("dd", null, s.label)])))))] });
+          h("dt", null, (s.display ?? s.keys).map((k) => h("kbd", null, keyLabel(k, mac)))), h("dd", null, s.label)])))))] });
   }
 
   // ---------------------------------------------------------------------------------------------

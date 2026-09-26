@@ -194,7 +194,7 @@ export function createStore(options) {
         if (!s.planning && changed && [...replica.records.values()].some((r) => r.entity !== "work_item")) s.planning = true;
         s.sync.error = ""; s.sync.lastSync = now(); s.sync.failures = 0; s.sync.offline = false;
         settleCommitted();
-        if (changed) notify("data", "history");
+        if (changed) { notify("data", "history"); scheduleOutcomes(true); }
         notify("sync");
       } catch (err) {
         const code = errorCode(err);
@@ -332,9 +332,11 @@ export function createStore(options) {
     }
   }
 
-  function scheduleOutcomes() {
-    if (destroyed || outcomeTimer) return;
+  /** @param {boolean} [soon] check now (the journal just changed, so an approval may have landed) */
+  function scheduleOutcomes(soon = false) {
+    if (destroyed) return;
     if (!s.changes.some((c) => c.status === "pending")) return;
+    if (outcomeTimer) { if (!soon) return; clearTimeout(outcomeTimer); outcomeTimer = null; }
     outcomeTimer = setTimeout(async () => {
       outcomeTimer = null;
       let touched = false;
@@ -348,7 +350,7 @@ export function createStore(options) {
       }
       if (touched) { savePending(); notify("changes"); }
       scheduleOutcomes();
-    }, outcomeMs);
+    }, soon ? 0 : outcomeMs);
   }
 
   /** The newest unsettled change for an item (the overlay shows it). @param {string} itemId */

@@ -122,7 +122,7 @@ textarea { width: 100%; resize: vertical; line-height: 1.5; }
 .wql-icon { color: var(--muted); display: grid; place-items: center; }
 .wql-wrap { position: relative; flex: 1; min-width: 0; height: 30px; }
 .wql-input, .wql-layer { position: absolute; inset: 0; font: 13px/30px var(--mono); padding: 0 4px; margin: 0; border: 0; letter-spacing: 0; white-space: pre; }
-.wql-input { background: transparent; color: transparent; caret-color: var(--ink); outline: none; width: 100%; min-height: 0; }
+.wql-field .wql-input { background: transparent; border: 0; border-radius: 0; color: transparent; caret-color: var(--ink); outline: none; width: 100%; min-height: 0; padding: 0 4px; }
 .wql-input::placeholder { color: var(--muted); font-family: var(--font); }
 .wql-input::selection { background: var(--accent-soft); color: var(--ink); }
 .wql-layer { overflow: hidden; color: var(--ink); pointer-events: none; }
@@ -195,6 +195,10 @@ textarea { width: 100%; resize: vertical; line-height: 1.5; }
 .cell .spacer { list-style: none; padding: 0; margin: 0; }
 .cell-empty { display: flex; align-items: center; justify-content: center; min-height: 52px; color: var(--muted); font-size: 12px; border-radius: var(--radius); text-align: center; padding: 8px; }
 .cell-empty:focus-visible { outline-offset: -2px; }
+.has-lanes .cell { min-height: 52px; }
+.has-lanes .cell:has(> .cell-empty) { background: transparent; border: 1px dashed var(--line); }
+.has-lanes .cell-empty .empty-text { opacity: 0; }
+.has-lanes .cell-empty:hover .empty-text, .has-lanes .cell-empty:focus .empty-text { opacity: 1; }
 .drop-line { height: 2px; background: var(--accent); border-radius: 2px; margin: -1px 4px; }
 .drop-target .drop-card { height: calc(var(--card-h) - 8px); border: 2px dashed var(--accent); border-radius: var(--radius); display: grid; place-items: center; color: var(--accent); font-weight: 600; background: var(--accent-soft); }
 
