@@ -44,13 +44,14 @@ test('real Postgres: generic modules, boundaries, retries, rollback and concurre
  const duplicates=await Promise.all(Array.from({length:12},()=>command({title:'Concurrent'},'parallel')));assert(duplicates.every(r=>r.seq===3));
  await assert.rejects(runtime(async tx=>{await tx`select records_api.execute_command(${work}::uuid,'work',1,'work.create','{"title":"rollback"}'::jsonb,'rollback',null)`;throw Error('rollback');}),/rollback/);
  const many=await Promise.all(Array.from({length:12},(_,i)=>command({title:`${i}`},`key-${i}`)));assert.deepEqual(many.map(r=>r.seq).sort((a,b)=>a-b),Array.from({length:12},(_,i)=>i+4));
- const changes=await runtime(async tx=>(await tx`select records_api.pull_changes(${work}::uuid,0,500) result`)[0].result);assert.equal(changes.changes.length,15);assert.equal(changes.cursor,15);
+ const changes=await runtime(async tx=>(await tx`select records_api.pull_changes(${work}::uuid,0,500) result`)[0].result);// The first work command also journals the seven default workflow states (migration 010).
+ assert.equal(changes.changes.filter(c=>c.entity==='work_item').length,15);assert.equal(changes.changes.length,22);assert.equal(changes.cursor,15);
  let signal; const locked=new Promise(resolve=>{signal=resolve;});
  const slow=runtime(async tx=>{const r=(await tx`select records_api.execute_command(${work}::uuid,'work',1,'work.create','{"title":"slow"}'::jsonb,'slow',null) result`)[0].result;signal();await tx`select pg_sleep(0.1)`;return r;});
  await locked;
  const fast=command({title:'fast'},'fast');
  assert.equal((await slow).seq,16);assert.equal((await fast).seq,17);
- const snapshot=await runtime(async tx=>(await tx`select records_api.snapshot_records(${work}::uuid,'work',1) result`)[0].result);assert.equal(snapshot.seq,17);assert.equal(snapshot.records.length,16);assert.equal(snapshot.complete,true);
+ const snapshot=await runtime(async tx=>(await tx`select records_api.snapshot_records(${work}::uuid,'work',1) result`)[0].result);assert.equal(snapshot.seq,17);assert.equal(snapshot.records.filter(r=>r.entity==='work_item').length,16);assert.equal(snapshot.records.length,23);assert.equal(snapshot.complete,true);
  await assert.rejects(runtime(tx=>tx`select records_api.snapshot_records(${work}::uuid,'work',1,1)`),e=>e.code==='PT413');
  await assert.rejects(runtime(tx=>tx`select records_api.read_records(${work}::uuid,null,null)`,claims(work,binding,[])),e=>e.code==='PT404');
  await assert.rejects(runtime(tx=>tx`select records_api.read_records(${work}::uuid,'work',1,null,null,null)`),e=>e.code==='PT400');

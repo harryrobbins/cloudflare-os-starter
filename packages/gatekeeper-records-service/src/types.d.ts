@@ -25,9 +25,11 @@ export interface RecordsServiceSession {
    */
   snapshot(limit?: number): Promise<RecordsSnapshot>;
   /**
-   * Journal entries after `after` (a snapshot's or earlier page's `seq`/`cursor`), at most 100
-   * per page. Pass the last `permission_epoch`; `reset_required` means discard cached records and
-   * take a new snapshot.
+   * Journal entries after `after` (a snapshot's or earlier page's `seq`/`cursor`), about 100 per
+   * page. A page never splits a commit: entries sharing a `seq` (for example a datastore's first
+   * `work` command, which also creates the default workflow states) arrive together, so a page can
+   * run a few entries over. Pass the last `permission_epoch`; `reset_required` means discard cached
+   * records and take a new snapshot.
    */
   changes(after?: number, epoch?: number): Promise<RecordsChanges>;
   /**
@@ -118,6 +120,13 @@ export interface RecordsRecord {
   entity: string;
   /** The journal sequence of the record's last change; pass it as `revision` to update. */
   revision: number;
+  /** Actor who created the record, e.g. `cloudflare-os:ada@example.com`; set by the service. */
+  created_by?: string;
+  /** Actor of the record's last change; set by the service. */
+  updated_by?: string;
+  /** Present on modules with ownership rules. */
+  owner?: string;
+  /** Fields per the module's profile; empty (null) fields are absent. */
   data: Record<string, unknown>;
 }
 
@@ -126,13 +135,32 @@ export interface RecordsSnapshot { records: RecordsRecord[]; seq: number; permis
 
 export interface RecordsChange {
   seq: number;
+  /** Position within the commit `seq`; 0 is the command's own record. */
   ordinal: number;
   entity: string;
   record_id: string;
   revision: number;
+  /** Actor who made this change, e.g. `cloudflare-os:ada@example.com`. */
+  actor: string;
   /** The record's data after this change. */
   data: Record<string, unknown>;
 }
+
+/**
+ * Commands of the bundled `work` module (API v1). All need `work.write`; updates need `revision`.
+ * Creates may pass a client `id` (UUID), unique across every work entity of the datastore.
+ */
+export type RecordsWorkCommand =
+  | "work.create" | "work.update"
+  | "work.project.create" | "work.project.update"
+  | "work.cycle.create" | "work.cycle.update"
+  | "work.state.create" | "work.state.update"
+  | "work.label.create" | "work.label.update"
+  | "work.relation.create" | "work.relation.update"
+  | "work.comment.create" | "work.comment.update";
+
+/** Entities of the bundled `work` module (API v1). */
+export type RecordsWorkEntity = "work_item" | "project" | "cycle" | "workflow_state" | "label" | "relation" | "comment";
 
 export interface RecordsChanges { changes: RecordsChange[]; cursor: number; permission_epoch: number }
 

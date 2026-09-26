@@ -110,3 +110,32 @@ test('restricted fields are optional, marked in JSON Schema, and metadata names 
     assert.ok(validateProfile(clash).some(e=>/reserved/.test(e)),name);
   }
 });
+
+test('work profile 1.1 adds the planning model additively to the executable 1.0 profile',async()=>{
+  const {validateUpgrade}=await import('../src/index.ts');
+  const {getRuntimeProfile}=await import('../src/bundled.ts');
+  const previousProfile:Profile=read('test/fixtures/work-profile-1.0.0.json'); const nextProfile=getRuntimeProfile('work')!;
+  assert.deepEqual(validateProfile(nextProfile,catalogue),[]);
+  const commands=(names:string[],entity:(name:string)=>string)=>Object.fromEntries(names.map(name=>[name,{entity:entity(name),scope:'work.write'}]));
+  const previous:ModuleManifest={id:'work',version:'1.0.0',apiMajor:1,profile:previousProfile,scopes:['work.read','work.write'],commands:commands(['work.create','work.update'],()=>'work_item'),migrations:[]};
+  const entityOf:Record<string,string>={project:'project',cycle:'cycle',state:'workflow_state',label:'label',relation:'relation',comment:'comment'};
+  const names=['work.create','work.update',...Object.keys(entityOf).flatMap(k=>[`work.${k}.create`,`work.${k}.update`])];
+  const next:ModuleManifest={...previous,version:'1.1.0',profile:nextProfile,commands:commands(names,name=>entityOf[name.split('.')[1]!]??'work_item')};
+  assert.deepEqual(validateUpgrade(previous,next),[]);
+  assert.deepEqual(Object.keys(nextProfile.entities),['work_item','project','cycle','workflow_state','label','relation','comment']);
+  const records:Record<string,Record<string,unknown>>={
+    work_item:{title:'Fix login',status:'active',state:'in_progress',description:'',extensions:{},number:42,priority:1,assignee:'cloudflare-os:ada@example.com',labels:['bug'],estimate:2.5,start_date:'2026-09-01',due_date:'2026-09-30',parent:'urn:uuid:1',project:'urn:uuid:2',cycle:'urn:uuid:3',rank:'0|hzzzzz:',archived:false},
+    project:{name:'Website relaunch',description:'',state:'active',lead:'cloudflare-os:ada@example.com',start_date:'2026-09-01',target_date:'2026-12-01',color:'#aa3300',archived:false},
+    cycle:{name:'Sprint 1',number:1,starts_on:'2026-09-07',ends_on:'2026-09-20',goal:'Beta'},
+    workflow_state:{key:'in_review',name:'In Review',kind:'started',category:'active',position:4,color:'#0f7488',wip_limit:3},
+    label:{key:'bug',name:'Bug',color:'#d73a4a',description:'',archived:false},
+    relation:{from:'urn:uuid:1',to:'urn:uuid:2',kind:'blocks',active:true},
+    comment:{item:'urn:uuid:1',body:'Looks good',edited:false},
+  };
+  for(const [entity,record] of Object.entries(records)) {
+    assert.deepEqual(validateRecord(nextProfile,entity,record),[],entity);
+    assert.deepEqual(fromJsonLd(nextProfile,entity,toJsonLd(nextProfile,entity,record)),record,entity);
+  }
+  assert.ok(validateRecord(nextProfile,'work_item',{title:'X',priority:5}).length);
+  assert.ok(validateRecord(nextProfile,'work_item',{title:'X',labels:Array.from({length:21},(_,i)=>`l${i}`)}).length);
+});

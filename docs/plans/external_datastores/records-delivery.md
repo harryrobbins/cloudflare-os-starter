@@ -140,6 +140,23 @@ commands (2026-09-26).
     ([benchmark](../../../packages/records-service/docs/benchmark-views.md)): page of 100 at
     6.8 ms p50 vs 3.3 ms; 5,000-record snapshot at 104 ms vs 42 ms.
 
+## 6. Work planning model (migration 010)
+
+Plan: [Work Board flagship](../work-board/plan.md#data-model-work-v1-additive-records-migration-010).
+`work` API v1 grows additively (profile 1.1.0) so the Work Board can be a real project tracker.
+
+- [x] Item planning fields (`number`, `state`, `priority`, `assignee`, `labels`, `estimate`, dates,
+  `parent`, `project`, `cycle`, `rank`, `archived`) and entities `project`, `cycle`,
+  `workflow_state`, `label`, `relation`, `comment`, each with a view, history and 14 commands.
+- [x] Integrity in SQL handlers owned by `records_commander`: same-datastore references, no parent
+  cycles, no overlapping cycles, one active relation per kind and pair, state/status agreement,
+  gapless numbers. See [sql/README.md](../../../packages/records-service/sql/README.md#work-planning-model-010).
+- [x] Default workflow states seeded (and journalled) by a datastore's first command; existing
+  datastores backfilled with an epoch bump. Change pages no longer split a commit.
+- [x] `test/work-planning.test.ts` (embedded Postgres) and `validateUpgrade` from profile 1.0.0.
+- [ ] Deploy 010 to ms and the Work Board revision that uses it.
+- [ ] Gateway/connector pass-through of safe PT4xx messages (today they collapse to one per status).
+
 ## Evidence log
 
 Implementation begins with three delegated workstreams: catalogue/model semantics, SQL authority,
