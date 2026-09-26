@@ -67,7 +67,8 @@ include triage and backlog.
 ```js
 // Recipe: burndown for a named cycle
 const vocab = await env.WorkBoard.vocabulary();
-const name = vocab.cycles.at(-2)?.name ?? "current";      // e.g. "Cycle 24"; use the name the person gave
+// Use the cycle the person named, e.g. "Cycle 24"; this example takes the one running today.
+const name = vocab.cycles.find((c) => c.starts_on <= vocab.today && vocab.today <= c.ends_on)?.name ?? "current";
 const burn = await env.WorkBoard.dataset("cycle_burndown", { params: { cycle: name } });
 const report = await env.WorkBoard.saveReport({
   id: `burndown-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,

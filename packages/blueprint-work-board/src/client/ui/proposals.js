@@ -159,10 +159,11 @@ export function createProposalsTray({ layers, controller: c }) {
         title: "Proposals", size: "lg", className: "tray",
         description: "Changes suggested by the Workshop agent or Jev. Nothing changes until you apply it; applied changes are attributed to you and go through approval like any other change.",
         content: () => body, onClose: () => { dlg = null; },
-        initialFocus: () => /** @type {HTMLElement|null} */ (body.querySelector(`[data-proposal="${focusId ?? ""}"] input:not(:disabled), [data-proposal="${focusId ?? ""}"] button`) ?? body.querySelector("input:not(:disabled), .proposal button, summary")),
+        initialFocus: () => null,
       });
       render();
-      const target = /** @type {HTMLElement|null} */ (body.querySelector(`[data-proposal="${focusId ?? ""}"] input:not(:disabled)`) ?? body.querySelector(".proposal input:not(:disabled), .proposal button, summary"));
+      const target = /** @type {HTMLElement|null} */ (body.querySelector(`[data-proposal="${focusId ?? ""}"] input:not(:disabled)`)
+        ?? body.querySelector(".proposal input:not(:disabled)") ?? body.querySelector(".proposal button, summary"));
       target?.focus();
     },
     render,

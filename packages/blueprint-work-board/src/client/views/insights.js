@@ -65,6 +65,7 @@ export function createInsightsView({ doc, onAction }) {
   let theme = currentTheme(win);
   /** @type {string|null} */
   let focusId = null;
+  let resizeQueued = false;
 
   const media = win.matchMedia?.("(prefers-color-scheme: dark)");
   media?.addEventListener?.("change", () => { theme = currentTheme(win); for (const c of charts.values()) c.sig = ""; if (model) update(model); });
@@ -76,7 +77,8 @@ export function createInsightsView({ doc, onAction }) {
       const c = charts.get(id);
       if (c && Math.abs(c.width - e.contentRect.width) > 24) { c.sig = ""; changed = true; }
     }
-    if (changed && model) update(model);
+    // Redraw on the next frame: drawing inside the observer would resize and loop.
+    if (changed && model && !resizeQueued) { resizeQueued = true; win.requestAnimationFrame(() => { resizeQueued = false; if (model) update(model); }); }
   }) : null;
 
   /** @param {InsightsModel} m */
