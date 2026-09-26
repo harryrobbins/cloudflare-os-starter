@@ -125,8 +125,7 @@ export function createListView({ doc, onAction }) {
       const height = scroller.clientHeight || view.height || 800;
       start = Math.max(0, Math.floor(scroller.scrollTop / ROW_H) - 10);
       end = Math.min(rows.length, Math.ceil((scroller.scrollTop + height) / ROW_H) + 10);
-      const fi = m.focus ? rows.findIndex((r) => r.key === m.focus?.row) : -1;
-      if (fi >= 0 && (fi < start || fi >= end)) { start = Math.min(start, fi); end = Math.max(end, fi + 1); }
+      // A focused row outside the window is brought back by focusCurrent() (it scrolls there).
     }
     body.style.paddingTop = `${start * ROW_H}px`;
     body.style.paddingBottom = `${(rows.length - end) * ROW_H}px`;

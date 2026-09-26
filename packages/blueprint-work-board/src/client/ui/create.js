@@ -54,7 +54,7 @@ export function openCreate(o) {
   let saveTimer = /** @type {ReturnType<typeof setTimeout>|null} */ (null);
   const persist = () => {
     if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => o.saveDraft(title.value || description.value ? { title: title.value, description: description.value } : null), 500);
+    saveTimer = setTimeout(() => o.saveDraft(title.value || description.value ? { title: title.value.slice(0, 600), description: description.value.slice(0, 2000) } : null), 500);
   };
   title.addEventListener("input", () => { renderProps(); persist(); error.textContent = ""; });
   description.addEventListener("input", persist);
