@@ -3,7 +3,9 @@
 A fast, keyboard-first project tracker for **work items** stored in a Records datastore. Plan with
 workflow states, priorities, assignees, labels, estimates, dates, projects, cycles, sub-issues and
 relations; view them as a board (with swimlanes) or a list; filter with the Work Query Language
-(WQL); save shared views.
+(WQL); save shared views; see how work flows in **Insights** (cumulative flow, cycle time,
+burndown and burnup, throughput, created vs resolved, workload, dependencies); and review changes
+the Workshop agent or Jev **proposes**.
 
 Every item lives in the Records datastore, not in this gadget. Every change is an approved,
 attributed command: the board shows what Records holds, and your pending changes are shown as
@@ -22,6 +24,13 @@ Open the gadget's Connections tab and add a **Records** datastore that uses the 
 - **Read only** shows the board without editing controls.
 - A datastore with another module (for example `messaging`) is refused with "This board needs a
   work v1 datastore".
+
+**Optional: Jev triage.** Add the **Jev decisions** connector (`jev://decisions`) named `JEV` to get
+triage suggestions (priority, state, labels, possible duplicates) with calibrated confidence. The
+board works fully without it. (The connection is added in the Connections tab rather than asked
+for when the board is created, because the platform makes every declared binding mandatory at
+creation, and not every deployment runs Jev.) Item titles, descriptions and the board's label
+names are sent to Jev (through OpenRouter) for each item you ask about; nothing else.
 
 The full planning model (states, priorities, labels, projects, cycles, relations, comments, item
 numbers) needs Records migration 010. On an older datastore the board still works with the basic
@@ -61,6 +70,48 @@ model: columns Open, Active and Done, and items with a title and description.
   property on all of them (one change per item).
 - **Undo** your own last change from its notification or with Ctrl/⌘+Z; it sends the inverse
   change once the original is saved.
+
+## Insights
+
+**Insights** (next to Board and List, or `G` then `I`) is a grid of reports. Each has a chart, a
+one-sentence summary ("Scope grew 12% this cycle; 18 of 40 points done; projected to finish 2 days
+late"), **Data** (an accessible table of what is plotted) and a menu: edit (title, filter,
+parameters, spec), duplicate, view spec, delete or hide. The view's filter applies to every report,
+so `project:"Billing v2"` turns the whole screen into that project's reports.
+
+- **Built in:** cumulative flow, cycle time (with the median, the 85th percentile and a rolling
+  average), cycle burndown and burnup (choose the cycle; the current one by default), throughput
+  per week, created vs resolved, workload by assignee, and the dependency graph (arrows from
+  blocker to blocked; chains in orange; **Only chains** hides single blocks; a legend explains the
+  colours and shapes; click a node, or Tab into the graph and use the arrow keys and Enter, to open
+  an item). Burndown and burnup show the ideal line, a projection at the pace so far and today.
+- **Reports are shared** by everyone using the board. Built-ins can be edited (**edited** tag;
+  "Reset" restores them) and hidden (bring them back from **Hidden**). **New report** takes a
+  Vega-Lite or Vega spec over a dataset; the Workshop agent can write them for you ([SKILL.md](SKILL.md)).
+- **Ask the agent** shows ready-to-paste prompts for the Workshop agent (select and copy them),
+  for example "Using the Work Board skill, build a burndown for Cycle 24 split by project".
+- **Time:** reports read the datastore's change journal from the start, so they cover changes made
+  before the board existed. Days are UTC dates. Charts refresh at most every 5 seconds as changes
+  arrive.
+- Charts follow the light or dark theme with colour-blind-safe colours; shape and text carry
+  meaning too (blocked items are diamonds; every chart has a summary and a data table).
+
+## Proposals
+
+The Workshop agent cannot change items; it **proposes** changes, and so does Jev triage. The
+**Proposals** button (with a count; `G` then `P`) opens the tray: each proposal shows who proposed
+it, why, and every change as a readable line ("TW-12 priority High → Urgent", "New sub-issue under
+TW-7: …"). Tick the ones you agree with (all are ticked to start; **Select none** clears them) and
+**Apply selected**. Each change is then sent as your own change, through approval like any other,
+and the tray shows its progress (sent, awaiting approval, saved, not saved). A change to an item
+someone edited since it was proposed is marked **Needs refresh**; **Refresh stale changes**
+re-checks them against the items as they are now. **Withdraw** closes a proposal you do not want.
+
+**Jev triage** (with the optional `JEV` connection): **Suggest** in an item's details, or
+**Triage with Jev** in the Triage view or the selection bar (up to 20 items at a time). Suggestions
+Jev is at least 90% sure of are ticked, 50–90% are shown unticked, less likely ones are hidden;
+confidence is written out ("94% likely"). **Apply selected** applies them as your changes (recorded
+as a proposal from Jev), or **Save as proposal** to review later.
 
 ## How changes are saved
 
@@ -151,7 +202,8 @@ work. Every action is also in the command palette, which shows its shortcut.
 | `X`, Ctrl/⌘+A, Escape | Select; select all shown; clear selection or close |
 | `S` `A` `I` `P` `L` `E` `D` | State, assign, assign to me, priority, labels, estimate, due date |
 | `M`, Shift+arrows | Move menu; keyboard move |
-| Ctrl/⌘+B, `G` then `B` / `L`, Ctrl/⌘+Z, `?` | Board/list, go to board / list, undo, shortcut sheet |
+| Ctrl/⌘+B, `G` then `B` / `L` / `I`, Ctrl/⌘+Z, `?` | Board/list, go to board / list / insights, undo, shortcut sheet |
+| `G` then `P` | Proposals |
 
 ## Accessibility
 
@@ -184,6 +236,11 @@ without record times, times appear only for changes the board saw arrive.)
 
 ## Programmatic use (agents)
 
+**For reporting, triage and proposing changes, follow [SKILL.md](SKILL.md)**: recipes you can run
+as written (what's blocking the cycle, who is overloaded, burndowns, custom charts, WQL from a
+request, triage, breaking work down, re-prioritising), the full RPC reference and the data
+dictionary of every dataset.
+
 Call these through the gadget's binding (for example `env.WorkBoard`) from `executeCode`. Reads
 use the same WQL as the board, so `query()` returns exactly what a person sees with that filter.
 
@@ -200,6 +257,10 @@ await env.WorkBoard.people();              // [{ actor, name, alias, displayName
 await env.WorkBoard.setPersonAlias("records:principal:…", "Import bot");
 await env.WorkBoard.getSetup();            // { connected, requirement, connection, description, error }
 await env.WorkBoard.snapshot(5000);        // raw Records snapshot; changes(seq, epoch), records(query), model() also pass through
+await env.WorkBoard.summary({ query: "cycle:current", by: ["assignee", "kind"] });   // counts for a chat answer
+await env.WorkBoard.history("WRK-12");     // the item's changes as sentences, newest first
+await env.WorkBoard.datasets();            // the data dictionary; dataset(name, { params, query, limit }) reads one
+await env.WorkBoard.propose([{ command: "work.update", input: { id: "WRK-12", priority: "urgent" }, reason: "Customer escalation" }], { title: "Escalate WRK-12" });
 ```
 
 `query` options: `limit` (1–500, default 50), `fields` (default: key, title, state, status,
@@ -208,5 +269,5 @@ archived), `viewer` (a Records actor for `me`). Errors are `code: detail` string
 `invalid_request: Unknown field “prority” (at character 1) Did you mean “priority”?`.
 
 **Agents cannot change items through this board.** A change needs a viewer assertion, which only
-a signed-in person using the board can obtain. Describe the change for the person to make, or give
-them the exact values.
+a signed-in person using the board can obtain. Use `propose()` instead: the person applies your
+proposal from the board's Proposals tray, and the change is attributed to them.

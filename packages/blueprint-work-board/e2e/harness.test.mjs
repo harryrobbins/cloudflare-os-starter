@@ -7,6 +7,7 @@
 
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { appState, axe, paneFrame, problems, screenshot, smallTargets, startHarness, until, waitReady } from "./helpers.mjs";
 
 /** @type {Awaited<ReturnType<typeof startHarness>>} */
@@ -354,5 +355,194 @@ describe("performance", () => {
     assert.ok(firstRender > 0 && firstRender < 300, `first render ${firstRender} ms`);
     assert.ok(timings.filter < 50 && timings.regroupLanes < 50, `filter/regroup ${JSON.stringify(timings)}`);
     await assertClean(page, errors);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Insights, proposals, Jev and the agent skill
+
+/** Waits until every visible report card has drawn its chart (or an empty state). @param {import("playwright").Frame} frame */
+const chartsDrawn = (frame) => frame.waitForFunction(() => {
+  const cards = [...document.querySelectorAll(".report-card")];
+  return cards.length > 0 && cards.every((c) => c.querySelector(".report-chart svg, .report-empty")) && !globalThis.workBoard.app.insights.loading;
+}, null, { timeout: 20_000 });
+
+describe("insights", () => {
+  for (const scheme of /** @type {const} */ (["light", "dark"])) {
+    for (const [w, hgt] of [[375, 812], [768, 1024], [1440, 900]]) {
+      it(`reports at ${w}px, ${scheme}: every chart draws, axe clean, 24px targets`, async () => {
+        const { page, frame, errors } = await h.open({ seed: 300, viewport: { width: w, height: hgt }, colorScheme: scheme });
+        await inApp(frame, "(app) => app.setLayout('insights')");
+        await chartsDrawn(frame);
+        assert.equal(await frame.locator(".report-card").count(), 8);
+        assert.equal(await frame.locator(".report-chart svg").count(), 8);
+        await screenshot(page, `insights-${w}-${scheme}`);
+        await frame.locator('[data-report="dependencies"]').scrollIntoViewIfNeeded();
+        await screenshot(page, `insights-${w}-${scheme}-end`);
+        if (w === 1440) {
+          await frame.locator('[data-report="cfd"] [data-focus-key="data"]').click();
+          await frame.locator('[data-report="cfd"] table').waitFor();
+          await frame.locator('[data-report="cfd"]').scrollIntoViewIfNeeded();
+          await screenshot(page, `insights-${w}-${scheme}-table`);
+        }
+        const overflow = await frame.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+        assert.ok(overflow <= 0, `page scrolls sideways by ${overflow}px`);
+        assert.deepEqual(await axe(frame), [], `axe ${w} ${scheme}`);
+        assert.deepEqual(await smallTargets(frame), [], `targets ${w} ${scheme}`);
+        await assertClean(page, errors);
+      });
+    }
+  }
+
+  it("keyboard: G then I opens insights, arrows move between reports, the graph is operable", async () => {
+    const { page, frame, errors } = await h.open({ seed: 300 });
+    await focusBoard(frame);
+    await page.keyboard.press("g");
+    await page.keyboard.press("i");
+    await until(() => inApp(frame, "(app) => app.view.layout === 'insights'"), { message: "insights layout" });
+    await chartsDrawn(frame);
+    await frame.locator('[data-report="cfd"] h3').focus();
+    await page.keyboard.press("ArrowDown");
+    assert.match(await frame.evaluate(() => document.activeElement?.textContent ?? ""), /Cycle time/);
+    const node = frame.locator('[data-report="dependencies"] .dep-node[tabindex="0"]');
+    await node.focus();
+    const first = await node.getAttribute("aria-label");
+    await page.keyboard.press("ArrowRight");
+    const second = await frame.evaluate(() => document.activeElement?.getAttribute("aria-label"));
+    assert.notEqual(second, first);
+    await page.keyboard.press("Enter");
+    await until(() => inApp(frame, "(app) => Boolean(app.detail.itemId)"), { message: "item opened" });
+    assert.match(second ?? "", new RegExp(`^${await inApp(frame, "(app, store) => store.index().items.get(app.detail.itemId).key")}:`));
+    await inApp(frame, "(app) => app.closeDetail()");
+    // Only chains: fewer nodes, still operable; a legend explains shapes and colours.
+    const all = await frame.locator('[data-report="dependencies"] .dep-node').count();
+    await frame.locator('[data-report="dependencies"] .seg', { hasText: "Only chains" }).click();
+    await until(async () => { const n = await frame.locator('[data-report="dependencies"] .dep-node').count(); return n > 0 && n < all; }, { message: "chains only" });
+    assert.match(await frame.locator('[data-report="dependencies"] .graph-legend').textContent() ?? "", /Blocked.*Part of a chain/);
+    await frame.locator('[data-report="dependencies"]').scrollIntoViewIfNeeded();
+    await screenshot(page, "insights-1440-light-chains");
+    // Ask the agent: selectable prompts.
+    await frame.getByRole("button", { name: "Ask the agent" }).click();
+    const prompt = await frame.locator("#wb-ask-main").inputValue();
+    assert.match(prompt, /^Using the Work Board skill, build a burndown for Cycle 24 split by project/);
+    await screenshot(page, "insights-ask-agent-1440-light");
+    assert.deepEqual(await axe(frame), []);
+    await page.keyboard.press("Escape");
+    await assertClean(page, errors);
+  });
+
+  it("2,000 items: dataset computation and the batched insights read", async () => {
+    const { page, frame, errors } = await h.open({ seed: 2000 });
+    const timing = await page.evaluate(async () => {
+      const reports = (await window.harness.rpc("listReports")).map((r) => ({ id: r.id, dataset: r.dataset, params: r.params, query: r.query }));
+      const t0 = performance.now();
+      await window.harness.rpc("insights", { reports });
+      const cold = performance.now() - t0;
+      const t1 = performance.now();
+      await window.harness.rpc("insights", { reports, query: "-label:docs" });
+      const filtered = performance.now() - t1;
+      /** @type {Record<string, number>} */
+      const each = {};
+      for (const d of await window.harness.rpc("datasets")) {
+        const t = performance.now();
+        await window.harness.rpc("dataset", d.name, { query: "priority:<=medium" });
+        each[d.name] = Math.round((performance.now() - t) * 10) / 10;
+      }
+      return { cold: Math.round(cold), filtered: Math.round(filtered), each, journal: window.harness.fake.journal.length };
+    });
+    await inApp(frame, "(app) => app.setLayout('insights')");
+    const t = Date.now();
+    await chartsDrawn(frame);
+    const drawn = Date.now() - t;
+    console.log(`# perf insights 2000 items (journal ${timing.journal} entries): first read incl. full journal backfill ${timing.cold} ms; filtered re-read of 8 reports ${timing.filtered} ms; per dataset ${JSON.stringify(timing.each)} ms; screen drawn in ${drawn} ms`);
+    assert.ok(timing.filtered < 500, `8 reports in ${timing.filtered} ms`);
+    await assertClean(page, errors);
+  });
+});
+
+describe("proposals and Jev", () => {
+  it("keyboard only: G then P opens the tray; untick one change, apply the rest as the viewer", async () => {
+    const { page, frame, errors } = await h.open({ seed: 120, approval: "manual" });
+    const p = await page.evaluate(() => window.harness.rpc("propose", [
+      { command: "work.update", input: { id: "TW-12", priority: "urgent" }, reason: "Customer escalation" },
+      { command: "work.update", input: { id: "TW-14", title: "Renamed by the agent" } },
+      { command: "work.create", input: { title: "Write the migration guide", parent: "TW-12" } },
+    ], { title: "Escalate TW-12", reason: "Acme is blocked." }));
+    await inApp(frame, "(app, store) => store.loadProposals()");
+    await frame.locator(".proposals-btn .badge", { hasText: "1" }).waitFor();
+    await focusBoard(frame);
+    await page.keyboard.press("g");
+    await page.keyboard.press("p");
+    await frame.locator(".tray").waitFor();
+    assert.equal(await frame.evaluate(() => document.activeElement?.getAttribute("type")), "checkbox", "focus starts on the first change");
+    // Tab to the second change's checkbox and untick it with Space.
+    for (let i = 0; i < 6 && !(await frame.evaluate(() => document.activeElement?.id?.endsWith("-c2"))); i++) await page.keyboard.press("Tab");
+    await page.keyboard.press("Space");
+    for (let i = 0; i < 12 && !(await frame.evaluate(() => document.activeElement?.textContent ?? "")).startsWith("Apply"); i++) await page.keyboard.press("Tab");
+    assert.equal(await frame.evaluate(() => document.activeElement?.textContent), "Apply 2 selected");
+    await page.keyboard.press("Enter");
+    const actions = await until(async () => { const x = await pending(page); return x.length === 2 && x; }, { message: "2 pending" });
+    assert.deepEqual(actions.map((a) => a.actor), ["cloudflare-os:ada@example.com", "cloudflare-os:ada@example.com"]);
+    const stored = await until(async () => { const x = await page.evaluate((id) => window.harness.rpc("getProposal", id), p.id); return x.status === "partial" && x; }, { message: "recorded" });
+    assert.equal(stored.applied_by.name, "Ada Lovelace");
+    assert.ok(await frame.evaluate(() => document.querySelector(".tray")?.contains(document.activeElement)), "focus stays in the tray");
+    await screenshot(page, "proposals-applied-1440-light");
+    assert.deepEqual(await axe(frame), []);
+    await page.keyboard.press("Escape");
+    await frame.locator(".tray").waitFor({ state: "detached" });
+    await assertClean(page, errors);
+  });
+
+  it("Jev: Triage with Jev from the Triage view, confidence as text, applied as a proposal", async () => {
+    const { page, frame, errors } = await h.open({ seed: 120 });
+    await inApp(frame, "(app) => app.loadView({ ...app.view, id: 'builtin:triage', name: 'Triage', query: 'kind:triage', layout: 'list' })");
+    await frame.getByRole("button", { name: "Triage with Jev" }).click();
+    await frame.locator(".suggest-list input").first().waitFor();
+    // Duplicates name the candidate and can be peeked; each item shows its current values.
+    const dup = frame.locator(".peek-dup").first();
+    if (await dup.count()) {
+      await dup.locator("summary").click();
+      assert.match(await dup.textContent() ?? "", /^Peek TW-\d+TW-\d+ .+/);
+    }
+    assert.ok(await frame.locator(".suggest-now").count() > 0);
+    assert.ok(await frame.locator(".suggest-foot .btn.primary").isVisible(), "footer pinned");
+    await screenshot(page, "jev-triage-1440-light");
+    const rows = await frame.locator(".suggest-list li").allTextContents();
+    assert.ok(rows.length > 0 && rows.every((r) => /\d+% likely/.test(r)), rows.slice(0, 3).join(" | "));
+    assert.ok(await frame.locator(".suggest-list input:checked").count() > 0, "some suggestions pre-selected");
+    assert.deepEqual(await axe(frame), []);
+    const journalBefore = await page.evaluate(() => window.harness.fake.journal.length);
+    await frame.locator(".suggest .btn.primary").click();
+    await until(async () => (await page.evaluate(() => window.harness.fake.journal.length)) > journalBefore, { message: "applied" });
+    const [p] = await page.evaluate(() => window.harness.rpc("listProposals", { status: "all" }));
+    assert.equal(p.proposed_by.kind, "jev");
+    assert.ok((await page.evaluate(() => window.harness.jev.calls.length)) >= 1);
+    await assertClean(page, errors);
+  });
+
+  it("without the optional Jev connection the board offers no Jev actions", async () => {
+    const { page, frame, errors } = await h.open({ seed: 40, extra: "&jev=0" });
+    await inApp(frame, "(app, store) => app.openDetail(store.index().itemList[0], { focus: true })");
+    assert.equal(await frame.getByRole("button", { name: "Suggest" }).count(), 0);
+    await assert.rejects(page.evaluate(() => window.harness.rpc("triage", "TW-1")), /not_connected/);
+    await assertClean(page, errors);
+  });
+});
+
+describe("agent skill", () => {
+  it("every SKILL.md recipe runs verbatim against the harness server RPC", async () => {
+    const { page } = await h.open({ seed: 300 });
+    const skill = readFileSync(new URL("../src/SKILL.md", import.meta.url), "utf8");
+    const recipes = [...skill.matchAll(/```js\n\/\/ Recipe: ([^\n]+)\n([\s\S]*?)```/g)].map((m) => ({ name: m[1], code: m[2] }));
+    assert.equal(recipes.length, 8);
+    for (const r of recipes) {
+      const out = await page.evaluate(async (code) => {
+        const WorkBoard = new Proxy({}, { get: (_t, m) => async (...args) => structuredClone(await window.harness.rpc(m, ...structuredClone(args))) });
+        const fn = new (Object.getPrototypeOf(async function () {}).constructor)("env", code);
+        try { return { ok: true, value: await fn({ WorkBoard }) }; } catch (e) { return { ok: false, error: String(e?.message ?? e) }; }
+      }, r.code);
+      assert.ok(out.ok, `${r.name}: ${out.error}`);
+      console.log(`# recipe "${r.name}": ${JSON.stringify(out.value).slice(0, 160)}`);
+    }
   });
 });

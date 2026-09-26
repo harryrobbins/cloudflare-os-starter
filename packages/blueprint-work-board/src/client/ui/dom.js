@@ -4,6 +4,8 @@
 // reused (keeping focus, scroll and DOM identity), moved only when out of order, created and
 // removed as needed.
 
+export { shortDate } from "../../shared/model/work.js";
+
 /**
  * @param {string} tag
  * @param {Record<string, any>|null} [attrs] `on*` keys add listeners; `class`, `text`, `hidden`,
@@ -128,14 +130,6 @@ export function relativeTime(t, now = Date.now()) {
   if (s < 172_800) return "yesterday";
   if (s < 30 * 86_400) return `${Math.round(s / 86_400)} days ago`;
   return new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-}
-
-/** "30 Sep", or "30 Sep 2027" when not this year. @param {string} day @param {string} today */
-export function shortDate(day, today) {
-  const d = new Date(`${day}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return day;
-  const sameYear = day.slice(0, 4) === today.slice(0, 4);
-  return d.toLocaleDateString(undefined, sameYear ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" });
 }
 
 /** A stable DOM id fragment from any string. @param {string} s */

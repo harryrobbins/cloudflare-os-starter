@@ -52,6 +52,44 @@ export class Gadget extends DurableObject {
   /** @param {string} key */
   item(key) { return this.api.item(key); }
   vocabulary() { return this.api.vocabulary(); }
+  /** @param {string} key @param {any} [opts] */
+  history(key, opts) { return this.api.history(key, opts); }
+  /** @param {any} [opts] */
+  summary(opts) { return this.api.summary(opts); }
+
+  // Insights (datasets and reports)
+  datasets() { return this.api.datasets(); }
+  /** @param {string} name @param {any} [opts] */
+  dataset(name, opts) { return this.api.dataset(name, opts); }
+  /** @param {any} [opts] */
+  insights(opts) { return this.api.insights(opts); }
+  listReports() { return this.api.listReports(); }
+  /** @param {any} doc @param {any} [opts] */
+  saveReport(doc, opts) { return this.api.saveReport(doc, opts); }
+  /** @param {string} id @param {any} [opts] */
+  deleteReport(id, opts) { return this.api.deleteReport(id, opts); }
+  /** @param {string} id */
+  restoreReport(id) { return this.api.restoreReport(id); }
+  /** @param {any} doc */
+  validateReport(doc) { return this.api.validateReport(doc); }
+
+  // Proposals (agents propose; people apply)
+  /** @param {any[]} changes @param {any} [opts] */
+  propose(changes, opts) { return this.api.propose(changes, opts); }
+  /** @param {any} [opts] */
+  listProposals(opts) { return this.api.listProposals(opts); }
+  /** @param {string} id */
+  getProposal(id) { return this.api.getProposal(id); }
+  /** @param {string} id @param {any} [opts] */
+  withdrawProposal(id, opts) { return this.api.withdrawProposal(id, opts); }
+  /** @param {string} id */
+  refreshProposal(id) { return this.api.refreshProposal(id); }
+  /** @param {string} id @param {any[]} outcomes @param {any} [opts] */
+  recordProposalOutcome(id, outcomes, opts) { return this.api.recordProposalOutcome(id, outcomes, opts); }
+
+  // Jev triage (optional JEV binding)
+  /** @param {string|string[]} keys */
+  triage(keys) { return this.api.triage(keys); }
 
   // People (display names for Records actors)
   people() { return this.api.people(); }

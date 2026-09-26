@@ -16,6 +16,7 @@ import { FakeRecords } from "../test/fake-records.js";
 import { createGadgetApi, RPC_METHODS } from "../src/server/api.js";
 import { memoryStorage } from "../src/server/documents.js";
 import { SEED_PEOPLE, mulberry32, seedWork } from "./seed.js";
+import { createFakeJev } from "../test/fake-jev.js";
 
 const params = new URLSearchParams(location.search);
 
@@ -191,8 +192,11 @@ if (params.get("people") !== "0" && planning) {
     .then(() => facet.api.setPersonAlias("records:operator:seed", "Records setup"));
 }
 
+// The optional Jev decisions connector (JEV): a deterministic fake; ?jev=0 leaves it unconnected.
+const jev = params.get("jev") === "0" ? null : createFakeJev({ delayMs: 150 });
+
 function makeFacet() {
-  return { api: createGadgetApi({ getEnv: () => ({ RECORDS: session }), storage, now: clock }), generation: ++facetGeneration };
+  return { api: createGadgetApi({ getEnv: () => ({ RECORDS: session, ...(jev ? { JEV: jev } : {}) }), storage, now: clock }), generation: ++facetGeneration };
 }
 
 const sleep = (/** @type {number} */ ms) => new Promise((r) => setTimeout(r, ms));
@@ -314,6 +318,7 @@ const harness = {
   violations,
   logs,
   fake,
+  jev,
   storage,
   viewers: VIEWERS,
   get api() { return facet.api; },

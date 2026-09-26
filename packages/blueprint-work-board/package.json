@@ -18,6 +18,9 @@
     "jsdom": "26.1.0",
     "playwright": "1.61.0",
     "typescript": "catalog:",
+    "vega": "6.2.0",
+    "vega-interpreter": "2.2.1",
+    "vega-lite": "6.4.1",
     "vitest": "catalog:",
     "yjs": "13.6.31"
   }

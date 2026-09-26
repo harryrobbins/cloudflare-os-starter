@@ -14,7 +14,8 @@ export const KIND_LABELS = { triage: "Triage", backlog: "Backlog", unstarted: "U
 /** @type {Record<string, "open"|"active"|"done">} */
 export const CATEGORY_OF_KIND = { triage: "open", backlog: "open", unstarted: "open", started: "active", completed: "done", canceled: "done" };
 /** Default colour per kind (used when a state has no valid colour of its own). */
-export const KIND_COLORS = { triage: "#b45bcf", backlog: "#8a8f98", unstarted: "#6b7280", started: "#d99100", completed: "#2f9e5b", canceled: "#9aa0a6" };
+/** Hues match the charts' kind palette (client/ui/chart.js) where a state has no colour of its own. */
+export const KIND_COLORS = { triage: "#eb6834", backlog: "#4a3aa7", unstarted: "#e87ba4", started: "#eda100", completed: "#2a78d6", canceled: "#1baf7a" };
 
 /**
  * Workflow states Records seeds in a datastore's first planning command (migration 010), in the
@@ -218,4 +219,12 @@ export function addDays(day, days) {
 /** Whole days from `a` to `b` (YYYY-MM-DD). @param {string} a @param {string} b */
 export function daysBetween(a, b) {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+}
+
+/** "30 Sep", or "30 Sep 2027" when not this year. @param {string} day @param {string} today */
+export function shortDate(day, today) {
+  const d = new Date(`${day}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return day;
+  const sameYear = day.slice(0, 4) === today.slice(0, 4);
+  return d.toLocaleDateString(undefined, sameYear ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" });
 }

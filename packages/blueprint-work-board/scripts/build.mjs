@@ -2,6 +2,7 @@
 //   dist/server.js                 the `Gadget` Durable Object, one ESM module
 //   dist/client.js                 the UI, one ESM module (the iframe cannot import siblings)
 //   dist/README.md                 what the in-Workshop agent reads before calling the RPC surface
+//   dist/SKILL.md                  the reporting and triage skill (recipes, RPC, data dictionary)
 //   dist/service-requirement.json  the Records service requirement (work v1, scopes)
 // Output is deliberately unminified so the code stays legible in the Workshop editor.
 
@@ -42,6 +43,7 @@ export async function buildGadget(outDir = dist) {
     banner: { js: `// ${NAME} gadget client. Built from packages/blueprint-work-board; edit there, not here.` },
   });
   await copyFile(join(pkg, "src/README.md"), join(outDir, "README.md"));
+  await copyFile(join(pkg, "src/SKILL.md"), join(outDir, "SKILL.md"));
   await copyFile(join(pkg, "src/service-requirement.json"), join(outDir, "service-requirement.json"));
   return outDir;
 }

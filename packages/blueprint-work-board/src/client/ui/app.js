@@ -31,9 +31,19 @@ import { PRIORITIES, localDay } from "../../shared/model/work.js";
 import { rankAt } from "../../shared/rank.js";
 import { DEFAULT_SORT, compare, compile, format, fromChips, mentionsArchived, parse, suggest } from "../../shared/wql/index.js";
 import { fuzzyScore } from "./fuzzy.js";
+import { createInsightsView } from "../views/insights.js";
+import { createProposalsTray } from "./proposals.js";
+import { openSuggestions } from "./suggest.js";
+import { openReportEditor } from "./reports.js";
+import { applyProposal, changeState, outcomeOf } from "../store/apply.js";
+import { describe as describeWql } from "../../shared/wql/index.js";
+import { listDatasets } from "../../shared/datasets/index.js";
 
 registerLayout({ id: "board", label: "Board", icon: "board", create: (deps) => createBoardView(deps) });
 registerLayout({ id: "list", label: "List", icon: "list", create: (deps) => createListView(deps) });
+registerLayout({ id: "insights", label: "Insights", icon: "chart", create: (deps) => /** @type {any} */ (createInsightsView(deps)) });
+const LAYOUT_IDS = ["board", "list", "insights"];
+const LAYOUT_LABELS = { board: "Board", list: "List", insights: "Insights" };
 
 const BOARD_SORT = [{ field: "rank", dir: /** @type {const} */ ("asc") }, { field: "priority", dir: /** @type {const} */ ("asc") }, { field: "key", dir: /** @type {const} */ ("desc") }];
 const PROPS = ["key", "priority", "assignee", "labels", "estimate", "due", "progress", "blocked", "comments"];
@@ -51,6 +61,14 @@ function blankItem() { return { id: "", labels: [], assignee: null, priority: 0,
 
 /** @param {ViewCfg} v */
 function toDoc(v) { return { id: v.id, name: v.name, query: v.query, layout: v.layout, columnsBy: v.columnsBy, swimlanesBy: v.swimlanesBy, sort: v.sort, display: v.display }; }
+
+/** A read-only prompt to copy (select on focus). @param {string} id @param {string} label @param {string} value @param {number} rows */
+function promptField(id, label, value, rows) {
+  const area = /** @type {HTMLTextAreaElement} */ (h("textarea", { id, readonly: true, rows: String(rows), class: "prompt-text" }));
+  area.value = value;
+  area.addEventListener("focus", () => area.select());
+  return h("div", { class: "field" }, h("label", { for: id }, label), area);
+}
 
 /** A read-only, select-on-focus text field. @param {string} label @param {string} value */
 function keyField(label, value) {
@@ -200,6 +218,19 @@ export function createBoardApp(appOptions) {
     close: () => closeDetail(),
     retry: (c) => { const r = store.retry(c); if (!r.ok) toast(r.error ?? "Could not retry."); },
     announce: (t) => live.announce(t),
+    canSuggest: () => store.jev && store.canWrite() && store.planning,
+    suggest: (item) => suggestWithJev([item]),
+  } });
+
+  const tray = createProposalsTray({ layers, controller: {
+    proposals: () => store.proposals, recent: () => store.recentProposals, now, canWrite: () => store.canWrite(), signedIn: () => Boolean(store.viewer?.id),
+    state: (p, ch) => changeState(store, ch, liveChange(p.id, ch.n)),
+    apply: (p, ns) => applyFromTray(p, ns),
+    refresh: async (p) => { await store.refreshProposal(p.id); },
+    withdraw: async (p) => { await store.withdrawProposal(p.id); },
+    history: () => store.call("listProposals", { status: "all" }),
+    openItem: (key) => { const it = itemByKey(store.index(), key); if (it) { tray.close(); openDetail(it, { focus: true }); } },
+    announce: (t, o) => live.announce(t, o),
   } });
 
   const body = h("div", { class: "body" }, main, detail.el);
@@ -290,7 +321,8 @@ export function createBoardApp(appOptions) {
     statePanel.hidden = true;
     layoutHost.hidden = false;
     toolbar.hidden = false;
-    if (topics.has("changes")) announceChangeTransitions();
+    if (topics.has("changes")) { announceChangeTransitions(); trackProposalOutcomes(); }
+    if (tray.open && (topics.has("proposals") || topics.has("changes") || topics.has("data"))) tray.render();
     renderViewControls();
     renderLayout();
     renderBulkBar();
@@ -317,10 +349,19 @@ export function createBoardApp(appOptions) {
       liveState ? h("span", { class: `live ${liveState}`, title: sync.lastSync ? `Last checked ${relativeTime(sync.lastSync, now())}` : "" }, h("span", { class: "dot", "aria-hidden": "true" }), liveText) : null,
       store.phase === "ready" ? h("button", { type: "button", class: "btn palette-btn", "aria-label": "Search or run a command", onclick: () => runAction("palette"), "aria-keyshortcuts": mac ? "Meta+K" : "Control+K" },
         icon("search", { size: 14 }), h("span", { class: "palette-label" }, "Search or run a command"), h("kbd", { "aria-hidden": "true" }, keyLabel("Mod+k", mac))) : null,
+      store.phase === "ready" ? proposalsButton() : null,
       store.phase === "ready" ? h("button", { type: "button", class: "icon-btn", "aria-label": "Keyboard shortcuts", title: "Keyboard shortcuts (?)", onclick: () => runAction("help") }, icon("keyboard")) : null,
       store.phase === "ready" ? h("button", { type: "button", class: "icon-btn", "aria-label": "Board settings", title: "Board settings", onclick: () => runAction("settings") }, icon("settings")) : null,
       store.phase === "ready" && store.canWrite() ? h("button", { type: "button", class: "btn primary new-btn", onclick: () => runAction("create"), title: "New item (C)", "aria-keyshortcuts": "C" }, icon("plus", { size: 14 }), h("span", null, "New item")) : null,
     );
+  }
+
+  function proposalsButton() {
+    const n = store.proposals.length;
+    const changes = store.proposals.reduce((sum, p) => sum + p.changes.filter((/** @type {any} */ ch) => !ch.outcome && !ch.noop).length, 0);
+    return h("button", { type: "button", class: `btn proposals-btn${n ? " has" : ""}`, "aria-haspopup": "dialog", title: "Proposals from the agent and Jev (G then P)",
+      "aria-label": n ? `Proposals: ${n} waiting, ${changes} ${changes === 1 ? "change" : "changes"}` : "Proposals: none waiting", onclick: () => runAction("proposals") },
+      icon("inbox", { size: 14 }), h("span", { class: "proposals-label" }, "Proposals"), n ? h("span", { class: "badge", "aria-hidden": "true" }, String(n)) : null);
   }
 
   function renderBanners() {
@@ -365,23 +406,36 @@ export function createBoardApp(appOptions) {
   function renderViewControls() {
     const host = /** @type {HTMLElement} */ (toolbar.querySelector(".view-controls"));
     const dirty = viewSig(view) !== viewSig(savedView);
-    const layoutsList = ["board", "list"];
+    const layoutsList = LAYOUT_IDS;
+    const triageView = /\bkind:(?:triage|[a-z,]*triage)/.test(view.query) || view.id === "builtin:triage";
     setChildren(host, 
       h("button", { type: "button", class: "icon-btn narrow-only filter-toggle", "aria-label": "Filter", "aria-expanded": String(app.classList.contains("filter-open")), title: "Filter (/)", onclick: () => { const open = app.classList.toggle("filter-open"); renderViewControls(); if (open) filter.focus(); } }, icon("filter")),
       h("button", { type: "button", class: `btn view-switch${dirty ? " dirty" : ""}`, "aria-haspopup": "dialog", onclick: (/** @type {Event} */ e) => viewsMenu(/** @type {HTMLElement} */ (e.currentTarget)) },
         icon("eye", { size: 14 }), h("span", { class: "view-name" }, view.name), dirty ? h("span", { class: "dirty-dot", title: "Unsaved changes" }, h("span", { class: "sr-only" }, ", unsaved changes")) : null, icon("chevronDown", { size: 12 })),
       h("div", { class: "segmented", role: "group", "aria-label": "Layout" }, layoutsList.map((id) => h("button", {
-        type: "button", class: "seg", "aria-pressed": String(view.layout === id), title: `${id === "board" ? "Board" : "List"} (${keyLabel("Mod+b", mac)} switches)`, onclick: () => setLayout(id),
-      }, icon(id === "board" ? "board" : "list", { size: 14 }), h("span", null, id === "board" ? "Board" : "List")))),
-      h("button", { type: "button", class: "btn", "aria-haspopup": "dialog", onclick: (/** @type {Event} */ e) => displayMenu(/** @type {HTMLElement} */ (e.currentTarget)) }, icon("lanes", { size: 14 }), "Display"),
+        type: "button", class: "seg", "aria-pressed": String(view.layout === id), "aria-label": /** @type {any} */ (LAYOUT_LABELS)[id], title: id === "insights" ? "Insights: reports and charts (G then I)" : `${/** @type {any} */ (LAYOUT_LABELS)[id]} (${keyLabel("Mod+b", mac)} switches board and list)`, onclick: () => setLayout(id),
+      }, icon(id === "board" ? "board" : id === "list" ? "list" : "chart", { size: 14 }), h("span", { class: "seg-label" }, /** @type {any} */ (LAYOUT_LABELS)[id])))),
+      view.layout !== "insights" ? h("button", { type: "button", class: "btn", "aria-haspopup": "dialog", onclick: (/** @type {Event} */ e) => displayMenu(/** @type {HTMLElement} */ (e.currentTarget)) }, icon("lanes", { size: 14 }), "Display") : null,
+      triageView && store.jev && store.canWrite() && store.planning && view.layout !== "insights" ? h("button", { type: "button", class: "btn", "aria-haspopup": "dialog", title: "Ask Jev to suggest priority, state, labels and duplicates for the items in triage", onclick: () => runAction("triageJev") }, icon("sparkle", { size: 14 }), "Triage with Jev") : null,
       dirty && view.id && store.canWrite() ? h("button", { type: "button", class: "btn", onclick: () => runAction("saveView") }, icon("save", { size: 14 }), "Save view") : null,
       dirty ? h("button", { type: "button", class: "btn ghost", onclick: () => runAction("resetView") }, "Reset") : null,
     );
   }
 
   function renderLayout() {
-    const id = view.layout === "list" ? "list" : "board";
+    const id = view.layout === "list" ? "list" : view.layout === "insights" ? "insights" : "board";
     const inst = layout(id);
+    if (id === "insights") {
+      if (layoutHost.firstElementChild !== inst.el) setChildren(layoutHost, inst.el);
+      const { items, total } = computeItems();
+      filter.setCount({ shown: items.length, total });
+      narrowBar.hidden = true;
+      layoutHost.dataset.empty = "";
+      layoutHost.querySelector(":scope > .empty-overlay")?.remove();
+      ensureInsights();
+      inst.update(insightsModel());
+      return;
+    }
     if (layoutHost.firstElementChild !== inst.el) setChildren(layoutHost, inst.el);
     const hadFocus = layoutHost.contains(doc.activeElement);
     const { items, total } = computeItems();
@@ -587,6 +641,7 @@ export function createBoardApp(appOptions) {
     setChildren(bulkBar, 
       h("span", { class: "bulk-count", role: "status" }, `${items.length} selected`),
       btn("state", "State", "s"), ...(index.planning ? [btn("assignee", "Assign", "a"), btn("priority", "Priority", "p"), btn("labels", "Labels", "l"), btn("estimate", "Estimate", "e"), btn("due", "Due", "d"), btn("cycle", "Cycle", "")] : []),
+      store.jev && index.planning ? h("button", { type: "button", class: "btn sm", "aria-haspopup": "dialog", title: "Ask Jev for triage suggestions for the selected items", onclick: () => runAction("triageJev") }, icon("sparkle", { size: 13 }), "Triage with Jev") : null,
       h("button", { type: "button", class: "btn ghost sm", onclick: () => clearSelection() }, "Clear", h("kbd", { "aria-hidden": "true" }, "Esc")));
   }
 
@@ -797,6 +852,12 @@ export function createBoardApp(appOptions) {
         schedule();
         break;
       }
+      case "insights:menu": reportMenu(payload.report, payload.anchor); break;
+      case "insights:open": { const it = itemByKey(store.index(), payload); if (it) openDetail(it, { focus: true }); else toast(`${payload} is not on the board.`); break; }
+      case "insights:params": insightParams.set(payload.id, { ...insightParams.get(payload.id), ...payload.params }); live.announce("Updating the report."); schedule(); break;
+      case "insights:new": editReport(null); break;
+      case "insights:ask": askAgent(); break;
+      case "insights:hidden": hiddenReports(payload); break;
       case "hover": hoverId = payload; break;
       case "announce": live.announce(payload); break;
       case "hint": live.announce(payload); toast(payload); break;
@@ -838,6 +899,7 @@ export function createBoardApp(appOptions) {
   }
   function focusedItem() {
     const active = doc.activeElement;
+    if (view.layout === "insights") return null;
     if (view.layout === "list") return layoutHost.contains(active) ? layout("list").focusedItem() : null;
     return layoutHost.contains(active) ? layout("board").focusedEntry()?.entry.item ?? null : null;
   }
@@ -887,9 +949,9 @@ export function createBoardApp(appOptions) {
     const current = focusedItem() ?? (detail.itemId ? store.index().items.get(detail.itemId) : null);
     view = { ...view, layout: id };
     itemsCache = null;
-    if (current) { if (id === "list") listFocus = { row: current.id, col: 1 }; else boardFocus = findBoardPos(current.id) ?? boardFocus; }
+    if (current) { if (id === "list") listFocus = { row: current.id, col: 1 }; else if (id === "board") boardFocus = findBoardPos(current.id) ?? boardFocus; }
     render(new Set(["data"]));
-    live.announce(`${id === "board" ? "Board" : "List"} layout.`);
+    live.announce(id === "insights" ? `Insights: ${(store.reports ?? []).filter((r) => !r.hidden).length || "loading"} reports${view.query ? ", filtered" : ""}.` : `${id === "board" ? "Board" : "List"} layout.`);
     if (current) layout().focusCurrent();
   }
 
@@ -1082,6 +1144,192 @@ export function createBoardApp(appOptions) {
   }
 
   // ---------------------------------------------------------------------------------------------
+  // Insights: reports data (one batched RPC per screen), report documents
+
+  /** @type {Map<string, Record<string, unknown>>} */
+  const insightParams = new Map();
+  const insights = { key: "", version: -1, loading: false, again: false, results: /** @type {Record<string, any>|null} */ (null), error: "", at: /** @type {number|null} */ (null), fetchedAt: 0, historyComplete: true, reportsLoading: false, timer: /** @type {ReturnType<typeof setTimeout>|null} */ (null) };
+  const INSIGHTS_REFRESH_MS = 5_000;
+
+  function visibleReports() { return (store.reports ?? []).filter((r) => !r.hidden); }
+  function insightRequests() {
+    return visibleReports().map((r) => ({ id: r.id, dataset: r.dataset, params: { ...r.params, ...insightParams.get(r.id) }, query: r.query ?? "" }));
+  }
+  /** Fetches report data when the filter, reports or parameters change, and at most every 5 s as data changes. @param {boolean} [force] */
+  function ensureInsights(force = false) {
+    if (store.reports === null) {
+      if (!insights.reportsLoading) {
+        insights.reportsLoading = true;
+        store.loadReports().catch((err) => { insights.error = `Reports could not load: ${String(err?.message ?? err).replace(/^[a-z_]+:\s*/, "")}`; })
+          .finally(() => { insights.reportsLoading = false; if (view.layout === "insights") renderLayout(); });
+      }
+      return;
+    }
+    const key = JSON.stringify([view.query, insightRequests(), store.me]);
+    const version = store.replica.version;
+    const sinceFetch = Date.now() - insights.fetchedAt;
+    const changedData = version !== insights.version;
+    if (!force && key === insights.key && (!changedData || sinceFetch < INSIGHTS_REFRESH_MS)) {
+      if (changedData && !insights.timer) insights.timer = setTimeout(() => { insights.timer = null; if (view.layout === "insights") ensureInsights(); }, INSIGHTS_REFRESH_MS - sinceFetch + 50);
+      return;
+    }
+    if (insights.loading) { insights.again = true; return; }
+    insights.loading = true;
+    insights.key = key;
+    insights.version = version;
+    store.call("insights", { query: view.query, reports: insightRequests(), viewer: store.me })
+      .then((r) => { insights.results = r.results; insights.at = Date.parse(r.at) || now(); insights.historyComplete = r.history?.complete !== false; insights.error = ""; })
+      .catch((err) => { insights.error = `Reports could not load: ${String(err?.message ?? err).replace(/^[a-z_]+:\s*/, "")}`; live.announce(insights.error, { assertive: true }); })
+      .finally(() => {
+        insights.loading = false;
+        insights.fetchedAt = Date.now();
+        if (insights.again) { insights.again = false; ensureInsights(); }
+        if (view.layout === "insights" && store.phase === "ready") renderLayout();
+      });
+  }
+  function insightsModel() {
+    const index = store.index();
+    const c = ctx();
+    const utc = new Date(now()).toISOString().slice(0, 10);
+    const { ast } = parse(view.query);
+    return {
+      reports: visibleReports(), hiddenCount: (store.reports ?? []).filter((r) => r.hidden).length,
+      results: insights.results, loading: insights.loading || store.reports === null, error: insights.error, at: insights.at, now: now(),
+      historyComplete: insights.historyComplete, filter: view.query, filterDescription: view.query ? describeWql(ast, c) : "",
+      canWrite: store.canWrite(),
+      cycles: index.cycles.filter((cy) => cy.start && cy.end).map((cy) => ({ name: cy.name, current: /** @type {string} */ (cy.start) <= utc && utc <= /** @type {string} */ (cy.end) })),
+      params: (/** @type {string} */ id) => insightParams.get(id) ?? {},
+    };
+  }
+  /** @param {any} rep @param {HTMLElement} anchor */
+  function reportMenu(rep, anchor) {
+    const w = store.canWrite();
+    /** @type {import("./picker.js").PickerOption[]} */
+    const options = [
+      ...(w ? [{ value: "edit", label: "Edit report…", detail: "Title, filter, parameters and spec" }, { value: "duplicate", label: "Duplicate" }] : []),
+      { value: "spec", label: w ? "View or edit spec…" : "View spec" },
+      ...(w && rep.customised ? [{ value: "reset", label: "Reset to the built-in version" }] : []),
+      ...(w ? [{ value: "delete", label: rep.builtin ? "Hide this report" : "Delete this report…" }] : []),
+    ];
+    openPicker({ layers, anchor, title: rep.title, options, placeholder: "Choose an action…", onPick: ([v]) => {
+      if (v === "edit" || v === "spec") editReport(rep);
+      else if (v === "duplicate") void reportOp(() => store.saveReport({ title: `${rep.title} (copy)`, description: rep.description ?? "", dataset: rep.dataset, params: rep.params, query: rep.query, spec: rep.spec }), `Duplicated “${rep.title}”.`);
+      else if (v === "reset") void reportOp(() => store.restoreReport(rep.id), `Reset “${rep.title}”.`);
+      else if (v === "delete") {
+        if (rep.builtin) void reportOp(() => store.deleteReport(rep.id), `Hid “${rep.title}”. Bring it back from Hidden.`);
+        else confirmDelete(rep);
+      }
+    } });
+  }
+  /** @param {() => Promise<any>} fn @param {string} done */
+  async function reportOp(fn, done) {
+    try { await fn(); live.announce(done); toast(done); insights.key = ""; renderLayout(); }
+    catch (err) { const m = String(/** @type {any} */ (err)?.message ?? err).replace(/^[a-z_]+:\s*/, ""); toast(m, { tone: "bad" }); live.announce(m, { assertive: true }); }
+  }
+  /** @param {any} rep */
+  function confirmDelete(rep) {
+    layers.openDialog({ title: `Delete “${rep.title}”?`, size: "sm", description: "The report is removed for everyone using this board. The data it charts is not affected.",
+      content: (close) => [h("div", { class: "row end" }, h("button", { type: "button", class: "btn", onclick: () => close("cancel") }, "Cancel"),
+        h("button", { type: "button", class: "btn primary danger", onclick: () => { close("ok"); void reportOp(() => store.deleteReport(rep.id), `Deleted “${rep.title}”.`); } }, "Delete report"))] });
+  }
+  /** @param {any|null} rep */
+  function editReport(rep) {
+    openReportEditor({ layers, report: rep, datasets: listDatasets(), canWrite: store.canWrite(), announce: (t) => live.announce(t),
+      validate: (d) => store.call("validateReport", d),
+      save: async (d) => { const saved = await store.saveReport(d); live.announce(`Saved report “${saved.title}”.`); toast(`Saved report “${saved.title}”.`); insights.key = ""; renderLayout(); } });
+  }
+  /** Ready-to-paste prompts for the Workshop agent (selectable text; the sandbox has no clipboard). */
+  function askAgent() {
+    const index = store.index();
+    const utc = new Date(now()).toISOString().slice(0, 10);
+    const cycle = index.cycles.find((cy) => cy.start && cy.end && cy.start <= utc && utc <= cy.end)?.name ?? "the current cycle";
+    const scope = view.query ? ` for items matching \`${view.query}\`` : "";
+    const suggested = `Using the Work Board skill, build a burndown for ${cycle} split by project${scope}, and save it as a report.`;
+    const examples = [
+      `Using the Work Board skill, what's blocking ${cycle}? List the blockers first, with who owns each.`,
+      `Using the Work Board skill, who is overloaded in ${cycle}? Propose re-assignments I can apply.`,
+      "Using the Work Board skill, triage everything in Triage and propose the changes for me to review.",
+    ];
+    layers.openDialog({ title: "Ask the Workshop agent", size: "md", className: "ask-agent",
+      description: "The agent in this Workshop reads the board with its reporting skill (SKILL.md): it answers questions, builds reports and proposes changes you apply. Select a prompt, copy it (Ctrl/⌘+C) and paste it into the agent's chat.",
+      content: (close) => [promptField("wb-ask-main", "Suggested prompt", suggested, 3),
+        h("h3", { class: "tray-sub" }, "More examples"), ...examples.map((e, i) => promptField(`wb-ask-${i}`, `Example ${i + 1}`, e, 3)),
+        h("div", { class: "row end" }, h("button", { type: "button", class: "btn", onclick: () => close("done") }, "Done"))],
+      initialFocus: () => /** @type {HTMLElement|null} */ (doc.getElementById("wb-ask-main")) });
+  }
+
+  /** @param {HTMLElement} anchor */
+  function hiddenReports(anchor) {
+    const hidden = (store.reports ?? []).filter((r) => r.hidden);
+    openPicker({ layers, anchor, title: "Hidden reports", options: hidden.map((r) => ({ value: r.id, label: `Show “${r.title}” again` })), onPick: ([id]) => {
+      const r = hidden.find((x) => x.id === id);
+      if (r) void reportOp(() => store.restoreReport(r.id), `“${r.title}” is back.`);
+    } });
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Proposals: applying through the normal write path, and recording outcomes
+
+  /** Store changes sent from proposals this session: "proposalId:n" → change. @type {Map<string, import("../store/store.js").Change>} */
+  const proposalLive = new Map();
+  /** @type {Map<string, string>} last recorded status per "proposalId:n" */
+  const proposalRecorded = new Map();
+  /** @param {string} pid @param {number} n */
+  function liveChange(pid, n) { return proposalLive.get(`${pid}:${n}`) ?? null; }
+
+  /** @param {any} p @param {number[]} ns */
+  async function applyFromTray(p, ns) {
+    const { results, outcomes } = applyProposal(store, p, ns);
+    for (const r of results) if (r.change) { proposalLive.set(`${p.id}:${r.n}`, r.change); proposalRecorded.set(`${p.id}:${r.n}`, "sent"); }
+    const sent = results.filter((r) => r.ok && r.change).length;
+    const failed = results.filter((r) => !r.ok);
+    const text = `${p.title}: ${sent} ${sent === 1 ? "change" : "changes"} sent${failed.length ? `; ${failed.length} not sent (${failed.slice(0, 2).map((f) => f.error).join("; ")})` : ""}.`;
+    live.announce(text, { assertive: failed.length > 0 });
+    toast(text, { tone: failed.length ? "bad" : "" });
+    try { await store.recordProposalOutcome(p.id, outcomes); } catch (err) { console.warn("Could not record the proposal outcome:", String(/** @type {any} */ (err)?.message ?? err)); }
+  }
+
+  /** Records outcomes as sent changes are approved, saved or refused (batched per proposal). */
+  let outcomeTimer = /** @type {ReturnType<typeof setTimeout>|null} */ (null);
+  function trackProposalOutcomes() {
+    if (outcomeTimer || !proposalLive.size) return;
+    outcomeTimer = setTimeout(() => {
+      outcomeTimer = null;
+      /** @type {Map<string, any[]>} */
+      const byProposal = new Map();
+      for (const [key, ch] of proposalLive) {
+        const o = outcomeOf(ch);
+        if (proposalRecorded.get(key) === o.status) continue;
+        proposalRecorded.set(key, o.status);
+        const [pid, n] = [key.slice(0, key.lastIndexOf(":")), Number(key.slice(key.lastIndexOf(":") + 1))];
+        byProposal.set(pid, [...(byProposal.get(pid) ?? []), { n, ...o }]);
+        if (o.status === "applied" || o.status === "conflict" || o.status === "rejected") proposalLive.delete(key);
+      }
+      for (const [pid, list] of byProposal) store.recordProposalOutcome(pid, list).catch(() => {});
+    }, 400);
+  }
+
+  /** Jev triage suggestions for items, applied (or saved) as a proposal. @param {ItemView[]} items */
+  function suggestWithJev(items) {
+    if (!items.length) return;
+    const keys = items.map((i) => i.key);
+    const title = items.length === 1 ? `Jev suggestions for ${keys[0]}` : `Jev triage: ${items.length} items`;
+    const by = { kind: "jev", name: store.viewer?.displayName ?? store.viewer?.id ?? "you" };
+    openSuggestions({ layers, title, count: items.length, announce: (t, o) => live.announce(t, o),
+      triage: () => store.call("triage", keys),
+      apply: async (changes, meta) => {
+        const p = await store.propose(changes, { title: `Jev triage: ${meta.keys.join(", ")}`, reason: "Suggested by Jev and applied from the board.", by });
+        await applyFromTray(p, p.changes.map((/** @type {any} */ c) => c.n));
+      },
+      save: async (changes, meta) => {
+        const p = await store.propose(changes, { title: `Jev triage: ${meta.keys.join(", ")}`, reason: "Suggested by Jev; review and apply in Proposals.", by });
+        live.announce(`Saved to Proposals: ${p.title}.`);
+        toast(`Saved to Proposals: ${p.changes.length} ${p.changes.length === 1 ? "change" : "changes"}.`, { action: { label: "Open", run: () => tray.show(p.id) } });
+      },
+    });
+  }
+
+  // ---------------------------------------------------------------------------------------------
   // Actions (the verb grammar)
 
   /** @type {Record<string, { label: string, group: string, when?: () => boolean, run: (arg?: any) => void }>} */
@@ -1104,6 +1352,16 @@ export function createBoardApp(appOptions) {
     toggleLayout: { label: "Switch board / list", group: "View", run: () => setLayout(view.layout === "board" ? "list" : "board") },
     layoutBoard: { label: "Board layout", group: "View", run: () => setLayout("board") },
     layoutList: { label: "List layout", group: "View", run: () => setLayout("list") },
+    layoutInsights: { label: "Insights (reports)", group: "View", run: () => setLayout("insights") },
+    proposals: { label: "Proposals from the agent and Jev", group: "General", run: () => { tray.show(); void store.loadProposals(); } },
+    triageJev: { label: "Triage with Jev", group: "Item", when: () => store.jev && store.canWrite() && store.planning, run: () => {
+      const picked = selection.size ? targets() : computeItems().items.filter((i) => i.kind === "triage");
+      if (!picked.length) { live.announce("Nothing to triage: select items or open the Triage view."); toast("Select items, or open the Triage view, to triage with Jev."); return; }
+      suggestWithJev(picked.slice(0, 20));
+      if (picked.length > 20) toast(`Jev looks at 20 items at a time; the first 20 of ${picked.length} are in this batch.`);
+    } },
+    suggest: { label: "Suggest with Jev (triage this item)", group: "Item", when: () => store.jev && store.canWrite() && store.planning && targets().length === 1, run: () => suggestWithJev(targets()) },
+    newReport: { label: "New report…", group: "View", when: () => store.canWrite(), run: () => { setLayout("insights"); editReport(null); } },
     saveView: { label: "Save view", group: "View", when: () => store.canWrite(), run: () => { void saveCurrentView(); } },
     saveViewAs: { label: "Save as a new view…", group: "View", when: () => store.canWrite(), run: () => saveViewDialog(false) },
     resetView: { label: "Discard unsaved view changes", group: "View", run: () => loadView(savedView) },
@@ -1210,7 +1468,8 @@ export function createBoardApp(appOptions) {
     // Two-key chords: G then B (board) or L (list).
     if (!isTyping(target) && !e.ctrlKey && !e.metaKey && !e.altKey && store.prefs.shortcuts !== false && !board.moving) {
       const k = e.key.toLowerCase();
-      if (chord && (k === "b" || k === "l")) { e.preventDefault(); chord = false; setLayout(k === "b" ? "board" : "list"); return; }
+      if (chord && (k === "b" || k === "l" || k === "i")) { e.preventDefault(); chord = false; setLayout(k === "b" ? "board" : k === "l" ? "list" : "insights"); return; }
+      if (chord && k === "p") { e.preventDefault(); chord = false; runAction("proposals"); return; }
       chord = false;
       if (k === "g") { e.preventDefault(); chord = true; setTimeout(() => { chord = false; }, 1200); return; }
     }
@@ -1230,6 +1489,13 @@ export function createBoardApp(appOptions) {
       return;
     }
     const onBody = !target || target === doc.body || target === app || target === main;
+    if (view.layout === "insights" && (NAV.has(id) || id === "open" || id === "peek" || id === "moveMode")) {
+      const onCard = Boolean(target?.closest(".report-card h3")) || target === layout("insights").el;
+      if (!onCard || id === "open" || id === "peek" || id === "moveMode") return;
+      e.preventDefault();
+      layout("insights").navigate(id);
+      return;
+    }
     if (NAV.has(id) || id === "open" || id === "peek" || id === "moveMode") {
       if (!(inLayout || onBody || (inDetail && peeking && !isTyping(target)))) return;
       if (target && target.closest("button, a, input, select, [role=tab]") && !target.closest(".card, .lg-td, .cell-empty") && (id === "open" || id === "peek")) return;
@@ -1265,9 +1531,13 @@ export function createBoardApp(appOptions) {
     get boardFocus() { return boardFocus; },
     runAction, loadView, setLayout, openDetail, closeDetail, render: () => render(new Set(["data", "changes"])),
     /** Test and e2e hooks. */
-    layout, live, pickers, filter, detail,
+    layout, live, pickers, filter, detail, tray, refreshInsights: () => ensureInsights(true),
+    get insights() { return insights; },
     destroy() {
       clearInterval(ticker);
+      if (insights.timer) clearTimeout(insights.timer);
+      if (outcomeTimer) clearTimeout(outcomeTimer);
+      layouts.get("insights")?.destroy?.();
       doc.removeEventListener("keydown", onKeydown);
       store.destroy();
     },
