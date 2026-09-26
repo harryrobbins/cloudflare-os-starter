@@ -5,7 +5,7 @@
 
 import { h, reconcile, focus as focusEl, shortDate, relativeTime, setChildren } from "./dom.js";
 import { icon, priorityIcon } from "./icons.js";
-import { avatar, itemStateIcon, stateOf, pendingLabel } from "./card.js";
+import { actorTitle, avatar, fitChips, itemStateIcon, stateOf, pendingLabel } from "./card.js";
 import { PRIORITIES } from "../../shared/model/work.js";
 import { personName } from "../../shared/model/index.js";
 import { property } from "../../shared/model/properties.js";
@@ -35,8 +35,15 @@ export const LIST_COLUMNS = {
     h("span", { class: "row-title" }, i.title || "Untitled")] },
   state: { id: "state", label: "State", sort: "state", width: "150px", render: (i, m) => [itemStateIcon(i, m.index, { size: 13 }), h("span", null, stateOf(i, m.index)?.name ?? i.state)], text: (i, m) => stateOf(i, m.index)?.name ?? "" },
   priority: { id: "priority", label: "Priority", sort: "priority", width: "120px", render: (i) => (i.priority ? [priorityIcon(i.priority), h("span", null, PRIORITIES[i.priority].name)] : h("span", { class: "muted" }, "—")) },
-  assignee: { id: "assignee", label: "Assignee", sort: "assignee", width: "170px", render: (i, m) => (i.assignee ? [avatar(i.assignee, m.index, 18), h("span", { class: "ellipsis" }, personName(m.index, i.assignee))] : h("span", { class: "muted" }, "Unassigned")) },
-  labels: { id: "labels", label: "Labels", width: "minmax(120px, 1fr)", render: (i, m) => (i.labels.length ? i.labels.slice(0, 3).map((l) => h("span", { class: "chip label" }, h("span", { class: "dot", style: { background: m.index.labelByKey.get(l)?.color ?? "#8a8f98" } }), m.index.labelByKey.get(l)?.name ?? l)) : null) },
+  assignee: { id: "assignee", label: "Assignee", sort: "assignee", width: "170px", render: (i, m) => (i.assignee ? [avatar(i.assignee, m.index, 18), h("span", { class: "ellipsis", title: actorTitle(i.assignee, personName(m.index, i.assignee)) }, personName(m.index, i.assignee))] : h("span", { class: "muted" }, "Unassigned")) },
+  labels: { id: "labels", label: "Labels", width: "minmax(160px, 1fr)", render: (i, m) => {
+    if (!i.labels.length) return null;
+    const names = i.labels.map((l) => m.index.labelByKey.get(l)?.name ?? l);
+    const n = fitChips(names, 170);
+    const rest = names.slice(n).join(", ");
+    return [...names.slice(0, n).map((name, k) => h("span", { class: "chip label" }, h("span", { class: "dot", style: { background: m.index.labelByKey.get(i.labels[k])?.color ?? "#8a8f98" } }), name)),
+      n < names.length ? h("span", { class: "chip more", title: rest, "aria-label": `${names.length - n} more labels: ${rest}` }, `+${names.length - n}`) : null];
+  } },
   estimate: { id: "estimate", label: "Estimate", sort: "estimate", width: "84px", render: (i) => (i.estimate === null ? h("span", { class: "muted" }, "—") : String(i.estimate)) },
   due: { id: "due", label: "Due", sort: "due", width: "96px", render: (i, m) => (i.due ? h("span", { class: i.due < m.today && i.category !== "done" ? "overdue" : "" }, shortDate(i.due, m.today), i.due < m.today && i.category !== "done" ? h("span", { class: "sr-only" }, ", overdue") : null) : h("span", { class: "muted" }, "—")) },
   project: { id: "project", label: "Project", sort: "project", width: "150px", render: (i, m) => (i.project ? h("span", { class: "ellipsis" }, m.index.projectById.get(i.project)?.name ?? "") : h("span", { class: "muted" }, "—")) },
@@ -45,6 +52,26 @@ export const LIST_COLUMNS = {
   created: { id: "created", label: "Created", sort: "created", width: "110px", render: (i, m) => (i.created ? relativeTime(i.created, m.now) : h("span", { class: "muted" }, "—")) },
   created_by: { id: "created_by", label: "Creator", width: "150px", render: (i, m) => (i.created_by ? h("span", { class: "ellipsis" }, personName(m.index, i.created_by)) : "—") },
 };
+
+/** @param {ListModel} m @returns {Row[]} */
+function buildRows(m) {
+  const prop = m.groupBy ? property(m.groupBy) : null;
+  if (!prop) return m.items.map((item) => ({ kind: "item", key: item.id, item, pending: m.pendingFor(item.id) }));
+  const groups = prop.groups(m.ctx, m.items);
+  /** @type {Map<string, ItemView[]>} */
+  const by = new Map(groups.map((g) => [g.key, []]));
+  for (const item of m.items) for (const k of prop.keysOf(item, m.ctx)) (by.get(k) ?? by.set(k, []).get(k))?.push(item);
+  /** @type {Row[]} */
+  const out = [];
+  for (const g of groups) {
+    const list = by.get(g.key) ?? [];
+    if (!list.length) continue;
+    const collapsed = m.collapsed.has(`list:${g.key}`);
+    out.push({ kind: "group", key: `g:${g.key}`, label: g.label, count: list.length, collapsed, color: g.color });
+    if (!collapsed) for (const item of list) out.push({ kind: "item", key: prop.multi ? `${item.id}@${g.key}` : item.id, item, pending: m.pendingFor(item.id) });
+  }
+  return out;
+}
 
 /** @param {{ doc: Document, onAction: (type: string, payload?: any) => void }} opts */
 export function createListView({ doc, onAction }) {
@@ -64,26 +91,6 @@ export function createListView({ doc, onAction }) {
     const cols = m.columns.map((c) => LIST_COLUMNS[c]).filter(Boolean);
     if (!cols.some((c) => c.id === "title")) cols.unshift(LIST_COLUMNS.title);
     return m.index.planning ? cols : cols.filter((c) => ["key", "title", "state", "updated", "created", "created_by"].includes(c.id));
-  }
-
-  /** @param {ListModel} m @returns {Row[]} */
-  function buildRows(m) {
-    const prop = m.groupBy ? property(m.groupBy) : null;
-    if (!prop) return m.items.map((item) => ({ kind: "item", key: item.id, item, pending: m.pendingFor(item.id) }));
-    const groups = prop.groups(m.ctx, m.items);
-    /** @type {Map<string, ItemView[]>} */
-    const by = new Map(groups.map((g) => [g.key, []]));
-    for (const item of m.items) for (const k of prop.keysOf(item, m.ctx)) (by.get(k) ?? by.set(k, []).get(k))?.push(item);
-    /** @type {Row[]} */
-    const out = [];
-    for (const g of groups) {
-      const list = by.get(g.key) ?? [];
-      if (!list.length) continue;
-      const collapsed = m.collapsed.has(`list:${g.key}`);
-      out.push({ kind: "group", key: `g:${g.key}`, label: g.label, count: list.length, collapsed, color: g.color });
-      if (!collapsed) for (const item of list) out.push({ kind: "item", key: prop.multi ? `${item.id}@${g.key}` : item.id, item, pending: m.pendingFor(item.id) });
-    }
-    return out;
   }
 
   /** @param {ListModel} m */
@@ -127,10 +134,17 @@ export function createListView({ doc, onAction }) {
       end = Math.min(rows.length, Math.ceil((scroller.scrollTop + height) / ROW_H) + 10);
       // A focused row outside the window is brought back by focusCurrent() (it scrolls there).
     }
-    body.style.paddingTop = `${start * ROW_H}px`;
-    body.style.paddingBottom = `${(rows.length - end) * ROW_H}px`;
+    let padTop = start * ROW_H, padBottom = (rows.length - end) * ROW_H;
     const focusRow = m.focus?.row ?? null;
-    reconcile(body, rows.slice(start, end).map((r, i) => ({ r, i: start + i })), {
+    /** @type {{ r: Row, i: number }[]} */
+    let shown = rows.slice(start, end).map((r, i) => ({ r, i: start + i }));
+    // The focused row stays in the DOM when scrolled out of the window (pinned beside it).
+    const fi = focusRow ? rows.findIndex((r) => r.key === focusRow) : -1;
+    if (fi >= 0 && fi < start) { shown = [{ r: rows[fi], i: fi }, ...shown]; padTop -= ROW_H; }
+    else if (fi >= end) { shown = [...shown, { r: rows[fi], i: fi }]; padBottom -= ROW_H; }
+    body.style.paddingTop = `${padTop}px`;
+    body.style.paddingBottom = `${padBottom}px`;
+    reconcile(body, shown, {
       key: ({ r }) => r.key,
       create: ({ r }) => h("div", { role: "row", class: r.kind === "group" ? "lg-group" : "lg-row" }),
       update: (node, { r, i }) => {

@@ -70,8 +70,8 @@ export function cycleIds(ctx, value) {
   const cycles = ctx.index.cycles;
   const t = ctx.today;
   if (v === "current") return cycles.filter((c) => c.start && c.end && c.start <= t && t <= c.end).map((c) => c.id);
-  if (v === "next") { const c = cycles.find((c) => c.start && c.start > t); return c ? [c.id] : []; }
-  if (v === "previous") { const c = cycles.filter((c) => c.end && c.end < t).at(-1); return c ? [c.id] : []; }
+  if (v === "next") { const cy = cycles.find((c) => c.start && c.start > t); return cy ? [cy.id] : []; }
+  if (v === "previous") { const cy = cycles.filter((c) => c.end && c.end < t).at(-1); return cy ? [cy.id] : []; }
   const found = cycles.filter((c) => c.id === v || c.name.toLowerCase() === v || (c.number !== null && String(c.number) === v));
   return found.length ? found.map((c) => c.id) : null;
 }
@@ -120,6 +120,9 @@ function ordered(field, type, ctx) {
   return { get, conv };
 }
 
+/** An absent extension value. @param {any} x */
+const isEmptyValue = (x) => x === undefined || x === null || x === "" || (Array.isArray(x) && !x.length);
+
 /** @param {import("./parse.js").TermNode} t @param {WqlContext} ctx @returns {Predicate} */
 function compileTerm(t, ctx) {
   const field = fieldByName(t.field);
@@ -132,14 +135,13 @@ function compileTerm(t, ctx) {
   if (field.type === "ext") {
     const name = t.field.slice(4);
     const read = (/** @type {ItemView} */ i) => /** @type {any} */ (i.ext)[name];
-    const empty = (/** @type {any} */ x) => x === undefined || x === null || x === "" || (Array.isArray(x) && !x.length);
     const cmp = (/** @type {any} */ a, /** @type {string} */ b) => {
       const na = numeric(a), nb = numeric(b);
       if (na !== null && nb !== null) return na - nb;
       return String(a).toLowerCase().localeCompare(b.toLowerCase());
     };
-    if (t.op === "eq") return (i) => { const x = read(i); if (empty(x)) return none; return (Array.isArray(x) ? x : [x]).some((e) => values.some((v) => !isNone(v) && cmp(e, v) === 0)); };
-    return rangeOp(t, (i) => { const x = read(i); return empty(x) || Array.isArray(x) || typeof x === "object" ? null : x; }, (v) => v, cmp);
+    if (t.op === "eq") return (i) => { const x = read(i); if (isEmptyValue(x)) return none; return (Array.isArray(x) ? x : [x]).some((e) => values.some((v) => !isNone(v) && cmp(e, v) === 0)); };
+    return rangeOp(t, (i) => { const x = read(i); return isEmptyValue(x) || Array.isArray(x) || typeof x === "object" ? null : x; }, (v) => v, cmp);
   }
 
   const ord = ordered(t.field, field.type, ctx);

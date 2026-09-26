@@ -4,7 +4,7 @@
 // shortcuts (Ctrl/⌘+K etc.) always work.
 
 /**
- * @typedef {{ id: string, keys: string[], label: string, group: string, single?: boolean, display?: string[] }} Shortcut
+ * @typedef {{ id: string, keys: string[], label: string, group: string, single?: boolean, display?: string[], chord?: boolean }} Shortcut
  */
 
 /** @type {Shortcut[]} */
@@ -15,6 +15,8 @@ export const SHORTCUTS = [
   { id: "toggleLayout", keys: ["Mod+b"], label: "Switch board / list", group: "General" },
   { id: "help", keys: ["?"], label: "Keyboard shortcuts", group: "General", single: true },
   { id: "undo", keys: ["Mod+z"], label: "Undo your last change", group: "General" },
+  { id: "goBoard", keys: ["g", "b"], label: "Go to the board", group: "General", chord: true, display: ["G then B"] },
+  { id: "goList", keys: ["g", "l"], label: "Go to the list", group: "General", chord: true, display: ["G then L"] },
   { id: "down", keys: ["j", "ArrowDown"], label: "Next item", group: "Navigate" },
   { id: "up", keys: ["k", "ArrowUp"], label: "Previous item", group: "Navigate" },
   { id: "left", keys: ["h", "ArrowLeft"], label: "Previous column", group: "Navigate" },
@@ -80,7 +82,7 @@ export function matchShortcut(event, opts) {
   // Escape, arrows and paging keys always work.
   if (event.key.length === 1 && event.key !== " " && !opts.singleKeys) return null;
   for (const s of SHORTCUTS) {
-    if (!s.keys.includes(key) || s.keys.some((k) => k.startsWith("Mod+") || k.startsWith("Shift+"))) continue;
+    if (s.chord || !s.keys.includes(key) || s.keys.some((k) => k.startsWith("Mod+") || k.startsWith("Shift+"))) continue;
     if (CONFLICTS.has(key) && s.id === "right") continue;
     return s.id;
   }

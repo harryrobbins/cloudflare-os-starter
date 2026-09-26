@@ -65,7 +65,9 @@ export function openPalette(opts) {
           r.keys?.length ? h("span", { class: "opt-keys" }, r.keys.map((k) => h("kbd", null, keyLabel(k, opts.mac)))) : null);
       },
     });
-    empty.textContent = shown.length ? `${shown.length} results` : "Nothing matches. Try an item key like WRK-12.";
+    empty.textContent = !input.value.trim()
+      ? "Tips: type a key (TW-12) or words from a title · actions apply to the selection or focused card · “view” lists saved views"
+      : shown.length ? `${shown.length} results` : "Nothing matches. Try an item key like TW-12, a few words of a title, or an action such as “assign”.";
     if (shown[active]) {
       input.setAttribute("aria-activedescendant", `${listId}-${active}`);
       list.ownerDocument.getElementById(`${listId}-${active}`)?.scrollIntoView?.({ block: "nearest" });

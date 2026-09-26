@@ -54,6 +54,11 @@ const COMMENTS = ["I can reproduce this on staging.", "Looks good to me — ship
   "Do we need a migration for existing rows?", "Checked with legal: fine to proceed."];
 const CUSTOMERS = ["Acme", "Globex", "Initech", "Umbrella", "Stark Industries"];
 
+/** @param {string} id */
+const actorId = (id) => `cloudflare-os:${id}`;
+/** @param {number} t */
+const isoDay = (t) => new Date(t).toISOString().slice(0, 10);
+
 /**
  * @param {import("../test/fake-records.js").FakeRecords} fake
  * @param {{ items?: number, now?: number, rng?: () => number }} [options]
@@ -61,9 +66,7 @@ const CUSTOMERS = ["Acme", "Globex", "Initech", "Umbrella", "Stark Industries"];
 export function seedWork(fake, { items = 300, now = Date.parse("2026-09-26T12:00:00Z"), rng = mulberry32(42) } = {}) {
   const pick = (/** @type {any[]} */ list) => list[Math.floor(rng() * list.length)];
   const chance = (/** @type {number} */ p) => rng() < p;
-  const actor = (/** @type {string} */ id) => `cloudflare-os:${id}`;
-  const people = SEED_PEOPLE.map((p) => actor(p.id));
-  const iso = (/** @type {number} */ t) => new Date(t).toISOString().slice(0, 10);
+  const people = SEED_PEOPLE.map((p) => actorId(p.id));
   const start = now - 70 * DAY;
   const originalNow = fake.now;
   let clock = start;
@@ -79,17 +82,17 @@ export function seedWork(fake, { items = 300, now = Date.parse("2026-09-26T12:00
     // Setup by Ada (the board owner) on day 0.
     const ada = people[0];
     // The first command also creates the service's seven default states (Triage … Canceled).
-    for (const [key, name, color, description] of LABELS) fake.run("work.label.create", { key, name, color, description }, { actor: ada });
+    for (const [key, name, color, labelDescription] of LABELS) fake.run("work.label.create", { key, name, color, description: labelDescription }, { actor: ada });
     const review = [...fake.rows.values()].find((r) => r.entity === "workflow_state" && r.data.key === "in_review");
     if (review) fake.run("work.state.update", { id: review.id, wip_limit: 5 }, { actor: ada, revision: review.revision });
-    const projectIds = PROJECTS.map(([name, description, state, lead, color], i) => fake.run("work.project.create", {
-      name, description, state, lead: people[/** @type {number} */ (lead)], color,
-      start_date: iso(start + i * 5 * DAY), target_date: iso(now + (20 + i * 15) * DAY),
+    const projectIds = PROJECTS.map(([name, projectDescription, state, lead, color], i) => fake.run("work.project.create", {
+      name, description: projectDescription, state, lead: people[/** @type {number} */ (lead)], color,
+      start_date: isoDay(start + i * 5 * DAY), target_date: isoDay(now + (20 + i * 15) * DAY),
     }, { actor: ada }).id);
-    const currentStart = Date.parse(`${iso(now)}T00:00:00Z`) - 5 * DAY;
+    const currentStart = Date.parse(`${isoDay(now)}T00:00:00Z`) - 5 * DAY;
     const cycles = [-3, -2, -1, 0, 1, 2].map((offset, i) => {
       const s = currentStart + offset * 14 * DAY;
-      const record = fake.run("work.cycle.create", { name: `Cycle ${21 + i}`, starts_on: iso(s), ends_on: iso(s + 13 * DAY), ...(offset === 0 ? { goal: "Ship the checkout redesign and close P1 bugs." } : {}) }, { actor: ada });
+      const record = fake.run("work.cycle.create", { name: `Cycle ${21 + i}`, starts_on: isoDay(s), ends_on: isoDay(s + 13 * DAY), ...(offset === 0 ? { goal: "Ship the checkout redesign and close P1 bugs." } : {}) }, { actor: ada });
       return { id: record.id, offset, start: s, end: s + 14 * DAY };
     });
 
@@ -132,8 +135,8 @@ export function seedWork(fake, { items = 300, now = Date.parse("2026-09-26T12:00
       if (labels.length) input.labels = labels;
       if (chance(0.7)) input.estimate = pick([1, 1, 2, 2, 3, 3, 3, 5, 5, 8, 13]);
       // About 1 in 10 items is overdue (a past due date on unfinished work); a quarter have a future one.
-      if (target !== "done" && target !== "canceled" && chance(0.2)) input.due_date = iso(now - Math.round(1 + rng() * 14) * DAY);
-      else if (chance(0.25)) input.due_date = iso(now + Math.round(1 + rng() * 30) * DAY);
+      if (target !== "done" && target !== "canceled" && chance(0.2)) input.due_date = isoDay(now - Math.round(1 + rng() * 14) * DAY);
+      else if (chance(0.25)) input.due_date = isoDay(now + Math.round(1 + rng() * 30) * DAY);
       if (chance(0.75)) input.project = projectIds[Math.floor(rng() * projectIds.length)];
       if (chance(0.1)) input.extensions = { customer: pick(CUSTOMERS) };
       const ref = { id: "" };

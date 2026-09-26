@@ -102,7 +102,7 @@ describe("keyboard-only journeys", () => {
     const key = /^([A-Z]+-\d+):/.exec(label)?.[1];
     assert.ok(key, `a card is focused (${label})`);
     const n = Number(key.split("-")[1]);
-    const before = await rowByNumber(page, n);
+    const original = await rowByNumber(page, n);
     await page.keyboard.press("Shift+ArrowDown");
     const announcement = await frame.evaluate(() => new Promise((r) => setTimeout(() => r(document.querySelector('[data-live="polite"]').textContent), 80)));
     assert.match(announcement, new RegExp(`Moving ${key} to .+ lane .+ Press Enter to confirm, Escape to cancel`));
@@ -117,8 +117,8 @@ describe("keyboard-only journeys", () => {
       await page.waitForTimeout(40);
     }
     await page.keyboard.press("Enter");
-    const after = await until(async () => { const r = await rowByNumber(page, n); return r.revision !== before.revision && r; }, { message: "assignee change applied" });
-    assert.notEqual(after.data.assignee ?? null, before.data.assignee ?? null);
+    const changed = await until(async () => { const r = await rowByNumber(page, n); return r.revision !== original.revision && r; }, { message: "assignee change applied" });
+    assert.notEqual(changed.data.assignee ?? null, original.data.assignee ?? null);
     await pull(frame);
     await until(async () => (await focused(frame)).startsWith(`${key}:`), { message: "focus follows the moved card" });
     await assertClean(page, errors);
@@ -240,6 +240,51 @@ describe("robustness", () => {
   });
 });
 
+describe("round 2", () => {
+  it("keeps the focused card in the DOM when a windowed column scrolls away from it", async () => {
+    const { page, frame, errors } = await h.open({ seed: 2000 });
+    await frame.locator(".board-scroll").focus();
+    await page.keyboard.press("ArrowDown");
+    const label = await focused(frame);
+    assert.match(label, /^[A-Z]+-\d+:/);
+    await frame.locator(".board-scroll").evaluate((el) => { el.scrollTop = el.scrollHeight; });
+    await page.waitForTimeout(150);
+    assert.equal(await focused(frame), label, "focus stayed on the same card");
+    await page.keyboard.press("ArrowDown");
+    assert.notEqual(await focused(frame), label, "arrow keys still move from it");
+    await assertClean(page, errors);
+  });
+
+  it("shows names for colleagues and times from the service", async () => {
+    const { page, frame, errors } = await h.open({ seed: 120 });
+    await inApp(frame, "(app) => app.setLayout('list')");
+    const updated = await frame.locator(".lg-row .col-updated").first().textContent();
+    assert.notEqual(updated?.trim(), "—");
+    const names = await frame.locator(".lg-row .col-assignee").allTextContents();
+    assert.ok(names.some((n) => /Hopper|Turing|Johnson|Torvalds|Hamilton|Lovelace/.test(n)), names.slice(0, 5).join(" | "));
+    assert.ok(!names.some((n) => n.includes("@")), "no account emails as names");
+    await assertClean(page, errors);
+  });
+
+  it("phones: one column with a switcher, filter behind a button, no horizontal page scroll", async () => {
+    const { page, frame, errors } = await h.open({ seed: 120, viewport: { width: 375, height: 812 }, hasTouch: true });
+    assert.equal(await frame.locator(".narrow-bar").isVisible(), true);
+    assert.equal(await frame.locator(".col-head").count(), 1);
+    assert.equal(await frame.locator("#wb-wql").isVisible(), false);
+    await frame.getByRole("button", { name: "Filter" }).click();
+    assert.equal(await frame.locator("#wb-wql").isVisible(), true);
+    const previous = await frame.locator('.narrow-tab[aria-pressed="true"]').textContent();
+    await frame.locator(".narrow-tab").nth(4).click();
+    assert.notEqual(await frame.locator('.narrow-tab[aria-pressed="true"]').textContent(), previous);
+    const overflow = await frame.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    assert.ok(overflow <= 0, `page scrolls sideways by ${overflow}px`);
+    assert.deepEqual(await axe(frame), []);
+    assert.deepEqual(await smallTargets(frame), []);
+    await screenshot(page, "narrow-375-light");
+    await assertClean(page, errors);
+  });
+});
+
 describe("screenshots", () => {
   for (const scheme of /** @type {const} */ (["light", "dark"])) {
     for (const [w, hgt] of [[375, 812], [768, 1024], [1440, 900]]) {
@@ -267,14 +312,18 @@ describe("performance", () => {
     const firstRender = await frame.evaluate(() => performance.getEntriesByName("wb:snapshot-to-render")[0]?.duration ?? -1);
     const timings = await frame.evaluate(() => {
       const { app } = globalThis.workBoard;
-      const time = (/** @type {() => void} */ fn) => { const t0 = performance.now(); fn(); return performance.now() - t0; };
+      /** @type {[string, () => void][]} */
+      const steps = [
+        ["filter", () => app.loadView({ ...app.view, id: null, name: "p", query: "priority:<=high -is:blocked" })],
+        ["regroupLanes", () => app.loadView({ ...app.view, swimlanesBy: "assignee" })],
+        ["regroupColumns", () => app.loadView({ ...app.view, columnsBy: "priority", swimlanesBy: null })],
+        ["clear", () => app.loadView({ ...app.view, query: "", columnsBy: "state" })],
+        ["list", () => app.setLayout("list")],
+        ["board", () => app.setLayout("board")],
+      ];
+      /** @type {Record<string, number>} */
       const out = {};
-      out.filter = time(() => app.loadView({ ...app.view, id: null, name: "p", query: "priority:<=high -is:blocked" }));
-      out.regroupLanes = time(() => app.loadView({ ...app.view, swimlanesBy: "assignee" }));
-      out.regroupColumns = time(() => app.loadView({ ...app.view, columnsBy: "priority", swimlanesBy: null }));
-      out.clear = time(() => app.loadView({ ...app.view, query: "", columnsBy: "state" }));
-      out.list = time(() => app.setLayout("list"));
-      out.board = time(() => app.setLayout("board"));
+      for (const [name, step] of steps) { const t0 = performance.now(); step(); out[name] = performance.now() - t0; }
       return out;
     });
     // Drag across the board and record frame intervals.

@@ -45,6 +45,12 @@ function code(err) {
   return m ? m[1] : null;
 }
 
+/** When a journal entry was committed, if the service says. @param {JournalEntry} change @returns {number|null} */
+function timeOf(change) {
+  const t = Date.parse(String(change.created_at ?? change.at ?? ""));
+  return Number.isNaN(t) ? null : t;
+}
+
 /**
  * @param {{ limit?: number, maxPagesPerPull?: number, now?: () => number }} [options]
  */
@@ -89,12 +95,6 @@ export function createReplica(options = {}) {
     version++;
   }
 
-  /** @param {JournalEntry} change @returns {number|null} */
-  function timeOf(change) {
-    const t = Date.parse(String(change.created_at ?? change.at ?? ""));
-    return Number.isNaN(t) ? null : t;
-  }
-
   /** @param {string} id @param {HistoryEntry} entry */
   function remember(id, entry) {
     let list = history.get(id);
@@ -129,7 +129,7 @@ export function createReplica(options = {}) {
       records.set(change.record_id, {
         id: change.record_id, entity: change.entity, revision: change.revision,
         created_by: current ? current.created_by : change.actor, updated_by: change.actor ?? current?.updated_by,
-        created_at: current?.created_at, updated_at: change.created_at ?? change.at ?? current?.updated_at,
+        created_at: current ? current.created_at : change.created_at ?? change.at, updated_at: change.created_at ?? change.at ?? current?.updated_at,
         data: change.data ?? {},
       });
       changed = true;

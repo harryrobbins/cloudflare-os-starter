@@ -161,8 +161,9 @@ describe("parse: errors with positions", () => {
   });
 });
 
+const highlightKinds = (q) => highlight(q).map((t) => [q.slice(t.start, t.end), t.kind]);
+
 describe("highlight", () => {
-  const kinds = (q) => highlight(q).map((t) => [q.slice(t.start, t.end), t.kind]);
   it.each([
     ["status:active", [["status:", "field"], ["active", "value"]]],
     ["priority:<=2", [["priority:", "field"], ["<=", "op"], ["2", "value"]]],
@@ -173,7 +174,7 @@ describe("highlight", () => {
     ["is:nope", [["is:", "field"], ["nope", "error"]]],
     ["NOT a AND b", [["NOT", "keyword"], ["a", "text"], ["AND", "keyword"], ["b", "text"]]],
     ["a )", [["a", "text"], [")", "error"]]],
-  ])("%s", (q, expected) => expect(kinds(q)).toEqual(expected));
+  ])("%s", (q, expected) => expect(highlightKinds(q)).toEqual(expected));
 
   it("omits whitespace and orders tokens", () => {
     const tokens = highlight("  a   b ");

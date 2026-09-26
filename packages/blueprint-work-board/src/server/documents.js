@@ -27,7 +27,7 @@ const PROPERTIES = ["key", "priority", "assignee", "labels", "estimate", "due", 
  *   id: string, name: string, query: string, layout: string, columnsBy: string, swimlanesBy: string|null,
  *   sort: { field: string, dir: "asc"|"desc" }[],
  *   display: { density: "comfortable"|"compact", properties: string[], showSubIssues: boolean, showArchived: boolean,
- *     hideEmptyLanes: boolean, hideEmptyColumns: boolean, listColumns: string[] },
+ *     hideEmptyLanes: boolean, hideEmptyColumns: boolean|null, listColumns: string[] },
  *   shared: true, created_by: string|null, updated_by: string|null, updated_at: string, version: number,
  * }} ViewDoc
  * @typedef {{ shortcuts: boolean, lastViewId: string|null, draft: Record<string, unknown>|null, collapsedColumns: string[],
@@ -88,16 +88,19 @@ export function normaliseView(input, existing = null) {
     showSubIssues: d.showSubIssues !== false,
     showArchived: d.showArchived === true,
     hideEmptyLanes: d.hideEmptyLanes === true,
-    hideEmptyColumns: d.hideEmptyColumns === true,
+    // null: automatic (hidden while the view filters, shown otherwise)
+    hideEmptyColumns: typeof d.hideEmptyColumns === "boolean" ? d.hideEmptyColumns : null,
     listColumns: list(d.listColumns, null, ["key", "title", "state", "priority", "assignee", "labels", "estimate", "due", "updated"]),
   };
   return { id, name, query, layout, columnsBy, swimlanesBy, sort, display, shared: true };
 }
 
+/** Unique short strings from a list (at most 200). @param {unknown} v @returns {string[]} */
+const stringList = (v) => Array.isArray(v) ? [...new Set(v.filter((x) => typeof x === "string" && x.length <= 200))].slice(0, 200) : [];
+
 /** @param {any} input @returns {Omit<Prefs, "version">} */
 export function normalisePrefs(input) {
   const p = input && typeof input === "object" && !Array.isArray(input) ? input : {};
-  const strings = (/** @type {unknown} */ v) => Array.isArray(v) ? [...new Set(v.filter((x) => typeof x === "string" && x.length <= 200))].slice(0, 200) : [];
   let draft = null;
   if (p.draft && typeof p.draft === "object" && !Array.isArray(p.draft)) {
     draft = p.draft;
@@ -106,7 +109,7 @@ export function normalisePrefs(input) {
   const out = {
     shortcuts: p.shortcuts !== false,
     lastViewId: typeof p.lastViewId === "string" && ID.test(p.lastViewId) ? p.lastViewId : null,
-    draft, collapsedColumns: strings(p.collapsedColumns), collapsedLanes: strings(p.collapsedLanes),
+    draft, collapsedColumns: stringList(p.collapsedColumns), collapsedLanes: stringList(p.collapsedLanes),
     reduceMotion: p.reduceMotion === true,
   };
   if (jsonBytes(out) > DOC_LIMITS.prefsBytes) throw invalid("Preferences are too large.");
@@ -191,18 +194,102 @@ export function createDocuments(storage, options = {}) {
   };
 }
 
+export const PEOPLE_LIMITS = Object.freeze({ people: 500, bytes: 64 * 1024, name: 80, actor: 300 });
+const ACTOR = /^[a-z][a-z0-9-]{0,39}:[!-~]{1,255}$/;
+
+/**
+ * @typedef {{ name: string|null, alias: string|null, seen: number }} PersonEntry
+ * @typedef {{ actor: string, name: string|null, alias: string|null, displayName: string|null, seen: number }} Person
+ */
+
+/** @param {{ people: Record<string, PersonEntry> }} doc @returns {Person[]} */
+const listPeople = (doc) => Object.entries(doc.people).map(([actor, p]) => ({ actor, name: p.name, alias: p.alias, displayName: p.alias ?? p.name, seen: p.seen }))
+  .toSorted((a, b) => String(a.displayName ?? a.actor).localeCompare(String(b.displayName ?? b.actor)));
+
+/**
+ * Display names for Records actors. A viewer's own name is learned when they use the board
+ * (`cloudflare-os:<viewer.id>` → gadgetViewer.displayName, the connector's actor mapping); anyone
+ * can set an alias for an actor (e.g. a service credential → "Import bot"). One bounded document:
+ * at most 500 people and 64 KiB, forgetting the longest-unseen entries without an alias first.
+ * @param {Parameters<typeof createDocuments>[0]} storage @param {{ now?: () => number }} [options]
+ */
+export function createPeople(storage, options = {}) {
+  const now = options.now ?? (() => Date.now());
+  // Writes are read-modify-write of one document; storage calls interleave across awaits, so
+  // they run one at a time or concurrent viewers would overwrite each other.
+  /** @type {Promise<unknown>} */
+  let chain = Promise.resolve();
+  /** @template T @param {() => Promise<T>} fn @returns {Promise<T>} */
+  const serial = (fn) => { const run = chain.then(fn, fn); chain = run.catch(() => {}); return run; };
+  /** @returns {Promise<{ people: Record<string, PersonEntry>, version: number }>} */
+  const load = async () => (await storage.get("people")) ?? { people: {}, version: 0 };
+  /** @param {{ people: Record<string, PersonEntry>, version: number }} doc */
+  async function save(doc) {
+    const entries = Object.entries(doc.people);
+    // Forget the longest-unseen people (aliases last) until within bounds.
+    entries.sort(([, a], [, b]) => (a.alias ? 1 : 0) - (b.alias ? 1 : 0) || a.seen - b.seen);
+    while (entries.length > PEOPLE_LIMITS.people || (entries.length && jsonBytes({ people: Object.fromEntries(entries) }) > PEOPLE_LIMITS.bytes)) entries.shift();
+    const next = { people: Object.fromEntries(entries), version: doc.version + 1 };
+    await storage.put("people", next);
+    return next;
+  }
+  /** @param {unknown} value @param {string} what */
+  const cleanName = (value, what) => {
+    if (value === null || value === undefined || value === "") return null;
+    if (typeof value !== "string") throw invalid(`${what} must be text.`);
+    const t = [...value].filter((ch) => ch.charCodeAt(0) >= 32 && ch.charCodeAt(0) !== 127).join("").trim();
+    if (t.length > PEOPLE_LIMITS.name) throw invalid(`${what} can be at most ${PEOPLE_LIMITS.name} characters.`);
+    return t || null;
+  };
+  return {
+    async people() { return listPeople(await load()); },
+    /** Records the signed-in viewer's display name. @param {unknown} viewer */
+    rememberViewer(viewer) { return serial(() => remember(viewer)); },
+    /** Sets (or clears, with null) the name shown for an actor. @param {unknown} actor @param {unknown} alias */
+    setPersonAlias(actor, alias) { return serial(() => setAlias(actor, alias)); },
+  };
+
+  /** @param {unknown} viewer */
+  async function remember(viewer) {
+      const v = /** @type {any} */ (viewer);
+      if (!v || typeof v.id !== "string" || !v.id || v.id.length > 200) throw invalid("A viewer with an id is required.");
+      const actor = `cloudflare-os:${v.id}`;
+      if (!ACTOR.test(actor)) throw invalid("That viewer id cannot be a Records actor.");
+      const name = cleanName(v.displayName, "A display name");
+      const doc = await load();
+      const prev = doc.people[actor];
+      const t = now();
+      // Unchanged and seen within a day: nothing to write.
+      if (prev && prev.name === name && t - prev.seen < 86_400_000) return listPeople(doc);
+      doc.people[actor] = { name, alias: prev?.alias ?? null, seen: t };
+      return listPeople(await save(doc));
+  }
+  /** @param {unknown} actor @param {unknown} alias */
+  async function setAlias(actor, alias) {
+      if (typeof actor !== "string" || actor.length > PEOPLE_LIMITS.actor || !ACTOR.test(actor)) throw invalid("That is not a Records actor.");
+      const clean = cleanName(alias, "A name");
+      const doc = await load();
+      const prev = doc.people[actor];
+      if (!prev && !clean) return listPeople(doc);
+      doc.people[actor] = { name: prev?.name ?? null, alias: clean, seen: prev?.seen ?? now() };
+      return listPeople(await save(doc));
+  }
+}
+
+/** @param {any} v */
+const cloneValue = (v) => (v === undefined ? undefined : structuredClone(v));
+
 /** An in-memory stand-in for Durable Object storage (tests, harness). Values are structured-cloned. */
 export function memoryStorage() {
   /** @type {Map<string, any>} */
   const map = new Map();
-  const clone = (/** @type {any} */ v) => (v === undefined ? undefined : structuredClone(v));
   return {
     map,
-    async get(/** @type {string} */ key) { return clone(map.get(key)); },
-    async put(/** @type {string} */ key, /** @type {any} */ value) { map.set(key, clone(value)); },
+    async get(/** @type {string} */ key) { return cloneValue(map.get(key)); },
+    async put(/** @type {string} */ key, /** @type {any} */ value) { map.set(key, cloneValue(value)); },
     async delete(/** @type {string} */ key) { return map.delete(key); },
     async list({ prefix = "" } = {}) {
-      return new Map([...map].filter(([k]) => k.startsWith(prefix)).toSorted(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, clone(v)]));
+      return new Map([...map].filter(([k]) => k.startsWith(prefix)).toSorted(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, cloneValue(v)]));
     },
   };
 }

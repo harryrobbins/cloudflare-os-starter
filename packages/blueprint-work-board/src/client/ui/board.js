@@ -31,6 +31,11 @@ const INITIAL_WINDOW = 12;
  * @typedef {(type: string, payload?: any) => void} OnAction
  */
 
+/** The cards (not ghosts or placeholders) of a cell. @param {Lane} lane @param {string} col */
+function cardsIn(lane, col) {
+  return (lane.cells.get(col) ?? []).filter((e) => e.kind === "card");
+}
+
 /** @param {{ doc: Document, onAction: OnAction }} opts */
 export function createBoardView({ doc, onAction }) {
   const grid = h("div", { class: "board-grid" });
@@ -72,6 +77,10 @@ export function createBoardView({ doc, onAction }) {
       create: () => h("div", { class: "col-head" }),
       update: (node, c) => renderColumnHead(/** @type {HTMLElement} */ (node), c),
     });
+    // Chips are budgeted to the real card width (the column track is responsive).
+    const head = /** @type {HTMLElement|null} */ (headers.querySelector(".col-head:not(.collapsed)"));
+    const trackWidth = head?.getBoundingClientRect().width ?? 0;
+    next.env.metaWidth = trackWidth ? Math.floor(trackWidth - 34) : undefined;
     const lanes = projection.lanes;
     let total = 0;
     for (const l of lanes) for (const c of l.cells.values()) total += c.length;
@@ -196,6 +205,12 @@ export function createBoardView({ doc, onAction }) {
       slice = entries.slice(w.start, w.end);
       top = w.start * pitch;
       bottom = (n - w.end) * pitch;
+      // The focused card stays in the DOM when the window moves away from it (pinned just
+      // outside the slice, taking one pitch from the spacer), so focus is never dropped.
+      const focusKeyHere = m.focus && m.focus.lane === lane.key && m.focus.col === col ? m.focus.key : null;
+      const fi = focusKeyHere ? entries.findIndex((e) => e.key === focusKeyHere) : -1;
+      if (fi >= 0 && fi < w.start) { slice = [entries[fi], ...slice]; top -= pitch; }
+      else if (fi >= w.end) { slice = [...slice, entries[fi]]; bottom -= pitch; }
       ul.classList.add("windowed");
     } else {
       windows.delete(cellKey);
@@ -221,7 +236,9 @@ export function createBoardView({ doc, onAction }) {
       create: (e) => {
         if (e.kind === "empty") {
           return h("li", { class: "cell-empty", tabindex: "-1", "data-empty": "1" },
-            h("span", { class: "empty-text" }, m.emptyText));
+            h("span", { class: "empty-text" }, m.emptyText),
+            m.canWrite ? h("button", { type: "button", class: "cell-add", tabindex: "-1", "aria-label": `New item in ${colLabel}${lane.group ? `, ${lane.group.label}` : ""}`, title: "New item here (C)",
+              onclick: (/** @type {Event} */ ev) => { ev.stopPropagation(); onAction("create", { col, lane: lane.key }); } }, icon("plus", { size: 14 })) : null);
         }
         if (e.kind === "drop") return h("li", { class: "drop-target", "aria-hidden": "true" }, h("div", { class: "drop-card" }, "Drop here"));
         const li = h("li", { class: "slot" });
@@ -306,11 +323,6 @@ export function createBoardView({ doc, onAction }) {
     return { lanes, cols };
   }
 
-  /** @param {Lane} lane @param {string} col */
-  function cards(lane, col) {
-    return (lane.cells.get(col) ?? []).filter((e) => e.kind === "card");
-  }
-
   /** @returns {{ li: number, ci: number, idx: number }|null} */
   function where() {
     if (!model?.focus) return null;
@@ -318,14 +330,14 @@ export function createBoardView({ doc, onAction }) {
     const li = lanes.findIndex((l) => l.key === model?.focus?.lane);
     const ci = cols.indexOf(model.focus.col);
     if (li < 0 || ci < 0) return null;
-    const idx = cards(lanes[li], cols[ci]).findIndex((e) => e.key === model?.focus?.key);
+    const idx = cardsIn(lanes[li], cols[ci]).findIndex((e) => e.key === model?.focus?.key);
     return { li, ci, idx };
   }
 
   /** The position to use when nothing is focused yet: the first card anywhere. */
   function firstPos() {
     const { lanes, cols } = cellGrid();
-    for (let li = 0; li < lanes.length; li++) for (let ci = 0; ci < cols.length; ci++) if (cards(lanes[li], cols[ci]).length) return { li, ci, idx: 0 };
+    for (let li = 0; li < lanes.length; li++) for (let ci = 0; ci < cols.length; ci++) if (cardsIn(lanes[li], cols[ci]).length) return { li, ci, idx: 0 };
     return lanes.length && cols.length ? { li: 0, ci: 0, idx: -1 } : null;
   }
 
@@ -334,7 +346,7 @@ export function createBoardView({ doc, onAction }) {
     const { lanes, cols } = cellGrid();
     const lane = lanes[li], col = cols[ci];
     if (!lane || col === undefined) return null;
-    const list = cards(lane, col);
+    const list = cardsIn(lane, col);
     if (!list.length) return { key: `empty:${lane.key}::${col}`, lane: lane.key, col };
     const e = list[Math.max(0, Math.min(list.length - 1, idx))];
     return { key: e.key, lane: lane.key, col };
@@ -355,7 +367,7 @@ export function createBoardView({ doc, onAction }) {
       return go(first.li, first.ci, Math.max(0, first.idx));
     }
     let { li, ci, idx } = at;
-    const len = (/** @type {number} */ l, /** @type {number} */ c) => cards(lanes[l], cols[c]).length;
+    const len = (/** @type {number} */ l, /** @type {number} */ c) => cardsIn(lanes[l], cols[c]).length;
     switch (dir) {
       case "down":
         if (idx < len(li, ci) - 1) return go(li, ci, idx + 1);
@@ -427,7 +439,7 @@ export function createBoardView({ doc, onAction }) {
   function startMove() {
     const f = focusedEntry();
     if (!f || !model?.canWrite) return false;
-    const list = cards(/** @type {Lane} */ (model.projection.lanes.find((l) => l.key === f.lane)), f.col);
+    const list = cardsIn(/** @type {Lane} */ (model.projection.lanes.find((l) => l.key === f.lane)), f.col);
     moving = { entry: f.entry, fromLane: f.lane, fromCol: f.col, toLane: f.lane, toCol: f.col, index: list.findIndex((e) => e.key === f.entry.key) };
     announceMove(true);
     rerender();
@@ -441,7 +453,7 @@ export function createBoardView({ doc, onAction }) {
     let li = lanes.findIndex((l) => l.key === moving?.toLane);
     let ci = cols.indexOf(moving.toCol);
     let index = moving.index;
-    const size = (/** @type {number} */ l, /** @type {number} */ c) => cards(lanes[l], cols[c]).filter((e) => e.key !== moving?.entry.key).length;
+    const size = (/** @type {number} */ l, /** @type {number} */ c) => cardsIn(lanes[l], cols[c]).filter((e) => e.key !== moving?.entry.key).length;
     if (dir === "left" && ci > 0) { ci--; index = model.manualOrder ? Math.min(index, size(li, ci)) : 0; }
     else if (dir === "right" && ci < cols.length - 1) { ci++; index = model.manualOrder ? Math.min(index, size(li, ci)) : 0; }
     else if (dir === "up") { if (model.manualOrder && index > 0) index--; else if (li > 0) { li--; index = model.manualOrder ? size(li, ci) : 0; } }
@@ -468,10 +480,10 @@ export function createBoardView({ doc, onAction }) {
     const m = moving;
     moving = null;
     const lane = model.projection.lanes.find((l) => l.key === m.toLane);
-    const ordered = lane ? cards(lane, m.toCol).filter((e) => e.key !== m.entry.key).map((e) => e.item) : [];
+    const ordered = lane ? cardsIn(lane, m.toCol).filter((e) => e.key !== m.entry.key).map((e) => e.item) : [];
     rerender();
     if (m.toLane === m.fromLane && m.toCol === m.fromCol) {
-      const original = lane ? cards(lane, m.fromCol).findIndex((e) => e.key === m.entry.key) : -1;
+      const original = lane ? cardsIn(lane, m.fromCol).findIndex((e) => e.key === m.entry.key) : -1;
       if (!model.manualOrder || m.index === original) {
         onAction("announce", "Move cancelled: same place.");
         return true;
@@ -658,8 +670,8 @@ export function createBoardView({ doc, onAction }) {
     if (!commit || !d.target || !model) return;
     const toLane = /** @type {string} */ (d.target.ul.dataset.lane), toCol = /** @type {string} */ (d.target.ul.dataset.col);
     const lane = model.projection.lanes.find((l) => l.key === toLane);
-    const ordered = lane ? cards(lane, toCol).filter((e) => e.item.id !== d.hit.entry.item.id).map((e) => e.item) : [];
-    const all = lane ? cards(lane, toCol) : [];
+    const ordered = lane ? cardsIn(lane, toCol).filter((e) => e.item.id !== d.hit.entry.item.id).map((e) => e.item) : [];
+    const all = lane ? cardsIn(lane, toCol) : [];
     const oldIndex = all.findIndex((e) => e.key === d.hit.entry.key);
     let index = d.target.index;
     if (toLane === d.hit.lane && toCol === d.hit.col && oldIndex >= 0 && oldIndex < index) index = Math.max(0, index);

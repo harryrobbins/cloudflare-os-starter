@@ -52,4 +52,11 @@ export class Gadget extends DurableObject {
   /** @param {string} key */
   item(key) { return this.api.item(key); }
   vocabulary() { return this.api.vocabulary(); }
+
+  // People (display names for Records actors)
+  people() { return this.api.people(); }
+  /** @param {any} viewer */
+  rememberViewer(viewer) { return this.api.rememberViewer(viewer); }
+  /** @param {string} actor @param {string|null} alias */
+  setPersonAlias(actor, alias) { return this.api.setPersonAlias(actor, alias); }
 }

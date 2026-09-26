@@ -31,6 +31,7 @@ server in its own process group, checks one seeded board and a manual-approval c
 | `v1=1` | A datastore without migration 010: only `work_item` with title/description/status, only `work.create`/`work.update` |
 | `access=read` | Read-only connection (`command` fails `read_only:`) |
 | `latency=300` | Added before and after every facet call (ms) |
+| `people=0` | Start with an empty people document (colleagues show as accounts until they open the board) |
 | `timestamps=0` | Records and change entries carry no timestamps (the service before its `created_at` change); default on |
 | `now=2026-09-26T12:00:00Z` | Fake clock base; the seed's history ends just before it. Default real now |
 | `anon=1` | Pane 1 has no signed-in viewer (`gadgetViewer` null; `$createViewerAssertion` fails `forbidden:`) |

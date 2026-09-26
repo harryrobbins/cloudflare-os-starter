@@ -56,6 +56,9 @@ export function icon(name, opts = {}) {
     svg("path", { d: PATHS[name], fill: "none", stroke: "currentColor", "stroke-width": "1.5", "stroke-linecap": "round", "stroke-linejoin": "round" }));
 }
 
+/** The ring of a state icon. @param {Record<string, any>} [extra] */
+const stateRing = (extra = {}) => svg("circle", { cx: 7, cy: 7, r: 5.5, fill: "none", stroke: "currentColor", "stroke-width": 1.5, ...extra });
+
 /**
  * Workflow-state icon by kind (Linear's shapes): triage ◇, backlog dashed ○, unstarted ○,
  * started ◑ (fill grows with position among started states), completed ✓●, canceled ✕●.
@@ -64,18 +67,17 @@ export function icon(name, opts = {}) {
 export function stateIcon(kind, color, opts = {}) {
   const size = opts.size ?? 14;
   const box = { class: "icon state-icon", width: size, height: size, viewBox: "0 0 14 14", "aria-hidden": "true", focusable: "false", style: themed(color) };
-  const ring = (/** @type {Record<string, any>} */ extra = {}) => svg("circle", { cx: 7, cy: 7, r: 5.5, fill: "none", stroke: "currentColor", "stroke-width": 1.5, ...extra });
   switch (kind) {
     case "triage":
       return svg("svg", box, svg("path", { d: "M7 1.3L12.7 7 7 12.7 1.3 7z", fill: "none", stroke: "currentColor", "stroke-width": 1.5, "stroke-linejoin": "round" }),
         svg("path", { d: "M7 4.6L9.4 7 7 9.4 4.6 7z", fill: "currentColor" }));
     case "backlog":
-      return svg("svg", box, ring({ "stroke-dasharray": "2 1.6" }));
+      return svg("svg", box, stateRing({ "stroke-dasharray": "2 1.6" }));
     case "started": {
       const p = Math.max(0.25, Math.min(0.75, opts.progress ?? 0.5));
       const a = p * 2 * Math.PI;
       const x = 7 + 3 * Math.sin(a), y = 7 - 3 * Math.cos(a);
-      return svg("svg", box, ring(), svg("path", { d: `M7 7V4A3 3 0 ${p > 0.5 ? 1 : 0} 1 ${x.toFixed(2)} ${y.toFixed(2)}Z`, fill: "currentColor" }));
+      return svg("svg", box, stateRing(), svg("path", { d: `M7 7V4A3 3 0 ${p > 0.5 ? 1 : 0} 1 ${x.toFixed(2)} ${y.toFixed(2)}Z`, fill: "currentColor" }));
     }
     case "completed":
       return svg("svg", box, svg("circle", { cx: 7, cy: 7, r: 6.2, fill: "currentColor" }),
@@ -84,7 +86,7 @@ export function stateIcon(kind, color, opts = {}) {
       return svg("svg", box, svg("circle", { cx: 7, cy: 7, r: 6.2, fill: "currentColor" }),
         svg("path", { d: "M5 5l4 4M9 5l-4 4", fill: "none", stroke: "var(--surface)", "stroke-width": 1.6, "stroke-linecap": "round" }));
     default:
-      return svg("svg", box, ring());
+      return svg("svg", box, stateRing());
   }
 }
 

@@ -76,9 +76,10 @@ const COMPARABLE = new Set(["status", "state", "kind", "priority", "estimate", "
 const VALUES = ["bug", "In Progress", "a,b", 'say "hi"', "x\\y", "-7d", "2026-09-30", "3", "me", "none", "<5", "a..b", "Done", "WRK-4", "current", "é", "x:y", "(p)"];
 const WORDS = ["login", "or", "Fix bug", "-dash", "WRK-7", "a:b", "(x)", "and", "plain"];
 
+const quoteWord = (v) => (/^[A-Za-z0-9_-]+$/.test(v) && !v.startsWith('-') ? v : `"${v.replace(/[\\"]/g, (c) => `\\${c}`)}"`);
+
 function generate(rand, depth = 0) {
   const pick = (list) => list[Math.floor(rand() * list.length)];
-  const quote = (v) => (/^[A-Za-z0-9_-]+$/.test(v) && !v.startsWith('-') ? v : `"${v.replace(/[\\"]/g, (c) => `\\${c}`)}"`);
   const r = rand();
   if (depth < 3 && r < 0.2) {
     const n = 2 + Math.floor(rand() * 3);
@@ -87,16 +88,16 @@ function generate(rand, depth = 0) {
     return `(${parts.join(joiner)})`;
   }
   if (r < 0.3) return `${pick(["-", "NOT ", "not "])}${generate(rand, depth + 1)}`;
-  if (r < 0.4) return quote(pick(WORDS));
+  if (r < 0.4) return quoteWord(pick(WORDS));
   if (r < 0.47) return `is:${pick(["blocked", "overdue", "stale", "sub", "open", "Parent"])}`;
   if (r < 0.52) return `has:${pick(["due", "label", "estimate", "ext.team", "assignee"])}`;
   if (r < 0.56) return `sort:${pick(["-", ""])}${pick(["priority", "updated", "due", "key"])}`;
   const field = pick(FIELDS);
   const kind = rand();
-  if (COMPARABLE.has(field) && kind < 0.25) return `${field}:${pick(["<", "<=", ">", ">=", "="])}${quote(pick(VALUES))}`;
+  if (COMPARABLE.has(field) && kind < 0.25) return `${field}:${pick(["<", "<=", ">", ">=", "="])}${quoteWord(pick(VALUES))}`;
   if (COMPARABLE.has(field) && kind < 0.4) return `${field}:${pick(["1", "2026-09-01", "high"])}..${pick(["5", "2026-10-01", "low"])}`;
   const n = 1 + Math.floor(rand() * 3);
-  return `${field}:${Array.from({ length: n }, () => quote(pick(VALUES))).join(",")}`;
+  return `${field}:${Array.from({ length: n }, () => quoteWord(pick(VALUES))).join(",")}`;
 }
 
 describe("format: round-trip property", () => {

@@ -49,10 +49,13 @@ export function parseDateInput(text, today) {
   return null;
 }
 
+/** The value all items share, or undefined. @param {ItemView[]} items @param {(i: ItemView) => unknown} get */
+const commonValue = (items, get) => items.length > 0 && items.every((i) => get(i) === get(items[0])) ? get(items[0]) : undefined;
+/** "WRK-3" or "4 items". @param {ItemView[]} items */
+const targetLabel = (items) => (items.length === 1 ? items[0].key : `${items.length} items`);
+
 /** @param {PickerDeps} deps */
 export function createPickers(deps) {
-  const same = (/** @type {ItemView[]} */ items, /** @type {(i: ItemView) => unknown} */ get) => items.length > 0 && items.every((i) => get(i) === get(items[0])) ? get(items[0]) : undefined;
-  const who = (/** @type {ItemView[]} */ items) => (items.length === 1 ? items[0].key : `${items.length} items`);
 
   /**
    * Opens the picker for a property. With `onValues`, the chosen patch is handed back instead of
@@ -63,7 +66,7 @@ export function createPickers(deps) {
   function pick(prop, items, anchor, onValues = null) {
     const index = deps.index();
     const today = deps.today();
-    const target = who(items);
+    const target = targetLabel(items);
     const returnTo = "getBoundingClientRect" in anchor ? anchor : null;
     /** @param {(item: ItemView) => Record<string, unknown>|null} patchFor @param {string} label */
     const send = (patchFor, label) => {
@@ -75,7 +78,7 @@ export function createPickers(deps) {
 
     switch (prop) {
       case "state": {
-        const current = same(items, (i) => i.state);
+        const current = commonValue(items, (i) => i.state);
         return open(`State for ${target}`, index.states.map((s, n) => ({
           value: s.key, label: s.name, icon: () => stateIcon(s.kind, s.color), selected: s.key === current, hint: n < 9 ? String(n + 1) : undefined,
         })), ([key]) => {
@@ -84,13 +87,13 @@ export function createPickers(deps) {
         });
       }
       case "priority": {
-        const current = same(items, (i) => i.priority);
+        const current = commonValue(items, (i) => i.priority);
         return open(`Priority for ${target}`, PRIORITY_ORDER.map((p, n) => ({
           value: String(p), label: PRIORITIES[p].name, icon: () => priorityIcon(p), selected: p === current, hint: String(n === 4 ? 0 : n + 1),
         })), ([v]) => send(() => ({ priority: Number(v) }), `Set priority of ${target} to ${PRIORITIES[Number(v)].name}`));
       }
       case "assignee": {
-        const current = same(items, (i) => i.assignee ?? "");
+        const current = commonValue(items, (i) => i.assignee ?? "");
         const people = [...index.people.values()].filter((p) => p.id.startsWith("cloudflare-os:") || p.id === deps.me).toSorted((a, b) => a.name.localeCompare(b.name));
         /** @type {PickerOption[]} */
         const options = [];
@@ -124,7 +127,7 @@ export function createPickers(deps) {
         });
       }
       case "estimate": {
-        const current = same(items, (i) => i.estimate);
+        const current = commonValue(items, (i) => i.estimate);
         const values = [0, 1, 2, 3, 5, 8, 13, 21];
         return open(`Estimate for ${target}`, [
           ...values.map((v) => ({ value: String(v), label: `${v} ${v === 1 ? "point" : "points"}`, selected: v === current, icon: () => icon("estimate", { size: 14 }) })),
@@ -137,7 +140,7 @@ export function createPickers(deps) {
       case "due": case "start": {
         const field = prop === "due" ? "due_date" : "start_date";
         const noun = prop === "due" ? "due date" : "start date";
-        const current = same(items, (i) => (prop === "due" ? i.due : i.start));
+        const current = commonValue(items, (i) => (prop === "due" ? i.due : i.start));
         return open(`${noun[0].toUpperCase()}${noun.slice(1)} for ${target}`, [
           ...datePresets(index, today).map(([label, day]) => ({ value: day, label, detail: new Date(`${day}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }), selected: day === current, icon: () => icon("calendar", { size: 14 }) })),
           { value: "", label: `No ${noun}`, selected: current === null },
@@ -147,14 +150,14 @@ export function createPickers(deps) {
         });
       }
       case "project": {
-        const current = same(items, (i) => i.project ?? "");
+        const current = commonValue(items, (i) => i.project ?? "");
         return open(`Project for ${target}`, [
           ...index.projects.filter((p) => !p.archived).map((p) => ({ value: p.id, label: p.name, detail: p.state, icon: () => h("span", { class: "dot", style: { background: p.color } }), selected: p.id === current })),
           { value: "", label: "No project", selected: current === "" },
         ], ([v]) => send(() => ({ project: v || null }), v ? `Move ${target} to ${index.projectById.get(v)?.name}` : `Remove ${target} from its project`));
       }
       case "cycle": {
-        const current = same(items, (i) => i.cycle ?? "");
+        const current = commonValue(items, (i) => i.cycle ?? "");
         return open(`Cycle for ${target}`, [
           ...index.cycles.filter((c) => !c.end || c.end >= addDays(today, -28)).map((c) => ({
             value: c.id, label: c.name, selected: c.id === current,
@@ -170,7 +173,7 @@ export function createPickers(deps) {
         const blocked = new Set(ids);
         let grew = true;
         while (grew) { grew = false; for (const it of index.itemList) if (it.parent && blocked.has(it.parent) && !blocked.has(it.id)) { blocked.add(it.id); grew = true; } }
-        const current = same(items, (i) => i.parent ?? "");
+        const current = commonValue(items, (i) => i.parent ?? "");
         const options = index.itemList.filter((i) => !blocked.has(i.id) && !i.archived).toSorted((a, b) => (b.number ?? 0) - (a.number ?? 0)).slice(0, 400).map((i) => ({
           value: i.id, label: `${i.key} ${i.title}`, selected: i.id === current, keywords: i.key,
         }));

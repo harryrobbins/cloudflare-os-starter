@@ -54,8 +54,19 @@ export function createStore(options) {
 
   const replica = createReplica({ limit: SNAPSHOT_LIMIT, now });
   /** @type {Map<string, string>} */
-  const names = new Map();
-  if (me && viewer?.displayName) names.set(me, viewer.displayName);
+  let names = new Map();
+  let namesVersion = 0;
+  /** @type {{ actor: string, name: string|null, alias: string|null, displayName: string|null }[]} */
+  let people = [];
+  /** @param {any} list */
+  function setPeople(list) {
+    people = Array.isArray(list) ? list : [];
+    names = new Map(people.filter((p) => p.displayName).map((p) => [p.actor, String(p.displayName)]));
+    // The signed-in viewer's own account name is authoritative for them unless someone aliased it.
+    if (me && viewer?.displayName && !people.find((p) => p.actor === me)?.alias) names.set(me, viewer.displayName);
+    namesVersion++;
+  }
+  setPeople([]);
 
   const s = {
     /** @type {Phase} */ phase: "loading",
@@ -102,7 +113,7 @@ export function createStore(options) {
   }
 
   function index() {
-    const key = `${replica.version}|${s.settings.keyPrefix ?? ""}|${s.planning}|${s.connection?.label ?? ""}`;
+    const key = `${replica.version}|${s.settings.keyPrefix ?? ""}|${s.planning}|${s.connection?.label ?? ""}|${namesVersion}`;
     if (!indexCache || indexCache.key !== key) {
       indexCache = { key, index: buildIndex(replica.records.values(), { planning: s.planning, keyPrefix: s.settings.keyPrefix, label: s.connection?.label ?? "", names, times: replica.times }) };
     }
@@ -164,12 +175,19 @@ export function createStore(options) {
     s.connection = setup.connection;
     s.description = setup.description;
     if (!isWorkV1(s.description)) { s.phase = "wrong_module"; s.phaseMessage = ""; notify("phase"); return; }
-    const [snapshot, settings, views, prefs] = await Promise.all([
+    const [snapshot, settings, views, prefs, known] = await Promise.all([
       source.snapshot(SNAPSHOT_LIMIT),
       rpc(() => gadget.getSettings()).catch(() => null),
       rpc(() => gadget.listViews()).catch(() => []),
       viewer?.id ? rpc(() => gadget.getPrefs(viewer.id)).catch(() => null) : Promise.resolve(null),
+      typeof gadget.people === "function" ? rpc(() => gadget.people()).catch(() => []) : Promise.resolve([]),
     ]);
+    setPeople(known);
+    // Tell the board who we are (so everyone sees our name, not our account), when it changed.
+    const mine = people.find((p) => p.actor === me);
+    if (viewer?.id && viewer.displayName && typeof gadget.rememberViewer === "function" && mine?.name !== viewer.displayName) {
+      rpc(() => gadget.rememberViewer({ id: viewer.id, displayName: viewer.displayName })).then((list) => { setPeople(list); notify("data"); }).catch(() => {});
+    }
     replica.loadSnapshot(snapshot);
     try { performance.mark("wb:snapshot"); } catch { /* no performance API */ }
     s.planning = hasPlanning({ description: s.description, records: snapshot.records });
@@ -394,8 +412,8 @@ export function createStore(options) {
     const built = updateInput(item, patch, { planning: s.planning });
     if (!built) return { ok: true, change: null };
     if (!built.ok) return built;
-    const undo = opts.undoable === false ? null : { itemId: item.id, patch: inversePatch(item, built.input) };
-    const change = request({ label: opts.label ?? `Edit ${item.key}`, command: "work.update", input: built.input, revision: item.revision, itemId: item.id, group: opts.group, undo, undoOf: opts.undoOf });
+    const undoPatch = opts.undoable === false ? null : { itemId: item.id, patch: inversePatch(item, built.input) };
+    const change = request({ label: opts.label ?? `Edit ${item.key}`, command: "work.update", input: built.input, revision: item.revision, itemId: item.id, group: opts.group, undo: undoPatch, undoOf: opts.undoOf });
     return { ok: true, change };
   }
 
@@ -521,6 +539,15 @@ export function createStore(options) {
       rpc(() => gadget.savePrefs(viewer.id, body)).catch((err) => console.warn("Could not save preferences:", errorDetail(err)));
     }, 600);
   }
+  /** Names an actor for everyone using the board (null restores the account name). @param {string} actor @param {string|null} alias */
+  async function setPersonAlias(actor, alias) {
+    setPeople(await rpc(() => gadget.setPersonAlias(actor, alias)));
+    notify("data", "views");
+  }
+  async function reloadPeople() {
+    try { setPeople(await rpc(() => gadget.people())); notify("data"); } catch { /* keep */ }
+  }
+
   /** @param {{ keyPrefix: string|null }} settings */
   async function saveSettings(settings) {
     s.settings = await rpc(() => gadget.saveSettings(settings, { actor: me }));
@@ -561,7 +588,8 @@ export function createStore(options) {
     get me() { return me; },
     get replica() { return replica; },
     index, canWrite, pendingFor, refresh, pull, createItem, updateItem, bulkUpdate, entity, undo, retry, dismiss,
-    saveView, deleteView, reloadViews, setPrefs, saveSettings,
+    saveView, deleteView, reloadViews, setPrefs, saveSettings, setPersonAlias, reloadPeople,
+    get people() { return people; },
     /** @param {(topics: Set<Topic>) => void} fn */
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     /** Test hook: run pending notifications now. */

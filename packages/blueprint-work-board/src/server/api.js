@@ -8,14 +8,14 @@
 //   Agent reads: query, describeQuery, item, vocabulary
 
 import { createRecordsProxy } from "./proxy.js";
-import { createDocuments } from "./documents.js";
+import { createDocuments, createPeople } from "./documents.js";
 import { createQueryCache } from "./query.js";
 
 /** Every method the client or the agent may call. */
 export const RPC_METHODS = Object.freeze([
   "getSetup", "connection", "describe", "model", "snapshot", "changes", "records", "command", "getOutcome",
   "listViews", "saveView", "deleteView", "getPrefs", "savePrefs", "getSettings", "saveSettings",
-  "query", "describeQuery", "item", "vocabulary",
+  "query", "describeQuery", "item", "vocabulary", "people", "rememberViewer", "setPersonAlias",
 ]);
 
 /**
@@ -24,11 +24,13 @@ export const RPC_METHODS = Object.freeze([
 export function createGadgetApi({ getEnv, storage, now, ttlMs }) {
   const proxy = createRecordsProxy(getEnv);
   const docs = createDocuments(storage, { now });
+  const people = createPeople(storage, { now });
   /** @type {string|null} */
   let label = null;
   const queries = createQueryCache(() => /** @type {any} */ ({ snapshot: proxy.snapshot, changes: proxy.changes }), {
     now, ttlMs,
     settings: () => docs.getSettings(),
+    names: async () => new Map((await people.people()).filter((p) => p.displayName).map((p) => [p.actor, /** @type {string} */ (p.displayName)])),
     label: async () => {
       if (label === null) { try { label = (await proxy.connection())?.label ?? ""; } catch { label = ""; } }
       return label;
@@ -56,6 +58,11 @@ export function createGadgetApi({ getEnv, storage, now, ttlMs }) {
     /** @param {unknown} key */
     item: (key) => queries.item(key),
     vocabulary: () => queries.vocabulary(),
+    people: () => people.people(),
+    /** @param {unknown} viewer */
+    rememberViewer: (viewer) => people.rememberViewer(viewer),
+    /** @param {unknown} actor @param {unknown} alias */
+    setPersonAlias: (actor, alias) => people.setPersonAlias(actor, alias),
     /** @internal */
     queries,
   };

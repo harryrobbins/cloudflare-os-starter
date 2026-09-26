@@ -26,10 +26,15 @@ import { personName, progressOf, relationsFor } from "../../shared/model/index.j
  *   unrelate: (rel: import("../../shared/model/index.js").RelationView, item: ItemView) => void,
  *   comment: (item: ItemView, body: string) => { ok: boolean, error?: string },
  *   editComment: (c: import("../../shared/model/index.js").CommentView, body: string) => { ok: boolean, error?: string },
- *   open: (item: ItemView) => void, close: () => void, retry: (c: import("../store/store.js").Change) => void,
+ *   open: (item: ItemView) => void, close: () => void, showKey: (item: ItemView, anchor: HTMLElement) => void, retry: (c: import("../store/store.js").Change) => void,
  *   announce: (text: string) => void,
  * }} DetailController
  */
+
+/** @param {HTMLElement} node */
+const describeFocus = (node) => node.dataset.focusKey ?? null;
+/** @param {string} t */
+const mutedText = (t) => h("span", { class: "muted" }, t);
 
 /** @param {{ doc: Document, controller: DetailController }} opts */
 export function createDetail({ doc, controller: c }) {
@@ -94,32 +99,44 @@ export function createDetail({ doc, controller: c }) {
     if (doc.activeElement !== titleInput && !titleDirty) titleInput.value = item.title;
     titleInput.readOnly = !canWrite;
 
+    const title = canWrite
+      ? h("div", { class: "title-wrap" }, h("h2", { id: "wb-detail-heading", class: "sr-only" }, `${item.key}: ${item.title}`), titleInput, titleError)
+      : h("h2", { id: "wb-detail-heading", class: "detail-title" }, item.title || "Untitled");
+    // The header stays put while the body scrolls: key, the title and the three properties people
+    // change most, as pills.
+    const pill = (/** @type {string} */ prop, /** @type {string} */ label, /** @type {any[]} */ content) => (canWrite
+      ? h("button", { type: "button", class: "pill", "data-focus-key": `pill-${prop}`, "aria-haspopup": "dialog", "aria-label": `${label}: ${content.filter((x) => typeof x === "string").join(" ")}. Change`, onclick: (/** @type {Event} */ e) => c.pick(prop, [item], /** @type {HTMLElement} */ (e.currentTarget)) }, content)
+      : h("span", { class: "pill", "aria-label": `${label}: ${content.filter((x) => typeof x === "string").join(" ")}` }, content));
+    const stateName = stateOf(item, index)?.name ?? item.state;
+    const pills = h("div", { class: "pills", role: "group", "aria-label": "Main properties" },
+      pill("state", "State", [itemStateIcon(item, index), stateName]),
+      index.planning ? pill("priority", "Priority", [priorityIcon(item.priority), PRIORITIES[item.priority].name]) : null,
+      index.planning ? pill("assignee", "Assignee", [avatar(item.assignee, index, 18), item.assignee ? personName(index, item.assignee) : "Unassigned"]) : null);
     const head = h("div", { class: "detail-head" },
-      parent ? h("button", { type: "button", class: "crumb", onclick: () => c.open(parent), title: parent.title }, parent.key, h("span", { "aria-hidden": "true" }, " ›")) : null,
-      h("span", { class: "detail-key", tabindex: "-1" }, item.key),
-      h("span", { class: "grow" }),
-      h("button", { type: "button", class: "icon-btn", "aria-label": "Close details", title: "Close (Esc)", onclick: () => c.close() }, h("span", { class: "x", "aria-hidden": "true" }, "×")));
+      h("div", { class: "detail-bar" },
+        parent ? h("button", { type: "button", class: "crumb", onclick: () => c.open(parent), title: parent.title }, parent.key, h("span", { "aria-hidden": "true" }, " ›")) : null,
+        h("span", { class: "detail-key", tabindex: "-1" }, item.key),
+        h("span", { class: "grow" }),
+        h("button", { type: "button", class: "btn ghost sm", "aria-haspopup": "dialog", title: "Show the key and a link to share", onclick: (/** @type {Event} */ e) => c.showKey(item, /** @type {HTMLElement} */ (e.currentTarget)) }, "Share…"),
+        h("button", { type: "button", class: "icon-btn", "aria-label": "Close details", title: "Close (Esc)", onclick: () => c.close() }, h("span", { class: "x", "aria-hidden": "true" }, "×"))),
+      title, pills);
 
     const pending = c.changesFor(item.id).filter((x) => x.status !== "applied" || !x.settledAt);
     const notices = pending.length ? h("div", { class: "notices" }, pending.map((ch) => h("div", { class: `notice ${ch.status}`, role: ch.status === "conflict" || ch.status === "rejected" ? "alert" : null },
       h("span", { class: "notice-text" }, ch.status === "conflict" || ch.status === "rejected" ? `Not saved: ${ch.label}. ${ch.message}` : pendingLabel(ch, false)),
       ch.status === "conflict" || ch.status === "rejected" ? h("button", { type: "button", class: "btn sm", onclick: () => c.retry(ch) }, "Retry") : null))) : null;
 
-    const title = canWrite
-      ? h("div", { class: "title-wrap" }, h("h2", { id: "wb-detail-heading", class: "sr-only" }, `${item.key}: ${item.title}`), titleInput, titleError)
-      : h("h2", { id: "wb-detail-heading", class: "detail-title" }, item.title || "Untitled");
-
-    const props = index.planning ? propGrid(item, index, today, canWrite) : h("dl", { class: "props" },
-      h("dt", null, "Status"), h("dd", null, propButton("state", item, canWrite, [itemStateIcon(item, index), stateOf(item, index)?.name ?? item.state])));
+    const props = index.planning ? propGrid(item, index, today, canWrite) : null;
 
     const desc = descriptionSection(item, canWrite);
     const subs = index.planning ? subIssues(item, index, canWrite) : null;
     const rels = index.planning ? relations(item, index, canWrite) : null;
     const activity = activitySection(item, index, canWrite);
 
-    const scroll = h("div", { class: "detail-scroll" }, notices, title, props, desc, subs, rels, activity,
+    const scroll = h("div", { class: "detail-scroll" }, notices, props, desc, subs, rels, activity,
       h("p", { class: "attribution" }, `Created by ${personName(index, item.created_by)}${item.created ? ` · ${relativeTime(item.created, c.now())}` : ""} · Last changed by ${personName(index, item.updated_by)}${item.updated ? ` · ${relativeTime(item.updated, c.now())}` : ""} · Revision ${item.revision}`));
-    const prevScroll = /** @type {HTMLElement|null} */ (el.querySelector(".detail-scroll"))?.scrollTop ?? 0;
+    const prevScroll = el.dataset.item === item.id ? /** @type {HTMLElement|null} */ (el.querySelector(".detail-scroll"))?.scrollTop ?? 0 : 0;
+    el.dataset.item = item.id;
     const active = doc.activeElement;
     const keep = active && el.contains(active) && active !== titleInput && active !== composer ? describeFocus(/** @type {HTMLElement} */ (active)) : null;
     setChildren(el, head, scroll);
@@ -128,8 +145,6 @@ export function createDetail({ doc, controller: c }) {
     if (keep) restoreFocus(keep);
   }
 
-  /** @param {HTMLElement} node */
-  function describeFocus(node) { return node.dataset.focusKey ?? null; }
   /** @param {string} key */
   function restoreFocus(key) { /** @type {HTMLElement|null} */ (el.querySelector(`[data-focus-key="${key}"]`))?.focus(); }
 
@@ -143,21 +158,17 @@ export function createDetail({ doc, controller: c }) {
 
   /** @param {ItemView} item @param {WorkIndex} index @param {string} today @param {boolean} canWrite */
   function propGrid(item, index, today, canWrite) {
-    const muted = (/** @type {string} */ t) => h("span", { class: "muted" }, t);
     const project = item.project ? index.projectById.get(item.project) : null;
     const cycle = item.cycle ? index.cycleById.get(item.cycle) : null;
     const parent = item.parent ? index.items.get(item.parent) : null;
     const rows = [
-      ["state", "State", [itemStateIcon(item, index), stateOf(item, index)?.name ?? item.state]],
-      ["priority", "Priority", [priorityIcon(item.priority), PRIORITIES[item.priority].name]],
-      ["assignee", "Assignee", item.assignee ? [avatar(item.assignee, index, 18), personName(index, item.assignee)] : [avatar(null, index, 18), muted("Unassigned")]],
-      ["labels", "Labels", item.labels.length ? item.labels.map((l) => h("span", { class: "chip label" }, h("span", { class: "dot", style: { background: index.labelByKey.get(l)?.color ?? "#8a8f98" } }), index.labelByKey.get(l)?.name ?? l)) : muted("Add labels")],
-      ["estimate", "Estimate", item.estimate === null ? muted("No estimate") : `${item.estimate} ${item.estimate === 1 ? "point" : "points"}`],
-      ["due", "Due date", item.due ? h("span", { class: item.due < today && item.category !== "done" ? "overdue" : "" }, shortDate(item.due, today), item.due < today && item.category !== "done" ? " · overdue" : "") : muted("No due date")],
-      ["start", "Start date", item.start ? shortDate(item.start, today) : muted("No start date")],
-      ["project", "Project", project ? [h("span", { class: "dot", style: { background: project.color } }), project.name] : muted("No project")],
-      ["cycle", "Cycle", cycle ? cycle.name : muted("No cycle")],
-      ["parent", "Parent", parent ? `${parent.key} ${parent.title}` : muted("No parent")],
+      ["labels", "Labels", item.labels.length ? item.labels.map((l) => h("span", { class: "chip label" }, h("span", { class: "dot", style: { background: index.labelByKey.get(l)?.color ?? "#8a8f98" } }), index.labelByKey.get(l)?.name ?? l)) : mutedText("Add labels")],
+      ["estimate", "Estimate", item.estimate === null ? mutedText("No estimate") : `${item.estimate} ${item.estimate === 1 ? "point" : "points"}`],
+      ["due", "Due date", item.due ? h("span", { class: item.due < today && item.category !== "done" ? "overdue" : "" }, shortDate(item.due, today), item.due < today && item.category !== "done" ? " · overdue" : "") : mutedText("No due date")],
+      ["start", "Start date", item.start ? shortDate(item.start, today) : mutedText("No start date")],
+      ["project", "Project", project ? [h("span", { class: "dot", style: { background: project.color } }), project.name] : mutedText("No project")],
+      ["cycle", "Cycle", cycle ? cycle.name : mutedText("No cycle")],
+      ["parent", "Parent", parent ? `${parent.key} ${parent.title}` : mutedText("No parent")],
     ];
     return h("dl", { class: "props" }, rows.flatMap(([prop, label, content]) => [
       h("dt", null, /** @type {string} */ (label)),

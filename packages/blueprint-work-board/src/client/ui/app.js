@@ -6,7 +6,7 @@
 // them, the shortcut sheet documents them, menus and keys call the same code.
 
 import { h, relativeTime, setChildren } from "./dom.js";
-import { icon } from "./icons.js";
+import { icon, stateIcon } from "./icons.js";
 import { CSS } from "./styles.js";
 import { createLayers, createLive } from "./overlay.js";
 import { createBoardView } from "./board.js";
@@ -43,13 +43,26 @@ const LIST_DEFAULT = ["key", "title", "state", "priority", "assignee", "labels",
  * @typedef {import("../../shared/model/index.js").ItemView} ItemView
  * @typedef {{ id: string|null, name: string, query: string, layout: string, columnsBy: string, swimlanesBy: string|null,
  *   sort: { field: string, dir: "asc"|"desc" }[],
- *   display: { density: string, properties: string[], showSubIssues: boolean, showArchived: boolean, hideEmptyLanes: boolean, hideEmptyColumns: boolean, listColumns: string[] } }} ViewCfg
+ *   display: { density: string, properties: string[], showSubIssues: boolean, showArchived: boolean, hideEmptyLanes: boolean, hideEmptyColumns: boolean|null, listColumns: string[] } }} ViewCfg
  */
+
+/** A blank item for computing default property values. */
+function blankItem() { return { id: "", labels: [], assignee: null, priority: 0, project: null, cycle: null, parent: null, ext: {}, state: "", category: "open" }; }
+
+/** @param {ViewCfg} v */
+function toDoc(v) { return { id: v.id, name: v.name, query: v.query, layout: v.layout, columnsBy: v.columnsBy, swimlanesBy: v.swimlanesBy, sort: v.sort, display: v.display }; }
+
+/** A read-only, select-on-focus text field. @param {string} label @param {string} value */
+function keyField(label, value) {
+  const input = /** @type {HTMLInputElement} */ (h("input", { type: "text", readonly: true, value, "aria-label": label, class: "key-field" }));
+  input.addEventListener("focus", () => input.select());
+  return h("label", { class: "field" }, h("span", null, label), input);
+}
 
 /** @returns {ViewCfg} */
 export function defaultView() {
   return { id: null, name: "All items", query: "", layout: "board", columnsBy: "state", swimlanesBy: null, sort: [],
-    display: { density: "comfortable", properties: [...PROPS], showSubIssues: true, showArchived: false, hideEmptyLanes: false, hideEmptyColumns: false, listColumns: [...LIST_DEFAULT] } };
+    display: { density: "comfortable", properties: [...PROPS], showSubIssues: true, showArchived: false, hideEmptyLanes: false, hideEmptyColumns: null, listColumns: [...LIST_DEFAULT] } };
 }
 
 /** Built-in views: always there, not stored. */
@@ -68,14 +81,14 @@ const viewSig = (v) => JSON.stringify([v.query, v.layout, v.columnsBy, v.swimlan
  *   gadget: any, root: HTMLElement, viewer?: { id: string, displayName?: string, role?: string } | null,
  *   timers?: { visibleMs?: number, hiddenMs?: number, outcomeMs?: number, historyMs?: number },
  *   doc?: Document, randomUUID?: () => string, now?: () => number, persist?: any,
- * }} options
+ * }} appOptions
  */
-export function createBoardApp(options) {
-  const doc = options.doc ?? document;
+export function createBoardApp(appOptions) {
+  const doc = appOptions.doc ?? document;
   const win = doc.defaultView ?? window;
-  const now = options.now ?? (() => Date.now());
+  const now = appOptions.now ?? (() => Date.now());
   const mac = /Mac|iPhone|iPad/.test(win.navigator?.platform ?? "");
-  const store = createStore({ gadget: options.gadget, viewer: options.viewer ?? null, timers: options.timers, doc, randomUUID: options.randomUUID, now, persist: options.persist });
+  const store = createStore({ gadget: appOptions.gadget, viewer: appOptions.viewer ?? null, timers: appOptions.timers, doc, randomUUID: appOptions.randomUUID, now, persist: appOptions.persist });
 
   const style = doc.createElement("style");
   style.textContent = CSS;
@@ -85,7 +98,7 @@ export function createBoardApp(options) {
   // Shell
 
   const app = h("div", { class: "wb-app" });
-  setChildren(options.root, app);
+  setChildren(appOptions.root, app);
   const live = createLive(app);
   const layers = createLayers(app);
   const toasts = createToasts();
@@ -96,7 +109,9 @@ export function createBoardApp(options) {
   const layoutHost = h("div", { class: "layout-host" });
   const statePanel = h("div", { class: "state-host" });
   const bulkBar = h("div", { class: "bulk-bar", role: "toolbar", "aria-label": "Selected items", hidden: true });
-  const main = h("main", { id: "wb-main", class: "main", tabindex: "-1", "aria-label": "Work items" }, statePanel, layoutHost);
+  // Narrow screens show one column at a time with this switcher (swipe or tap to change).
+  const narrowBar = h("div", { class: "narrow-bar", role: "group", "aria-label": "Column", hidden: true });
+  const main = h("main", { id: "wb-main", class: "main", tabindex: "-1", "aria-label": "Work items" }, statePanel, narrowBar, layoutHost);
   const status = createStatusCentre({ controller: {
     changes: () => store.changes, now,
     retry: (c) => { const r = store.retry(c); if (!r.ok) toast(r.error ?? "Could not retry."); else live.announce(`Sent again: ${c.label}.`); },
@@ -181,6 +196,7 @@ export function createBoardApp(options) {
       return r.ok ? { ok: true } : r;
     },
     open: (item) => openDetail(item, { focus: true }),
+    showKey: (item, anchor) => showKey(item, anchor),
     close: () => closeDetail(),
     retry: (c) => { const r = store.retry(c); if (!r.ok) toast(r.error ?? "Could not retry."); },
     announce: (t) => live.announce(t),
@@ -224,14 +240,15 @@ export function createBoardApp(options) {
     const { items, key } = computeItems();
     const c = ctx();
     const chSig = store.changes.map((x) => `${x.id}:${x.status}:${x.settledAt ? 1 : 0}`).join(",");
-    const pkey = `${key}|${chSig}|${view.columnsBy}|${view.swimlanesBy}|${view.display.hideEmptyLanes}|${view.display.hideEmptyColumns}|${view.display.showSubIssues}`;
+    const hideEmptyColumns = view.display.hideEmptyColumns ?? Boolean(view.query.trim());
+    const pkey = `${key}|${chSig}|${view.columnsBy}|${view.swimlanesBy}|${view.display.hideEmptyLanes}|${hideEmptyColumns}|${view.display.showSubIssues}`;
     if (projCache?.key === pkey) return projCache.projection;
     const { ast } = parse(view.query);
     const pred = compile(ast, c);
     const projection = project({
       index: c.index, items, columnsBy: view.columnsBy, swimlanesBy: view.swimlanesBy, ctx: { index: c.index, today: c.today, viewer: c.viewer },
       changes: store.changes, matches: pred, compare: compare(effectiveSort(), c),
-      hideEmptyLanes: view.display.hideEmptyLanes, hideEmptyColumns: view.display.hideEmptyColumns, showSubIssues: view.display.showSubIssues,
+      hideEmptyLanes: view.display.hideEmptyLanes, hideEmptyColumns, showSubIssues: view.display.showSubIssues,
     });
     projCache = { key: pkey, projection };
     return projection;
@@ -350,6 +367,7 @@ export function createBoardApp(options) {
     const dirty = viewSig(view) !== viewSig(savedView);
     const layoutsList = ["board", "list"];
     setChildren(host, 
+      h("button", { type: "button", class: "icon-btn narrow-only filter-toggle", "aria-label": "Filter", "aria-expanded": String(app.classList.contains("filter-open")), title: "Filter (/)", onclick: () => { const open = app.classList.toggle("filter-open"); renderViewControls(); if (open) filter.focus(); } }, icon("filter")),
       h("button", { type: "button", class: `btn view-switch${dirty ? " dirty" : ""}`, "aria-haspopup": "dialog", onclick: (/** @type {Event} */ e) => viewsMenu(/** @type {HTMLElement} */ (e.currentTarget)) },
         icon("eye", { size: 14 }), h("span", { class: "view-name" }, view.name), dirty ? h("span", { class: "dirty-dot", title: "Unsaved changes" }, h("span", { class: "sr-only" }, ", unsaved changes")) : null, icon("chevronDown", { size: 12 })),
       h("div", { class: "segmented", role: "group", "aria-label": "Layout" }, layoutsList.map((id) => h("button", {
@@ -372,9 +390,11 @@ export function createBoardApp(options) {
     const empty = !index.itemList.length ? (store.canWrite() ? "Nothing here yet. Press C to create the first item." : "Nothing here yet.")
       : "No items";
     layoutHost.dataset.empty = items.length ? "" : index.itemList.length ? "filtered" : "none";
+    narrowBar.hidden = true;
     if (id === "board") {
-      const projection = computeProjection();
-      fixBoardFocus(projection);
+      const full = computeProjection();
+      fixBoardFocus(full);
+      const projection = narrowed(full);
       const flipBefore = captureRects();
       inst.update({
         projection, focus: boardFocus, collapsedCols, collapsedLanes: new Set(store.prefs.collapsedLanes ?? []),
@@ -396,6 +416,74 @@ export function createBoardApp(options) {
     }
     renderEmptyOverlay(items.length, index.itemList.length);
     if (hadFocus && (!layoutHost.contains(doc.activeElement) || doc.activeElement === doc.body)) inst.focusCurrent({ scroll: false });
+  }
+
+  /** Narrow screens (and 400 % zoom) show one column at a time. */
+  function isNarrow() { return (win.innerWidth || 1024) < 640; }
+  /** @type {string|null} */
+  let narrowCol = null;
+  /** @param {import("../board/projection.js").Projection} full */
+  function narrowed(full) {
+    if (!isNarrow() || !full.columns.length) return full;
+    const keys = full.columns.map((c) => c.group.key);
+    if (!narrowCol || !keys.includes(narrowCol)) {
+      narrowCol = boardFocus && keys.includes(boardFocus.col) ? boardFocus.col : (full.columns.find((c) => c.count > 0) ?? full.columns[0]).group.key;
+    }
+    if (boardFocus && boardFocus.col !== narrowCol) {
+      const lane = full.lanes.find((l) => l.cells.get(/** @type {string} */ (narrowCol))?.some((e) => e.kind === "card")) ?? full.lanes[0];
+      const first = lane?.cells.get(/** @type {string} */ (narrowCol))?.find((e) => e.kind === "card");
+      boardFocus = lane ? { key: first ? first.key : `empty:${lane.key}::${narrowCol}`, lane: lane.key, col: /** @type {string} */ (narrowCol) } : boardFocus;
+    }
+    renderNarrowBar(full);
+    return { ...full, columns: full.columns.filter((c) => c.group.key === narrowCol) };
+  }
+  /** @param {import("../board/projection.js").Projection} full */
+  function renderNarrowBar(full) {
+    narrowBar.hidden = false;
+    setChildren(narrowBar, ...full.columns.map((c) => h("button", {
+      type: "button", class: "narrow-tab", "aria-pressed": String(c.group.key === narrowCol), "data-col": c.group.key,
+      onclick: () => showColumn(c.group.key),
+    }, c.group.stateKind ? stateIcon(c.group.stateKind, c.group.color ?? "#888") : null, h("span", null, c.group.label), h("span", { class: "narrow-count" }, String(c.count)))));
+    /** @type {HTMLElement|null} */ (narrowBar.querySelector('[aria-pressed="true"]'))?.scrollIntoView?.({ inline: "center", block: "nearest" });
+  }
+  /** @param {string} col @param {{ focus?: boolean }} [opts] */
+  function showColumn(col, opts = {}) {
+    narrowCol = col;
+    const p = computeProjection();
+    const c = p.columns.find((x) => x.group.key === col);
+    boardFocus = null;
+    render(new Set());
+    live.announce(`${c?.group.label ?? col}: ${c?.count ?? 0} ${c?.count === 1 ? "item" : "items"}.`);
+    if (opts.focus) layout("board").focusCurrent();
+  }
+  /** @param {number} delta */
+  function stepColumn(delta) {
+    const cols = computeProjection().columns.map((c) => c.group.key);
+    const i = cols.indexOf(narrowCol ?? "");
+    const next = cols[Math.max(0, Math.min(cols.length - 1, i + delta))];
+    if (next && next !== narrowCol) { showColumn(next, { focus: true }); return true; }
+    return false;
+  }
+  // Swipe between columns on touch screens.
+  /** @type {{ x: number, y: number }|null} */
+  let swipe = null;
+  layoutHost.addEventListener("pointerdown", (e) => { swipe = isNarrow() && view.layout === "board" && e.pointerType === "touch" ? { x: e.clientX, y: e.clientY } : null; });
+  layoutHost.addEventListener("pointerup", (e) => {
+    if (!swipe) return;
+    const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y;
+    swipe = null;
+    if (Math.abs(dx) > 60 && Math.abs(dy) < 40) stepColumn(dx < 0 ? 1 : -1);
+  });
+
+  /** "Share": the key and title as selectable text (the sandbox has no clipboard API). @param {ItemView} item @param {HTMLElement|{ x: number, y: number }} anchor */
+  function showKey(item, anchor) {
+    layers.openPopover({ anchor, label: `Share ${item.key}`, className: "showkey", content: (close) => {
+      return h("div", { class: "showkey-inner" },
+        h("h2", { class: "pop-title" }, `Share ${item.key}`),
+        keyField("Key", item.key), keyField("Key and title", `${item.key} ${item.title}`),
+        h("p", { class: "hint" }, "Select and copy (Ctrl/⌘+C). Anyone on this board opens it with Ctrl/⌘+K and the key."),
+        h("div", { class: "row end" }, h("button", { type: "button", class: "btn", onclick: () => close("done") }, "Done")));
+    }, initialFocus: () => /** @type {HTMLElement|null} */ (layers.top?.querySelector(".key-field") ?? null) });
   }
 
   /** @param {number} shown @param {number} all */
@@ -654,7 +742,6 @@ export function createBoardApp(options) {
     if (index.planning && !fields.state && !fields.status) fields.state = defaultCreateState();
     return { fields, context: describe.filter(Boolean).join(" · ") };
   }
-  function blankItem() { return { id: "", labels: [], assignee: null, priority: 0, project: null, cycle: null, parent: null, ext: {}, state: "", category: "open" }; }
 
   // ---------------------------------------------------------------------------------------------
   // Layout actions
@@ -853,8 +940,6 @@ export function createBoardApp(options) {
       schedule();
     } catch (err) { toast(String(/** @type {any} */ (err)?.message ?? err).replace(/^[a-z_]+:\s*/, ""), { tone: "bad" }); }
   }
-  /** @param {ViewCfg} v */
-  function toDoc(v) { return { id: v.id, name: v.name, query: v.query, layout: v.layout, columnsBy: v.columnsBy, swimlanesBy: v.swimlanesBy, sort: v.sort, display: v.display }; }
 
   /** @param {boolean} rename */
   function saveViewDialog(rename) {
@@ -894,7 +979,7 @@ export function createBoardApp(options) {
     const index = store.index();
     const fields = groupableFields(index);
     /** @param {string} label @param {string} value @param {{ value: string, label: string }[]} opts @param {(v: string) => void} onChange */
-    const select = (label, value, opts, onChange) => {
+    const selectField = (label, value, opts, onChange) => {
       const id = `wb-disp-${label.replace(/\W+/g, "")}`;
       const s = /** @type {HTMLSelectElement} */ (h("select", { id }, opts.map((o) => h("option", { value: o.value, selected: o.value === value }, o.label))));
       s.addEventListener("change", () => { onChange(s.value); schedule(); });
@@ -911,17 +996,17 @@ export function createBoardApp(options) {
     const curSort = view.sort.length ? `${view.sort[0].dir === "desc" ? "-" : ""}${view.sort[0].field}` : view.layout === "board" ? "manual" : "priority";
     layers.openPopover({ anchor, label: "Display options", className: "display-menu", content: () => h("div", { class: "display-inner" },
       h("h2", { class: "pop-title" }, "Display"),
-      select(view.layout === "list" ? "Group by" : "Columns", view.columnsBy, fields.filter((f) => f.column).map((f) => ({ value: f.field, label: f.label })), (v) => { view = { ...view, columnsBy: v }; collapsedCols.clear(); }),
-      view.layout === "board" ? select("Swimlanes", view.swimlanesBy ?? "", [{ value: "", label: "None" }, ...fields.filter((f) => f.field !== view.columnsBy).map((f) => ({ value: f.field, label: f.label }))], (v) => { view = { ...view, swimlanesBy: v || null }; }) : null,
-      select("Order", curSort, sortOpts, (v) => { view = { ...view, sort: v === "manual" ? [{ field: "rank", dir: "asc" }] : [{ field: v.replace(/^-/, ""), dir: v.startsWith("-") ? "desc" : "asc" }] }; }),
-      select("Density", view.display.density, [{ value: "comfortable", label: "Comfortable" }, { value: "compact", label: "Compact" }], (v) => setDisplay({ density: v })),
+      selectField(view.layout === "list" ? "Group by" : "Columns", view.columnsBy, fields.filter((f) => f.column).map((f) => ({ value: f.field, label: f.label })), (v) => { view = { ...view, columnsBy: v }; collapsedCols.clear(); }),
+      view.layout === "board" ? selectField("Swimlanes", view.swimlanesBy ?? "", [{ value: "", label: "None" }, ...fields.filter((f) => f.field !== view.columnsBy).map((f) => ({ value: f.field, label: f.label }))], (v) => { view = { ...view, swimlanesBy: v || null }; }) : null,
+      selectField("Order", curSort, sortOpts, (v) => { view = { ...view, sort: v === "manual" ? [{ field: "rank", dir: "asc" }] : [{ field: v.replace(/^-/, ""), dir: v.startsWith("-") ? "desc" : "asc" }] }; }),
+      selectField("Density", view.display.density, [{ value: "comfortable", label: "Comfortable" }, { value: "compact", label: "Compact" }], (v) => setDisplay({ density: v })),
       h("fieldset", { class: "props-fieldset" }, h("legend", null, view.layout === "list" ? "Columns" : "Card properties"),
         h("div", { class: "check-grid" }, (view.layout === "list" ? Object.values(LIST_COLUMNS).filter((c) => c.id !== "title").map((c) => check(c.label, view.display.listColumns.includes(c.id), (on) => setDisplay({ listColumns: on ? [...view.display.listColumns, c.id].toSorted((a, b) => Object.keys(LIST_COLUMNS).indexOf(a) - Object.keys(LIST_COLUMNS).indexOf(b)) : view.display.listColumns.filter((x) => x !== c.id) })))
           : PROPS.map((p) => check(p === "progress" ? "Sub-issue progress" : p === "blocked" ? "Blocked badge" : p[0].toUpperCase() + p.slice(1), view.display.properties.includes(p), (on) => setDisplay({ properties: on ? [...view.display.properties, p] : view.display.properties.filter((x) => x !== p) })))))),
       check("Show sub-issues", view.display.showSubIssues, (v) => setDisplay({ showSubIssues: v })),
       check("Show archived items", view.display.showArchived, (v) => setDisplay({ showArchived: v })),
       view.layout === "board" ? check("Hide empty lanes", view.display.hideEmptyLanes, (v) => setDisplay({ hideEmptyLanes: v })) : null,
-      view.layout === "board" ? check("Hide empty columns", view.display.hideEmptyColumns, (v) => setDisplay({ hideEmptyColumns: v })) : null,
+      view.layout === "board" ? selectField("Empty columns", String(view.display.hideEmptyColumns), [{ value: "null", label: "Hide while filtering" }, { value: "true", label: "Always hide" }, { value: "false", label: "Always show" }], (v) => setDisplay({ hideEmptyColumns: v === "null" ? null : v === "true" })) : null,
       view.layout === "board" && view.swimlanesBy ? h("div", { class: "row" },
         h("button", { type: "button", class: "btn sm", onclick: () => runAction("collapseLanes") }, "Collapse all lanes"),
         h("button", { type: "button", class: "btn sm", onclick: () => runAction("expandLanes") }, "Expand all lanes")) : null) });
@@ -999,7 +1084,8 @@ export function createBoardApp(options) {
         draft: store.prefs.draft ?? null, saveDraft: (d) => store.setPrefs({ draft: d }), announce: (t) => live.announce(t),
       });
     } },
-    filter: { label: "Filter (WQL)", group: "General", run: () => filter.focus() },
+    filter: { label: "Filter (WQL)", group: "General", run: () => { app.classList.add("filter-open"); filter.focus(); } },
+    showKey: { label: "Share: show the key", group: "Item", when: () => targets().length === 1, run: () => { const [t] = targets(); if (t) showKey(t, anchorFor()); } },
     help: { label: "Keyboard shortcuts", group: "General", run: () => shortcutSheet() },
     settings: { label: "Board settings", group: "General", run: () => openSettings({ layers, store, today: () => today(), announce: (t) => live.announce(t) }) },
     toggleLayout: { label: "Switch board / list", group: "View", run: () => setLayout(view.layout === "board" ? "list" : "board") },
@@ -1096,6 +1182,7 @@ export function createBoardApp(options) {
   // Keyboard
 
   const NAV = new Set(["up", "down", "left", "right", "first", "last", "pageUp", "pageDown"]);
+  let chord = false;
   /** @param {KeyboardEvent} e */
   function onKeydown(e) {
     if (e.defaultPrevented) return;
@@ -1107,6 +1194,13 @@ export function createBoardApp(options) {
     const inLayout = Boolean(target && layoutHost.contains(target));
     const inDetail = Boolean(target && detail.el.contains(target));
     const board = layout("board");
+    // Two-key chords: G then B (board) or L (list).
+    if (!isTyping(target) && !e.ctrlKey && !e.metaKey && !e.altKey && store.prefs.shortcuts !== false && !board.moving) {
+      const k = e.key.toLowerCase();
+      if (chord && (k === "b" || k === "l")) { e.preventDefault(); chord = false; setLayout(k === "b" ? "board" : "list"); return; }
+      chord = false;
+      if (k === "g") { e.preventDefault(); chord = true; setTimeout(() => { chord = false; }, 1200); return; }
+    }
     // Move mode owns the keyboard until Enter or Escape.
     if (view.layout === "board" && board.moving) {
       const dirs = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
@@ -1131,6 +1225,7 @@ export function createBoardApp(options) {
       if (id === "open") { runAction("open"); return; }
       if (id === "peek") { runAction("peek"); return; }
       const inst = layout();
+      if (view.layout === "board" && isNarrow() && (id === "left" || id === "right")) { stepColumn(id === "left" ? -1 : 1); return; }
       // Until focus is on a card (or list cell), the first key press lands on the current one;
       // after that keys move.
       const onItem = Boolean(target?.closest("article.card, li.cell-empty, .lg-td, .lg-grouphead button"));

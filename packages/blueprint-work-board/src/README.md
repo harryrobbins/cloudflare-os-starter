@@ -32,17 +32,22 @@ model: columns Open, Active and Done, and items with a title and description.
 - **Columns** are workflow states by default (Triage, Backlog, Todo, In Progress, In Review, Done,
   Canceled, or your own), with counts, point totals and WIP limits (shown in red when exceeded; not
   enforced). Collapse a column with its arrow button. **Display** changes what columns show:
-  state, status, assignee, priority, project or cycle.
+  state, status, assignee, priority, project or cycle, and whether empty columns hide (by default
+  they hide while the view has a filter). Columns size themselves so about five fit on a laptop.
+- **Phones and narrow windows** show one column at a time: tap a column in the switcher above the
+  board, swipe sideways, or press ← →. The filter box sits behind the **Filter** button.
 - **Swimlanes** (Display → Swimlanes) split the board by assignee, priority, project, cycle,
   parent, label, due date, status, creator or any extension field (`ext.<name>`). Lanes are
   sticky, collapsible, ordered naturally with "No value" last, and can hide when empty. An item
-  with two labels appears in both label lanes ("also shown in another lane").
-- **Cards** show the key (for example `WRK-42`), title, priority, assignee, labels, estimate, due
-  date (red when overdue), sub-issue progress, a Blocked badge and the comment count. Display
-  chooses which, and the density.
+  with two labels appears in both label lanes ("also shown in another lane"). An empty cell is a
+  slim drop zone; its **+** creates an item right there.
+- **Cards** show the key (for example `WRK-42`), title, priority (an icon; only Urgent is coloured),
+  assignee, labels (as many as fit, then "+N"), estimate, due date (red when overdue), sub-issue
+  progress, a Blocked badge and the comment count. Display chooses which, and the density.
 - **List** (Ctrl/⌘+B switches) shows the same items as a grouped, sortable table; choose columns
   in Display.
-- **Details** open beside the board (full screen on narrow screens): edit the title and Markdown
+- **Details** open beside the board (full screen on narrow screens). The top shows the key, the
+  title and pills for state, priority and assignee; **Share…** shows the key as text to copy. Edit the title and Markdown
   description, set every property, add sub-issues, relations (blocks, blocked by, relates,
   duplicates) and comments, and read the item's activity ("Ada moved it from Todo to In Review").
 - **Create** with **New item** or `C`. Type tokens in the title: `#label`, `@person` or `@me`,
@@ -70,6 +75,14 @@ model: columns Open, Active and Done, and items with a title and description.
   not allowed). **Retry** sends the change again against the current version. An automatic resend
   after a network failure reuses the same idempotency key, so a change is never applied twice.
 - Pending changes survive a reload of the board frame.
+
+## People
+
+Everyone is shown by name. A person's display name is learned the first time they open the board
+(their Workshop account name); until then they appear as their account. **Settings → People**
+renames anyone for everyone using this board, for example a service credential used by an import
+("Import bot"). Hover a name to see the account behind it. Filters accept names:
+`assignee:"Ada Lovelace"`.
 
 ## Views
 
@@ -138,7 +151,7 @@ work. Every action is also in the command palette, which shows its shortcut.
 | `X`, Ctrl/⌘+A, Escape | Select; select all shown; clear selection or close |
 | `S` `A` `I` `P` `L` `E` `D` | State, assign, assign to me, priority, labels, estimate, due date |
 | `M`, Shift+arrows | Move menu; keyboard move |
-| Ctrl/⌘+B, Ctrl/⌘+Z, `?` | Board/list, undo, shortcut sheet |
+| Ctrl/⌘+B, `G` then `B` / `L`, Ctrl/⌘+Z, `?` | Board/list, go to board / list, undo, shortcut sheet |
 
 ## Accessibility
 
@@ -148,7 +161,8 @@ tab stop per board with arrow-key navigation; focus returns to where you were af
 updates; every drag has a single-pointer Move menu and a keyboard move with spoken targets;
 saves, approvals, conflicts and filter counts are announced; 24 px targets; light and dark themes
 with checked contrast; meaning never by colour alone; works at 320 px wide and 400 % zoom; motion
-is off when your system asks for reduced motion.
+is off when your system asks for reduced motion. The focused card stays put while you scroll a
+long column with the mouse, so the keyboard carries on where you left it.
 
 ## Settings
 
@@ -163,9 +177,10 @@ change category; cycles cannot overlap.
 The board loads a complete snapshot (up to 5,000 records), then pulls the datastore's change
 journal every 3 seconds while visible (15 seconds in the background), backing off when the service
 is unreachable (an offline banner offers Retry). When permissions change it discards what it holds
-and reloads. Activity history is read from the journal in the background. The Records journal
-carries who made each change but not when, so times ("2 h ago") appear only for changes this board
-saw arrive; `created:`/`updated:` filters match only items with known times.
+and reloads. Activity history is read from the journal in the background. Records carries who
+made each change and when, so activity reads "Ada moved it to In Review · 2 h ago" and
+`created:`, `updated:` and `is:stale` work on every item. (Against an older Records service
+without record times, times appear only for changes the board saw arrive.)
 
 ## Programmatic use (agents)
 
@@ -181,6 +196,8 @@ await env.WorkBoard.vocabulary();          // keyPrefix, states, labels, project
 await env.WorkBoard.listViews();           // shared saved views
 await env.WorkBoard.saveView({ id: "blocked-now", name: "Blocked now", query: "is:blocked", layout: "board", swimlanesBy: "assignee" });
 await env.WorkBoard.deleteView("blocked-now");
+await env.WorkBoard.people();              // [{ actor, name, alias, displayName }]: names used for actors
+await env.WorkBoard.setPersonAlias("records:principal:…", "Import bot");
 await env.WorkBoard.getSetup();            // { connected, requirement, connection, description, error }
 await env.WorkBoard.snapshot(5000);        // raw Records snapshot; changes(seq, epoch), records(query), model() also pass through
 ```

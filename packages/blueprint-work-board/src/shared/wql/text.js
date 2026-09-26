@@ -65,6 +65,9 @@ function dayText(v) {
   return m[1] === "-" ? `${m[2]} ${unit} ago` : `in ${m[2]} ${unit}`;
 }
 
+/** A priority value as its name. @param {string} v */
+const priorityName = (v) => PRIORITIES.find((p) => p.key === v.toLowerCase() || String(p.value) === v)?.name ?? v;
+
 /** @param {import("./parse.js").TermNode} t @param {WqlContext|undefined} ctx */
 function termText(t, ctx) {
   const idx = ctx?.index;
@@ -84,9 +87,8 @@ function termText(t, ctx) {
     }
     case "kind": return `in a ${list(vals.map((v) => v.toLowerCase()))} state`;
     case "priority": {
-      const name = (/** @type {string} */ v) => PRIORITIES.find((p) => p.key === v.toLowerCase() || String(p.value) === v)?.name ?? v;
-      const w = { eq: () => `with priority ${list(vals.map(name))}`, lt: () => `with priority higher than ${name(vals[0])}`, lte: () => `with priority ${name(vals[0])} or higher`,
-        gt: () => `with priority lower than ${name(vals[0])}`, gte: () => `with priority ${name(vals[0])} or lower`, range: () => `with priority between ${name(vals[0])} and ${name(vals[1])}` };
+      const w = { eq: () => `with priority ${list(vals.map(priorityName))}`, lt: () => `with priority higher than ${priorityName(vals[0])}`, lte: () => `with priority ${priorityName(vals[0])} or higher`,
+        gt: () => `with priority lower than ${priorityName(vals[0])}`, gte: () => `with priority ${priorityName(vals[0])} or lower`, range: () => `with priority between ${priorityName(vals[0])} and ${priorityName(vals[1])}` };
       return w[t.op]();
     }
     case "assignee": case "created_by": case "updated_by": {

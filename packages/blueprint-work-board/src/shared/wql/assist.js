@@ -20,33 +20,35 @@ import { format, formatNode } from "./text.js";
 const DATE_PRESETS = [["today", "Today"], ["-7d", "7 days ago"], ["7d", "In 7 days"], ["-14d", "14 days ago"], ["-30d", "30 days ago"], ["none", "No date"]];
 const MAX = 50;
 
+/** @param {string} value @param {string} [detail] @param {Suggestion["kind"]} [kind] @returns {Suggestion} */
+const valueSuggestion = (value, detail = "", kind = "value") => ({ label: value, insert: quoteValue(value), detail, kind });
+
 /** Values offered for a field. @param {string} fieldName @param {WqlContext} ctx @returns {Suggestion[]} */
 function valuesFor(fieldName, ctx) {
   const idx = ctx.index;
-  const v = (/** @type {string} */ value, detail = "", /** @type {Suggestion["kind"]} */ kind = "value") => ({ label: value, insert: quoteValue(value), detail, kind });
   const lower = fieldName.toLowerCase();
-  if (lower === "is") return PREDICATES.map((p) => v(p, "", "predicate"));
-  if (lower === "has") return FIELDS.filter((f) => f.name !== "rank").map((f) => v(f.name, f.doc, "field"));
-  if (lower === "sort") return FIELDS.filter((f) => f.sortable).flatMap((f) => [v(f.name, "ascending", "field"), v(`-${f.name}`, "descending", "field")]);
+  if (lower === "is") return PREDICATES.map((p) => valueSuggestion(p, "", "predicate"));
+  if (lower === "has") return FIELDS.filter((f) => f.name !== "rank").map((f) => valueSuggestion(f.name, f.doc, "field"));
+  if (lower === "sort") return FIELDS.filter((f) => f.sortable).flatMap((f) => [valueSuggestion(f.name, "ascending", "field"), valueSuggestion(`-${f.name}`, "descending", "field")]);
   const field = fieldByName(fieldName);
   if (!field) return [];
   switch (field.name === "priority" || field.name === "status" ? field.name : field.type) {
-    case "priority": return ["urgent", "high", "medium", "low", "none"].map((p) => v(p));
-    case "status": return CATEGORIES.map((c) => v(c));
-    case "kind": return KINDS.map((k) => v(k));
-    case "state": return idx.states.map((s) => v(s.name, s.key));
-    case "person": return [v("me", "You"), v("none", "Nobody"), ...[...idx.people.keys()].map((a) => v(personName(idx, a), a))];
+    case "priority": return ["urgent", "high", "medium", "low", "none"].map((p) => valueSuggestion(p));
+    case "status": return CATEGORIES.map((c) => valueSuggestion(c));
+    case "kind": return KINDS.map((k) => valueSuggestion(k));
+    case "state": return idx.states.map((s) => valueSuggestion(s.name, s.key));
+    case "person": return [valueSuggestion("me", "You"), valueSuggestion("none", "Nobody"), ...[...idx.people.keys()].map((a) => valueSuggestion(personName(idx, a), a))];
     case "labels": {
       const keys = new Set([...idx.labels.map((l) => l.key), ...idx.itemList.flatMap((i) => i.labels)]);
-      return [...[...keys].toSorted().map((k) => v(k, idx.labelByKey.get(k)?.name ?? "")), v("none", "No labels")];
+      return [...[...keys].toSorted().map((k) => valueSuggestion(k, idx.labelByKey.get(k)?.name ?? "")), valueSuggestion("none", "No labels")];
     }
-    case "project": return [...idx.projects.map((p) => v(p.name, p.state)), v("none", "Not in a project")];
-    case "cycle": return [v("current"), v("next"), v("previous"), ...idx.cycles.map((c) => v(c.name, [c.start, c.end].filter(Boolean).join(" – "))), v("none", "Not in a cycle")];
-    case "date": case "instant": return DATE_PRESETS.map(([p, d]) => v(p, d));
-    case "bool": return [v("true"), v("false")];
-    case "ref-item": return [v("none", "No parent"), ...[...idx.children.keys()].map((id) => idx.items.get(id)).filter(Boolean).map((i) => v(/** @type {any} */ (i).key, /** @type {any} */ (i).title))];
-    case "key": return idx.itemList.slice(0, MAX).map((i) => v(i.key, i.title));
-    case "number": case "ext": return [v("none")];
+    case "project": return [...idx.projects.map((p) => valueSuggestion(p.name, p.state)), valueSuggestion("none", "Not in a project")];
+    case "cycle": return [valueSuggestion("current"), valueSuggestion("next"), valueSuggestion("previous"), ...idx.cycles.map((c) => valueSuggestion(c.name, [c.start, c.end].filter(Boolean).join(" – "))), valueSuggestion("none", "Not in a cycle")];
+    case "date": case "instant": return DATE_PRESETS.map(([p, d]) => valueSuggestion(p, d));
+    case "bool": return [valueSuggestion("true"), valueSuggestion("false")];
+    case "ref-item": return [valueSuggestion("none", "No parent"), ...[...idx.children.keys()].map((id) => idx.items.get(id)).filter(Boolean).map((i) => valueSuggestion(/** @type {any} */ (i).key, /** @type {any} */ (i).title))];
+    case "key": return idx.itemList.slice(0, MAX).map((i) => valueSuggestion(i.key, i.title));
+    case "number": case "ext": return [valueSuggestion("none")];
   }
   return [];
 }

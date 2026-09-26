@@ -14,7 +14,16 @@ import { KINDS, KIND_LABELS, KIND_COLORS, PROJECT_STATES, addDays, keyPrefixFrom
  * }} SettingsOptions
  */
 
-const TABS = [["general", "General"], ["states", "Workflow"], ["labels", "Labels"], ["projects", "Projects"], ["cycles", "Cycles"]];
+const TABS = [["general", "General"], ["people", "People"], ["states", "Workflow"], ["labels", "Labels"], ["projects", "Projects"], ["cycles", "Cycles"]];
+
+/** @param {string} what @param {boolean} canWrite @param {() => any[]} build */
+function addRow(what, canWrite, build) {
+  if (!canWrite) return null;
+  return h("div", { class: "settings-add", role: "group", "aria-label": `Add a ${what}` }, build());
+}
+
+/** What kind of account an actor is, for the People tab. @param {string} a */
+const accountLabel = (a) => (a.startsWith("cloudflare-os:") ? a.slice("cloudflare-os:".length) : a.startsWith("records:principal:") ? "Service credential" : a.startsWith("records:operator:") ? "Operator" : a);
 
 /** @param {SettingsOptions} o */
 export function openSettings(o) {
@@ -48,11 +57,12 @@ export function openSettings(o) {
     if (!force && panel.contains(panel.ownerDocument.activeElement) && /INPUT|TEXTAREA|SELECT/.test(panel.ownerDocument.activeElement?.tagName ?? "")) return;
     const index = store.index();
     const canWrite = store.canWrite();
-    const blocked = tab !== "general" && !store.planning
+    const blocked = tab !== "general" && tab !== "people" && !store.planning
       ? h("p", { class: "notice" }, "This datastore has the basic work model. Workflow states, labels, projects and cycles arrive with the Records planning upgrade (migration 010).")
       : null;
     if (blocked) { setChildren(panel, blocked); return; }
     if (tab === "general") setChildren(panel, general(index));
+    else if (tab === "people") setChildren(panel, peopleTab(index, canWrite));
     else if (tab === "states") setChildren(panel, states(index, canWrite));
     else if (tab === "labels") setChildren(panel, labels(index, canWrite));
     else if (tab === "projects") setChildren(panel, projects(index, canWrite));
@@ -89,6 +99,33 @@ export function openSettings(o) {
         h("p", { class: "hint" }, "Just for you. Turn off if you use speech input or a screen reader's single-key navigation. Ctrl/⌘+K and the arrow keys always work.")),
       h("h3", null, "Datastore"),
       h("p", { class: "hint" }, `${store.connection?.label ?? "Records"} · work v1${store.planning ? " with planning" : ""} · ${store.connection?.access === "write" ? "read and request changes" : "read only"}. Changes to items, states, labels, projects and cycles go through Workshop approval.`));
+  }
+
+  /** @param {import("../../shared/model/index.js").WorkIndex} index @param {boolean} canWrite */
+  function peopleTab(index, canWrite) {
+    const known = new Map(store.people.map((p) => [p.actor, p]));
+    const actors = [...new Set([...known.keys(), ...index.people.keys()])];
+    const rows = actors.map((actor) => {
+      const p = known.get(actor);
+      const shown = index.people.get(actor)?.name ?? actor;
+      const input = /** @type {HTMLInputElement} */ (h("input", { type: "text", value: p?.alias ?? "", placeholder: p?.name ?? shown, maxlength: "80", "aria-label": `Name shown for ${actor}`, disabled: !canWrite }));
+      const error = h("p", { class: "field-error", role: "alert" });
+      const save = async (/** @type {string|null} */ value) => {
+        try { await store.setPersonAlias(actor, value); error.textContent = ""; o.announce(value ? `${actor} now shows as ${value}.` : `${actor} shows as ${p?.name ?? "their account"} again.`); }
+        catch (err) { error.textContent = String(/** @type {any} */ (err)?.message ?? err).replace(/^[a-z_]+:\s*/, ""); }
+      };
+      input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); void save(input.value.trim() || null); } });
+      return h("li", { class: "settings-row" },
+        h("span", { class: "person-cell", title: actor }, h("strong", null, shown), h("span", { class: "muted" }, ` ${accountLabel(actor)}`)),
+        input,
+        canWrite ? h("span", { class: "row-actions" },
+          h("button", { type: "button", class: "btn sm", onclick: () => save(input.value.trim() || null) }, "Save"),
+          p?.alias ? h("button", { type: "button", class: "btn ghost sm", onclick: () => save(null) }, "Clear") : null) : null,
+        error);
+    });
+    return h("div", null,
+      h("p", { class: "hint" }, "Names shown for people and service credentials on this board, for everyone using it. People's names are learned when they open the board; set an alias to rename anyone, for example an import credential."),
+      rows.length ? h("ul", { class: "settings-list" }, rows) : h("p", { class: "muted" }, "Nobody yet."));
   }
 
   /** @param {import("../../shared/model/index.js").WorkIndex} index @param {boolean} canWrite */
@@ -244,12 +281,6 @@ export function openSettings(o) {
       return [start, end, h("button", { type: "button", class: "btn primary sm", onclick: create }, "Add cycle"), error];
     });
     return h("div", null, h("p", { class: "hint" }, "Cycles are numbered by Records and cannot overlap."), h("ul", { class: "settings-list" }, rows), add);
-  }
-
-  /** @param {string} what @param {boolean} canWrite @param {() => any[]} build */
-  function addRow(what, canWrite, build) {
-    if (!canWrite) return null;
-    return h("div", { class: "settings-add", role: "group", "aria-label": `Add a ${what}` }, build());
   }
 
   renderTabs();

@@ -158,7 +158,7 @@ describe("detail panel", () => {
     await app.store.pull();
     await settle();
     // Priority via the picker.
-    const prio = [...root.querySelectorAll(".prop-value")].find((b) => text(b).includes("High"));
+    const prio = [...root.querySelectorAll(".detail-head .pill")].find((b) => text(b).includes("High"));
     /** @type {HTMLElement} */ (prio).click();
     await settle();
     const urgent = option(root, "Urgent");

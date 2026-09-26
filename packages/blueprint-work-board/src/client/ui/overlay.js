@@ -130,6 +130,8 @@ export function createLayers(root) {
   return {
     openDialog, openPopover,
     get open() { return stack.length > 0; },
+    /** The top layer's element (for initial focus lookups). */
+    get top() { return stack[stack.length - 1]?.el ?? null; },
     closeTop() { stack[stack.length - 1]?.close("cancel"); },
     closeAll() { for (const l of [...stack].toReversed()) l.close("cancel"); },
   };

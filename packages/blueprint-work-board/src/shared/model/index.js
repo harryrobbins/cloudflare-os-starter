@@ -52,6 +52,12 @@ import {
  * }} WorkIndex
  */
 
+/** Appends to a list in a map of lists. @param {Map<string, any[]>} map @param {string} key @param {any} value */
+function pushTo(map, key, value) {
+  const list = map.get(key);
+  if (list) list.push(value); else map.set(key, [value]);
+}
+
 /**
  * @param {Iterable<RawRecord>} records
  * @param {{ planning?: boolean, keyPrefix?: string|null, label?: string|null, names?: Map<string, string>,
@@ -141,6 +147,8 @@ export function buildIndex(records, options = {}) {
     person(item.assignee); person(item.created_by); person(item.updated_by);
   }
   for (const p of projects) person(p.lead);
+  // People the board knows by name (the people document) are offered even before they act.
+  for (const actor of names.keys()) person(actor);
 
   // Children (only real parents), relations and the blocking graph.
   /** @type {Map<string, ItemView[]>} */
@@ -159,10 +167,6 @@ export function buildIndex(records, options = {}) {
   const blockedBy = new Map();
   /** @type {Map<string, string[]>} */
   const blocking = new Map();
-  const push = (/** @type {Map<string, any[]>} */ map, /** @type {string} */ key, /** @type {any} */ value) => {
-    const list = map.get(key);
-    if (list) list.push(value); else map.set(key, [value]);
-  };
   for (const r of byEntity.relation) {
     const from = refId(r.data.from), to = refId(r.data.to);
     const kind = r.data.kind === "blocks" || r.data.kind === "duplicates" ? r.data.kind : "relates";
@@ -171,13 +175,13 @@ export function buildIndex(records, options = {}) {
     const rel = { id: r.id, from, to, kind, active: r.data.active !== false, revision: r.revision, created_by: r.created_by ?? null };
     relations.push(rel);
     if (!rel.active) continue;
-    push(relationsOf, from, rel);
-    push(relationsOf, to, rel);
+    pushTo(relationsOf, from, rel);
+    pushTo(relationsOf, to, rel);
     // A blocker stops blocking once it is done (Linear moves it to "related").
     const blocker = items.get(from), blocked = items.get(to);
     if (kind === "blocks" && blocker && blocked && blocker.category !== "done") {
-      push(blockedBy, to, from);
-      push(blocking, from, to);
+      pushTo(blockedBy, to, from);
+      pushTo(blocking, from, to);
     }
   }
 
@@ -186,7 +190,7 @@ export function buildIndex(records, options = {}) {
   for (const r of byEntity.comment) {
     const item = refId(r.data.item);
     if (!item) continue;
-    push(comments, item, {
+    pushTo(comments, item, {
       id: r.id, item, body: String(r.data.body ?? ""), edited: r.data.edited === true, revision: r.revision,
       created_by: r.created_by ?? null, updated_by: r.updated_by ?? null,
       created: instant(r.created_at ?? r.data.created_at) ?? times.get(r.id)?.created ?? null,

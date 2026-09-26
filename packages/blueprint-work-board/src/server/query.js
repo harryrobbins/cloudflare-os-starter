@@ -15,8 +15,37 @@ const ITEM_FIELDS = ["key", "title", "state", "status", "priority", "assignee", 
 const invalid = (message) => new Error(`invalid_request: ${message}`);
 
 /**
+ * A plain-JSON summary of an item.
+ * @param {import("../shared/model/index.js").WorkIndex} ix @param {import("../shared/model/index.js").ItemView} item
+ * @param {string[]} [fields]
+ */
+function toJson(ix, item, fields = ITEM_FIELDS) {
+  const state = ix.stateByKey.get(item.state);
+  /** @type {Record<string, unknown>} */
+  const all = {
+    key: item.key, id: item.id, revision: item.revision, title: item.title, description: item.description,
+    state: state?.name ?? item.state, state_key: item.state, kind: item.kind, status: item.category,
+    priority: PRIORITIES[item.priority].name, assignee: item.assignee ? personName(ix, item.assignee) : null, assignee_id: item.assignee,
+    labels: item.labels, estimate: item.estimate, due: item.due, start: item.start,
+    project: item.project ? ix.projectById.get(item.project)?.name ?? item.project : null,
+    cycle: item.cycle ? ix.cycleById.get(item.cycle)?.name ?? item.cycle : null,
+    parent: item.parent ? ix.items.get(item.parent)?.key ?? item.parent : null,
+    created_by: item.created_by ? personName(ix, item.created_by) : null,
+    updated_by: item.updated_by ? personName(ix, item.updated_by) : null,
+    blocked_by: (ix.blockedBy.get(item.id) ?? []).map((id) => ix.items.get(id)?.key ?? id),
+    archived: item.archived, rank: item.rank, number: item.number, extensions: item.ext,
+  };
+  /** @type {Record<string, unknown>} */
+  const out = { key: all.key };
+  for (const f of fields) if (f in all) out[f] = all[f];
+  if (fields.includes("state")) out.status = all.status;
+  return out;
+}
+
+/**
  * @param {() => import("../shared/replica.js").ReplicaSource} getSource the Records session
- * @param {{ ttlMs?: number, now?: () => number, settings?: () => Promise<{ keyPrefix: string|null }>, label?: () => Promise<string|null> }} [options]
+ * @param {{ ttlMs?: number, now?: () => number, settings?: () => Promise<{ keyPrefix: string|null }>, label?: () => Promise<string|null>,
+ *   names?: () => Promise<Map<string, string>> }} [options] `names`: display names by actor (the people document)
  */
 export function createQueryCache(getSource, options = {}) {
   const ttlMs = options.ttlMs ?? 5_000;
@@ -25,7 +54,7 @@ export function createQueryCache(getSource, options = {}) {
   let freshAt = 0;
   /** @type {Promise<void>|null} */
   let syncing = null;
-  /** @type {{ version: number, prefix: string, index: import("../shared/model/index.js").WorkIndex }|null} */
+  /** @type {{ version: number, prefix: string, names: string, index: import("../shared/model/index.js").WorkIndex }|null} */
   let cached = null;
 
   async function sync() {
@@ -44,8 +73,10 @@ export function createQueryCache(getSource, options = {}) {
     const settings = options.settings ? await options.settings() : { keyPrefix: null };
     const label = options.label ? await options.label() : null;
     const prefix = settings.keyPrefix ?? "";
-    if (!cached || cached.version !== replica.version || cached.prefix !== prefix) {
-      cached = { version: replica.version, prefix, index: buildIndex(replica.records.values(), { keyPrefix: settings.keyPrefix, label, times: replica.times }) };
+    const names = options.names ? await options.names() : new Map();
+    const namesKey = JSON.stringify([...names]);
+    if (!cached || cached.version !== replica.version || cached.prefix !== prefix || cached.names !== namesKey) {
+      cached = { version: replica.version, prefix, names: namesKey, index: buildIndex(replica.records.values(), { keyPrefix: settings.keyPrefix, label, times: replica.times, names }) };
     }
     return cached.index;
   }
@@ -54,34 +85,6 @@ export function createQueryCache(getSource, options = {}) {
   function context(ix, viewer) {
     const t = now();
     return { index: ix, viewer, now: t, today: new Date(t).toISOString().slice(0, 10) };
-  }
-
-  /**
-   * A plain-JSON summary of an item.
-   * @param {import("../shared/model/index.js").WorkIndex} ix @param {import("../shared/model/index.js").ItemView} item
-   * @param {string[]} [fields]
-   */
-  function toJson(ix, item, fields = ITEM_FIELDS) {
-    const state = ix.stateByKey.get(item.state);
-    /** @type {Record<string, unknown>} */
-    const all = {
-      key: item.key, id: item.id, revision: item.revision, title: item.title, description: item.description,
-      state: state?.name ?? item.state, state_key: item.state, kind: item.kind, status: item.category,
-      priority: PRIORITIES[item.priority].name, assignee: item.assignee ? personName(ix, item.assignee) : null, assignee_id: item.assignee,
-      labels: item.labels, estimate: item.estimate, due: item.due, start: item.start,
-      project: item.project ? ix.projectById.get(item.project)?.name ?? item.project : null,
-      cycle: item.cycle ? ix.cycleById.get(item.cycle)?.name ?? item.cycle : null,
-      parent: item.parent ? ix.items.get(item.parent)?.key ?? item.parent : null,
-      created_by: item.created_by ? personName(ix, item.created_by) : null,
-      updated_by: item.updated_by ? personName(ix, item.updated_by) : null,
-      blocked_by: (ix.blockedBy.get(item.id) ?? []).map((id) => ix.items.get(id)?.key ?? id),
-      archived: item.archived, rank: item.rank, number: item.number, extensions: item.ext,
-    };
-    /** @type {Record<string, unknown>} */
-    const out = { key: all.key };
-    for (const f of fields) if (f in all) out[f] = all[f];
-    if (fields.includes("state")) out.status = all.status;
-    return out;
   }
 
   return {

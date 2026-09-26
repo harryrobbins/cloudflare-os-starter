@@ -184,6 +184,12 @@ let dropCalls = 0;
 let facetGeneration = 0;
 /** @type {{ api: ReturnType<typeof createGadgetApi>, generation: number }} */
 let facet = makeFacet();
+// The seeded colleagues have used the board before, so the people document knows their names
+// (?people=0 starts without them: everyone but the viewer shows as an account).
+if (params.get("people") !== "0" && planning) {
+  void Promise.all(SEED_PEOPLE.map((p) => facet.api.rememberViewer(p)))
+    .then(() => facet.api.setPersonAlias("records:operator:seed", "Records setup"));
+}
 
 function makeFacet() {
   return { api: createGadgetApi({ getEnv: () => ({ RECORDS: session }), storage, now: clock }), generation: ++facetGeneration };

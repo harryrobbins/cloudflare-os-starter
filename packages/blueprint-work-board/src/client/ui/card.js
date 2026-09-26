@@ -17,7 +17,7 @@ const AVATAR = ["#b4235a", "#8e3fbf", "#4f46e5", "#1d6fb8", "#0f766e", "#3f7d20"
  * @typedef {import("../board/projection.js").Entry} Entry
  * @typedef {{
  *   index: WorkIndex, today: string, density: string, props: Set<string>, columnsBy: string,
- *   selected: Set<string>, canWrite: boolean, lanesBy: string|null,
+ *   selected: Set<string>, canWrite: boolean, lanesBy: string|null, metaWidth?: number,
  * }} CardEnv
  */
 
@@ -25,7 +25,33 @@ const AVATAR = ["#b4235a", "#8e3fbf", "#4f46e5", "#1d6fb8", "#0f766e", "#3f7d20"
 export function avatar(actor, index, size = 20) {
   if (!actor) return h("span", { class: "avatar none", style: { width: `${size}px`, height: `${size}px` }, "aria-hidden": "true" }, icon("user", { size: Math.round(size * 0.7) }));
   const name = personName(index, actor);
-  return h("span", { class: "avatar", "aria-hidden": "true", title: name, style: { width: `${size}px`, height: `${size}px`, background: AVATAR[hash(actor) % AVATAR.length], fontSize: `${Math.round(size * 0.42)}px` } }, initials(name));
+  return h("span", { class: "avatar", "aria-hidden": "true", title: actorTitle(actor, name), style: { width: `${size}px`, height: `${size}px`, background: AVATAR[hash(actor) % AVATAR.length], fontSize: `${Math.round(size * 0.42)}px` } }, initials(name));
+}
+
+/** A tooltip naming a person and, when different, the account behind the name. @param {string} actor @param {string} name */
+export function actorTitle(actor, name) {
+  const account = actor.startsWith("cloudflare-os:") ? actor.slice("cloudflare-os:".length) : actor;
+  return account === name ? name : `${name} (${account})`;
+}
+
+/**
+ * Which chips fit in `budget` px, whole: an estimate from text length (system font at 11.5 px)
+ * that errs on the wide side. The meta row also wraps, so a misestimate hides a chip whole
+ * rather than clipping it; nothing is ever cut mid-word.
+ * @param {string[]} texts @param {number} budget @param {number} [extra] fixed width per chip (icon, dot)
+ */
+export function fitChips(texts, budget, extra = 12) {
+  const width = (/** @type {string} */ t) => Math.ceil(t.length * 6.2) + 14 + extra + 4;
+  let used = 0;
+  let n = 0;
+  for (const t of texts) {
+    const w = width(t);
+    const moreAfter = n < texts.length - 1 ? 30 : 0;
+    if (used + w + moreAfter > budget) break;
+    used += w;
+    n++;
+  }
+  return n;
 }
 
 /** @param {ItemView} item @param {WorkIndex} index */
@@ -88,7 +114,7 @@ export function updateCard(el, entry, env, state) {
   const selected = !ghost && env.selected.has(item.id);
   const sig = [
     item.id, item.revision, item.key, pending?.status ?? "", pending?.id ?? "", selected ? 1 : 0, env.density, [...env.props].join(","),
-    env.columnsBy, env.today, env.canWrite ? 1 : 0, entry.kind === "card" && entry.mirror ? 1 : 0, env.index.keyPrefix,
+    env.columnsBy, env.today, env.canWrite ? 1 : 0, env.metaWidth ?? 0, entry.kind === "card" && entry.mirror ? 1 : 0, env.index.keyPrefix,
     env.index.blockedBy.get(item.id)?.length ?? 0, env.index.children.get(item.id)?.length ?? 0, env.index.comments.get(item.id)?.length ?? 0,
     item.assignee ? personName(env.index, item.assignee) : "",
   ].join("|");
@@ -125,7 +151,8 @@ export function updateCard(el, entry, env, state) {
   const title = h("div", { class: "card-title" }, item.title || "Untitled");
   const meta = h("div", { class: "card-meta" });
   if (index.planning) {
-    if (props.has("priority") && item.priority) meta.append(h("span", { class: `chip prio p${item.priority}`, title: `Priority: ${PRIORITIES[item.priority].name}` }, priorityIcon(item.priority), h("span", { class: "chip-text" }, PRIORITIES[item.priority].name)));
+    // Priority is an icon only on cards (the card's accessible name says it); only Urgent is coloured.
+    if (props.has("priority") && item.priority) meta.append(h("span", { class: `chip prio p${item.priority}`, title: `Priority: ${PRIORITIES[item.priority].name}` }, priorityIcon(item.priority)));
     const blocked = index.blockedBy.get(item.id)?.length ?? 0;
     if (props.has("blocked") && blocked) meta.append(h("span", { class: "chip blocked", title: `Blocked by ${blocked}` }, icon("blocked", { size: 12 }), h("span", { class: "chip-text" }, "Blocked")));
     if (props.has("due") && item.due) {
@@ -137,13 +164,19 @@ export function updateCard(el, entry, env, state) {
     if (props.has("progress") && progress) meta.append(h("span", { class: `chip progress${progress.done === progress.total ? " complete" : ""}`, title: "Sub-issues done" }, icon("subtask", { size: 12 }), `${progress.done}/${progress.total}`));
     const comments = index.comments.get(item.id)?.length ?? 0;
     if (props.has("comments") && comments) meta.append(h("span", { class: "chip comments", title: `${comments} comments` }, icon("comment", { size: 12 }), String(comments)));
-    if (props.has("labels")) {
-      const shown = item.labels.slice(0, env.density === "compact" ? 1 : 2);
-      for (const l of shown) {
-        const label = index.labelByKey.get(l);
-        meta.append(h("span", { class: "chip label" }, h("span", { class: "dot", style: { background: label?.color ?? "#8a8f98" } }), label?.name ?? l));
+    if (props.has("labels") && item.labels.length) {
+      const names = item.labels.map((l) => index.labelByKey.get(l)?.name ?? l);
+      // Room left after the other chips (each estimated like a label chip).
+      const fixed = [...meta.children].reduce((w, c) => w + (c.classList.contains("prio") ? 22 : Math.ceil((c.textContent ?? "").length * 6.2) + 34), 0);
+      const n = fitChips(names, (env.metaWidth ?? 240) - fixed);
+      names.slice(0, n).forEach((name, i) => {
+        const label = index.labelByKey.get(item.labels[i]);
+        meta.append(h("span", { class: "chip label" }, h("span", { class: "dot", style: { background: label?.color ?? "#8a8f98" } }), name));
+      });
+      if (n < names.length) {
+        const rest = names.slice(n).join(", ");
+        meta.append(h("span", { class: "chip more", title: rest, "aria-label": `${names.length - n} more labels: ${rest}` }, `+${names.length - n}`));
       }
-      if (item.labels.length > shown.length) meta.append(h("span", { class: "chip more", title: item.labels.slice(shown.length).join(", ") }, `+${item.labels.length - shown.length}`));
     }
   } else if (item.description) {
     meta.append(h("span", { class: "snippet" }, plainText(item.description).slice(0, 140)));

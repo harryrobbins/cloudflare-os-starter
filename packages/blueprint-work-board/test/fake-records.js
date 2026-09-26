@@ -124,6 +124,9 @@ const set = (input, key, current, convert = (v) => v) => (key in input ? convert
  * @typedef {{ seq: number, actor: string, at: string, entries: any[], undo: { id: string, prev: Row|undefined }[] }} Tx
  */
 
+/** A profile field. @param {string} term @param {string} type @param {Record<string, unknown>} [extra] */
+const profileField = (term, type, extra = {}) => ({ term, type, ...extra });
+
 export class FakeRecords {
   /**
    * @param {{ planning?: boolean, access?: "read"|"write", module?: string, epoch?: number, label?: string,
@@ -226,31 +229,30 @@ export class FakeRecords {
   }
 
   model() {
-    const f = (/** @type {string} */ term, /** @type {string} */ type, extra = {}) => ({ term, type, ...extra });
     /** @type {Record<string, any>} */
     const item = {
-      title: f("https://schema.org/name", "string", { required: true, minLength: 1, maxLength: 500 }),
-      status: f("urn:records:work:status", "string", { enum: ["open", "active", "done"] }),
-      description: f("https://schema.org/description", "string"),
-      extensions: f("urn:records:extensions", "object"),
+      title: profileField("https://schema.org/name", "string", { required: true, minLength: 1, maxLength: 500 }),
+      status: profileField("urn:records:work:status", "string", { enum: ["open", "active", "done"] }),
+      description: profileField("https://schema.org/description", "string"),
+      extensions: profileField("urn:records:extensions", "object"),
     };
     const entities = /** @type {Record<string, any>} */ ({ work_item: { term: "urn:records:work:WorkItem", fields: item } });
     if (this.planning) {
       Object.assign(item, {
-        number: f("urn:records:work:number", "integer"), state: f("urn:records:work:state", "string"),
-        priority: f("urn:records:work:priority", "integer"), assignee: f("urn:records:work:assignee", "string"),
-        labels: f("https://schema.org/keywords", "array"), estimate: f("urn:records:work:estimate", "number"),
-        start_date: f("https://schema.org/startDate", "string"), due_date: f("https://schema.org/endDate", "string"),
-        parent: f("urn:records:work:parent", "reference"), project: f("urn:records:work:project", "reference"),
-        cycle: f("urn:records:work:cycle", "reference"), rank: f("urn:records:work:rank", "string"),
-        archived: f("urn:records:work:archived", "boolean"),
+        number: profileField("urn:records:work:number", "integer"), state: profileField("urn:records:work:state", "string"),
+        priority: profileField("urn:records:work:priority", "integer"), assignee: profileField("urn:records:work:assignee", "string"),
+        labels: profileField("https://schema.org/keywords", "array"), estimate: profileField("urn:records:work:estimate", "number"),
+        start_date: profileField("https://schema.org/startDate", "string"), due_date: profileField("https://schema.org/endDate", "string"),
+        parent: profileField("urn:records:work:parent", "reference"), project: profileField("urn:records:work:project", "reference"),
+        cycle: profileField("urn:records:work:cycle", "reference"), rank: profileField("urn:records:work:rank", "string"),
+        archived: profileField("urn:records:work:archived", "boolean"),
       });
-      entities.project = { term: "https://schema.org/Project", fields: { name: f("https://schema.org/name", "string") } };
-      entities.cycle = { term: "urn:records:work:Cycle", fields: { name: f("https://schema.org/name", "string") } };
-      entities.workflow_state = { term: "urn:records:work:WorkflowState", fields: { key: f("urn:records:work:key", "string"), kind: f("urn:records:work:kind", "string") } };
-      entities.label = { term: "urn:records:work:Label", fields: { key: f("urn:records:work:key", "string") } };
-      entities.relation = { term: "urn:records:work:Relation", fields: { kind: f("urn:records:work:kind", "string") } };
-      entities.comment = { term: "https://schema.org/Comment", fields: { body: f("https://schema.org/text", "string") } };
+      entities.project = { term: "https://schema.org/Project", fields: { name: profileField("https://schema.org/name", "string") } };
+      entities.cycle = { term: "urn:records:work:Cycle", fields: { name: profileField("https://schema.org/name", "string") } };
+      entities.workflow_state = { term: "urn:records:work:WorkflowState", fields: { key: profileField("urn:records:work:key", "string"), kind: profileField("urn:records:work:kind", "string") } };
+      entities.label = { term: "urn:records:work:Label", fields: { key: profileField("urn:records:work:key", "string") } };
+      entities.relation = { term: "urn:records:work:Relation", fields: { kind: profileField("urn:records:work:kind", "string") } };
+      entities.comment = { term: "https://schema.org/Comment", fields: { body: profileField("https://schema.org/text", "string") } };
     }
     return { moduleId: "work", apiMajor: 1, profile: { id: "urn:records:profile:work", version: this.planning ? "1.1.0" : "1.0.0", entities }, schemas: {} };
   }

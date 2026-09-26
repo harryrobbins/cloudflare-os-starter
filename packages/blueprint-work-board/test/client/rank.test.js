@@ -66,20 +66,21 @@ describe("validRank / compareRank", () => {
   });
 });
 
+const rankColumn = (/** @type {string[]} */ ranks) => ranks.map((rank) => ({ rank }));
+
 describe("rankAt", () => {
-  const col = (/** @type {string[]} */ ranks) => ranks.map((rank) => ({ rank }));
   it("places between neighbours", () => {
-    const r = rankAt(col(["a", "c"]), 1);
+    const r = rankAt(rankColumn(["a", "c"]), 1);
     expect(r > "a" && r < "c").toBe(true);
   });
   it("top and bottom", () => {
-    expect(rankAt(col(["m", "n"]), 0) < "m").toBe(true);
-    expect(rankAt(col(["m", "n"]), 2) > "n").toBe(true);
+    expect(rankAt(rankColumn(["m", "n"]), 0) < "m").toBe(true);
+    expect(rankAt(rankColumn(["m", "n"]), 2) > "n").toBe(true);
   });
   it("empty column", () => expect(validRank(rankAt([], 0))).toBe(true));
   it("dropping among unranked lands after the last ranked", () => {
-    const r = rankAt(col(["a", "b", "", ""]), 3);
+    const r = rankAt(rankColumn(["a", "b", "", ""]), 3);
     expect(r > "b").toBe(true);
   });
-  it("all unranked", () => expect(validRank(rankAt(col(["", ""]), 1))).toBe(true));
+  it("all unranked", () => expect(validRank(rankAt(rankColumn(["", ""]), 1))).toBe(true));
 });
