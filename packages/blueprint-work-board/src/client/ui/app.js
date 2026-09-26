@@ -5,7 +5,7 @@
 // One verb grammar: every action is in ACTIONS with a label and shortcut; the palette lists
 // them, the shortcut sheet documents them, menus and keys call the same code.
 
-import { h, relativeTime, setChildren } from "./dom.js";
+import { h, reconcile, relativeTime, setChildren } from "./dom.js";
 import { icon, stateIcon } from "./icons.js";
 import { CSS } from "./styles.js";
 import { createLayers, createLive } from "./overlay.js";
@@ -440,11 +440,24 @@ export function createBoardApp(appOptions) {
   /** @param {import("../board/projection.js").Projection} full */
   function renderNarrowBar(full) {
     narrowBar.hidden = false;
-    setChildren(narrowBar, ...full.columns.map((c) => h("button", {
-      type: "button", class: "narrow-tab", "aria-pressed": String(c.group.key === narrowCol), "data-col": c.group.key,
-      onclick: () => showColumn(c.group.key),
-    }, c.group.stateKind ? stateIcon(c.group.stateKind, c.group.color ?? "#888") : null, h("span", null, c.group.label), h("span", { class: "narrow-count" }, String(c.count)))));
-    /** @type {HTMLElement|null} */ (narrowBar.querySelector('[aria-pressed="true"]'))?.scrollIntoView?.({ inline: "center", block: "nearest" });
+    const was = narrowBar.dataset.active;
+    // Keyed: tabs keep their identity (and focus) across renders.
+    reconcile(narrowBar, full.columns, {
+      key: (c) => c.group.key,
+      create: (c) => h("button", { type: "button", class: "narrow-tab", "data-col": c.group.key, onclick: () => showColumn(c.group.key) }),
+      update: (node, c) => {
+        node.setAttribute("aria-pressed", String(c.group.key === narrowCol));
+        const sig = `${c.group.label}|${c.count}|${c.group.color ?? ""}`;
+        const el = /** @type {HTMLElement} */ (node);
+        if (el.dataset.sig === sig) return;
+        el.dataset.sig = sig;
+        setChildren(el, c.group.stateKind ? stateIcon(c.group.stateKind, c.group.color ?? "#888") : null, h("span", null, c.group.label), h("span", { class: "narrow-count" }, String(c.count)));
+      },
+    });
+    if (was !== narrowCol) {
+      narrowBar.dataset.active = narrowCol ?? "";
+      /** @type {HTMLElement|null} */ (narrowBar.querySelector('[aria-pressed="true"]'))?.scrollIntoView?.({ inline: "center", block: "nearest" });
+    }
   }
   /** @param {string} col @param {{ focus?: boolean }} [opts] */
   function showColumn(col, opts = {}) {

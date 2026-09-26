@@ -142,11 +142,14 @@ describe("keyboard-only journeys", () => {
     await frame.locator(".picker-input").waitFor();
     await page.keyboard.type("grace");
     await page.keyboard.press("Enter");
-    const actions = await until(async () => { const p = await pending(page); return p.length === 3 && p; }, { message: "3 pending updates" });
+    // One command per selected item that is not already Grace's.
+    const expected = await inApp(frame, "(app, store) => [...app.selection].filter((id) => store.index().items.get(id)?.assignee !== 'cloudflare-os:grace@example.com').length");
+    assert.ok(expected >= 1);
+    const actions = await until(async () => { const p = await pending(page); return p.length === expected && p; }, { message: `${expected} pending updates` });
     assert.ok(actions.every((a) => a.command === "work.update" && a.input.assignee === "cloudflare-os:grace@example.com"));
     await page.evaluate(() => window.harness.approveAll());
     await pull(frame);
-    await until(() => inApp(frame, "(app, store) => store.changes.filter((c) => c.status === 'applied').length === 3"), { message: "all saved" });
+    await until(() => inApp(frame, `(app, store) => store.changes.filter((c) => c.status === 'applied').length === ${expected}`), { message: "all saved" });
     await assertClean(page, errors);
   });
 
@@ -273,6 +276,7 @@ describe("round 2", () => {
     assert.equal(await frame.locator("#wb-wql").isVisible(), false);
     await frame.getByRole("button", { name: "Filter" }).click();
     assert.equal(await frame.locator("#wb-wql").isVisible(), true);
+    await page.keyboard.press("Escape");
     const previous = await frame.locator('.narrow-tab[aria-pressed="true"]').textContent();
     await frame.locator(".narrow-tab").nth(4).click();
     assert.notEqual(await frame.locator('.narrow-tab[aria-pressed="true"]').textContent(), previous);
@@ -291,6 +295,11 @@ describe("screenshots", () => {
       it(`board at ${w}px, ${scheme}`, async () => {
         const { page, frame, errors } = await h.open({ seed: 300, viewport: { width: w, height: hgt }, colorScheme: scheme });
         await screenshot(page, `board-${w}-${scheme}`);
+        if (w === 375) {
+          await inApp(frame, "(app, store) => app.openDetail(store.index().itemList.find((i) => (store.index().children.get(i.id)?.length ?? 0) > 2), { focus: true })");
+          await screenshot(page, `detail-${w}-${scheme}`);
+          await inApp(frame, "(app) => app.closeDetail()");
+        }
         if (w === 1440) {
           await inApp(frame, "(app) => app.loadView({ ...app.view, id: null, name: 'Current cycle by person', query: 'cycle:current', swimlanesBy: 'assignee' })");
           await screenshot(page, `lanes-${w}-${scheme}`);

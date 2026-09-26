@@ -15,7 +15,7 @@ export const CSS = `
   --shadow-2: 0 2px 4px rgba(16, 24, 40, .06), 0 6px 16px rgba(16, 24, 40, .08);
   --shadow-pop: 0 16px 40px rgba(16, 24, 40, .18), 0 2px 8px rgba(16, 24, 40, .08);
   --radius: 8px; --radius-lg: 12px;
-  --col-w: clamp(248px, calc((100vw - 72px) / 5), 320px); --col-collapsed: 44px; --head-h: 44px; --lane-h: 40px;
+  --col-w: clamp(248px, calc((100vw - 104px) / 5), 320px); --col-collapsed: 44px; --head-h: 44px; --lane-h: 40px;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
   color-scheme: light;
