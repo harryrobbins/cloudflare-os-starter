@@ -66,6 +66,13 @@ describe("board layout", () => {
 });
 
 describe("keyboard", () => {
+  it("offers exactly one tab stop on the board before anything is focused", async () => {
+    const { root } = await mount({ records: basic });
+    const stops = root.querySelectorAll('.board-view [tabindex="0"]');
+    expect(stops).toHaveLength(1);
+    expect(stops[0].getAttribute("aria-label")).toMatch(/^TW-1:/);
+  });
+
   it("roves focus across cards and columns with arrows and j/k, keeping one tab stop", async () => {
     const { root } = await mount({ records: basic });
     const scroller = root.querySelector(".board-scroll");

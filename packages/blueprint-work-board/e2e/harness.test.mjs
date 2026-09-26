@@ -113,7 +113,7 @@ describe("keyboard-only journeys", () => {
       const current = await frame.evaluate((k) => globalThis.workBoard.store.index().itemList.find((x) => x.key === k)?.assignee ?? null, key);
       const laneActor = await frame.evaluate((name) => [...globalThis.workBoard.store.index().people.values()].find((p) => p.name === name)?.id ?? null, lane ?? "");
       if (lane && laneActor !== current) break;
-      await page.keyboard.press("ArrowDown");
+      await page.keyboard.press(i < 20 ? "ArrowDown" : "ArrowUp");
       await page.waitForTimeout(40);
     }
     await page.keyboard.press("Enter");

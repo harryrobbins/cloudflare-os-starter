@@ -530,6 +530,16 @@ export function createBoardView({ doc, onAction }) {
     const me = /** @type {MouseEvent} */ (event);
     onAction("menu", { item: hit.entry.item, lane: hit.lane, anchor: { x: me.clientX, y: me.clientY } });
   });
+  lanesEl.addEventListener("focusin", (event) => {
+    const t = /** @type {HTMLElement} */ (event.target);
+    if (!model || moving) return;
+    const card = /** @type {HTMLElement|null} */ (t.closest("article.card:not(.ghost), li.cell-empty"));
+    if (!card) return;
+    const ul = /** @type {HTMLElement|null} */ (card.closest("ul.cell"));
+    const key = card.dataset.key;
+    if (!ul || !key || (model.focus?.key === key && model.focus.lane === ul.dataset.lane)) return;
+    onAction("focus", { key, lane: ul.dataset.lane, col: ul.dataset.col, silent: true });
+  });
   lanesEl.addEventListener("mouseover", (event) => {
     const hit = cardFrom(/** @type {Element} */ (event.target));
     onAction("hover", hit ? hit.entry.item.id : null);
@@ -653,7 +663,10 @@ export function createBoardView({ doc, onAction }) {
     const oldIndex = all.findIndex((e) => e.key === d.hit.entry.key);
     let index = d.target.index;
     if (toLane === d.hit.lane && toCol === d.hit.col && oldIndex >= 0 && oldIndex < index) index = Math.max(0, index);
-    if (toLane === d.hit.lane && toCol === d.hit.col && (!model.manualOrder || index === oldIndex)) return;
+    if (toLane === d.hit.lane && toCol === d.hit.col && (!model.manualOrder || index === oldIndex)) {
+      if (!model.manualOrder && index !== oldIndex) onAction("hint", "This view is sorted, so cards cannot be reordered by hand. Choose Display → Order → Manual to drag them into place.");
+      return;
+    }
     onAction("move", { item: d.hit.entry.item, fromLane: d.hit.lane, toLane, toCol, ordered, index: Math.min(index, ordered.length), pointer: true });
   }
 

@@ -441,7 +441,17 @@ export function createBoardApp(options) {
 
   /** Keeps the roving focus on the same item after data changes (it may have moved cells). @param {import("../board/projection.js").Projection} projection */
   function fixBoardFocus(projection) {
-    if (!boardFocus) return;
+    if (!boardFocus) {
+      for (const lane of projection.lanes) {
+        for (const c of projection.columns) {
+          const first = lane.cells.get(c.group.key)?.find((e) => e.kind === "card");
+          if (first) { boardFocus = { key: first.key, lane: lane.key, col: c.group.key }; return; }
+        }
+      }
+      const lane = projection.lanes[0], col = projection.columns[0]?.group.key;
+      if (lane && col !== undefined) boardFocus = { key: `empty:${lane.key}::${col}`, lane: lane.key, col };
+      return;
+    }
     const f = boardFocus;
     if (f.key.startsWith("empty:")) {
       const lane = projection.lanes.find((l) => l.key === f.lane);
@@ -459,8 +469,8 @@ export function createBoardApp(options) {
     boardFocus = lane ? { key: first ? first.key : `empty:${lane.key}::${f.col}`, lane: lane.key, col: f.col } : null;
   }
   function fixListFocus() {
-    if (!listFocus) return;
     const { items } = computeItems();
+    if (!listFocus) { if (items[0]) listFocus = { row: items[0].id, col: 1 }; return; }
     const id = listFocus.row.split("@")[0];
     if (!listFocus.row.startsWith("g:") && !items.some((i) => i.id === id)) listFocus = items[0] ? { row: items[0].id, col: listFocus.col } : null;
   }
@@ -689,6 +699,7 @@ export function createBoardApp(options) {
       }
       case "hover": hoverId = payload; break;
       case "announce": live.announce(payload); break;
+      case "hint": live.announce(payload); toast(payload); break;
     }
     void layoutId;
   }
@@ -1120,7 +1131,10 @@ export function createBoardApp(options) {
       if (id === "open") { runAction("open"); return; }
       if (id === "peek") { runAction("peek"); return; }
       const inst = layout();
-      if (!inLayout && !inst.focusCurrent()) { inst.navigate(id); return; }
+      // Until focus is on a card (or list cell), the first key press lands on the current one;
+      // after that keys move.
+      const onItem = Boolean(target?.closest("article.card, li.cell-empty, .lg-td, .lg-grouphead button"));
+      if (!onItem && inst.focusCurrent()) return;
       inst.navigate(id);
       return;
     }
