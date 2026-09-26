@@ -80,7 +80,7 @@ export function normaliseView(input, existing = null) {
   const d = input.display && typeof input.display === "object" ? input.display : {};
   const list = (/** @type {unknown} */ v, /** @type {string[]|null} */ allowed, /** @type {string[]} */ fallback) => {
     if (!Array.isArray(v)) return fallback;
-    return [...new Set(v.filter((x) => typeof x === "string" && (!allowed || allowed.includes(x) || FIELD.test(x))))].slice(0, 24);
+    return [...new Set(v.filter((x) => typeof x === "string" && (allowed ? allowed.includes(x) : FIELD.test(x))))].slice(0, 24);
   };
   const display = {
     density: /** @type {"comfortable"|"compact"} */ (DENSITIES.includes(d.density) ? d.density : "comfortable"),

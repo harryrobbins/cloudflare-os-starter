@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Work Board harness</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body { font: 13px system-ui, sans-serif; display: flex; flex-direction: column; background: #20242c; color: #e8ebf1; }
+    header { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 6px 12px; border-bottom: 1px solid #353b47; }
+    header strong { font-size: 13px; margin-right: 4px; }
+    header label { display: inline-flex; gap: 6px; align-items: center; }
+    button, select { font: inherit; background: #2f3542; color: inherit; border: 1px solid #4a5160; border-radius: 6px; padding: 3px 9px; cursor: pointer; }
+    button:hover { background: #3a4150; }
+    #pending { color: #f0c060; font-variant-numeric: tabular-nums; }
+    #log { color: #939bab; font-family: ui-monospace, monospace; font-size: 12px; flex-basis: 100%; }
+    #panes { flex: 1; min-height: 0; display: flex; gap: 4px; background: #111; }
+    #panes iframe { flex: 1; min-width: 0; height: 100%; border: none; background: #fff; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Work Board harness</strong>
+    <label>Approval <select id="approval"><option value="auto">auto</option><option value="manual">manual</option></select></label>
+    <span id="pending">0 pending</span>
+    <button id="approve-all" type="button">Approve all</button>
+    <button id="reject-oldest" type="button">Reject oldest</button>
+    <button id="external" type="button" title="Linus changes a random item through another client">External edit</button>
+    <button id="epoch" type="button" title="Permission epoch change: clients must reset and re-snapshot">Bump epoch</button>
+    <label>Latency <input id="latency" type="range" min="0" max="1000" step="10" value="0"> <span id="latency-value">0 ms</span></label>
+    <button id="restart" type="button" title="New facet over the same storage; every old gadget stub fails forever (as after a code edit)">Restart facet</button>
+    <span id="reloads"></span>
+    <span id="log">starting…</span>
+  </header>
+  <div id="panes"></div>
+  <script type="module" src="/harness/parent.js"></script>
+</body>
+</html>
