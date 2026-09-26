@@ -189,7 +189,8 @@ export function createBoardView({ doc, onAction }) {
     const pitch = pitchOf(m);
     if (bigBoard || entries.length > WINDOW_MIN) {
       const n = entries.length;
-      const prev = windows.get(cellKey) ?? { start: 0, end: Math.min(n, INITIAL_WINDOW) };
+      // New cells of a big board start empty; refreshWindows() fills the visible ones right after.
+      const prev = windows.get(cellKey) ?? { start: 0, end: bigBoard ? 0 : Math.min(n, INITIAL_WINDOW) };
       const w = { start: Math.min(prev.start, n), end: Math.min(Math.max(prev.end, prev.start), n) };
       windows.set(cellKey, w);
       slice = entries.slice(w.start, w.end);

@@ -26,7 +26,8 @@ export function createLayers(root) {
     el.addEventListener("keydown", (event) => {
       const e = /** @type {KeyboardEvent} */ (event);
       if (e.key === "Escape") {
-        if (stack[stack.length - 1]?.el !== el) return;
+        // Only the top layer closes (a dialog's layer is its backdrop).
+        if (!stack[stack.length - 1]?.el.contains(el)) return;
         e.preventDefault();
         e.stopPropagation();
         onEscape();

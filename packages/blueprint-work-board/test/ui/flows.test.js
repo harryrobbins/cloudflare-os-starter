@@ -59,6 +59,19 @@ describe("quick create", () => {
     expect([...fake.rows.values()].find((r) => r.data.title === "Hot fix").data).toMatchObject({ state: "in_review", priority: 1 });
   });
 
+  it("closes with Escape and returns focus to the invoker", async () => {
+    const { root } = await mount({ records: basic });
+    const invoker = /** @type {HTMLButtonElement} */ (button(root, "New item"));
+    invoker.focus();
+    invoker.click();
+    await settle();
+    const title = /** @type {HTMLInputElement} */ (root.querySelector(".create-title"));
+    key(title, "Escape");
+    await settle();
+    expect(root.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(invoker);
+  });
+
   it("validates before sending", async () => {
     const { root, fake } = await mount({ records: basic });
     key(document.body, "c");

@@ -122,11 +122,15 @@ describe("keyboard-only journeys", () => {
     const { page, frame, errors } = await h.open({ seed: 40, approval: "manual" });
     await focusBoard(frame);
     await frame.page().keyboard.press("ArrowDown");
-    await page.keyboard.press("x");
-    await page.keyboard.press("j");
-    await page.keyboard.press("x");
-    await page.keyboard.press("j");
-    await page.keyboard.press("x");
+    // Select three cards: X, then J to the next card (or → to the next column at a column's end).
+    for (let picked = 0; picked < 3;) {
+      await page.keyboard.press("x");
+      picked = (await appState(frame)).selection.length;
+      if (picked >= 3) break;
+      const was = await focused(frame);
+      await page.keyboard.press("j");
+      if ((await focused(frame)) === was) await page.keyboard.press("ArrowRight");
+    }
     await frame.locator(".bulk-count", { hasText: "3 selected" }).waitFor();
     await page.keyboard.press("a");
     await frame.locator(".picker-input").waitFor();

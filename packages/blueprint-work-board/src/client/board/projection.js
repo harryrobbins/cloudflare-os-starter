@@ -86,7 +86,8 @@ export function project(p) {
     const unsettled = c.status === "saving" || c.status === "pending" || (c.status === "applied" && !c.settledAt);
     if (!unsettled) continue;
     if (c.command === "work.create") {
-      if (c.status === "applied" && c.resultId && p.index.items.has(c.resultId)) continue;
+      // The record can arrive (journal pull) before the outcome poll says it was applied.
+      if (c.resultId && p.index.items.has(c.resultId)) continue;
       const ghost = projectItem(p.index, null, c.input, `pending:${c.id}`);
       if (p.matches && !p.matches(ghost)) continue;
       insertGhost(ghost, c, true);
