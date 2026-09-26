@@ -18,6 +18,7 @@ and [`brief-board.md`](../../docs/plans/work-board/brief-board.md).
 | `src/shared/wql/` | Work Query Language: parse, check, compile/run, format, describe, suggest, chips |
 | `src/shared/replica.js` | Snapshot + journal replica with activity history and backfill (client and server) |
 | `src/shared/rank.js` | Fractional ranks for manual order |
+| `src/shared/datasets/` | Named datasets with a data dictionary (`items` today; Insights registers the journal-derived ones) |
 | `src/server/` | Gadget server: Records pass-through (`proxy.js`, commands unchanged), documents (`documents.js`: views, prefs, settings), agent reads (`query.js`), RPC surface (`api.js`) |
 | `src/client/store/` | Client store: sync with backoff and epoch reset, command pipeline, pending overlay, undo, bulk edit (`store.js`); input validation (`commands.js`) |
 | `src/client/board/projection.js` | Columns × lanes projection with ghost cards for pending changes; move patches |
