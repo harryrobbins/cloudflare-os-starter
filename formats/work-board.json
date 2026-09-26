@@ -1,7 +1,7 @@
 {
   "blueprintId": "format.work-board",
   "title": "Work Board",
-  "description": "A shared board of work items stored in a Records datastore. Several boards and explorers can use the same datastore; every change is approved and attributed to the person who made it.",
+  "description": "A keyboard-first project board for work items in a Records datastore: workflow states, priorities, assignees, labels, cycles, swimlanes, a query language and shared views. Every change is approved and attributed to the person who made it.",
   "output": {
     "id": "work-board",
     "noun": "Work board",
@@ -13,5 +13,5 @@
     "name": "Surprisingly Ltd",
     "id": "harryrobbins@gmail.com"
   },
-  "revision": 2
+  "revision": 3
 }
