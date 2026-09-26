@@ -90,7 +90,7 @@ export function buildIndex(records, options = {}) {
   if (virtualStates) {
     states = (planning ? DEFAULT_STATES : V1_STATES).map((s) => ({
       id: null, key: s.key, name: s.name, kind: s.kind, category: categoryOfKind(s.kind), position: s.position,
-      color: /** @type {any} */ (KIND_COLORS)[s.kind], wipLimit: null, revision: 0, virtual: true,
+      color: safeColor(/** @type {any} */ (s).color, /** @type {any} */ (KIND_COLORS)[s.kind]), wipLimit: null, revision: 0, virtual: true,
     }));
   }
   states.sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));

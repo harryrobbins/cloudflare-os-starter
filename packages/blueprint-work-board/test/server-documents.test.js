@@ -102,7 +102,7 @@ describe.skipIf(!wqlReady)("createGadgetApi over FakeRecords", () => {
     expect(setup).toMatchObject({ connected: true, connection: { label: "Team work", access: "write" }, description: { module_id: "work" }, error: null });
     const snap = await api.snapshot(1000);
     expect(snap.records.filter((r) => r.entity === "work_item")).toHaveLength(1);
-    expect((await api.changes(0, 1)).changes.length).toBe(fake.seq);
+    expect((await api.changes(0, 1)).changes.length).toBe(fake.journal.length);
   });
 
   it("passes command arguments through by identity", async () => {

@@ -31,7 +31,7 @@ server in its own process group, checks one seeded board and a manual-approval c
 | `v1=1` | A datastore without migration 010: only `work_item` with title/description/status, only `work.create`/`work.update` |
 | `access=read` | Read-only connection (`command` fails `read_only:`) |
 | `latency=300` | Added before and after every facet call (ms) |
-| `timestamps=0` | Records and journal entries carry no `created_at`/`updated_at` (as today's service) |
+| `timestamps=1` | Harness-only extra: records carry `created_at`/`updated_at` and journal entries `created_at`. The real service strips them, so the default (off) is faithful |
 | `now=2026-09-26T12:00:00Z` | Fake clock base; the seed's history ends just before it. Default real now |
 | `anon=1` | Pane 1 has no signed-in viewer (`gadgetViewer` null; `$createViewerAssertion` fails `forbidden:`) |
 | `cspProbe=0` | Byte-identical platform frame document (no CSP violation reporter) |
@@ -64,12 +64,19 @@ reload recovers), **Reload pane N**.
 Faithful: the frame document, sandbox flags, CSP and prefix (`gadget`, `gadgetViewer`,
 `RpcTarget` as module-scope bindings) copied verbatim from `GadgetUI.tsx`; capnweb structured
 cloning; the gadget server code; intent digests checked with the connector's own
-`recordsOsIntentDigest`; the connector's rejection strings (`Records refused the command (400|403|404|412|428)`,
+`recordsOsIntentDigest`; the connector's rejection strings (`Records refused the command (400|403|404|409|412|428)`,
 `Approval was denied`); snapshot bounds and journal cursor semantics of records-service SQL 008.
 
-Not faithful: the fake applies the 010 contract as `brief-service.md` describes it before the real
-migration exists (references returned as bare UUIDs, `null` clears, lazily seeded states); the
-approval UI is these buttons, not the Workshop; there is no observation authorisation, rate limit
-(the platform handles ~45 RPC/s per gadget) or 128 KiB storage value cap; timestamps on journal
-entries exist only in the fake (`timestamps=0` removes them); the frame is a same-page srcdoc, so a
-pane reload is instant.
+The fake follows `packages/records-service/sql/010-work-planning.sql`: one command is one commit
+(one journal `seq`); the first command in an empty datastore also writes the seven default states
+(Triage, Backlog, Todo, In Progress, In Review, Done, Canceled — key `canceled`) in that commit at
+ordinals 1–7 after the command's own record at 0; change pages never split a commit; record data
+omits NULL columns (`null` in an update clears, `labels: []` is absent); references are bare UUIDs;
+every create takes an optional client `id` (unique across work entities, else 409); the SQL's limits,
+messages and SQLSTATEs (400/403/404/409/412/428) are reproduced. A failed command changes nothing.
+
+Not faithful: the approval UI is these buttons, not the Workshop; there is no observation
+authorisation, rate limit (the platform handles ~45 RPC/s per gadget) or 128 KiB storage value
+cap; `timestamps=1` adds times the real service does not send; errors thrown by `run()` keep the
+SQL message after the code, while the real connector's session errors carry codes with generic
+text; the frame is a same-page srcdoc, so a pane reload is instant.

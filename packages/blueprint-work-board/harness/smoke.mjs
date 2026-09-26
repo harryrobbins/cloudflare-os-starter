@@ -3,7 +3,7 @@
 // platform CSP, runs one manual-approval create through the pane's UI when the build offers a
 // "New item" button, checks window.harness, then stops everything.
 //
-//   node harness/smoke.mjs [--port 8796] [--keep-build]
+//   node harness/smoke.mjs [--port 8796] [--no-build]   (--no-build: use the dist/ already built)
 
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
@@ -15,7 +15,7 @@ const pkg = join(dirname(fileURLToPath(import.meta.url)), "..");
 const argPort = process.argv.indexOf("--port");
 const port = argPort !== -1 ? Number(process.argv[argPort + 1]) : 8796;
 
-await buildGadget();
+if (!process.argv.includes("--no-build")) await buildGadget();
 const server = spawn(process.execPath, [join(pkg, "harness/serve.mjs"), "--port", String(port)], { cwd: pkg, detached: true, stdio: ["ignore", "pipe", "pipe"] });
 const stop = () => { try { process.kill(-/** @type {number} */ (server.pid), "SIGTERM"); } catch { /* gone */ } };
 let failed = false;

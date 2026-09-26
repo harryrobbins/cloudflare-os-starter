@@ -17,16 +17,17 @@ export const CATEGORY_OF_KIND = { triage: "open", backlog: "open", unstarted: "o
 export const KIND_COLORS = { triage: "#b45bcf", backlog: "#8a8f98", unstarted: "#6b7280", started: "#d99100", completed: "#2f9e5b", canceled: "#9aa0a6" };
 
 /**
- * Workflow states the service seeds lazily on a datastore's first planning command
- * (brief-service.md). Shown as virtual states until real `workflow_state` records arrive.
+ * Workflow states Records seeds in a datastore's first planning command (migration 010), in the
+ * same commit as that command. Shown as virtual states until real `workflow_state` records arrive.
  */
 export const DEFAULT_STATES = Object.freeze([
-  { key: "backlog", name: "Backlog", kind: "backlog", position: 1 },
-  { key: "todo", name: "Todo", kind: "unstarted", position: 2 },
-  { key: "in_progress", name: "In Progress", kind: "started", position: 3 },
-  { key: "in_review", name: "In Review", kind: "started", position: 4 },
-  { key: "done", name: "Done", kind: "completed", position: 5 },
-  { key: "cancelled", name: "Canceled", kind: "canceled", position: 6 },
+  { key: "triage", name: "Triage", kind: "triage", position: 0, color: "#fc7840" },
+  { key: "backlog", name: "Backlog", kind: "backlog", position: 1, color: "#bec2c8" },
+  { key: "todo", name: "Todo", kind: "unstarted", position: 2, color: "#e2e2e2" },
+  { key: "in_progress", name: "In Progress", kind: "started", position: 3, color: "#f2c94c" },
+  { key: "in_review", name: "In Review", kind: "started", position: 4, color: "#0f7488" },
+  { key: "done", name: "Done", kind: "completed", position: 5, color: "#5e6ad2" },
+  { key: "canceled", name: "Canceled", kind: "canceled", position: 6, color: "#95a2b3" },
 ]);
 
 /** The three v1 statuses presented as states for datastores without migration 010. */
@@ -55,7 +56,7 @@ export const RELATION_KINDS = /** @type {const} */ (["blocks", "relates", "dupli
 
 export const LIMITS = Object.freeze({
   title: 500, description: 20_000, labels: 20, label: 60, estimate: 1000, comment: 20_000, rank: 64,
-  stateName: 60, stateKey: 40, wip: 999, name: 120,
+  stateName: 60, stateKey: 40, wip: 100_000, position: 100_000, name: 200, goal: 2000,
 });
 
 /** Every entity the planning model adds (the snapshot may contain none of them). */

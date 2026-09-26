@@ -1,6 +1,6 @@
 // @ts-check
-// A realistic, deterministic work datastore for the harness and tests: people, a Triage state and
-// a WIP limit, labels, projects, six two-week cycles around `now`, epics with sub-issues, items
+// A realistic, deterministic work datastore for the harness and tests: people, the service's default
+// workflow states with a WIP limit on In Review, labels, projects, six two-week cycles around `now`, epics with sub-issues, items
 // that moved through states over ~70 days by several people, blocking relations and comments.
 // Everything is written through FakeRecords.run() with a controlled clock, so the journal carries
 // realistic actors and times and the activity history is rich.
@@ -78,10 +78,10 @@ export function seedWork(fake, { items = 300, now = Date.parse("2026-09-26T12:00
   try {
     // Setup by Ada (the board owner) on day 0.
     const ada = people[0];
-    fake.run("work.state.create", { key: "triage", name: "Triage", kind: "triage", position: 0, color: "#b45bcf" }, { actor: ada });
+    // The first command also creates the service's seven default states (Triage … Canceled).
+    for (const [key, name, color, description] of LABELS) fake.run("work.label.create", { key, name, color, description }, { actor: ada });
     const review = [...fake.rows.values()].find((r) => r.entity === "workflow_state" && r.data.key === "in_review");
     if (review) fake.run("work.state.update", { id: review.id, wip_limit: 5 }, { actor: ada, revision: review.revision });
-    for (const [key, name, color, description] of LABELS) fake.run("work.label.create", { key, name, color, description }, { actor: ada });
     const projectIds = PROJECTS.map(([name, description, state, lead, color], i) => fake.run("work.project.create", {
       name, description, state, lead: people[/** @type {number} */ (lead)], color,
       start_date: iso(start + i * 5 * DAY), target_date: iso(now + (20 + i * 15) * DAY),
@@ -89,7 +89,7 @@ export function seedWork(fake, { items = 300, now = Date.parse("2026-09-26T12:00
     const currentStart = Date.parse(`${iso(now)}T00:00:00Z`) - 5 * DAY;
     const cycles = [-3, -2, -1, 0, 1, 2].map((offset, i) => {
       const s = currentStart + offset * 14 * DAY;
-      const record = fake.run("work.cycle.create", { name: `Cycle ${21 + i}`, starts_on: iso(s), ends_on: iso(s + 13 * DAY), goal: offset === 0 ? "Ship the checkout redesign and close P1 bugs." : "" }, { actor: ada });
+      const record = fake.run("work.cycle.create", { name: `Cycle ${21 + i}`, starts_on: iso(s), ends_on: iso(s + 13 * DAY), ...(offset === 0 ? { goal: "Ship the checkout redesign and close P1 bugs." } : {}) }, { actor: ada });
       return { id: record.id, offset, start: s, end: s + 14 * DAY };
     });
 
@@ -104,8 +104,8 @@ export function seedWork(fake, { items = 300, now = Date.parse("2026-09-26T12:00
       }
       const r = rng();
       let target;
-      if (!cycle) target = r < 0.18 ? "triage" : r < 0.55 ? "backlog" : r < 0.75 ? "todo" : r < 0.9 ? "done" : "cancelled";
-      else if (cycle.offset < 0) target = r < 0.82 ? "done" : r < 0.9 ? "cancelled" : r < 0.96 ? "in_progress" : "todo";
+      if (!cycle) target = r < 0.18 ? "triage" : r < 0.55 ? "backlog" : r < 0.75 ? "todo" : r < 0.9 ? "done" : "canceled";
+      else if (cycle.offset < 0) target = r < 0.82 ? "done" : r < 0.9 ? "canceled" : r < 0.96 ? "in_progress" : "todo";
       else if (cycle.offset === 0) target = r < 0.3 ? "todo" : r < 0.55 ? "in_progress" : r < 0.7 ? "in_review" : "done";
       else target = r < 0.7 ? "todo" : "backlog";
       if (epic) target = r < 0.3 ? "done" : "in_progress";
@@ -147,7 +147,7 @@ export function seedWork(fake, { items = 300, now = Date.parse("2026-09-26T12:00
       if (["in_progress", "in_review", "done"].includes(target)) move({ state: "in_progress" }, worker);
       if (target === "in_review" || (target === "done" && chance(0.7))) move({ state: "in_review" }, worker);
       if (target === "done") move({ state: "done" }, chance(0.5) ? worker : pick(people));
-      if (target === "cancelled") move({ state: "cancelled" }, ada);
+      if (target === "canceled") move({ state: "canceled" }, ada);
       if (chance(0.15)) move({ priority: pick([1, 2, 3]) }, pick(people));
       if (chance(0.02) && target !== "in_progress") move({ archived: true }, ada);
       return entry;
