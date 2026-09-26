@@ -18,6 +18,14 @@ describe("service requirement and binding", () => {
     expect(archive.metadata.bindings).toEqual(BLUEPRINT_BINDINGS);
     expect(archive.files["client.js"]).toBe("c");
   });
+
+  it("ships SKILL.md and keeps Jev optional (not a declared binding, which the platform would require at creation)", async () => {
+    const { FILES } = await import("../scripts/pack-gadget.mjs");
+    expect(FILES).toContain("SKILL.md");
+    expect(Object.keys(BLUEPRINT_BINDINGS)).toEqual(["RECORDS"]);
+    const { JEV_BINDING } = await import("../src/shared/insights/triage.js");
+    expect(JEV_BINDING).toBe("JEV");
+  });
 });
 
 describe("gadget server proxy", () => {

@@ -38,6 +38,16 @@ const TABLES = {
  * }} InsightsModel
  */
 
+/** @param {Report} r @param {Result} result */
+function isEmpty(r, result) {
+  if (!result.rows.length) return true;
+  if (r.dataset === "dependencies") return !result.rows.some((x) => x.type === "edge");
+  if (["daily_state_counts", "throughput", "created_vs_resolved"].includes(r.dataset)) {
+    return !result.rows.some((x) => (x.count ?? x.completed ?? (x.created || x.resolved)) > 0);
+  }
+  return false;
+}
+
 /**
  * @param {{ doc: Document, onAction: (type: string, payload?: any) => void }} deps
  */
@@ -78,7 +88,7 @@ export function createInsightsView({ doc, onAction }) {
       create: (r) => card(r),
       update: (node, r) => fill(/** @type {HTMLElement} */ (node), r, m),
     });
-    for (const id of [...charts.keys()]) if (!m.reports.some((r) => r.id === id)) { charts.get(id)?.destroy?.(); charts.delete(id); }
+    for (const id of charts.keys()) if (!m.reports.some((r) => r.id === id)) { charts.get(id)?.destroy?.(); charts.delete(id); }
   }
 
   /** @param {InsightsModel} m */
@@ -165,16 +175,6 @@ export function createInsightsView({ doc, onAction }) {
     if (had) focusKey(r.id, had);
   }
 
-  /** @param {Report} r @param {Result} result */
-  function isEmpty(r, result) {
-    if (!result.rows.length) return true;
-    if (r.dataset === "dependencies") return !result.rows.some((x) => x.type === "edge");
-    if (["daily_state_counts", "throughput", "created_vs_resolved"].includes(r.dataset)) {
-      return !result.rows.some((x) => (x.count ?? x.completed ?? (x.created || x.resolved)) > 0);
-    }
-    return false;
-  }
-
   /** @param {string} id @param {string} key */
   function focusKey(id, key) {
     const target = /** @type {HTMLElement|null} */ (grid.querySelector(`[data-report="${id}"] [data-focus-key="${key}"]`));
@@ -194,14 +194,18 @@ export function createInsightsView({ doc, onAction }) {
     const width = Math.max(240, Math.floor(box.getBoundingClientRect().width || section.getBoundingClientRect().width - 32 || 480));
     state.sig = sig;
     state.width = section.getBoundingClientRect().width;
-    box.replaceChildren();
+    // Vega marks its own container as a graphics document; render into an inner element so the
+    // box keeps the chart's accessible role and name (the summary).
+    const canvas = h("div", { class: "chart-canvas" });
+    box.replaceChildren(canvas);
     try {
-      const { destroy } = await renderChart(box, {
+      const { destroy } = await renderChart(canvas, {
         spec: r.spec, dataset: r.dataset, rows: result.rows, width, height: CHART_HEIGHT, theme, tooltipHost: section,
         onClick: (d) => { if (typeof d?.key === "string" && r.dataset === "dependencies") onAction("insights:open", d.key); },
       });
       if (state.sig !== sig) { destroy(); return; }
       state.destroy = destroy;
+      for (const a of ["role", "aria-roledescription", "aria-label", "tabindex"]) canvas.removeAttribute(a);
       if (r.dataset === "dependencies") {
         focusableNodes(box, {
           label: (d) => `${d.key}: ${d.title}. ${d.state}${d.assignee ? `, ${d.assignee}` : ""}.${d.blocked ? ` Blocked${d.depth > 1 ? ` (chain ${d.depth} deep)` : ""}.` : ""}${d.blocking ? ` Blocks ${d.blocking} ${d.blocking === 1 ? "item" : "items"}.` : ""}${d.context ? " Outside the filter." : ""} Press Enter to open.`,
@@ -282,8 +286,8 @@ export function createInsightsView({ doc, onAction }) {
       return true;
     },
     focusCurrent() {
-      const card = (focusId && grid.querySelector(`[data-report="${focusId}"]`)) || grid.querySelector(".report-card");
-      const target = /** @type {HTMLElement|null} */ (card?.querySelector("h3") ?? null);
+      const current = (focusId && grid.querySelector(`[data-report="${focusId}"]`)) || grid.querySelector(".report-card");
+      const target = /** @type {HTMLElement|null} */ (current?.querySelector("h3") ?? null);
       if (!target) { el.focus(); return true; }
       target.setAttribute("tabindex", "-1");
       target.focus();

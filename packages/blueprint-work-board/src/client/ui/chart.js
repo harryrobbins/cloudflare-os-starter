@@ -44,15 +44,15 @@ function registerSchemes(theme) {
   scheme("workboard-series", t.series);
 }
 
-/** @param {Theme} theme */
-function config(theme) {
+/** @param {Theme} theme @param {number} [width] */
+function config(theme, width = 600) {
   const t = THEMES[theme];
   const font = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
   return {
     background: null, font, padding: 4,
     view: { stroke: null },
     axis: { labelColor: t.muted, titleColor: t.muted, gridColor: t.grid, domainColor: t.line, tickColor: t.line, labelFontSize: 11, titleFontSize: 11, titleFontWeight: 500, labelFont: font, titleFont: font, labelPadding: 4 },
-    legend: { labelColor: t.ink, titleColor: t.muted, labelFontSize: 11, titleFontSize: 11, labelFont: font, titleFont: font, orient: "bottom", direction: "horizontal", symbolSize: 90, columnPadding: 12 },
+    legend: { labelColor: t.ink, titleColor: t.muted, labelFontSize: 11, titleFontSize: 11, labelFont: font, titleFont: font, orient: "bottom", direction: "horizontal", symbolSize: 90, columnPadding: 12, ...(width < 460 ? { columns: 3 } : {}) },
     title: { color: t.ink, font },
     text: { fill: t.ink, font },
     range: { category: t.series },
@@ -75,18 +75,18 @@ export function prepare(spec, dataset, rows, opts) {
   let vega;
   if (specKind(spec) === "vega-lite") {
     const lite = structuredClone(spec);
-    lite.datasets = { ...(lite.datasets ?? {}), [dataset]: values };
+    lite.datasets = { ...lite.datasets, [dataset]: values };
     if (lite.width === undefined || lite.width === "container") lite.width = opts.width;
     if (lite.height === undefined || lite.height === "container") lite.height = opts.height;
     lite.autosize = lite.autosize ?? { type: "fit", contains: "padding" };
-    lite.config = mergeConfig(config(opts.theme), lite.config ?? {});
+    lite.config = mergeConfig(config(opts.theme, opts.width), lite.config ?? {});
     vega = compile(/** @type {any} */ (lite)).spec;
   } else {
     vega = structuredClone(spec);
     for (const d of vega.data ?? []) if (d?.name === dataset && d.source === undefined) d.values = values;
     vega.width = opts.width;
     vega.height = opts.height;
-    vega.config = mergeConfig(config(opts.theme), vega.config ?? {});
+    vega.config = mergeConfig(config(opts.theme, opts.width), vega.config ?? {});
   }
   const defined = new Set((vega.signals ?? []).map((/** @type {any} */ s) => s.name));
   const themeSignals = { ink: t.ink, muted: t.muted, surface: t.surface, line: t.line, linkHot: t.linkHot, linkCold: t.linkCold };
@@ -157,6 +157,9 @@ function formatValue(v) {
   return String(v);
 }
 
+/** The Vega datum behind a rendered SVG element. @param {Element} el */
+const datum = (el) => /** @type {any} */ (el).__data__.datum;
+
 /**
  * Makes the dependency graph's nodes keyboard-operable: one tab stop, arrow keys move between
  * items (in key order), Enter or Space opens the focused item.
@@ -166,7 +169,6 @@ function formatValue(v) {
 export function focusableNodes(container, opts) {
   const nodes = /** @type {SVGElement[]} */ ([...container.querySelectorAll("g.mark-symbol.nodes path")])
     .filter((el) => /** @type {any} */ (el).__data__?.datum?.key);
-  const datum = (/** @type {Element} */ el) => /** @type {any} */ (el).__data__.datum;
   // Only the nodes speak: Vega's own roles on marks and groups would be unlabelled images.
   const nodeSet = new Set(nodes);
   for (const el of container.querySelectorAll("svg [role], svg [aria-roledescription]")) {

@@ -846,7 +846,7 @@ export function createBoardApp(appOptions) {
       }
       case "insights:menu": reportMenu(payload.report, payload.anchor); break;
       case "insights:open": { const it = itemByKey(store.index(), payload); if (it) openDetail(it, { focus: true }); else toast(`${payload} is not on the board.`); break; }
-      case "insights:params": insightParams.set(payload.id, { ...(insightParams.get(payload.id) ?? {}), ...payload.params }); live.announce("Updating the report."); schedule(); break;
+      case "insights:params": insightParams.set(payload.id, { ...insightParams.get(payload.id), ...payload.params }); live.announce("Updating the report."); schedule(); break;
       case "insights:new": editReport(null); break;
       case "insights:hidden": hiddenReports(payload); break;
       case "hover": hoverId = payload; break;
@@ -1144,7 +1144,7 @@ export function createBoardApp(appOptions) {
 
   function visibleReports() { return (store.reports ?? []).filter((r) => !r.hidden); }
   function insightRequests() {
-    return visibleReports().map((r) => ({ id: r.id, dataset: r.dataset, params: { ...r.params, ...(insightParams.get(r.id) ?? {}) }, query: r.query ?? "" }));
+    return visibleReports().map((r) => ({ id: r.id, dataset: r.dataset, params: { ...r.params, ...insightParams.get(r.id) }, query: r.query ?? "" }));
   }
   /** Fetches report data when the filter, reports or parameters change, and at most every 5 s as data changes. @param {boolean} [force] */
   function ensureInsights(force = false) {
@@ -1192,23 +1192,23 @@ export function createBoardApp(appOptions) {
       params: (/** @type {string} */ id) => insightParams.get(id) ?? {},
     };
   }
-  /** @param {any} report @param {HTMLElement} anchor */
-  function reportMenu(report, anchor) {
+  /** @param {any} rep @param {HTMLElement} anchor */
+  function reportMenu(rep, anchor) {
     const w = store.canWrite();
     /** @type {import("./picker.js").PickerOption[]} */
     const options = [
       ...(w ? [{ value: "edit", label: "Edit report…", detail: "Title, filter, parameters and spec" }, { value: "duplicate", label: "Duplicate" }] : []),
       { value: "spec", label: w ? "View or edit spec…" : "View spec" },
-      ...(w && report.customised ? [{ value: "reset", label: "Reset to the built-in version" }] : []),
-      ...(w ? [{ value: "delete", label: report.builtin ? "Hide this report" : "Delete this report…" }] : []),
+      ...(w && rep.customised ? [{ value: "reset", label: "Reset to the built-in version" }] : []),
+      ...(w ? [{ value: "delete", label: rep.builtin ? "Hide this report" : "Delete this report…" }] : []),
     ];
-    openPicker({ layers, anchor, title: report.title, options, placeholder: "Choose an action…", onPick: ([v]) => {
-      if (v === "edit" || v === "spec") editReport(report);
-      else if (v === "duplicate") void reportOp(() => store.saveReport({ title: `${report.title} (copy)`, description: report.description ?? "", dataset: report.dataset, params: report.params, query: report.query, spec: report.spec }), `Duplicated “${report.title}”.`);
-      else if (v === "reset") void reportOp(() => store.restoreReport(report.id), `Reset “${report.title}”.`);
+    openPicker({ layers, anchor, title: rep.title, options, placeholder: "Choose an action…", onPick: ([v]) => {
+      if (v === "edit" || v === "spec") editReport(rep);
+      else if (v === "duplicate") void reportOp(() => store.saveReport({ title: `${rep.title} (copy)`, description: rep.description ?? "", dataset: rep.dataset, params: rep.params, query: rep.query, spec: rep.spec }), `Duplicated “${rep.title}”.`);
+      else if (v === "reset") void reportOp(() => store.restoreReport(rep.id), `Reset “${rep.title}”.`);
       else if (v === "delete") {
-        if (report.builtin) void reportOp(() => store.deleteReport(report.id), `Hid “${report.title}”. Bring it back from Hidden.`);
-        else confirmDelete(report);
+        if (rep.builtin) void reportOp(() => store.deleteReport(rep.id), `Hid “${rep.title}”. Bring it back from Hidden.`);
+        else confirmDelete(rep);
       }
     } });
   }
@@ -1217,15 +1217,15 @@ export function createBoardApp(appOptions) {
     try { await fn(); live.announce(done); toast(done); insights.key = ""; renderLayout(); }
     catch (err) { const m = String(/** @type {any} */ (err)?.message ?? err).replace(/^[a-z_]+:\s*/, ""); toast(m, { tone: "bad" }); live.announce(m, { assertive: true }); }
   }
-  /** @param {any} report */
-  function confirmDelete(report) {
-    layers.openDialog({ title: `Delete “${report.title}”?`, size: "sm", description: "The report is removed for everyone using this board. The data it charts is not affected.",
+  /** @param {any} rep */
+  function confirmDelete(rep) {
+    layers.openDialog({ title: `Delete “${rep.title}”?`, size: "sm", description: "The report is removed for everyone using this board. The data it charts is not affected.",
       content: (close) => [h("div", { class: "row end" }, h("button", { type: "button", class: "btn", onclick: () => close("cancel") }, "Cancel"),
-        h("button", { type: "button", class: "btn primary danger", onclick: () => { close("ok"); void reportOp(() => store.deleteReport(report.id), `Deleted “${report.title}”.`); } }, "Delete report"))] });
+        h("button", { type: "button", class: "btn primary danger", onclick: () => { close("ok"); void reportOp(() => store.deleteReport(rep.id), `Deleted “${rep.title}”.`); } }, "Delete report"))] });
   }
-  /** @param {any|null} report */
-  function editReport(report) {
-    openReportEditor({ layers, report, datasets: listDatasets(), canWrite: store.canWrite(), announce: (t) => live.announce(t),
+  /** @param {any|null} rep */
+  function editReport(rep) {
+    openReportEditor({ layers, report: rep, datasets: listDatasets(), canWrite: store.canWrite(), announce: (t) => live.announce(t),
       validate: (d) => store.call("validateReport", d),
       save: async (d) => { const saved = await store.saveReport(d); live.announce(`Saved report “${saved.title}”.`); toast(`Saved report “${saved.title}”.`); insights.key = ""; renderLayout(); } });
   }

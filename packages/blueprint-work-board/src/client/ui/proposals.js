@@ -26,6 +26,12 @@ function proposer(p) {
   return by.kind === "jev" ? `Jev, for ${by.name}` : by.name ?? "the agent";
 }
 
+/** @param {ChangeState} s */
+function stateIcon(s) {
+  const name = s === "applied" ? "check" : s === "stale" ? "refresh" : s === "invalid" || s === "conflict" || s === "rejected" ? "warning" : s === "sent" || s === "pending" ? "inbox" : null;
+  return name ? icon(name, { size: 13 }) : null;
+}
+
 /**
  * @param {{ layers: ReturnType<typeof import("./overlay.js").createLayers>, controller: TrayController }} opts
  */
@@ -48,7 +54,7 @@ export function createProposalsTray({ layers, controller: c }) {
     let set = selected.get(p.id);
     const selectable = p.changes.filter((/** @type {any} */ ch) => c.state(p, ch).selectable).map((/** @type {any} */ ch) => ch.n);
     if (!set) { set = new Set(selectable); selected.set(p.id, set); }
-    for (const n of [...set]) if (!selectable.includes(n)) set.delete(n);
+    for (const n of set) if (!selectable.includes(n)) set.delete(n);
     return set;
   }
 
@@ -141,12 +147,6 @@ export function createProposalsTray({ layers, controller: c }) {
     const target = again ?? fallback;
     if (target && target.tagName === "H3") target.setAttribute("tabindex", "-1");
     target?.focus();
-  }
-
-  /** @param {ChangeState} s */
-  function stateIcon(s) {
-    const name = s === "applied" ? "check" : s === "stale" ? "refresh" : s === "invalid" || s === "conflict" || s === "rejected" ? "warning" : s === "sent" || s === "pending" ? "inbox" : null;
-    return name ? icon(name, { size: 13 }) : null;
   }
 
   return {

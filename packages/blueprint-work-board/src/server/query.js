@@ -156,7 +156,7 @@ export function createQueryCache(getSource, options = {}) {
       const rel = relationsFor(ix, item.id);
       const keyOf = (/** @type {string} */ id) => ix.items.get(id)?.key ?? id;
       return {
-        ...toJson(ix, item, [...ITEM_FIELDS]),
+        ...toJson(ix, item, [...ITEM_FIELDS, "revision"]),
         progress: progressOf(ix, item.id),
         sub_issues: (ix.children.get(item.id) ?? []).map((c) => toJson(ix, c, ["title", "state", "assignee"])),
         blocks: rel.blocks.map((r) => keyOf(r.to)), blocked_by_all: rel.blockedBy.map((r) => keyOf(r.from)),

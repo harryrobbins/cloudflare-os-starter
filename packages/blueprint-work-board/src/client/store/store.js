@@ -582,9 +582,9 @@ export function createStore(options) {
     notify("reports");
     return s.reports;
   }
-  /** @param {any} doc */
-  async function saveReport(doc) {
-    const saved = await call("saveReport", doc, { actor: me });
+  /** @param {any} report */
+  async function saveReport(report) {
+    const saved = await call("saveReport", report, { actor: me });
     await loadReports();
     return saved;
   }

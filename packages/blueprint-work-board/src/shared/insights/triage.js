@@ -8,6 +8,14 @@
 import { KIND_LABELS, PRIORITIES } from "../model/work.js";
 
 export const JEV_BINDING = "JEV";
+/**
+ * The optional connection: packages/gatekeeper-jev, Workshop vendor id "jev" (deploy.ts binds it
+ * as GATEKEEPER_JEV), one resource `jev://decisions`. It is deliberately NOT declared in the
+ * archive's `bindings`: the platform makes every declared binding mandatory when a gadget is
+ * created from the blueprint (BlueprintLandingPage requires all of them), which would stop
+ * deployments without Jev from creating a board. People add it in the Connections tab as JEV.
+ */
+export const JEV_CONNECTION = Object.freeze({ gatekeeperName: "jev", typeUrlPattern: "jev://decisions" });
 export const TRIAGE_LIMITS = Object.freeze({ keys: 20, labels: 8, similar: 5, description: 1200 });
 export const BANDS = Object.freeze({ preselect: 0.9, show: 0.5 });
 

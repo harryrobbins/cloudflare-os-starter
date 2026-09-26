@@ -16,14 +16,14 @@ const mounted = [];
 
 /**
  * @param {{ seed?: number, planning?: boolean, approval?: "auto"|"manual", access?: "read"|"write", viewer?: any,
- *   records?: (fake: FakeRecords) => void, storage?: any }} [o]
+ *   records?: (fake: FakeRecords) => void, storage?: any, jevSession?: any }} [o]
  */
 export async function mount(o = {}) {
   const fake = new FakeRecords({ planning: o.planning ?? true, approval: o.approval ?? "auto", access: o.access ?? "write", now: () => NOW });
   if (o.seed) seedWork(fake, { items: o.seed, now: NOW });
   o.records?.(fake);
   const storage = o.storage ?? memoryStorage();
-  const api = createGadgetApi({ getEnv: () => ({ RECORDS: fake.session() }), storage, now: () => NOW });
+  const api = createGadgetApi({ getEnv: () => ({ RECORDS: fake.session(), ...(o.jevSession ? { JEV: o.jevSession } : {}) }), storage, now: () => NOW });
   const viewer = o.viewer === undefined ? ADA : o.viewer;
   const gadget = { ...api, $createViewerAssertion: async (binding, digest) => fake.createViewerAssertion(viewer?.id, binding, digest) };
   document.head.replaceChildren();
