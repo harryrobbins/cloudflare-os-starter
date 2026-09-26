@@ -234,25 +234,26 @@ describe("FakeRecords planning entities", () => {
 });
 
 describe("FakeRecords reads", () => {
-  it("snapshot bounds and presentation (no timestamps by default)", async () => {
+  it("snapshot bounds and presentation (timestamps top-level, as migration 011)", async () => {
     const fake = new FakeRecords();
     item(fake, "a");
     const s = fake.session();
     const snap = await s.snapshot(100);
     expect(snap).toMatchObject({ seq: 1, complete: true, permission_epoch: 1 });
     expect(snap.records).toHaveLength(8);
-    expect(snap.records[0].created_at).toBeUndefined();
+    expect(typeof snap.records[0].created_at).toBe("string");
+    expect(snap.records[0].data.created_at).toBeUndefined();
     await expect(s.snapshot(3)).rejects.toThrow(/^too_large/);
     await expect(s.snapshot(5001)).rejects.toThrow(/^invalid_request/);
   });
 
-  it("carries timestamps only as a harness extra", async () => {
+  it("carries timestamps (and can reproduce a service without them)", async () => {
     const fake = new FakeRecords({ timestamps: true, now: () => Date.parse("2026-09-26T10:00:00Z") });
     item(fake, "a");
     expect((await fake.session().snapshot()).records[0].created_at).toBe("2026-09-26T10:00:00.000Z");
     const c = await fake.session().changes(0);
     expect(c.changes[0]).toMatchObject({ created_at: "2026-09-26T10:00:00.000Z", actor: ADA });
-    const plain = new FakeRecords();
+    const plain = new FakeRecords({ timestamps: false });
     item(plain, "a");
     expect(Object.keys((await plain.session().changes(0)).changes[0]).toSorted()).toEqual(["actor", "data", "entity", "ordinal", "record_id", "revision", "seq"]);
   });

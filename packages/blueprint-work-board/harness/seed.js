@@ -112,6 +112,8 @@ export function seedWork(fake, { items = 300, now = Date.parse("2026-09-26T12:00
       return { cycle, target };
     };
 
+    // Realistic priorities: ~5% urgent, 15% high, 35% medium, 25% low, 20% none.
+    const weightedPriority = () => { const r = rng(); return r < 0.05 ? 1 : r < 0.2 ? 2 : r < 0.55 ? 3 : r < 0.8 ? 4 : 0; };
     const epicCount = Math.max(1, Math.round(items / 30));
     /** @type {{ ref: { id: string }, created: number, epic: boolean, parent: { id: string }|null, target: string, assignee: string|null }[]} */
     const made = [];
@@ -119,17 +121,19 @@ export function seedWork(fake, { items = 300, now = Date.parse("2026-09-26T12:00
     const makeItem = (/** @type {number} */ created, /** @type {{ ref: {id: string}, created: number }|null} */ parent, /** @type {string|null} */ epicTitle) => {
       const epic = epicTitle !== null;
       const { cycle, target } = plan(created, epic);
-      const assignee = chance(0.85) ? pick(people) : null;
+      const assignee = chance(0.7) ? pick(people) : null;
       const by = pick(people);
       const title = epicTitle ?? `${pick(VERBS)} ${pick(THINGS)} ${pick(PLACES)}`.trim();
       /** @type {Record<string, any>} */
-      const input = { title, state: target === "triage" ? "triage" : target === "backlog" ? "backlog" : "todo", priority: epic ? 2 : pick([0, 1, 2, 2, 3, 3, 3, 4, 4]) };
+      const input = { title, state: target === "triage" ? "triage" : target === "backlog" ? "backlog" : "todo", priority: epic ? 2 : weightedPriority() };
       if (chance(0.6)) input.description = description(title);
       if (assignee) input.assignee = assignee;
       const labels = [...new Set(Array.from({ length: Math.floor(rng() * 4) }, () => pick(LABELS)[0]))];
       if (labels.length) input.labels = labels;
-      if (chance(0.75)) input.estimate = pick([1, 2, 3, 5, 8]);
-      if (chance(0.3)) input.due_date = iso(now + Math.round((rng() * 50 - 20)) * DAY);
+      if (chance(0.7)) input.estimate = pick([1, 1, 2, 2, 3, 3, 3, 5, 5, 8, 13]);
+      // About 1 in 10 items is overdue (a past due date on unfinished work); a quarter have a future one.
+      if (target !== "done" && target !== "canceled" && chance(0.2)) input.due_date = iso(now - Math.round(1 + rng() * 14) * DAY);
+      else if (chance(0.25)) input.due_date = iso(now + Math.round(1 + rng() * 30) * DAY);
       if (chance(0.75)) input.project = projectIds[Math.floor(rng() * projectIds.length)];
       if (chance(0.1)) input.extensions = { customer: pick(CUSTOMERS) };
       const ref = { id: "" };
@@ -148,7 +152,7 @@ export function seedWork(fake, { items = 300, now = Date.parse("2026-09-26T12:00
       if (target === "in_review" || (target === "done" && chance(0.7))) move({ state: "in_review" }, worker);
       if (target === "done") move({ state: "done" }, chance(0.5) ? worker : pick(people));
       if (target === "canceled") move({ state: "canceled" }, ada);
-      if (chance(0.15)) move({ priority: pick([1, 2, 3]) }, pick(people));
+      if (chance(0.1)) move({ priority: weightedPriority() }, pick(people));
       if (chance(0.02) && target !== "in_progress") move({ archived: true }, ada);
       return entry;
     };

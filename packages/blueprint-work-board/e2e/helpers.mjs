@@ -53,7 +53,7 @@ export async function startHarness({ port = Number(process.env.HARNESS_PORT || 8
       if (o.access) q.set("access", o.access);
       if (o.latency) q.set("latency", String(o.latency));
       if (o.panes) q.set("panes", String(o.panes));
-      if (o.timestamps) q.set("timestamps", "1");
+      if (o.timestamps === false) q.set("timestamps", "0");
       await page.goto(`${url}?${q}${o.extra ?? ""}`);
       await page.waitForFunction(() => window.harness?.ready, null, { timeout: 30_000 });
       const frame = await paneFrame(page, 0);

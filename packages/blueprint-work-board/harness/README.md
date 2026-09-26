@@ -31,7 +31,7 @@ server in its own process group, checks one seeded board and a manual-approval c
 | `v1=1` | A datastore without migration 010: only `work_item` with title/description/status, only `work.create`/`work.update` |
 | `access=read` | Read-only connection (`command` fails `read_only:`) |
 | `latency=300` | Added before and after every facet call (ms) |
-| `timestamps=1` | Harness-only extra: records carry `created_at`/`updated_at` and journal entries `created_at`. The real service strips them, so the default (off) is faithful |
+| `timestamps=0` | Records and change entries carry no timestamps (the service before its `created_at` change); default on |
 | `now=2026-09-26T12:00:00Z` | Fake clock base; the seed's history ends just before it. Default real now |
 | `anon=1` | Pane 1 has no signed-in viewer (`gadgetViewer` null; `$createViewerAssertion` fails `forbidden:`) |
 | `cspProbe=0` | Byte-identical platform frame document (no CSP violation reporter) |
@@ -77,6 +77,6 @@ messages and SQLSTATEs (400/403/404/409/412/428) are reproduced. A failed comman
 
 Not faithful: the approval UI is these buttons, not the Workshop; there is no observation
 authorisation, rate limit (the platform handles ~45 RPC/s per gadget) or 128 KiB storage value
-cap; `timestamps=1` adds times the real service does not send; errors thrown by `run()` keep the
+cap; `timestamps=0` removes record and change times; errors thrown by `run()` keep the
 SQL message after the code, while the real connector's session errors carry codes with generic
 text; the frame is a same-page srcdoc, so a pane reload is instant.

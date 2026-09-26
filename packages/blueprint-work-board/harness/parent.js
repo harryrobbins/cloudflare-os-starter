@@ -5,7 +5,7 @@
 // (the migration-010 contract). serve.mjs bundles this file with esbuild on request.
 //
 // Query: ?panes=1|2, ?seed=<items> (default 300; 0 = empty), ?approval=auto|manual (default
-// auto), ?v1=1 (datastore without migration 010), ?access=read, ?latency=<ms>, ?timestamps=1 (harness-only
+// auto), ?v1=1 (datastore without migration 010), ?access=read, ?latency=<ms>, ?timestamps=0 (no record
 // extra: record and journal times, which the real service strips),
 // ?now=<ISO> (fake clock base), ?anon=1 (pane 0 has no signed-in viewer), ?cspProbe=0.
 // Test hooks on window.harness (see README.md).
@@ -147,8 +147,8 @@ const fake = new FakeRecords({
   planning,
   access: params.get("access") === "read" ? "read" : "write",
   approval: params.get("approval") === "manual" ? "manual" : "auto",
-  // Harness-only extra: the real service carries no record or journal timestamps.
-  timestamps: params.get("timestamps") === "1",
+  // Records and change entries carry timestamps; ?timestamps=0 reproduces a service without them.
+  timestamps: params.get("timestamps") !== "0",
   now: clock,
 });
 

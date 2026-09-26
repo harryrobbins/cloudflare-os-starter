@@ -17,7 +17,8 @@
 //     (duplicate id/key, cycle overlap, duplicate active relation — `relates` is symmetric —,
 //     parent loop, category change of a used state), 412 stale revision, 428 revision missing;
 //   - change pages never split a commit; the journal carries no `created_at` (the real
-//     pull_changes strips it) and records no timestamps, unless `timestamps: true` (harness extra).
+//     change entries carry `created_at` and records `created_at`/`updated_at` (the service change that
+//     adds them is in progress); `timestamps: false` reproduces the older service without them.
 // What it mirrors from the connector: viewer assertions checked against its own intent digest,
 // pending actions, and its outcome strings `Records refused the command (<status>)` (no detail)
 // and `Approval was denied`.
@@ -131,7 +132,7 @@ export class FakeRecords {
    *   service does neither; this is a harness-only extra, off by default.
    */
   constructor({ planning = true, access = "write", module = "work", epoch = 1, label = "Team work", approval = "manual",
-    timestamps = false, now = () => Date.now(), datastore = DATASTORE, binding = "b-1" } = {}) {
+    timestamps = true, now = () => Date.now(), datastore = DATASTORE, binding = "b-1" } = {}) {
     this.planning = planning;
     this.module = module;
     this.epoch = epoch;
