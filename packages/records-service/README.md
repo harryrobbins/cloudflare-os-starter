@@ -75,12 +75,25 @@ Available interfaces:
 | `GET /v1/datastores/{id}/modules/work/v1/records` | Bounded records, optional `entity`, `id`, `after`, `limit` |
 | Same read with `format=jsonld` | Permission-filtered semantic representation |
 | `GET /v1/datastores/{id}/modules/work/v1/snapshot` | Atomic bootstrap with sequence/permission epoch; at most 5,000 records |
-| `POST /v1/datastores/{id}/modules/work/v1/rpc/work.create` | Create `{title,status?,description?,extensions?}` |
-| Same prefix, `rpc/work.update` | Update `{id,title?,status?,description?,extensions?}`, requires quoted revision in `If-Match` |
+| `POST /v1/datastores/{id}/modules/work/v1/rpc/work.create` | Create `{title,status?,description?,extensions?}` plus optional planning fields (below) |
+| Same prefix, `rpc/work.update` | Update `{id,title?,status?,description?,extensions?,…}`, requires quoted revision in `If-Match` |
+| Same prefix, `rpc/work.project.create` / `.update` | `{name,description?,state?,lead?,start_date?,target_date?,color?,archived?}` |
+| Same prefix, `rpc/work.cycle.create` / `.update` | `{name?,starts_on,ends_on,goal?}`; cycles never overlap; `number` is assigned |
+| Same prefix, `rpc/work.state.create` / `.update` | `{key,name,kind,category?,position?,color?,wip_limit?}`; `key` is fixed after create |
+| Same prefix, `rpc/work.label.create` / `.update` | `{key,name?,color?,description?,archived?}`; `key` is fixed after create |
+| Same prefix, `rpc/work.relation.create` / `.update` | Create `{from,to,kind}`; update `{id,active}` only |
+| Same prefix, `rpc/work.comment.create` / `.update` | Create `{item,body}`; update `{id,body}` |
 | Messaging prefix, `rpc/messaging.send` | Create `{channel,body,extensions?}` |
 | Messaging prefix, `rpc/messaging.edit` | Edit `{id,body?,extensions?}`, requires revision |
 | `GET /v1/datastores/{id}/changes?after=0&epoch=1` | Durable cursor pull; epoch mismatch requires cache reset |
 | `GET /v1/datastores/{id}/events` | Authorised SSE hints, bounded and periodically revalidated |
+
+Work items also accept `state`, `priority` (0-4), `assignee` (actor id), `labels` (≤ 20 strings),
+`estimate` (0-1000), `start_date`, `due_date` (`YYYY-MM-DD`), `parent`, `project`, `cycle`
+(record ids), `rank` and `archived`; `null` clears an optional field and `labels` replaces the
+list. `number` is assigned by the service, and `status` always equals the category of the item's
+workflow state. The work planning model and its rules are described in
+[sql/README.md](sql/README.md#work-planning-model-010).
 
 Datastore routes require `Authorization: Bearer <credential>`. Writes also require a unique
 `Idempotency-Key`; preserve it across retries. Credentials are scoped to a principal and datastore.
@@ -210,7 +223,8 @@ session. The helper neither deploys this stack nor edits policies. See
 
 ## Explicit alpha limits
 
-Single-record commands; no delete/tombstone protocol, multi-record commands, erasure/retention
+Single-record commands (the one exception: a `work` datastore's first command also creates its
+default workflow states in the same commit); no delete/tombstone protocol, multi-record commands, erasure/retention
 workflow, webhook delivery worker or stable streaming snapshots yet. Snapshots above 5,000 records
 are refused rather than silently truncated. Change cursors are sequence plus epoch, not opaque
 signed cursors. Credential revocation stops new tokens immediately; previously minted internal

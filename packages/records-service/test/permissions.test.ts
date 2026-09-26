@@ -54,7 +54,8 @@ test('actor attribution: namespace-bound delegation, server-set stamps and appen
     const record = page.records.find((r: any) => r.id === byAda.record.id);
     assert.equal(record.created_by, 'test:ada'); assert.equal(record.updated_by, 'test:bob'); assert.equal(record.data.title, 'B2');
     const feed = await t.changes(undefined);
-    assert.deepEqual(feed.changes.map((c: any) => c.actor), [`records:principal:${t.principal}`, 'test:ada', 'test:bob']);
+    // Default workflow states join the first command's commit, attributed to its actor.
+    assert.deepEqual(feed.changes.filter((c: any) => c.entity === 'work_item').map((c: any) => c.actor), [`records:principal:${t.principal}`, 'test:ada', 'test:bob']);
     await assert.rejects(sql`update records_private.journal set actor='test:mallory'`, (e: any) => e.code === '42501');
     await assert.rejects(sql`delete from records_private.journal`, (e: any) => e.code === '42501');
     await assert.rejects(sql`truncate records_private.journal`, (e: any) => e.code === '42501');

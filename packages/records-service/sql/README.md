@@ -16,9 +16,11 @@ credentials, never credentials for arbitrary report authors.
 RPC signatures are defined in the numbered migrations (`snapshot_records` is added in 004). `execute_command` accepts a registered command,
 object input, idempotency key and optional expected revision. Creation returns
 `{record:{id,entity,revision,data},seq,permission_epoch}`. Updates require a matching revision.
-Work commands are `work.create` and `work.update`; messaging commands are `messaging.send`
-and `messaging.edit`. Data uses typed module columns; extensions are bounded JSON objects.
-Each mutation adds one immutable journal row and an outbox marker. The generic
+Work commands are `work.create` and `work.update`, plus the planning commands of 010 (below);
+messaging commands are `messaging.send` and `messaging.edit`. Data uses typed module columns;
+extensions are bounded JSON objects. Each mutation adds one immutable journal row (ordinal 0) and
+an outbox marker; a `work` datastore's first command also journals its default workflow states at
+ordinals 1-7 of the same commit. Change pages never split a commit. The generic
 `records_private.records` projection is still written but is internal: no read uses it. No module names or domain branches exist in the command dispatcher.
 
 Authorization takes shared locks on principal, membership and binding, in that order. Writers
@@ -70,10 +72,55 @@ The migration role must be a superuser (or BYPASSRLS): core definer functions (a
 journal, registry) run as the owner and enforce rights explicitly. Owner bypass is never how client
 data access is granted.
 
+## Work planning model (010)
+
+`work` API v1 grows additively (profile 1.1.0); v1 clients keep working unchanged. Every handler
+is SECURITY DEFINER, owned by `records_commander`, with `search_path=pg_catalog`, and refuses
+unknown keys and wrong JSON types with PT400. Creates may pass a client `id`, which must be unused
+by every work entity in the datastore (PT409). Updates need the revision (PT428 missing, PT412
+stale, PT404 unknown). Each entity has a 1:1 presentation view and the shared history view.
+
+| Entity | Fields (data) | Commands |
+| --- | --- | --- |
+| `work_item` | v1 fields plus `number` (server), `state`, `priority` 0-4, `assignee`, `labels` (≤ 20, 1-60 chars, unique), `estimate` 0-1000, `start_date`, `due_date`, `parent`, `project`, `cycle`, `rank` (≤ 64 printable ASCII), `archived` | `work.create`, `work.update` |
+| `project` | `name`, `description`, `state` (planned/active/paused/completed/cancelled), `lead`, `start_date`, `target_date`, `color`, `archived` | `work.project.create`, `.update` |
+| `cycle` | `name`, `number` (server), `starts_on`, `ends_on`, `goal` | `work.cycle.create`, `.update` |
+| `workflow_state` | `key` (fixed), `name`, `kind` (triage/backlog/unstarted/started/completed/canceled), `category` (derived), `position`, `color`, `wip_limit` | `work.state.create`, `.update` |
+| `label` | `key` (fixed), `name`, `color`, `description`, `archived` | `work.label.create`, `.update` |
+| `relation` | `from`, `to`, `kind` (blocks/relates/duplicates), `active` | `work.relation.create`; `.update` sets `active` only |
+| `comment` | `item`, `body` (1-20,000), `edited` (server) | `work.comment.create`, `.update` (body only) |
+
+Rules enforced in SQL (the datastore row lock serializes them):
+
+- `parent`, `project`, `cycle`, relation endpoints and comment items must exist in the same
+  datastore (PT400; composite foreign keys back this up). A parent never forms a cycle (PT409) and
+  an item is never its own parent (PT400).
+- `status` equals the category of `state` (a trigger enforces it for every writer). `state` alone
+  sets `status`; `status` alone keeps the current state if it has that category, else picks the
+  category's default (first `unstarted`, `started` or `completed` state by position, then any);
+  both disagreeing is PT400. A state in use cannot change category (PT409).
+- Cycles do not overlap (inclusive dates, PT409) and do not end before they start (PT400).
+- One active relation per kind and pair, `relates` symmetric (PT409); no self-relations (PT400).
+- `number` (items and cycles) is `max + 1` per datastore under the datastore lock: gapless and
+  unique. Items and cycles are never deleted; items, projects and labels are archived.
+- Dates are `YYYY-MM-DD`; actors (`assignee`, `lead`) match `<namespace>:<id>`; colours `#rrggbb`.
+  `null` clears an optional field; `labels: []` clears labels (absent when empty).
+
+Default workflow states (`triage`, `backlog`, `todo`, `in_progress`, `in_review`, `done`,
+`canceled`) are created by the first command in a datastore without states, inside that command's
+commit and attributed to its actor (`records_work.ensure_states`, owner-run, journal ordinals 1-7).
+Migration 010 backfilled existing datastores without journalling: states seeded, `number` in
+creation order, `state` from `status` (`open→todo`, `active→in_progress`, `done→done`), attribution
+untouched, and the permission epoch bumped so synced clients take a new snapshot.
+
+References (`parent`, `project`, `cycle`, `from`, `to`, `item`) carry the target's record id (a
+UUID), as record ids do; like ids, they map to IRIs only at the export boundary.
+
 Current limits are explicit:
 
-- A handler changes exactly one record. Multi-record commands and tombstone/delete semantics are
-  not implemented; extending them requires whole-commit pagination before enabling batches.
+- A handler changes exactly one record (the default workflow state seed is the only exception).
+  Multi-record commands and tombstone/delete semantics are not implemented. Change pages are
+  whole-commit since 010 (a page may exceed its limit by the rest of its last commit).
 - Presentation reads cost more than the old projection (see
   [the view benchmark](../docs/benchmark-views.md)): about 2× for a 100-record page and 2.5× for a
   5,000-record snapshot.
@@ -88,7 +135,9 @@ Current limits are explicit:
 - The outbox is durable transaction evidence, not an implemented webhook delivery queue.
 - Journal redaction, retention, imports, undo, operator audit, and backups are further delivery gates.
 - Error SQLSTATEs PT400/401/403/404/409/412/413/428 are mapped by PostgREST/gateway; internal errors
-  must not be exposed by a public gateway.
+  must not be exposed by a public gateway. The gateway currently replaces every message with a
+  fixed one per status, so the specific work planning messages (for example "Cycle dates overlap
+  another cycle") reach SQL clients and tests, not HTTP clients.
 
 `test/database.test.mjs` exercises real embedded PostgreSQL, including concurrency and rollback,
 as restricted runtime roles. Signature verification belongs to the PostgREST integration tests.

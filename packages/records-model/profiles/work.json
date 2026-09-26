@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "vocabulary": {
     "id": "https://schema.org/",
     "version": "30.1"
@@ -32,6 +32,321 @@
         "extensions": {
           "term": "urn:records:extensions",
           "type": "object"
+        },
+        "number": {
+          "term": "urn:records:work:number",
+          "type": "integer"
+        },
+        "state": {
+          "term": "urn:records:work:state",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "priority": {
+          "term": "urn:records:work:priority",
+          "type": "integer",
+          "enum": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        "assignee": {
+          "term": "urn:records:work:assignee",
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 296
+        },
+        "labels": {
+          "term": "https://schema.org/keywords",
+          "type": "string",
+          "many": true,
+          "minItems": 1,
+          "maxItems": 20,
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "estimate": {
+          "term": "urn:records:work:estimate",
+          "type": "number"
+        },
+        "start_date": {
+          "term": "https://schema.org/startDate",
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10
+        },
+        "due_date": {
+          "term": "urn:records:work:dueDate",
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10
+        },
+        "parent": {
+          "term": "https://schema.org/isPartOf",
+          "type": "iri",
+          "reference": "work_item"
+        },
+        "project": {
+          "term": "urn:records:work:project",
+          "type": "iri",
+          "reference": "project"
+        },
+        "cycle": {
+          "term": "urn:records:work:cycle",
+          "type": "iri",
+          "reference": "cycle"
+        },
+        "rank": {
+          "term": "urn:records:work:rank",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "archived": {
+          "term": "urn:records:work:archived",
+          "type": "boolean"
+        }
+      }
+    },
+    "project": {
+      "term": "https://schema.org/Project",
+      "fields": {
+        "name": {
+          "term": "https://schema.org/name",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "description": {
+          "term": "https://schema.org/description",
+          "type": "string",
+          "maxLength": 20000
+        },
+        "state": {
+          "term": "urn:records:work:projectState",
+          "type": "string",
+          "enum": [
+            "planned",
+            "active",
+            "paused",
+            "completed",
+            "cancelled"
+          ]
+        },
+        "lead": {
+          "term": "urn:records:work:lead",
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 296
+        },
+        "start_date": {
+          "term": "https://schema.org/startDate",
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10
+        },
+        "target_date": {
+          "term": "urn:records:work:targetDate",
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10
+        },
+        "color": {
+          "term": "https://schema.org/color",
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 7
+        },
+        "archived": {
+          "term": "urn:records:work:archived",
+          "type": "boolean"
+        }
+      }
+    },
+    "cycle": {
+      "term": "urn:records:work:Cycle",
+      "fields": {
+        "name": {
+          "term": "https://schema.org/name",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "number": {
+          "term": "urn:records:work:number",
+          "type": "integer",
+          "required": true
+        },
+        "starts_on": {
+          "term": "https://schema.org/startDate",
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "required": true
+        },
+        "ends_on": {
+          "term": "https://schema.org/endDate",
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "required": true
+        },
+        "goal": {
+          "term": "urn:records:work:goal",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "workflow_state": {
+      "term": "urn:records:work:WorkflowState",
+      "fields": {
+        "key": {
+          "term": "https://schema.org/identifier",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "name": {
+          "term": "https://schema.org/name",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "kind": {
+          "term": "urn:records:work:stateKind",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "triage",
+            "backlog",
+            "unstarted",
+            "started",
+            "completed",
+            "canceled"
+          ]
+        },
+        "category": {
+          "term": "urn:records:work:status",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "open",
+            "active",
+            "done"
+          ]
+        },
+        "position": {
+          "term": "https://schema.org/position",
+          "type": "integer",
+          "required": true
+        },
+        "color": {
+          "term": "https://schema.org/color",
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 7
+        },
+        "wip_limit": {
+          "term": "urn:records:work:wipLimit",
+          "type": "integer"
+        }
+      }
+    },
+    "label": {
+      "term": "https://schema.org/DefinedTerm",
+      "fields": {
+        "key": {
+          "term": "https://schema.org/termCode",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "name": {
+          "term": "https://schema.org/name",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "color": {
+          "term": "https://schema.org/color",
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 7
+        },
+        "description": {
+          "term": "https://schema.org/description",
+          "type": "string",
+          "maxLength": 2000
+        },
+        "archived": {
+          "term": "urn:records:work:archived",
+          "type": "boolean"
+        }
+      }
+    },
+    "relation": {
+      "term": "urn:records:work:Relation",
+      "fields": {
+        "from": {
+          "term": "urn:records:work:from",
+          "type": "iri",
+          "required": true,
+          "reference": "work_item"
+        },
+        "to": {
+          "term": "urn:records:work:to",
+          "type": "iri",
+          "required": true,
+          "reference": "work_item"
+        },
+        "kind": {
+          "term": "urn:records:work:relationKind",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "blocks",
+            "relates",
+            "duplicates"
+          ]
+        },
+        "active": {
+          "term": "urn:records:work:active",
+          "type": "boolean",
+          "required": true
+        }
+      }
+    },
+    "comment": {
+      "term": "https://schema.org/Comment",
+      "fields": {
+        "item": {
+          "term": "https://schema.org/about",
+          "type": "iri",
+          "required": true,
+          "reference": "work_item"
+        },
+        "body": {
+          "term": "https://schema.org/text",
+          "type": "string",
+          "required": true,
+          "minLength": 1,
+          "maxLength": 20000
+        },
+        "edited": {
+          "term": "urn:records:work:edited",
+          "type": "boolean",
+          "required": true
         }
       }
     }

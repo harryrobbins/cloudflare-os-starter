@@ -24,7 +24,9 @@ try {
     for (const module of ['work', 'messaging']) {
       const c = client[module];
       const profile = getRuntimeProfile(module)!;
-      const manifest = {id:module,version:'0.1.0',api_majors:[1],scopes:[`${module}.read`,`${module}.write`],entities:Object.keys(profile.entities),commands:module==='work'?['work.create','work.update']:['messaging.send','messaging.edit'],profile};
+      // Commands are whatever the migrations registered (work gains planning commands in 010).
+      const commands = (await tx`SELECT command FROM records_private.commands WHERE module_id=${module} AND api_major=1 ORDER BY command`).map(row => row.command as string);
+      const manifest = {id:module,version:'0.1.0',api_majors:[1],scopes:[`${module}.read`,`${module}.write`],entities:Object.keys(profile.entities),commands,profile};
       await tx`UPDATE records_private.modules SET manifest=${tx.json(JSON.parse(JSON.stringify(manifest)))} WHERE id=${module} AND api_major=1`; 
       await tx`INSERT INTO records_private.datastores(id,org_id,module_id,api_major) VALUES(${c.datastoreId},${client.orgId},${module},1) ON CONFLICT DO NOTHING`;
       await tx`INSERT INTO records_private.bindings(id,datastore_id,principal_id,scopes) VALUES(${c.bindingId},${c.datastoreId},${client.principalId},${[`${module}.read`, `${module}.write`]}) ON CONFLICT DO NOTHING`;
