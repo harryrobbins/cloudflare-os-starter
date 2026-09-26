@@ -17,6 +17,8 @@ export const SHORTCUTS = [
   { id: "undo", keys: ["Mod+z"], label: "Undo your last change", group: "General" },
   { id: "goBoard", keys: ["g", "b"], label: "Go to the board", group: "General", chord: true, display: ["G then B"] },
   { id: "goList", keys: ["g", "l"], label: "Go to the list", group: "General", chord: true, display: ["G then L"] },
+  { id: "goInsights", keys: ["g", "i"], label: "Go to insights (reports)", group: "General", chord: true, display: ["G then I"] },
+  { id: "goProposals", keys: ["g", "p"], label: "Open proposals", group: "General", chord: true, display: ["G then P"] },
   { id: "down", keys: ["j", "ArrowDown"], label: "Next item", group: "Navigate" },
   { id: "up", keys: ["k", "ArrowUp"], label: "Previous item", group: "Navigate" },
   { id: "left", keys: ["h", "ArrowLeft"], label: "Previous column", group: "Navigate" },

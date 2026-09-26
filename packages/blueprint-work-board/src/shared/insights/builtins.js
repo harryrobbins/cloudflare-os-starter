@@ -10,7 +10,8 @@ const LITE = "https://vega.github.io/schema/vega-lite/v6.json";
 const VEGA = "https://vega.github.io/schema/vega/v6.json";
 
 const kindColor = { field: "kind_label", type: "nominal", title: "State", scale: { domain: KIND_DOMAIN, scheme: "workboard-kinds" } };
-const dayAxis = { field: "day", type: "temporal", title: null, axis: { format: "%d %b", labelOverlap: true, tickCount: 6 } };
+// Days are UTC dates: read and shown in UTC whatever the viewer's time zone.
+const dayAxis = { field: "day", type: "temporal", title: null, scale: { type: "utc" }, axis: { format: "%d %b", labelOverlap: true, tickCount: 6 } };
 
 /**
  * @typedef {{ id: string, title: string, description: string, dataset: string, params: Record<string, unknown>, query: string,
@@ -30,7 +31,7 @@ export const BUILTIN_REPORTS = [
         y: { field: "count", type: "quantitative", stack: "zero", title: "Items" },
         color: kindColor,
         order: { field: "order", type: "quantitative", sort: "descending" },
-        tooltip: [{ field: "day", type: "temporal", title: "Day", format: "%a %d %b" }, { field: "kind_label", title: "State" }, { field: "count", title: "Items" }, { field: "points", title: "Points" }],
+        tooltip: [{ field: "day", type: "temporal", title: "Day", format: "%a %d %b", formatType: "utc" }, { field: "kind_label", title: "State" }, { field: "count", title: "Items" }, { field: "points", title: "Points" }],
       },
     },
   },
@@ -43,24 +44,24 @@ export const BUILTIN_REPORTS = [
         {
           mark: { type: "point", filled: true, size: 48, opacity: 0.75 },
           encoding: {
-            x: { field: "completed", type: "temporal", title: null, axis: { format: "%d %b", labelOverlap: true, tickCount: 6 } },
+            x: { field: "completed", type: "temporal", title: null, scale: { type: "utc" }, axis: { format: "%d %b", labelOverlap: true, tickCount: 6 } },
             y: { field: "days", type: "quantitative", title: "Days", scale: { type: "sqrt", zero: true } },
             color: { datum: "Item", type: "nominal", scale: { domain: ["Item", "Rolling average"], scheme: "workboard-series" }, title: null },
-            tooltip: [{ field: "key", title: "Item" }, { field: "title", title: "Title" }, { field: "days", title: "Days" }, { field: "assignee", title: "Assignee" }, { field: "completed", type: "temporal", title: "Completed", format: "%d %b" }],
+            tooltip: [{ field: "key", title: "Item" }, { field: "title", title: "Title" }, { field: "days", title: "Days" }, { field: "assignee", title: "Assignee" }, { field: "completed", type: "temporal", title: "Completed", format: "%d %b", formatType: "utc" }],
           },
         },
-        { mark: { type: "line", strokeWidth: 2, interpolate: "monotone" }, encoding: { x: { field: "completed", type: "temporal" }, y: { field: "rolling_avg", type: "quantitative" }, color: { datum: "Rolling average", type: "nominal" } } },
+        { mark: { type: "line", strokeWidth: 2, interpolate: "monotone" }, encoding: { x: { field: "completed", type: "temporal", scale: { type: "utc" } }, y: { field: "rolling_avg", type: "quantitative" }, color: { datum: "Rolling average", type: "nominal" } } },
         { mark: { type: "rule", strokeDash: [4, 4], color: { expr: "muted" } }, encoding: { y: { aggregate: "max", field: "p50", type: "quantitative" } } },
         { mark: { type: "rule", strokeDash: [2, 3], color: { expr: "muted" } }, encoding: { y: { aggregate: "max", field: "p85", type: "quantitative" } } },
         {
           mark: { type: "text", align: "right", dx: -2, dy: -6, color: { expr: "muted" }, fontSize: 11 },
           transform: [{ aggregate: [{ op: "max", field: "p50", as: "v" }, { op: "max", field: "completed", as: "x" }] }, { calculate: "'50%: ' + datum.v + ' d'", as: "label" }],
-          encoding: { x: { field: "x", type: "temporal" }, y: { field: "v", type: "quantitative" }, text: { field: "label" } },
+          encoding: { x: { field: "x", type: "temporal", scale: { type: "utc" } }, y: { field: "v", type: "quantitative" }, text: { field: "label" } },
         },
         {
           mark: { type: "text", align: "right", dx: -2, dy: -6, color: { expr: "muted" }, fontSize: 11 },
           transform: [{ aggregate: [{ op: "max", field: "p85", as: "v" }, { op: "max", field: "completed", as: "x" }] }, { calculate: "'85%: ' + datum.v + ' d'", as: "label" }],
-          encoding: { x: { field: "x", type: "temporal" }, y: { field: "v", type: "quantitative" }, text: { field: "label" } },
+          encoding: { x: { field: "x", type: "temporal", scale: { type: "utc" } }, y: { field: "v", type: "quantitative" }, text: { field: "label" } },
         },
       ],
     },
@@ -77,7 +78,7 @@ export const BUILTIN_REPORTS = [
         y: { field: "value", type: "quantitative", title: "Remaining" },
         color: { field: "Series", type: "nominal", title: null, scale: { domain: ["Remaining", "Ideal"], scheme: "workboard-series" } },
         strokeDash: { field: "Series", type: "nominal", scale: { domain: ["Remaining", "Ideal"], range: [[1, 0], [5, 4]] }, legend: null },
-        tooltip: [{ field: "day", type: "temporal", title: "Day", format: "%a %d %b" }, { field: "remaining", title: "Remaining" }, { field: "scope", title: "Scope" }, { field: "completed", title: "Done" }, { field: "ideal", title: "Ideal" }],
+        tooltip: [{ field: "day", type: "temporal", title: "Day", format: "%a %d %b", formatType: "utc" }, { field: "remaining", title: "Remaining" }, { field: "scope", title: "Scope" }, { field: "completed", title: "Done" }, { field: "ideal", title: "Ideal" }],
       },
     },
   },
@@ -92,7 +93,7 @@ export const BUILTIN_REPORTS = [
         x: dayAxis,
         y: { field: "value", type: "quantitative", title: "Work" },
         color: { field: "Series", type: "nominal", title: null, scale: { domain: ["Scope", "Completed"], scheme: "workboard-series" } },
-        tooltip: [{ field: "day", type: "temporal", title: "Day", format: "%a %d %b" }, { field: "scope", title: "Scope" }, { field: "completed", title: "Completed" }],
+        tooltip: [{ field: "day", type: "temporal", title: "Day", format: "%a %d %b", formatType: "utc" }, { field: "scope", title: "Scope" }, { field: "completed", title: "Completed" }],
       },
     },
   },
@@ -103,11 +104,11 @@ export const BUILTIN_REPORTS = [
       $schema: LITE, data: { name: "throughput" },
       mark: { type: "bar", cornerRadiusEnd: 4, width: { band: 0.7 } },
       encoding: {
-        x: { field: "week", type: "ordinal", timeUnit: "yearmonthdate", title: "Week starting", axis: { format: "%d %b", labelAngle: 0, labelOverlap: true } },
+        x: { field: "week", type: "ordinal", timeUnit: "utcyearmonthdate", title: "Week starting", axis: { format: "%d %b", labelAngle: 0, labelOverlap: true } },
         y: { field: "completed", type: "quantitative", title: "Items completed" },
         color: { datum: "Completed", type: "nominal", scale: { domain: ["Completed"], scheme: "workboard-series" }, legend: null },
         opacity: { condition: { test: "datum.partial", value: 0.45 }, value: 1 },
-        tooltip: [{ field: "week", type: "temporal", title: "Week of", format: "%d %b" }, { field: "completed", title: "Items" }, { field: "points", title: "Points" }, { field: "partial", title: "Week in progress" }],
+        tooltip: [{ field: "week", type: "temporal", title: "Week of", format: "%d %b", formatType: "utc" }, { field: "completed", title: "Items" }, { field: "points", title: "Points" }, { field: "partial", title: "Week in progress" }],
       },
     },
   },
@@ -122,7 +123,7 @@ export const BUILTIN_REPORTS = [
         x: dayAxis,
         y: { field: "value", type: "quantitative", title: "Items (running total)" },
         color: { field: "Series", type: "nominal", title: null, scale: { domain: ["Created", "Resolved"], scheme: "workboard-series" } },
-        tooltip: [{ field: "day", type: "temporal", title: "Day", format: "%a %d %b" }, { field: "created", title: "Created that day" }, { field: "resolved", title: "Resolved that day" }, { field: "created_total", title: "Created (total)" }, { field: "resolved_total", title: "Resolved (total)" }],
+        tooltip: [{ field: "day", type: "temporal", title: "Day", format: "%a %d %b", formatType: "utc" }, { field: "created", title: "Created that day" }, { field: "resolved", title: "Resolved that day" }, { field: "created_total", title: "Created (total)" }, { field: "resolved_total", title: "Resolved (total)" }],
       },
     },
   },
@@ -149,7 +150,7 @@ export const BUILTIN_REPORTS = [
       signals: [{ name: "cx", update: "width / 2" }, { name: "cy", update: "height / 2" }],
       data: [
         { name: "dependencies" },
-        { name: "node-data", source: "dependencies", transform: [{ type: "filter", expr: "datum.type === 'node'" }] },
+        { name: "node-data", source: "dependencies", transform: [{ type: "filter", expr: "datum.type === 'node'" }, { type: "formula", expr: "cx", as: "tx" }, { type: "formula", expr: "cy", as: "ty" }] },
         { name: "link-data", source: "dependencies", transform: [{ type: "filter", expr: "datum.type === 'edge'" }] },
       ],
       scales: [{ name: "kind", type: "ordinal", domain: ["triage", "backlog", "unstarted", "started", "completed", "canceled"], range: { scheme: "workboard-kinds" } }],
@@ -190,8 +191,8 @@ export const BUILTIN_REPORTS = [
               { force: "collide", radius: 16 },
               { force: "nbody", strength: -36 },
               { force: "link", links: "link-data", distance: 46, id: "datum.key" },
-              { force: "x", x: { signal: "cx" }, strength: 0.04 },
-              { force: "y", y: { signal: "cy" }, strength: 0.08 },
+              { force: "x", x: "datum.tx", strength: 0.04 },
+              { force: "y", y: "datum.ty", strength: 0.08 },
             ],
           }],
         },

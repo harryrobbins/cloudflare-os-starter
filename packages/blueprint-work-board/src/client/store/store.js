@@ -29,7 +29,7 @@ const PERSIST_KEY = "wb-pending";
  *   undo: { itemId: string, patch: Record<string, unknown> }|null, undoOf: number|null, mine: true,
  * }} Change
  * @typedef {"loading"|"not_connected"|"forbidden"|"wrong_module"|"too_large"|"error"|"ready"} Phase
- * @typedef {"data"|"changes"|"views"|"prefs"|"sync"|"history"|"phase"} Topic
+ * @typedef {"data"|"changes"|"views"|"prefs"|"sync"|"history"|"phase"|"reports"|"proposals"} Topic
  */
 
 /**
@@ -79,7 +79,12 @@ export function createStore(options) {
     /** @type {any} */ prefs: { shortcuts: true, lastViewId: null, draft: null, collapsedColumns: [], collapsedLanes: [], reduceMotion: false, version: 0 },
     /** @type {Change[]} */ changes: [],
     sync: { error: "", lastSync: 0, failures: 0, retryAt: 0, offline: false, reset: 0 },
+    /** Whether the optional Jev binding is connected (triage suggestions). */
+    jev: false,
+    /** @type {any[]|null} report documents (built-in and saved); null until first needed */ reports: null,
+    /** @type {any[]} open and partly applied proposals */ proposals: [],
   };
+  let polls = 0;
   let nextChangeId = 1;
   let destroyed = false;
   /** @type {Set<(topics: Set<Topic>) => void>} */
@@ -174,14 +179,17 @@ export function createStore(options) {
     if (setup.error) { stopFor(new Error(setup.error)); return; }
     s.connection = setup.connection;
     s.description = setup.description;
+    s.jev = setup.jev === true;
     if (!isWorkV1(s.description)) { s.phase = "wrong_module"; s.phaseMessage = ""; notify("phase"); return; }
-    const [snapshot, settings, views, prefs, known] = await Promise.all([
+    const [snapshot, settings, views, prefs, known, proposals] = await Promise.all([
       source.snapshot(SNAPSHOT_LIMIT),
       rpc(() => gadget.getSettings()).catch(() => null),
       rpc(() => gadget.listViews()).catch(() => []),
       viewer?.id ? rpc(() => gadget.getPrefs(viewer.id)).catch(() => null) : Promise.resolve(null),
       typeof gadget.people === "function" ? rpc(() => gadget.people()).catch(() => []) : Promise.resolve([]),
+      typeof gadget.listProposals === "function" ? rpc(() => gadget.listProposals()).catch(() => []) : Promise.resolve([]),
     ]);
+    s.proposals = Array.isArray(proposals) ? proposals : [];
     setPeople(known);
     // Tell the board who we are (so everyone sees our name, not our account), when it changed.
     const mine = people.find((p) => p.actor === me);
@@ -233,7 +241,12 @@ export function createStore(options) {
     const base = visible ? visibleMs : hiddenMs;
     const delay = s.sync.failures ? Math.min(MAX_BACKOFF_MS, base * 2 ** Math.min(s.sync.failures, 5)) : base;
     s.sync.retryAt = s.sync.failures ? now() + delay : 0;
-    pollTimer = setTimeout(async () => { await pull(); schedulePoll(); }, delay);
+    pollTimer = setTimeout(async () => {
+      await pull();
+      // Proposals change rarely (the agent adds them): check every fifth tick.
+      if (++polls % 5 === 0 && s.phase === "ready" && visible) void loadProposals();
+      schedulePoll();
+    }, delay);
   }
 
   function scheduleHistory() {
@@ -556,6 +569,57 @@ export function createStore(options) {
   }
 
   // -----------------------------------------------------------------------------------------
+  // Insights: reports and proposals (gadget-server documents)
+
+  /** Any gadget RPC, through the failure accounting. @param {string} method @param {...any} args */
+  function call(method, ...args) {
+    if (typeof gadget[method] !== "function") return Promise.reject(new Error(`unavailable: This board's server does not offer ${method} yet; reload the board.`));
+    return rpc(() => gadget[method](...args));
+  }
+  async function loadReports() {
+    s.reports = await call("listReports");
+    notify("reports");
+    return s.reports;
+  }
+  /** @param {any} doc */
+  async function saveReport(doc) {
+    const saved = await call("saveReport", doc, { actor: me });
+    await loadReports();
+    return saved;
+  }
+  /** @param {string} id */
+  async function deleteReport(id) { const r = await call("deleteReport", id, { actor: me }); await loadReports(); return r; }
+  /** @param {string} id */
+  async function restoreReport(id) { const r = await call("restoreReport", id); await loadReports(); return r; }
+
+  async function loadProposals() {
+    try {
+      const list = await call("listProposals");
+      if (JSON.stringify(list.map((/** @type {any} */ p) => [p.id, p.version])) !== JSON.stringify(s.proposals.map((p) => [p.id, p.version]))) { s.proposals = list; notify("proposals"); }
+    } catch { /* keep what we have */ }
+    return s.proposals;
+  }
+  /** @param {any} p */
+  function putProposal(p) {
+    const active = p.status === "open" || p.status === "partial";
+    s.proposals = active ? [p, ...s.proposals.filter((x) => x.id !== p.id)].toSorted((a, b) => String(b.created_at).localeCompare(String(a.created_at))) : s.proposals.filter((x) => x.id !== p.id);
+    notify("proposals");
+    return p;
+  }
+  /** @param {any[]} changes @param {Record<string, unknown>} opts */
+  async function propose(changes, opts) {
+    return putProposal(await call("propose", changes, { ...opts, viewer: viewer ? { id: viewer.id, displayName: viewer.displayName } : null }));
+  }
+  /** @param {string} id */
+  async function refreshProposal(id) { return putProposal(await call("refreshProposal", id)); }
+  /** @param {string} id */
+  async function withdrawProposal(id) { return putProposal(await call("withdrawProposal", id, { actor: me })); }
+  /** @param {string} id @param {{ n: number, status: string, message?: string, actionId?: number|null }[]} outcomes */
+  async function recordProposalOutcome(id, outcomes) {
+    return putProposal(await call("recordProposalOutcome", id, outcomes, { viewer: viewer ? { id: viewer.id, displayName: viewer.displayName } : null }));
+  }
+
+  // -----------------------------------------------------------------------------------------
 
   async function refresh() {
     if (s.phase === "ready") { await pull(); return; }
@@ -581,6 +645,10 @@ export function createStore(options) {
     get planning() { return s.planning; },
     get settings() { return s.settings; },
     get views() { return s.views; },
+    get jev() { return s.jev; },
+    get reports() { return s.reports; },
+    get proposals() { return s.proposals; },
+    call, loadReports, saveReport, deleteReport, restoreReport, loadProposals, propose, refreshProposal, withdrawProposal, recordProposalOutcome,
     get prefs() { return s.prefs; },
     get changes() { return s.changes; },
     get sync() { return s.sync; },
