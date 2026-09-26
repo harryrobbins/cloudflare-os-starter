@@ -30,11 +30,11 @@ describe("project: columns and lanes", () => {
     expect(p.lanes).toHaveLength(1);
     expect(p.lanes[0].key).toBe(SINGLE_LANE);
     expect(p.total).toBe(11);
-    expect(nums(p, SINGLE_LANE, "todo").sort((a, b) => a - b)).toEqual([2, 10, 12]);
+    expect(nums(p, SINGLE_LANE, "todo").toSorted((a, b) => a - b)).toEqual([2, 10, 12]);
     expect(p.columns.find((c) => c.group.key === "in_progress")).toMatchObject({ count: 3, estimate: 18 });
   });
   it("keeps the order of the items it is given (manual order: ranked first)", () => {
-    expect(nums(base({ items: [...live].sort(cmp) }), SINGLE_LANE, "todo")[0]).toBe(2);
+    expect(nums(base({ items: [...live].toSorted(cmp) }), SINGLE_LANE, "todo")[0]).toBe(2);
   });
   it("lanes by assignee with Unassigned last and counts", () => {
     const p = base({ swimlanesBy: "assignee" });

@@ -41,7 +41,6 @@ export function parseFull(source) {
   };
   const tok = (/** @type {number} */ start, /** @type {number} */ end, /** @type {Token["kind"]} */ kind) => { if (end > start) tokens.push({ start, end, kind }); };
   const ws = () => { while (pos < text.length && /\s/.test(text[pos])) pos++; };
-  const boundary = (/** @type {number} */ i) => i >= text.length || /[\s()]/.test(text[i]);
 
   /** The bare word at pos (up to whitespace, a paren or a quote), without consuming it. */
   const peekWord = () => {

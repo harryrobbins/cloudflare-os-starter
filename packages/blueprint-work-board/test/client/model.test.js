@@ -101,7 +101,7 @@ describe("buildIndex", () => {
     expect(index.blockedBy.has(id(12))).toBe(false);
   });
   it("children, progress and relations", () => {
-    expect(index.children.get(id(1))?.map((i) => i.number).sort((a, b) => a - b)).toEqual([3, 10]);
+    expect(index.children.get(id(1))?.map((i) => i.number).toSorted((a, b) => a - b)).toEqual([3, 10]);
     expect(progressOf(index, id(1))).toEqual({ done: 0, total: 2 });
     expect(progressOf(index, id(2))).toBeNull();
     const r = relationsFor(index, id(3));

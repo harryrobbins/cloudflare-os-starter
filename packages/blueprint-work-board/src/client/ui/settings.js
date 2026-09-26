@@ -169,7 +169,7 @@ export function openSettings(o) {
           h("button", { type: "button", class: "btn ghost sm", onclick: () => save({ archived: !l.archived }) }, l.archived ? "Restore" : "Archive")) : null,
         l.id ? pendingChip(l.id) : null, error);
     });
-    const free = [...used.keys()].filter((k) => !index.labelByKey.has(k)).sort();
+    const free = [...used.keys()].filter((k) => !index.labelByKey.has(k)).toSorted();
     const add = addRow("label", canWrite, () => {
       const name = /** @type {HTMLInputElement} */ (h("input", { type: "text", placeholder: "New label", maxlength: "60", "aria-label": "New label name" }));
       const color = /** @type {HTMLInputElement} */ (h("input", { type: "color", value: "#5e6ad2", "aria-label": "Colour of the new label" }));
@@ -234,7 +234,7 @@ export function openSettings(o) {
       return h("li", { class: `settings-row${current ? " current" : ""}` }, name, start, end, current ? h("span", { class: "chip" }, "Current") : null,
         canWrite ? h("span", { class: "row-actions" }, h("button", { type: "button", class: "btn sm", onclick: save }, "Save")) : null, pendingChip(cy.id), error);
     });
-    const last = index.cycles.map((c) => c.end).filter(Boolean).sort().pop();
+    const last = index.cycles.map((c) => c.end).filter(Boolean).toSorted().pop();
     const nextStart = last && last >= today ? addDays(/** @type {string} */ (last), 1) : today;
     const add = addRow("cycle", canWrite, () => {
       const start = /** @type {HTMLInputElement} */ (h("input", { type: "date", value: nextStart, "aria-label": "Start of the new cycle" }));

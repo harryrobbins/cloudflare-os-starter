@@ -31,10 +31,10 @@ describe("list layout", () => {
     expect([...grid.querySelectorAll('[role="columnheader"]')].map((c) => text(c))[0]).toBe("Key");
     const heads = () => [...grid.querySelectorAll('[role="columnheader"]')];
     expect(heads().find((c) => text(c).startsWith("Priority"))?.getAttribute("aria-sort")).toBe("ascending");
-    /** @type {HTMLButtonElement} */ (heads().find((c) => text(c).startsWith("Priority"))?.querySelector("button")).click();
+    /** @type {HTMLButtonElement} */ (heads().find((c) => text(c).startsWith("Priority"))?.querySelector("button"))?.click();
     await settle();
     expect(heads().find((c) => text(c).startsWith("Priority"))?.getAttribute("aria-sort")).toBe("descending");
-    /** @type {HTMLButtonElement} */ (heads().find((c) => text(c).startsWith("Title"))?.querySelector("button")).click();
+    /** @type {HTMLButtonElement} */ (heads().find((c) => text(c).startsWith("Title"))?.querySelector("button"))?.click();
     await settle();
     expect(heads().find((c) => text(c).startsWith("Title"))?.getAttribute("aria-sort")).toBe("ascending");
     expect(heads().find((c) => text(c).startsWith("Priority"))?.getAttribute("aria-sort")).toBe("none");

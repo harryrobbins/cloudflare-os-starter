@@ -346,7 +346,7 @@ export function run(query, ctx, items = ctx.index.itemList) {
   const pred = compile(ast, ctx);
   const archived = mentionsArchived(ast.where);
   const out = items.filter((i) => (archived || !i.archived) && pred(i));
-  return out.sort(compare(ast.sort, ctx));
+  return out.toSorted(compare(ast.sort, ctx));
 }
 
 /**

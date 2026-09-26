@@ -11,7 +11,7 @@ export function canonical(value) {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
   if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
     const object = /** @type {Record<string, unknown>} */ (value);
-    return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${canonical(object[key])}`).join(",")}}`;
+    return `{${Object.keys(object).toSorted().map((key) => `${JSON.stringify(key)}:${canonical(object[key])}`).join(",")}}`;
   }
   throw new Error("Command intent must contain only JSON values");
 }

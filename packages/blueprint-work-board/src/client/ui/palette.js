@@ -34,7 +34,7 @@ export function openPalette(opts) {
     const q = input.value.trim();
     if (!q) { shown = all.slice(0, 60); return; }
     const scored = all.map((e, i) => ({ e, i, s: fuzzyScore(q, `${e.label} ${e.keywords ?? ""} ${e.group}`) }))
-      .filter((x) => x.s !== null).sort((a, b) => /** @type {number} */ (b.s) - /** @type {number} */ (a.s) || a.i - b.i).map((x) => x.e);
+      .filter((x) => x.s !== null).toSorted((a, b) => /** @type {number} */ (b.s) - /** @type {number} */ (a.s) || a.i - b.i).map((x) => x.e);
     shown = [...scored.slice(0, 30), ...opts.items(q)].slice(0, 60);
   }
 

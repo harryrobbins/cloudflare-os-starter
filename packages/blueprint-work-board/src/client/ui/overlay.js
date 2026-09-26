@@ -131,7 +131,7 @@ export function createLayers(root) {
     openDialog, openPopover,
     get open() { return stack.length > 0; },
     closeTop() { stack[stack.length - 1]?.close("cancel"); },
-    closeAll() { for (const l of [...stack].reverse()) l.close("cancel"); },
+    closeAll() { for (const l of [...stack].toReversed()) l.close("cancel"); },
   };
 }
 

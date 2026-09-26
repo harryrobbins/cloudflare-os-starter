@@ -3,7 +3,7 @@
 // item with pending changes explained inline. Text being edited (title, description, a comment)
 // is never replaced by a re-render.
 
-import { h, reconcile, relativeTime, shortDate, focus as focusEl, setChildren } from "./dom.js";
+import { h, relativeTime, shortDate, focus as focusEl, setChildren } from "./dom.js";
 import { icon, priorityIcon } from "./icons.js";
 import { avatar, itemStateIcon, stateOf, pendingLabel } from "./card.js";
 import { renderMarkdown } from "./markdown.js";
@@ -201,7 +201,7 @@ export function createDetail({ doc, controller: c }) {
 
   /** @param {ItemView} item @param {WorkIndex} index @param {boolean} canWrite */
   function subIssues(item, index, canWrite) {
-    const kids = (index.children.get(item.id) ?? []).filter((k) => !k.archived).sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
+    const kids = (index.children.get(item.id) ?? []).filter((k) => !k.archived).toSorted((a, b) => (a.number ?? 0) - (b.number ?? 0));
     const progress = progressOf(index, item.id);
     const section = h("section", { class: "detail-section", "aria-labelledby": "wb-sub-h" },
       h("div", { class: "section-head" }, h("h3", { id: "wb-sub-h" }, "Sub-issues"),

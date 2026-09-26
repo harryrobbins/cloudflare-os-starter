@@ -91,7 +91,7 @@ export function createPickers(deps) {
       }
       case "assignee": {
         const current = same(items, (i) => i.assignee ?? "");
-        const people = [...index.people.values()].filter((p) => p.id.startsWith("cloudflare-os:") || p.id === deps.me).sort((a, b) => a.name.localeCompare(b.name));
+        const people = [...index.people.values()].filter((p) => p.id.startsWith("cloudflare-os:") || p.id === deps.me).toSorted((a, b) => a.name.localeCompare(b.name));
         /** @type {PickerOption[]} */
         const options = [];
         if (deps.me) options.push({ value: deps.me, label: `${personName(index, deps.me)} (you)`, icon: () => avatar(deps.me, index, 18), selected: current === deps.me, keywords: "me myself" });
@@ -104,7 +104,7 @@ export function createPickers(deps) {
         const used = new Set(index.itemList.flatMap((i) => i.labels));
         for (const u of used) if (!all.has(u)) all.set(u, /** @type {any} */ ({ key: u, name: u, color: "#8a8f98" }));
         const initial = new Set([...all.keys()].filter((k) => items.length && items.every((i) => i.labels.includes(k))));
-        const options = [...all.values()].sort((a, b) => a.name.localeCompare(b.name)).map((l) => ({
+        const options = [...all.values()].toSorted((a, b) => a.name.localeCompare(b.name)).map((l) => ({
           value: l.key, label: l.name, icon: () => h("span", { class: "dot", style: { background: l.color } }), selected: initial.has(l.key),
         }));
         return open(`Labels for ${target}`, options, (values) => {
@@ -171,7 +171,7 @@ export function createPickers(deps) {
         let grew = true;
         while (grew) { grew = false; for (const it of index.itemList) if (it.parent && blocked.has(it.parent) && !blocked.has(it.id)) { blocked.add(it.id); grew = true; } }
         const current = same(items, (i) => i.parent ?? "");
-        const options = index.itemList.filter((i) => !blocked.has(i.id) && !i.archived).sort((a, b) => (b.number ?? 0) - (a.number ?? 0)).slice(0, 400).map((i) => ({
+        const options = index.itemList.filter((i) => !blocked.has(i.id) && !i.archived).toSorted((a, b) => (b.number ?? 0) - (a.number ?? 0)).slice(0, 400).map((i) => ({
           value: i.id, label: `${i.key} ${i.title}`, selected: i.id === current, keywords: i.key,
         }));
         return open(`Parent of ${target}`, [{ value: "", label: "No parent", selected: current === "" }, ...options],

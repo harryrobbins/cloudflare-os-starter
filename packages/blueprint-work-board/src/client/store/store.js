@@ -304,7 +304,7 @@ export function createStore(options) {
     try {
       viewerAssertion = await gadget.$createViewerAssertion(BINDING_NAME, digest);
     } catch (err) {
-      throw new Error(`forbidden: The Workshop could not confirm this change came from you (${errorDetail(err) || "no reason given"}).`);
+      throw new Error(`forbidden: The Workshop could not confirm this change came from you (${errorDetail(err) || "no reason given"}).`, { cause: err });
     }
     if (typeof viewerAssertion !== "string" || !viewerAssertion) throw new Error("forbidden: Only signed-in viewers can change items.");
     /** @type {{ viewerAssertion: string, idempotencyKey: string, revision?: number }} */

@@ -60,7 +60,7 @@ describe("validRank / compareRank", () => {
   });
   it("orders ranked before unranked", () => {
     const keys = ["", "b", "a", "0", "c"];
-    expect([...keys].sort(compareRank)).toEqual(["a", "b", "c", "", "0"]);
+    expect([...keys].toSorted(compareRank)).toEqual(["a", "b", "c", "", "0"]);
     expect(compareRank("a", "a")).toBe(0);
     expect(compareRank("", "")).toBe(0);
   });

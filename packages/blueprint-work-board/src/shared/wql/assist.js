@@ -38,7 +38,7 @@ function valuesFor(fieldName, ctx) {
     case "person": return [v("me", "You"), v("none", "Nobody"), ...[...idx.people.keys()].map((a) => v(personName(idx, a), a))];
     case "labels": {
       const keys = new Set([...idx.labels.map((l) => l.key), ...idx.itemList.flatMap((i) => i.labels)]);
-      return [...[...keys].sort().map((k) => v(k, idx.labelByKey.get(k)?.name ?? "")), v("none", "No labels")];
+      return [...[...keys].toSorted().map((k) => v(k, idx.labelByKey.get(k)?.name ?? "")), v("none", "No labels")];
     }
     case "project": return [...idx.projects.map((p) => v(p.name, p.state)), v("none", "Not in a project")];
     case "cycle": return [v("current"), v("next"), v("previous"), ...idx.cycles.map((c) => v(c.name, [c.start, c.end].filter(Boolean).join(" – "))), v("none", "Not in a cycle")];

@@ -122,7 +122,7 @@ describe("fuzzy", () => {
   });
   it("filters and orders; empty query keeps order with limit", () => {
     const items = ["Set state", "Assign", "Set priority", "Settings", "Estimate"];
-    expect(fuzzyFilter("set", items, (x) => x).slice(0, 3).sort()).toEqual(["Set priority", "Set state", "Settings"]);
+    expect(fuzzyFilter("set", items, (x) => x).slice(0, 3).toSorted()).toEqual(["Set priority", "Set state", "Settings"]);
     expect(fuzzyFilter("set", items, (x) => x)).not.toContain("Assign");
     expect(fuzzyFilter("", items, (x) => x, 2)).toEqual(["Set state", "Assign"]);
     expect(fuzzyFilter("sp", items, (x) => x)).toContain("Set priority");

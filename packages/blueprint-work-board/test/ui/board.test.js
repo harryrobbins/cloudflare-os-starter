@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
-import { axe, button, key, mount, row, settle, text, titles, unmountAll, until } from "./helpers.js";
+import { axe, key, mount, row, settle, text, titles, unmountAll, until } from "./helpers.js";
 
 afterEach(() => unmountAll());
 
@@ -33,7 +33,7 @@ describe("board layout", () => {
     expect(r.ok).toBe(true);
     await until(() => titles(root, "open").includes("New v1 item"));
     const created = [...fake.rows.values()].find((x) => x.data.title === "New v1 item");
-    expect(Object.keys(created.data).sort()).toEqual(["description", "extensions", "status", "title"].sort());
+    expect(Object.keys(created.data).toSorted()).toEqual(["description", "extensions", "status", "title"].toSorted());
     expect(app.store.createItem({ title: "x", priority: 1 })).toMatchObject({ ok: false });
   });
 

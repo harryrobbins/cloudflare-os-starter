@@ -50,7 +50,7 @@ const PROPERTIES = {
     groups: ({ index }, items) => {
       const seen = new Set(items.map((i) => i.assignee).filter(Boolean));
       for (const item of index.itemList) if (item.assignee) seen.add(item.assignee);
-      return [...[...seen].map((id) => ({ key: /** @type {string} */ (id), label: personName(index, id), person: /** @type {string} */ (id) })).sort(byLabel), none("Unassigned")];
+      return [...[...seen].map((id) => ({ key: /** @type {string} */ (id), label: personName(index, id), person: /** @type {string} */ (id) })).toSorted(byLabel), none("Unassigned")];
     },
     keysOf: (item) => [k(item.assignee)],
     patch: (item, _from, to) => (k(item.assignee) === to ? null : { assignee: to === NONE ? null : to }),
@@ -83,7 +83,7 @@ const PROPERTIES = {
     groups: ({ index }, items) => {
       const parents = [...new Set(items.map((i) => i.parent).filter((p) => p && index.items.has(p)))]
         .map((id) => /** @type {ItemView} */ (index.items.get(/** @type {string} */ (id))))
-        .sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
+        .toSorted((a, b) => (a.number ?? 0) - (b.number ?? 0));
       return [...parents.map((p) => ({ key: p.id, label: `${p.key} ${p.title}` })), none("No parent")];
     },
     keysOf: (item, { index }) => [item.parent && index.items.has(item.parent) ? item.parent : NONE],
@@ -100,7 +100,7 @@ const PROPERTIES = {
       return [...[...keys].map((key) => {
         const l = index.labelByKey.get(key);
         return { key, label: l?.name || key, color: l?.color ?? "#8a8f98" };
-      }).sort(byLabel), none("No labels")];
+      }).toSorted(byLabel), none("No labels")];
     },
     keysOf: (item) => (item.labels.length ? item.labels : [NONE]),
     patch: (item, from, to) => {
@@ -124,7 +124,7 @@ const PROPERTIES = {
     field: "created_by", label: "Creator", noneLabel: "Unknown creator", multi: false, settable: false, column: false,
     why: "The creator of an item cannot change.",
     groups: ({ index }, items) => [...[...new Set(items.map((i) => i.created_by).filter(Boolean))]
-      .map((id) => ({ key: /** @type {string} */ (id), label: personName(index, id), person: /** @type {string} */ (id) })).sort(byLabel), none("Unknown creator")],
+      .map((id) => ({ key: /** @type {string} */ (id), label: personName(index, id), person: /** @type {string} */ (id) })).toSorted(byLabel), none("Unknown creator")],
     keysOf: (item) => [k(item.created_by)],
     patch: () => null,
   },
@@ -149,7 +149,7 @@ function extProperty(name) {
   /** @type {Property} */
   const prop = {
     field: `ext.${name}`, label: name, noneLabel: `No ${name}`, multi: false, settable: true, column: false,
-    groups: (_ctx, items) => [...[...new Set(items.map(valueOf).filter((v) => v !== NONE))].map((v) => ({ key: v, label: v })).sort(byLabel), none(`No ${name}`)],
+    groups: (_ctx, items) => [...[...new Set(items.map(valueOf).filter((v) => v !== NONE))].map((v) => ({ key: v, label: v })).toSorted(byLabel), none(`No ${name}`)],
     keysOf: (item) => [valueOf(item)],
     patch: (item, _from, to) => {
       if (valueOf(item) === to) return null;
@@ -173,5 +173,5 @@ export function groupableFields(index) {
   const base = index.planning ? ["state", "status", "assignee", "priority", "project", "cycle", "parent", "label", "due", "created_by"] : ["state", "created_by"];
   const ext = new Set();
   for (const item of index.itemList) for (const key of Object.keys(item.ext ?? {})) if (/^[A-Za-z0-9_]{1,64}$/.test(key)) ext.add(`ext.${key}`);
-  return [...base, ...[...ext].sort().slice(0, 12)].map((f) => ({ field: f, label: property(f)?.label ?? f, column: property(f)?.column ?? false }));
+  return [...base, ...[...ext].toSorted().slice(0, 12)].map((f) => ({ field: f, label: property(f)?.label ?? f, column: property(f)?.column ?? false }));
 }

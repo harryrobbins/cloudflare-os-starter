@@ -3,7 +3,7 @@ import { check, compare, compile, evaluate, parse, resolveDay, run } from "../..
 import { BOB, TODAY, context } from "./fixture.js";
 
 const ctx = context();
-const nums = (q, c = ctx) => run(q, c).map((i) => i.number).sort((a, b) => a - b);
+const nums = (q, c = ctx) => run(q, c).map((i) => i.number).toSorted((a, b) => a - b);
 const order = (q, c = ctx) => run(q, c).map((i) => i.number);
 const ALL = [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12];
 const except = (...n) => ALL.filter((x) => !n.includes(x));
@@ -118,7 +118,7 @@ describe("evaluate: fields", () => {
     ["has:ext.team", [1, 8]],
   ])("%s", (q, expected) => {
     expect(parse(q).errors).toEqual([]);
-    expect(nums(q)).toEqual([...expected].sort((a, b) => a - b));
+    expect(nums(q)).toEqual([...expected].toSorted((a, b) => a - b));
   });
 });
 
@@ -160,7 +160,7 @@ describe("evaluate: predicates and combinations", () => {
     ["-is:archived", ALL],
   ])("%s", (q, expected) => {
     expect(parse(q).errors).toEqual([]);
-    expect(nums(q)).toEqual([...expected].sort((a, b) => a - b));
+    expect(nums(q)).toEqual([...expected].toSorted((a, b) => a - b));
   });
 
   it("a blocker that is done no longer blocks", () => {
@@ -228,7 +228,7 @@ describe("sort", () => {
 
   it("compare falls back to the default sort", () => {
     const items = [...ctx.index.itemList].filter((i) => !i.archived);
-    expect(items.sort(compare([], ctx)).map((i) => i.number)).toEqual(order(""));
+    expect(items.toSorted(compare([], ctx)).map((i) => i.number)).toEqual(order(""));
   });
 });
 

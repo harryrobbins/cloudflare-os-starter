@@ -254,7 +254,7 @@ describe("FakeRecords reads", () => {
     expect(c.changes[0]).toMatchObject({ created_at: "2026-09-26T10:00:00.000Z", actor: ADA });
     const plain = new FakeRecords();
     item(plain, "a");
-    expect(Object.keys((await plain.session().changes(0)).changes[0]).sort()).toEqual(["actor", "data", "entity", "ordinal", "record_id", "revision", "seq"]);
+    expect(Object.keys((await plain.session().changes(0)).changes[0]).toSorted()).toEqual(["actor", "data", "entity", "ordinal", "record_id", "revision", "seq"]);
   });
 
   it("pages changes without splitting a commit", async () => {
@@ -370,7 +370,7 @@ describe("seedWork", () => {
     expect(JSON.stringify([...a.rows.values()])).toBe(JSON.stringify([...b.rows.values()]));
     console.log(`seed 300: ${ms.toFixed(0)} ms, ${a.rows.size} records, ${a.journal.length} changes`);
     expect(count(a, "work_item")).toBe(300);
-    expect(states(a).map((s) => s.key).sort()).toEqual(DEFAULT_STATES.map((s) => s.key).sort());
+    expect(states(a).map((s) => s.key).toSorted()).toEqual(DEFAULT_STATES.map((s) => s.key).toSorted());
     expect(stateRow(a, "in_review").data.wip_limit).toBe(5);
     expect(count(a, "label")).toBe(9);
     expect(count(a, "project")).toBe(5);
@@ -391,10 +391,10 @@ describe("seedWork", () => {
     const times = a.journal.map((e) => Date.parse(e.created_at));
     expect(Math.min(...times)).toBeLessThanOrEqual(NOW - 69 * 86_400_000);
     expect(Math.max(...times)).toBeLessThan(NOW);
-    expect([...times].sort((x, y) => x - y)).toEqual(times);
+    expect([...times].toSorted((x, y) => x - y)).toEqual(times);
     const blocks = rows(a, "relation").filter((r) => r.data.kind === "blocks");
     expect(blocks.length).toBeGreaterThanOrEqual(20);
-    expect(items.map((d) => d.number).sort((x, y) => x - y)).toEqual(Array.from({ length: 300 }, (_, i) => i + 1));
+    expect(items.map((d) => d.number).toSorted((x, y) => x - y)).toEqual(Array.from({ length: 300 }, (_, i) => i + 1));
   });
 
   it("scales to 2,000 items under the 5,000-record snapshot bound", async () => {

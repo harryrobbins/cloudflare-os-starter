@@ -54,7 +54,7 @@ export function createStatusCentre({ controller: c }) {
     // Group bulk edits.
     /** @type {{ key: string, group: string|null, items: Change[] }[]} */
     const rows = [];
-    for (const ch of [...changes].reverse()) {
+    for (const ch of [...changes].toReversed()) {
       const existing = ch.group ? rows.find((r) => r.group === ch.group) : null;
       if (existing) existing.items.push(ch); else rows.push({ key: ch.group ?? `c${ch.id}`, group: ch.group, items: [ch] });
     }

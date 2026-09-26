@@ -78,7 +78,7 @@ const WORDS = ["login", "or", "Fix bug", "-dash", "WRK-7", "a:b", "(x)", "and", 
 
 function generate(rand, depth = 0) {
   const pick = (list) => list[Math.floor(rand() * list.length)];
-  const quote = (v) => (/^[A-Za-z0-9_-]+$/.test(v) && !/^-/.test(v) ? v : `"${v.replace(/[\\"]/g, (c) => `\\${c}`)}"`);
+  const quote = (v) => (/^[A-Za-z0-9_-]+$/.test(v) && !v.startsWith('-') ? v : `"${v.replace(/[\\"]/g, (c) => `\\${c}`)}"`);
   const r = rand();
   if (depth < 3 && r < 0.2) {
     const n = 2 + Math.floor(rand() * 3);

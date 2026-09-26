@@ -82,7 +82,7 @@ export function closest(word, candidates) {
     const d = lc.startsWith(w) || w.startsWith(lc) ? 0.5 : distance(w, lc);
     if (d <= limit) scored.push([d, c]);
   }
-  return scored.sort((a, b) => a[0] - b[0] || a[1].localeCompare(b[1])).slice(0, 3).map((s) => s[1]);
+  return scored.toSorted((a, b) => a[0] - b[0] || a[1].localeCompare(b[1])).slice(0, 3).map((s) => s[1]);
 }
 
 /** @param {string} prefix @param {string[]} suggestions */

@@ -131,7 +131,7 @@ export function createDocuments(storage, options = {}) {
     /** Every saved view, oldest first. @returns {Promise<ViewDoc[]>} */
     async listViews() {
       const views = [...(await storage.list({ prefix: "view:" })).values()];
-      return views.sort((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")) || a.name.localeCompare(b.name));
+      return views.toSorted((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")) || a.name.localeCompare(b.name));
     },
     /**
      * Creates or replaces a view. `expectedVersion` (optional) refuses a stale overwrite.
@@ -202,7 +202,7 @@ export function memoryStorage() {
     async put(/** @type {string} */ key, /** @type {any} */ value) { map.set(key, clone(value)); },
     async delete(/** @type {string} */ key) { return map.delete(key); },
     async list({ prefix = "" } = {}) {
-      return new Map([...map].filter(([k]) => k.startsWith(prefix)).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, clone(v)]));
+      return new Map([...map].filter(([k]) => k.startsWith(prefix)).toSorted(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, clone(v)]));
     },
   };
 }

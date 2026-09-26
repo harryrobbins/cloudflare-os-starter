@@ -45,7 +45,7 @@ describe("query()", () => {
   });
   it("selects fields", async () => {
     const r = await s.api.query("", { limit: 2, fields: ["title", "priority"] });
-    expect(Object.keys(r.items[0]).sort()).toEqual(["key", "priority", "title"]);
+    expect(Object.keys(r.items[0]).toSorted()).toEqual(["key", "priority", "title"]);
   });
   it("viewer makes `me` work", async () => {
     const r = await s.api.query("assignee:me", { viewer: "cloudflare-os:ada@example.com", limit: 500, fields: ["assignee"] });

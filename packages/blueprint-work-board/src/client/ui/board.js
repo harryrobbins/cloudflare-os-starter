@@ -273,7 +273,7 @@ export function createBoardView({ doc, onAction }) {
     const viewHeight = scroller.clientHeight || view.height || 800;
     /** @type {{ ul: HTMLElement, lane: Lane, col: string, label: string, key: string, rect: DOMRect }[]} */
     const cells = [];
-    for (const ul of /** @type {HTMLElement[]} */ ([...lanesEl.querySelectorAll("ul.cell.windowed")])) {
+    for (const ul of /** @type {NodeListOf<HTMLElement>} */ (lanesEl.querySelectorAll("ul.cell.windowed"))) {
       const lane = m.projection.lanes.find((l) => l.key === ul.dataset.lane);
       const col = m.projection.columns.find((c) => c.group.key === ul.dataset.col);
       if (!lane || !col) continue;

@@ -288,7 +288,7 @@ describe("performance", () => {
     const frames = await frame.evaluate(() => globalThis.__frames.slice(2));
     await page.keyboard.press("Escape");
     await page.mouse.up();
-    const sorted = [...frames].sort((a, b) => a - b);
+    const sorted = [...frames].toSorted((a, b) => a - b);
     const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? 0;
     const fps = 1000 / (frames.reduce((s, x) => s + x, 0) / Math.max(1, frames.length));
     const dom = await frame.evaluate(() => document.querySelectorAll("*").length);

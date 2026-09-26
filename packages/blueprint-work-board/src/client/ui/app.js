@@ -5,8 +5,8 @@
 // One verb grammar: every action is in ACTIONS with a label and shortcut; the palette lists
 // them, the shortcut sheet documents them, menus and keys call the same code.
 
-import { h, focus as focusEl, relativeTime, setChildren } from "./dom.js";
-import { icon, stateIcon } from "./icons.js";
+import { h, relativeTime, setChildren } from "./dom.js";
+import { icon } from "./icons.js";
 import { CSS } from "./styles.js";
 import { createLayers, createLive } from "./overlay.js";
 import { createBoardView } from "./board.js";
@@ -25,7 +25,7 @@ import { createStore } from "../store/store.js";
 import { SINGLE_LANE, movePatch, project } from "../board/projection.js";
 import { registerLayout, layoutDef } from "../views/registry.js";
 import { BINDING_NAME } from "../../shared/records.js";
-import { itemByKey, personName, projectItem } from "../../shared/model/index.js";
+import { itemByKey, projectItem } from "../../shared/model/index.js";
 import { NONE, groupableFields, property } from "../../shared/model/properties.js";
 import { PRIORITIES, localDay } from "../../shared/model/work.js";
 import { rankAt } from "../../shared/rank.js";
@@ -214,7 +214,7 @@ export function createBoardApp(options) {
     const { ast } = parse(view.query);
     const pred = compile(ast, c);
     const archived = view.display.showArchived || mentionsArchived(ast.where);
-    const items = index.itemList.filter((i) => (archived || !i.archived) && pred(i)).sort(compare(sort, c));
+    const items = index.itemList.filter((i) => (archived || !i.archived) && pred(i)).toSorted(compare(sort, c));
     itemsCache = { key, items, total: index.itemList.filter((i) => archived || !i.archived).length };
     return itemsCache;
   }
@@ -418,7 +418,7 @@ export function createBoardApp(options) {
   /** @param {Map<string, DOMRect>|null} before */
   function playFlip(before) {
     if (!before) return;
-    for (const c of /** @type {HTMLElement[]} */ ([...layoutHost.querySelectorAll("article.card[data-key]")])) {
+    for (const c of /** @type {NodeListOf<HTMLElement>} */ (layoutHost.querySelectorAll("article.card[data-key]"))) {
       const prev = before.get(/** @type {string} */ (c.dataset.key));
       if (!prev) continue;
       const next = c.getBoundingClientRect();
@@ -445,7 +445,8 @@ export function createBoardApp(options) {
     const f = boardFocus;
     if (f.key.startsWith("empty:")) {
       const lane = projection.lanes.find((l) => l.key === f.lane);
-      if (lane && (lane.cells.get(f.col)?.some((e) => e.kind === "card"))) boardFocus = { key: /** @type {any} */ (lane.cells.get(f.col)?.find((e) => e.kind === "card")).key, lane: f.lane, col: f.col };
+      const first = lane?.cells.get(f.col)?.find((e) => e.kind === "card");
+      if (lane && first) boardFocus = { key: first.key, lane: f.lane, col: f.col };
       return;
     }
     for (const lane of projection.lanes) for (const [col, cell] of lane.cells) {
@@ -784,7 +785,7 @@ export function createBoardApp(options) {
   /** @param {any} v */
   function loadView(v) {
     const base = defaultView();
-    view = { ...base, ...v, display: { ...base.display, ...(v.display ?? {}) }, sort: v.sort ?? [] };
+    view = { ...base, ...v, display: { ...base.display, ...v.display }, sort: v.sort ?? [] };
     savedView = structuredClone(view);
     filter.setQuery(view.query);
     itemsCache = null;
@@ -904,7 +905,7 @@ export function createBoardApp(options) {
       select("Order", curSort, sortOpts, (v) => { view = { ...view, sort: v === "manual" ? [{ field: "rank", dir: "asc" }] : [{ field: v.replace(/^-/, ""), dir: v.startsWith("-") ? "desc" : "asc" }] }; }),
       select("Density", view.display.density, [{ value: "comfortable", label: "Comfortable" }, { value: "compact", label: "Compact" }], (v) => setDisplay({ density: v })),
       h("fieldset", { class: "props-fieldset" }, h("legend", null, view.layout === "list" ? "Columns" : "Card properties"),
-        h("div", { class: "check-grid" }, (view.layout === "list" ? Object.values(LIST_COLUMNS).filter((c) => c.id !== "title").map((c) => check(c.label, view.display.listColumns.includes(c.id), (on) => setDisplay({ listColumns: on ? [...view.display.listColumns, c.id].sort((a, b) => Object.keys(LIST_COLUMNS).indexOf(a) - Object.keys(LIST_COLUMNS).indexOf(b)) : view.display.listColumns.filter((x) => x !== c.id) })))
+        h("div", { class: "check-grid" }, (view.layout === "list" ? Object.values(LIST_COLUMNS).filter((c) => c.id !== "title").map((c) => check(c.label, view.display.listColumns.includes(c.id), (on) => setDisplay({ listColumns: on ? [...view.display.listColumns, c.id].toSorted((a, b) => Object.keys(LIST_COLUMNS).indexOf(a) - Object.keys(LIST_COLUMNS).indexOf(b)) : view.display.listColumns.filter((x) => x !== c.id) })))
           : PROPS.map((p) => check(p === "progress" ? "Sub-issue progress" : p === "blocked" ? "Blocked badge" : p[0].toUpperCase() + p.slice(1), view.display.properties.includes(p), (on) => setDisplay({ properties: on ? [...view.display.properties, p] : view.display.properties.filter((x) => x !== p) })))))),
       check("Show sub-issues", view.display.showSubIssues, (v) => setDisplay({ showSubIssues: v })),
       check("Show archived items", view.display.showArchived, (v) => setDisplay({ showArchived: v })),
@@ -961,7 +962,7 @@ export function createBoardApp(options) {
     const kinds = [["blocks", "Blocks…"], ["blocked", "Is blocked by…"], ["relates", "Relates to…"], ["duplicates", "Duplicates…"]];
     openPicker({ layers, anchor, title: `Relate ${item.key}`, options: kinds.map(([value, label]) => ({ value, label })), onPick: ([kind]) => {
       const index = store.index();
-      const options = index.itemList.filter((i) => i.id !== item.id && !i.archived).sort((a, b) => (b.number ?? 0) - (a.number ?? 0)).slice(0, 500).map((i) => ({ value: i.id, label: `${i.key} ${i.title}`, keywords: i.key, icon: () => itemStateIcon(i, index, { size: 13 }) }));
+      const options = index.itemList.filter((i) => i.id !== item.id && !i.archived).toSorted((a, b) => (b.number ?? 0) - (a.number ?? 0)).slice(0, 500).map((i) => ({ value: i.id, label: `${i.key} ${i.title}`, keywords: i.key, icon: () => itemStateIcon(i, index, { size: 13 }) }));
       queueMicrotask(() => openPicker({ layers, anchor, title: `${kinds.find((k) => k[0] === kind)?.[1]}`, options, placeholder: "Search by key or title…", onPick: ([other]) => {
         const o = index.items.get(other);
         const input = kind === "blocked" ? { from: other, to: item.id, kind: "blocks" } : { from: item.id, to: other, kind };
@@ -1019,7 +1020,7 @@ export function createBoardApp(options) {
     moveMode: { label: "Move with the keyboard", group: "Item", when: () => store.canWrite() && view.layout === "board", run: () => { if (!layout("board").startMove()) live.announce("Focus a card on the board first."); } },
     archive: { label: "Archive / restore", group: "Item", when: () => store.canWrite() && store.planning && targets().length > 0, run: () => { const t = targets(); const to = !t.every((i) => i.archived); applyPatch(t, () => ({ archived: to }), `${to ? "Archive" : "Restore"} ${t.length === 1 ? t[0].key : `${t.length} items`}`); } },
     undo: { label: "Undo your last change", group: "General", run: () => {
-      const last = [...store.changes].reverse().find((c) => c.undo && !c.undoOf && c.status !== "conflict" && c.status !== "rejected");
+      const last = [...store.changes].toReversed().find((c) => c.undo && !c.undoOf && c.status !== "conflict" && c.status !== "rejected");
       if (!last) { live.announce("Nothing to undo."); return; }
       undo(last);
     } },
@@ -1046,7 +1047,7 @@ export function createBoardApp(options) {
         }));
         const views = [...BUILTIN.slice(0, store.planning ? BUILTIN.length : 1), ...store.views].map((v) => ({ id: `v:${v.id}`, label: `View: ${v.name}`, group: "Views", keywords: v.query ?? "",
           run: () => { const b = BUILTIN.find((x) => x.id === v.id); loadView(b ? { ...defaultView(), ...b } : v); } }));
-        return [...list.sort((a, b) => (a.group.startsWith("Actions") ? -1 : b.group.startsWith("Actions") ? 1 : 0)), ...views];
+        return [...list.toSorted((a, b) => (a.group.startsWith("Actions") ? -1 : b.group.startsWith("Actions") ? 1 : 0)), ...views];
       },
       items: (q) => {
         const index = store.index();

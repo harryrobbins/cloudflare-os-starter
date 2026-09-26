@@ -35,7 +35,7 @@ describe.skipIf(!wqlReady)("server documents: views", () => {
   it.each([
     ["no id", { id: undefined }], ["bad id", { id: "Has Space" }], ["long id", { id: "x".repeat(65) }], ["empty name", { name: "  " }],
     ["long name", { name: "n".repeat(81) }], ["name not text", { name: 5 }], ["unknown layout", { layout: "gantt" }],
-    ["bad columnsBy", { columnsBy: "DROP TABLE" }], ["bad swimlanesBy", { swimlanesBy: "a b" }], ["too many sorts", { sort: Array(6).fill({ field: "priority" }) }],
+    ["bad columnsBy", { columnsBy: "DROP TABLE" }], ["bad swimlanesBy", { swimlanesBy: "a b" }], ["too many sorts", { sort: Array.from({ length: 6 }, () => ({ field: "priority" })) }],
     ["bad sort field", { sort: [{ field: "" }] }], ["long query", { query: "a".repeat(2001) }], ["query error", { query: "prority:high" }],
     ["unbalanced query", { query: "(label:bug" }], ["not an object", null],
   ])("refuses a view with %s", async (_, extra) => {

@@ -110,7 +110,7 @@ export function buildIndex(records, options = {}) {
     state: String(r.data.state ?? "planned"), lead: typeof r.data.lead === "string" ? r.data.lead : null,
     start: dateOnly(r.data.start_date), target: dateOnly(r.data.target_date), color: safeColor(r.data.color, "#5b6ee1"),
     archived: r.data.archived === true, revision: r.revision,
-  })).sort((a, b) => a.name.localeCompare(b.name));
+  })).toSorted((a, b) => a.name.localeCompare(b.name));
   const projectById = new Map(projects.map((p) => [p.id, p]));
 
   /** @type {CycleView[]} */
@@ -118,7 +118,7 @@ export function buildIndex(records, options = {}) {
     id: r.id, name: String(r.data.name ?? ""), number: Number.isInteger(r.data.number) ? r.data.number : null,
     start: dateOnly(r.data.starts_on), end: dateOnly(r.data.ends_on), goal: String(r.data.goal ?? ""), revision: r.revision,
   })).map((c) => ({ ...c, name: c.name || (c.number ? `Cycle ${c.number}` : "Cycle") }))
-    .sort((a, b) => String(a.start ?? "9999").localeCompare(String(b.start ?? "9999")) || (a.number ?? 0) - (b.number ?? 0));
+    .toSorted((a, b) => String(a.start ?? "9999").localeCompare(String(b.start ?? "9999")) || (a.number ?? 0) - (b.number ?? 0));
   const cycleById = new Map(cycles.map((c) => [c.id, c]));
 
   // Items.
@@ -239,7 +239,7 @@ function makeItem(r, env) {
  */
 export function projectItem(index, item, input, pendingId = "pending") {
   const { id: _id, ...fields } = /** @type {Record<string, unknown>} */ (input);
-  const data = { ...(item?.raw.data ?? {}), ...fields };
+  const data = { ...item?.raw.data, ...fields };
   if ("state" in fields && !("status" in fields)) {
     const s = index.stateByKey.get(String(fields.state));
     if (s) data.status = s.category;

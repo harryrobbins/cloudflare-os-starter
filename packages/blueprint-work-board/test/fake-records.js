@@ -92,7 +92,7 @@ function toDate(v) {
   return v;
 }
 /** records_work.valid_label(). @param {unknown} v */
-function validLabel(v) { return typeof v === "string" && v.length >= 1 && v.length <= 60 && v === v.trim() && !/[\u0000-\u001f\u007f]/.test(v); }
+function validLabel(v) { return typeof v === "string" && v.length >= 1 && v.length <= 60 && v === v.trim() && ![...v].some((ch) => ch.charCodeAt(0) < 32 || ch.charCodeAt(0) === 127); }
 /** records_work.label_array(). @param {unknown} v */
 function labelArray(v) {
   if (v === null || v === undefined) return null;
@@ -265,7 +265,7 @@ export class FakeRecords {
   snapshot(limit = 1000) {
     if (!Number.isInteger(limit) || limit < 1 || limit > 5000) throw bad("Invalid snapshot limit");
     if (this.rows.size > limit) throw fail("too_large", "Datastore exceeds bounded snapshot; export workflow required");
-    const records = [...this.rows.values()].sort((a, b) => a.id.localeCompare(b.id)).map((r) => this.#present(r));
+    const records = [...this.rows.values()].toSorted((a, b) => a.id.localeCompare(b.id)).map((r) => this.#present(r));
     return { records, seq: this.seq, permission_epoch: this.epoch, complete: true };
   }
 
@@ -291,7 +291,7 @@ export class FakeRecords {
     const limit = query.limit ?? 100;
     if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw bad("Invalid limit");
     const rows = [...this.rows.values()].filter((r) => (!query.entity || r.entity === query.entity) && (!query.id || r.id === query.id)
-      && (!query.after || r.id > query.after)).sort((a, b) => a.id.localeCompare(b.id)).slice(0, limit);
+      && (!query.after || r.id > query.after)).toSorted((a, b) => a.id.localeCompare(b.id)).slice(0, limit);
     return { records: rows.map((r) => this.#present(r)), seq: this.seq, permission_epoch: this.epoch };
   }
 
@@ -405,10 +405,10 @@ export class FakeRecords {
         record = /** @type {any} */ (this)[`_${noun}`](verb === "create", input ?? {}, revision, /** @type {any} */ (ENTITY_OF)[noun]);
       }
       this.seq = this.tx.seq;
-      this.journal.push(...this.tx.entries.sort((a, b) => a.ordinal - b.ordinal));
+      this.journal.push(...this.tx.entries.toSorted((a, b) => a.ordinal - b.ordinal));
       return record;
     } catch (err) {
-      for (const { id, prev } of this.tx.undo.reverse()) {
+      for (const { id, prev } of this.tx.undo.toReversed()) {
         if (prev) this.rows.set(id, prev);
         else { const row = this.rows.get(id); this.rows.delete(id); if (row) this.byEntity.get(row.entity)?.delete(id); }
       }
@@ -489,7 +489,7 @@ export class FakeRecords {
     const current = states.find((x) => x.key === currentState);
     if (current && (wantedStatus === undefined || wantedStatus === current.category)) return current;
     const category = wantedStatus ?? currentStatus ?? "open";
-    const pick = states.filter((s) => s.category === category).sort((a, b) =>
+    const pick = states.filter((s) => s.category === category).toSorted((a, b) =>
       Number(b.kind === /** @type {any} */ (DEFAULT_KIND)[category]) - Number(a.kind === /** @type {any} */ (DEFAULT_KIND)[category]) || a.position - b.position || a.key.localeCompare(b.key))[0];
     if (!pick) throw bad("No workflow state has that status");
     return pick;

@@ -136,7 +136,7 @@ export function createFilterBar({ doc, controller: c }) {
         node.id = `${listId}-${i}`;
         node.setAttribute("aria-selected", String(i === active));
         setChildren(node, h("span", { class: `tk-${s.kind === "field" ? "field" : s.kind === "keyword" ? "keyword" : "value"}` }, s.label), s.detail ? h("span", { class: "opt-detail" }, s.detail) : null);
-        /** @type {HTMLElement} */ (node).onclick = () => accept(s);
+        /** @type {HTMLElement} */ (node).dataset.insert = String(i);
       },
     });
   }
@@ -168,6 +168,11 @@ export function createFilterBar({ doc, controller: c }) {
     list.children[active]?.scrollIntoView?.({ block: "nearest" });
   }
 
+  list.addEventListener("click", (e) => {
+    const li = /** @type {HTMLElement|null} */ (/** @type {HTMLElement} */ (e.target).closest("[data-insert]"));
+    const s = li ? sugg.items[Number(li.dataset.insert)] : null;
+    if (s) accept(s);
+  });
   input.addEventListener("input", onInput);
   input.addEventListener("scroll", () => { layer.scrollLeft = input.scrollLeft; });
   input.addEventListener("focus", () => updateSuggestions());

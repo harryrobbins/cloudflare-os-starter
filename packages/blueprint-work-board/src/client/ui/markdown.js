@@ -121,5 +121,5 @@ function link(doc, href, label) {
 
 /** Plain text of Markdown (for card snippets and accessible names). @param {string} source */
 export function plainText(source) {
-  return String(source ?? "").replace(/```[\s\S]*?```/g, " ").replace(/[#>*_`~\[\]]|\(https?:[^)]*\)/g, "").replace(/\s+/g, " ").trim();
+  return String(source ?? "").replace(/```[\s\S]*?```/g, " ").replace(/[#>*_`~[\]]|\(https?:[^)]*\)/g, "").replace(/\s+/g, " ").trim();
 }
