@@ -34,7 +34,7 @@ export function checkItemFields(fields, caps) {
       return fail(`Unknown field “${key}”.`, key);
     }
     if (value === null) {
-      if (key === "title" || (caps.create && key !== "extensions")) continue;
+      if (key === "title" || caps.create) continue;
       if (key === "status" || key === "state") return fail("An item always has a state.", key);
       input[key] = null;
       continue;
@@ -87,7 +87,6 @@ export function checkItemFields(fields, caps) {
         break;
       case "parent": case "project": case "cycle":
         if (typeof value !== "string" || !UUIDISH.test(value)) return fail(`Choose a ${key}.`, key);
-        if (key === "parent" && fields.id && String(value).toLowerCase().endsWith(String(fields.id).toLowerCase())) return fail("An item cannot be its own parent.", key);
         input[key] = value;
         break;
       case "rank":
@@ -106,7 +105,9 @@ export function checkItemFields(fields, caps) {
   }
   if (caps.create && !("title" in input)) return fail("Enter a title.", "title");
   if (caps.create && typeof fields.id === "string" && UUIDISH.test(fields.id)) input.id = fields.id;
-  const start = input.start_date ?? caps.current?.start_date, due = input.due_date ?? caps.current?.due_date;
+  // A field in the input (even null, which clears it) wins over the committed value.
+  const start = "start_date" in input ? input.start_date : caps.current?.start_date;
+  const due = "due_date" in input ? input.due_date : caps.current?.due_date;
   if (typeof start === "string" && typeof due === "string" && due < start && (input.start_date || input.due_date)) return fail("The due date is before the start date.", input.due_date ? "due_date" : "start_date");
   return { ok: true, input };
 }

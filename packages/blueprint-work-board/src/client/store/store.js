@@ -171,6 +171,7 @@ export function createStore(options) {
       viewer?.id ? rpc(() => gadget.getPrefs(viewer.id)).catch(() => null) : Promise.resolve(null),
     ]);
     replica.loadSnapshot(snapshot);
+    try { performance.mark("wb:snapshot"); } catch { /* no performance API */ }
     s.planning = hasPlanning({ description: s.description, records: snapshot.records });
     if (settings) s.settings = settings;
     s.views = Array.isArray(views) ? views : [];

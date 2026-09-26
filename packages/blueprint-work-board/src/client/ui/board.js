@@ -14,6 +14,9 @@ export const CARD_H = { comfortable: 104, compact: 80 };
 export const GAP = 6;
 const WINDOW_MIN = 100;
 const OVERSCAN = 6;
+/** Above this many cards on the board, every cell is windowed (lanes multiply cells). */
+const BIG_BOARD = 300;
+const INITIAL_WINDOW = 12;
 
 /**
  * @typedef {import("../board/projection.js").Projection} Projection
@@ -46,6 +49,7 @@ export function createBoardView({ doc, onAction }) {
   /** @type {null | { entry: Entry, fromLane: string, fromCol: string, toLane: string, toCol: string, index: number }} */
   let moving = null;
   let scrollRaf = 0;
+  let bigBoard = false;
 
   // -------------------------------------------------------------------------------------------
   // Rendering
@@ -69,6 +73,9 @@ export function createBoardView({ doc, onAction }) {
       update: (node, c) => renderColumnHead(/** @type {HTMLElement} */ (node), c),
     });
     const lanes = projection.lanes;
+    let total = 0;
+    for (const l of lanes) for (const c of l.cells.values()) total += c.length;
+    bigBoard = total > BIG_BOARD;
     reconcile(lanesEl, lanes, {
       key: (l) => l.key,
       create: (l) => {
@@ -82,6 +89,9 @@ export function createBoardView({ doc, onAction }) {
     if (!projection.total && !projection.lanes.some((l) => [...l.cells.values()].some((c) => c.length))) {
       scroller.dataset.empty = "true";
     } else delete scroller.dataset.empty;
+    // Second pass: every windowed cell's height is already exact (spacers + cards), so one batch of
+    // layout reads places all of them, then only the slices that changed are rendered.
+    refreshWindows();
   }
 
   /** @param {HTMLElement} node @param {import("../board/projection.js").ColumnInfo} c */
@@ -176,13 +186,15 @@ export function createBoardView({ doc, onAction }) {
     const cellKey = `${lane.key}::${col}`;
     let slice = entries;
     let top = 0, bottom = 0;
-    const pitch = (CARD_H[/** @type {"comfortable"|"compact"} */ (m.env.density)] ?? CARD_H.comfortable) + GAP;
-    if (entries.length > WINDOW_MIN) {
-      const w = visibleRange(ul, entries.length, pitch);
+    const pitch = pitchOf(m);
+    if (bigBoard || entries.length > WINDOW_MIN) {
+      const n = entries.length;
+      const prev = windows.get(cellKey) ?? { start: 0, end: Math.min(n, INITIAL_WINDOW) };
+      const w = { start: Math.min(prev.start, n), end: Math.min(Math.max(prev.end, prev.start), n) };
       windows.set(cellKey, w);
       slice = entries.slice(w.start, w.end);
       top = w.start * pitch;
-      bottom = (entries.length - w.end) * pitch;
+      bottom = (n - w.end) * pitch;
       ul.classList.add("windowed");
     } else {
       windows.delete(cellKey);
@@ -234,37 +246,53 @@ export function createBoardView({ doc, onAction }) {
     });
   }
 
-  /** @param {HTMLElement} ul @param {number} n @param {number} pitch */
-  function visibleRange(ul, n, pitch) {
-    const view = scroller.getBoundingClientRect();
-    const cell = ul.getBoundingClientRect();
-    const height = scroller.clientHeight || view.height || 800;
+  /** @param {BoardModel} m */
+  function pitchOf(m) { return (CARD_H[/** @type {"comfortable"|"compact"} */ (m.env.density)] ?? CARD_H.comfortable) + GAP; }
+
+  /**
+   * The visible slice of a cell from its position (cell coordinates, not DOM order).
+   * @param {DOMRect} view @param {number} viewHeight @param {DOMRect} cell @param {number} n @param {number} pitch
+   */
+  function visibleRange(view, viewHeight, cell, n, pitch) {
     // jsdom has no layout: fall back to the first screenful.
-    const offset = cell.height ? Math.max(0, view.top - cell.top) : 0;
-    let start = Math.max(0, Math.floor(offset / pitch) - OVERSCAN);
-    let end = Math.min(n, Math.ceil((offset + height) / pitch) + OVERSCAN);
-    if (end <= start) end = Math.min(n, start + Math.ceil(height / pitch) + OVERSCAN);
+    if (!cell.height && !cell.top) return { start: 0, end: Math.min(n, INITIAL_WINDOW) };
+    const top = cell.top - view.top;
+    const from = Math.max(0, -top), to = viewHeight - top;
+    const start = Math.max(0, Math.min(n, Math.floor(from / pitch) - OVERSCAN));
+    const end = Math.max(start, Math.min(n, Math.ceil(to / pitch) + OVERSCAN));
     return { start, end };
+  }
+
+  /** Reads every windowed cell's position in one layout, then re-renders only changed slices. */
+  function refreshWindows() {
+    if (!model || !windows.size) return;
+    const m = model;
+    const pitch = pitchOf(m);
+    const view = scroller.getBoundingClientRect();
+    const viewHeight = scroller.clientHeight || view.height || 800;
+    /** @type {{ ul: HTMLElement, lane: Lane, col: string, label: string, key: string, rect: DOMRect }[]} */
+    const cells = [];
+    for (const ul of /** @type {HTMLElement[]} */ ([...lanesEl.querySelectorAll("ul.cell.windowed")])) {
+      const lane = m.projection.lanes.find((l) => l.key === ul.dataset.lane);
+      const col = m.projection.columns.find((c) => c.group.key === ul.dataset.col);
+      if (!lane || !col) continue;
+      cells.push({ ul, lane, col: col.group.key, label: col.group.label, key: `${lane.key}::${col.group.key}`, rect: ul.getBoundingClientRect() });
+    }
+    for (const c of cells) {
+      const n = c.lane.cells.get(c.col)?.length ?? 0;
+      const next = visibleRange(view, viewHeight, c.rect, n, pitch);
+      const prev = windows.get(c.key);
+      // Hysteresis: keep the current slice while it still covers the viewport.
+      if (prev && prev.start <= next.start + OVERSCAN / 2 && prev.end >= next.end - OVERSCAN / 2 && prev.end - prev.start <= next.end - next.start + OVERSCAN * 3) continue;
+      windows.set(c.key, next);
+      renderCell(c.ul, c.lane, c.col, c.label);
+    }
   }
 
   scroller.addEventListener("scroll", () => {
     if (scrollRaf || !windows.size) return;
-    scrollRaf = requestAnimationFrame(() => {
-      scrollRaf = 0;
-      if (model) rerenderWindowed();
-    });
+    scrollRaf = requestAnimationFrame(() => { scrollRaf = 0; refreshWindows(); });
   }, { passive: true });
-
-  function rerenderWindowed() {
-    if (!model) return;
-    for (const lane of model.projection.lanes) {
-      for (const c of model.projection.columns) {
-        if ((lane.cells.get(c.group.key)?.length ?? 0) <= WINDOW_MIN) continue;
-        const ul = /** @type {HTMLElement|null} */ (lanesEl.querySelector(`section.lane[data-lane="${cssq(lane.key)}"] ul.cell[data-col="${cssq(c.group.key)}"]`));
-        if (ul) renderCell(ul, lane, c.group.key, c.group.label);
-      }
-    }
-  }
 
   // -------------------------------------------------------------------------------------------
   // Navigation (on the projection)
@@ -369,9 +397,10 @@ export function createBoardView({ doc, onAction }) {
       const entries = lane?.cells.get(f.col) ?? [];
       const i = entries.findIndex((e) => e.key === f.key);
       if (i >= 0 && lane) {
-        const pitch = (CARD_H[/** @type {"comfortable"|"compact"} */ (model.env.density)] ?? CARD_H.comfortable) + GAP;
+        const pitch = pitchOf(model);
         const cellTop = ul.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
         scroller.scrollTop = Math.max(0, cellTop + i * pitch - scroller.clientHeight / 3);
+        windows.set(`${f.lane}::${f.col}`, { start: Math.max(0, i - OVERSCAN), end: Math.min(entries.length, i + OVERSCAN * 3) });
         renderCell(ul, lane, f.col, model.projection.columns.find((c) => c.group.key === f.col)?.group.label ?? f.col);
         target = find();
       }

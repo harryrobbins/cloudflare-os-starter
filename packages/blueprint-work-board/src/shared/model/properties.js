@@ -115,7 +115,7 @@ const PROPERTIES = {
     why: "Due-date lanes are computed from the due date; change the due date instead.",
     groups: () => [
       { key: "overdue", label: "Overdue" }, { key: "today", label: "Today" }, { key: "week", label: "Next 7 days" },
-      { key: "later", label: "Later" }, none("No due date"),
+      { key: "later", label: "Later" }, { key: "past", label: "Past, finished" }, none("No due date"),
     ],
     keysOf: (item, { today }) => [dueBucket(item, today)],
     patch: () => null,
@@ -136,7 +136,7 @@ export function dueBucket(item, today) {
   if (item.due < today && item.category !== "done") return "overdue";
   if (item.due === today) return "today";
   if (item.due <= addDays(today, 7) && item.due > today) return "week";
-  return item.due < today ? "later" : "later";
+  return item.due < today ? "past" : "later";
 }
 
 /** An extension field as a property. @param {string} name */

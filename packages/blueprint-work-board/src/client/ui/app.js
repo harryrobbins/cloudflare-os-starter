@@ -268,7 +268,8 @@ export function createBoardApp(options) {
       status.render();
       return;
     }
-    if (!initialViewApplied) applyInitialView();
+    const first = !initialViewApplied;
+    if (first) applyInitialView();
     statePanel.hidden = true;
     layoutHost.hidden = false;
     toolbar.hidden = false;
@@ -276,6 +277,7 @@ export function createBoardApp(options) {
     renderViewControls();
     renderLayout();
     renderBulkBar();
+    if (first) { try { performance.mark("wb:first-render"); performance.measure("wb:snapshot-to-render", "wb:snapshot", "wb:first-render"); } catch { /* no performance API */ } }
     if (detail.itemId && (topics.has("data") || topics.has("changes") || topics.has("history"))) {
       if (!store.index().items.has(detail.itemId)) closeDetail();
       else detail.render();
@@ -296,7 +298,7 @@ export function createBoardApp(options) {
         h("div", { class: "brand-text" }, h("h1", null, label), h("span", { class: "sub" }, index ? `Work board · ${index.itemList.filter((i) => !i.archived).length.toLocaleString()} items${store.canWrite() ? "" : " · read only"}` : "Work board"))),
       h("span", { class: "grow" }),
       liveState ? h("span", { class: `live ${liveState}`, title: sync.lastSync ? `Last checked ${relativeTime(sync.lastSync, now())}` : "" }, h("span", { class: "dot", "aria-hidden": "true" }), liveText) : null,
-      store.phase === "ready" ? h("button", { type: "button", class: "btn palette-btn", onclick: () => runAction("palette"), "aria-keyshortcuts": mac ? "Meta+K" : "Control+K" },
+      store.phase === "ready" ? h("button", { type: "button", class: "btn palette-btn", "aria-label": "Search or run a command", onclick: () => runAction("palette"), "aria-keyshortcuts": mac ? "Meta+K" : "Control+K" },
         icon("search", { size: 14 }), h("span", { class: "palette-label" }, "Search or run a command"), h("kbd", { "aria-hidden": "true" }, keyLabel("Mod+k", mac))) : null,
       store.phase === "ready" ? h("button", { type: "button", class: "icon-btn", "aria-label": "Keyboard shortcuts", title: "Keyboard shortcuts (?)", onclick: () => runAction("help") }, icon("keyboard")) : null,
       store.phase === "ready" ? h("button", { type: "button", class: "icon-btn", "aria-label": "Board settings", title: "Board settings", onclick: () => runAction("settings") }, icon("settings")) : null,

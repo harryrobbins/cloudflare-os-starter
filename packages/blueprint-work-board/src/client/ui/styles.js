@@ -426,9 +426,12 @@ span.prop-value { cursor: default; }
   .palette-btn .palette-label, .palette-btn kbd, .new-btn span { display: none; }
   .toolbar { padding: 8px 12px 4px; }
   .board-scroll, .list-scroll { padding: 0 12px 96px; }
-  .detail { position: absolute; inset: 0; width: auto; z-index: 40; border-left: 0; }
+  .detail { position: fixed; inset: 0; width: auto; z-index: 45; border-left: 0; }
   .live { display: none; }
-  .quick { width: 100%; }
+  .quick, .view-controls { width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .quick .btn, .view-controls > * { flex: none; }
+  .filter-row { gap: 6px; }
+  .toolbar { gap: 6px; }
 }
 @media (max-width: 480px) {
   .brand .sub { display: none; }
