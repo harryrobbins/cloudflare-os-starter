@@ -116,6 +116,29 @@ export async function axe(frame, { include = null } = {}) {
   return results.filter((v) => v.impact === "serious" || v.impact === "critical");
 }
 
+/**
+ * WCAG 2.5.8 audit: visible pointer targets smaller than 24 × 24 CSS px, except inline links in
+ * text, controls inside a label that is itself ≥ 24 px, and native form fields (the label is the
+ * target). Returns descriptions of offenders.
+ * @param {import("playwright").Frame} frame
+ */
+export function smallTargets(frame) {
+  return frame.evaluate(() => {
+    const out = [];
+    for (const el of document.querySelectorAll('button, a[href], [role="option"], [role="tab"], label, input[type="checkbox"], select, summary')) {
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      const style = getComputedStyle(el);
+      if (style.visibility === "hidden" || Number(style.opacity) === 0) continue;
+      if (el.closest(".markdown") || (el.tagName === "A" && style.display === "inline")) continue;
+      if (el.tagName === "INPUT") { const label = el.closest("label"); if (label && label.getBoundingClientRect().height >= 24 && label.getBoundingClientRect().width >= 24) continue; }
+      if (el.tagName === "LABEL" && !el.querySelector("input")) continue;
+      if (r.width < 23.5 || r.height < 23.5) out.push(`${el.tagName.toLowerCase()}.${String(el.className).split(" ")[0]} "${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 30)}" ${Math.round(r.width)}×${Math.round(r.height)}`);
+    }
+    return [...new Set(out)];
+  });
+}
+
 /** @param {import("playwright").Page} page @param {string} name */
 export async function screenshot(page, name) {
   await mkdir(SHOTS, { recursive: true });

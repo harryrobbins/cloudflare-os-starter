@@ -517,7 +517,7 @@ export function createBoardView({ doc, onAction }) {
     if (!hit) return;
     const action = /** @type {HTMLElement|null} */ (t.closest("[data-action]"))?.dataset.action;
     onAction("focus", { key: hit.entry.key, lane: hit.lane, col: hit.col, silent: true });
-    if (action === "select") onAction("select", { item: hit.entry.item, toggle: true, range: e.shiftKey });
+    if (action === "select") { e.preventDefault(); onAction("select", { item: hit.entry.item, toggle: true, range: e.shiftKey }); }
     else if (action === "menu") onAction("menu", { item: hit.entry.item, lane: hit.lane, anchor: t.closest("button") });
     else if (e.shiftKey) onAction("select", { item: hit.entry.item, range: true });
     else if (e.metaKey || e.ctrlKey) onAction("select", { item: hit.entry.item, toggle: true });
@@ -542,7 +542,7 @@ export function createBoardView({ doc, onAction }) {
   lanesEl.addEventListener("pointerdown", (event) => {
     const e = /** @type {PointerEvent} */ (event);
     if (e.button !== 0 || !model?.canWrite || moving) return;
-    if (/** @type {Element} */ (e.target).closest("button, input, a")) return;
+    if (/** @type {Element} */ (e.target).closest("button, input, a, label")) return;
     const hit = cardFrom(/** @type {Element} */ (e.target));
     if (!hit) return;
     const rect = hit.card.getBoundingClientRect();

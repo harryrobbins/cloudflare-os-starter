@@ -31,7 +31,7 @@ const WINDOW_MIN = 150;
 export const LIST_COLUMNS = {
   key: { id: "key", label: "Key", sort: "key", width: "92px", render: (i) => h("span", { class: "card-key" }, i.key) },
   title: { id: "title", label: "Title", sort: "title", width: "minmax(220px, 1fr)", render: (i, m) => [
-    m.canWrite ? h("input", { type: "checkbox", class: "row-check", tabindex: "-1", checked: m.selected.has(i.id), "aria-label": `Select ${i.key}`, "data-action": "select" }) : null,
+    m.canWrite ? h("label", { class: "check-hit row-check", "data-action": "select" }, h("input", { type: "checkbox", tabindex: "-1", checked: m.selected.has(i.id), "aria-label": `Select ${i.key}` })) : null,
     h("span", { class: "row-title" }, i.title || "Untitled")] },
   state: { id: "state", label: "State", sort: "state", width: "150px", render: (i, m) => [itemStateIcon(i, m.index, { size: 13 }), h("span", null, stateOf(i, m.index)?.name ?? i.state)], text: (i, m) => stateOf(i, m.index)?.name ?? "" },
   priority: { id: "priority", label: "Priority", sort: "priority", width: "120px", render: (i) => (i.priority ? [priorityIcon(i.priority), h("span", null, PRIORITIES[i.priority].name)] : h("span", { class: "muted" }, "—")) },
@@ -181,7 +181,7 @@ export function createListView({ doc, onAction }) {
     const r = rows.find((x) => x.key === rowKey);
     onAction("focusRow", { row: rowKey, col: Number(cell.dataset.col ?? 0), silent: true });
     if (!r || r.kind !== "item") return;
-    if (t.closest("[data-action=select]")) onAction("select", { item: r.item, toggle: true, range: e.shiftKey });
+    if (t.closest("[data-action=select]")) { e.preventDefault(); onAction("select", { item: r.item, toggle: true, range: e.shiftKey }); }
     else if (e.shiftKey) onAction("select", { item: r.item, range: true });
     else if (e.metaKey || e.ctrlKey) onAction("select", { item: r.item, toggle: true });
     else onAction("open", { item: r.item });

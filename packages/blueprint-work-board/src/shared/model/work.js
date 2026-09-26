@@ -83,7 +83,7 @@ export function refId(value) {
  */
 export function refOut(id) { return id; }
 
-/** @param {unknown} value @returns {value is string} */
+/** @param {unknown} value @returns {boolean} */
 export function isIsoDate(value) {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
 }

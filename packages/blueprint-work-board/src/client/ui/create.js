@@ -61,6 +61,7 @@ export function openCreate(o) {
 
   function create() {
     const parsed = tokenFields();
+    /** @type {Record<string, unknown>} */
     const all = { ...fields, ...parsed.fields, title: parsed.title };
     if (description.value.trim()) all.description = description.value;
     const r = o.submit(all);

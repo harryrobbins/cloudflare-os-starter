@@ -31,7 +31,7 @@ export const SINGLE_LANE = "__all__";
  * @returns {Projection}
  */
 export function project(p) {
-  const colProp = property(p.columnsBy) ?? /** @type {any} */ (property("state"));
+  const colProp = /** @type {import("../../shared/model/properties.js").Property} */ (property(p.columnsBy) ?? property("state"));
   const laneProp = p.swimlanesBy ? property(p.swimlanesBy) : null;
   const ctx = p.ctx;
   let items = p.items;

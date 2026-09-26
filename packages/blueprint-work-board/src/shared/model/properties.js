@@ -41,7 +41,7 @@ const PROPERTIES = {
   },
   status: {
     field: "status", label: "Status", noneLabel: "No status", multi: false, settable: true, column: true,
-    groups: () => (["open", "active", "done"]).map((c) => ({ key: c, label: CATEGORY_LABELS[c], color: KIND_COLORS[c === "open" ? "unstarted" : c === "active" ? "started" : "completed"], stateKind: c === "open" ? "unstarted" : c === "active" ? "started" : "completed" })),
+    groups: () => (/** @type {const} */ (["open", "active", "done"])).map((c) => ({ key: c, label: CATEGORY_LABELS[c], color: KIND_COLORS[c === "open" ? "unstarted" : c === "active" ? "started" : "completed"], stateKind: c === "open" ? "unstarted" : c === "active" ? "started" : "completed" })),
     keysOf: (item) => [item.category],
     patch: (item, _from, to) => (to === NONE || to === item.category ? null : { status: to }),
   },

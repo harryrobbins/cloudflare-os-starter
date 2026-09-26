@@ -54,6 +54,7 @@ export function parseTokens(text, index, ctx) {
     }
     if (sigil === "^") {
       const cycles = index.cycles;
+      /** @type {import("../../shared/model/index.js").CycleView|null|undefined} */
       let cycle = null;
       if (v === "current" || v === "now") cycle = cycles.find((c) => c.start && c.end && c.start <= today && today <= c.end);
       else if (v === "next") cycle = cycles.find((c) => c.start && c.start > today);

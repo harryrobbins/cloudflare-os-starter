@@ -143,7 +143,7 @@ textarea { width: 100%; resize: vertical; line-height: 1.5; }
 .filter-chip.negated { border-color: var(--bad); background: var(--bad-bg); }
 .filter-chip.advanced { padding: 2px 8px; align-items: center; }
 .chip-main, .chip-x { border: 0; background: transparent; color: var(--ink); cursor: pointer; min-height: 24px; padding: 0 8px; }
-.chip-x { border-left: 1px solid var(--accent-line); padding: 0 6px; font-size: 14px; }
+.chip-x { border-left: 1px solid var(--accent-line); padding: 0 6px; font-size: 14px; min-width: 24px; }
 .chip-main:hover, .chip-x:hover { background: rgba(127, 127, 127, .15); }
 
 /* Layout */
@@ -212,8 +212,10 @@ textarea { width: 100%; resize: vertical; line-height: 1.5; }
 .card.done .card-title { color: var(--ink-2); }
 .card-top { display: flex; align-items: center; gap: 6px; min-height: 20px; }
 .card-key { font: 11.5px/1 var(--mono); color: var(--muted); letter-spacing: -.01em; white-space: nowrap; }
-.card-check { opacity: 0; position: absolute; left: 4px; top: 10px; }
-.card:hover .card-check, .card:focus-within .card-check, .card.selected .card-check, .has-bulk .card-check { opacity: 1; position: static; }
+.check-hit { display: inline-grid; place-items: center; width: 24px; height: 24px; flex: none; cursor: pointer; border-radius: 5px; }
+.check-hit:hover { background: var(--surface-3); }
+.card-check { opacity: 0; position: absolute; left: 2px; top: 6px; margin: 0; }
+.card:hover .card-check, .card:focus-within .card-check, .card.selected .card-check, .has-bulk .card-check { opacity: 1; position: static; margin: -2px -2px -2px -6px; }
 .card-menu { opacity: 0; min-width: 24px; min-height: 24px; border: 0; background: transparent; color: var(--ink-2); border-radius: 5px; display: grid; place-items: center; cursor: pointer; margin-right: -4px; }
 .card:hover .card-menu, .card:focus .card-menu, .card:focus-within .card-menu { opacity: 1; }
 .card-menu:hover { background: var(--surface-3); }
@@ -266,7 +268,7 @@ textarea { width: 100%; resize: vertical; line-height: 1.5; }
 .lg-td { display: flex; align-items: center; gap: 6px; padding: 0 8px; height: 100%; min-width: 0; white-space: nowrap; overflow: hidden; }
 .lg-td:focus-visible { outline-offset: -2px; }
 .row-title { font-weight: 550; overflow: hidden; text-overflow: ellipsis; }
-.row-check { opacity: .6; }
+.row-check { opacity: .7; margin-left: -4px; }
 .lg-group { height: 40px; display: flex; align-items: center; background: var(--bg); border-bottom: 1px solid var(--line); }
 .lg-grouphead { display: flex; align-items: center; }
 .overdue { color: var(--overdue); font-weight: 600; }
@@ -344,7 +346,7 @@ span.prop-value { cursor: default; }
 .change:hover { background: var(--surface-2); }
 .change .status-dot { margin-top: 5px; }
 .change-body { flex: 1; min-width: 0; }
-.change-label { font-weight: 550; overflow-wrap: anywhere; }
+.change-label { font-weight: 550; overflow-wrap: anywhere; min-height: 24px; display: inline-flex; align-items: center; }
 .change-status { color: var(--muted); font-size: 12px; }
 .change-message { color: var(--bad); font-size: 12px; margin-top: 2px; }
 .change-actions { display: flex; gap: 4px; align-items: center; }

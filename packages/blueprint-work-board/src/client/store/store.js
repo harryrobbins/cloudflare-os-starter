@@ -533,7 +533,7 @@ export function createStore(options) {
   async function refresh() {
     if (s.phase === "ready") { await pull(); return; }
     try { await bootstrap(); } catch (err) { stopFor(err); }
-    if (s.phase === "ready") await pull();
+    if (/** @type {Phase} */ (s.phase) === "ready") await pull();
   }
 
   const onVisibility = () => { if (doc.visibilityState !== "hidden") { void pull(); schedulePoll(); } };

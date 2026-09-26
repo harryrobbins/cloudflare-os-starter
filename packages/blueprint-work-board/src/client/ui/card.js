@@ -113,7 +113,7 @@ export function updateCard(el, entry, env, state) {
   el.setAttribute("aria-roledescription", ghost ? "pending card" : "card");
 
   const top = h("div", { class: "card-top" },
-    !ghost && env.canWrite ? h("input", { type: "checkbox", class: "card-check", tabindex: "-1", checked: selected, "aria-label": `Select ${item.key}`, "data-action": "select" }) : null,
+    !ghost && env.canWrite ? h("label", { class: "check-hit card-check", "data-action": "select" }, h("input", { type: "checkbox", tabindex: "-1", checked: selected, "aria-label": `Select ${item.key}` })) : null,
     props.has("key") ? h("span", { class: "card-key" }, entry.kind === "ghost" && entry.create ? "New" : item.key) : null,
     env.columnsBy !== "state" ? h("span", { class: "card-state", title: stateOf(item, index)?.name }, itemStateIcon(item, index, { size: 12 })) : null,
     h("span", { class: "grow" }),

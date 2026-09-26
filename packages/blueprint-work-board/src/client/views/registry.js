@@ -8,7 +8,7 @@
 /**
  * @typedef {{
  *   el: HTMLElement,
- *   navigate: (dir: string) => boolean,
+ *   navigate: (dir: any) => boolean,
  *   focusCurrent: (opts?: { scroll?: boolean }) => boolean,
  * }} LayoutInstance
  * @typedef {{ id: string, label: string, icon: string, shortcut?: string,

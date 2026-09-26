@@ -7,7 +7,7 @@
 
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { appState, axe, paneFrame, problems, screenshot, startHarness, until, waitReady } from "./helpers.mjs";
+import { appState, axe, paneFrame, problems, screenshot, smallTargets, startHarness, until, waitReady } from "./helpers.mjs";
 
 /** @type {Awaited<ReturnType<typeof startHarness>>} */
 let h;
@@ -41,6 +41,8 @@ describe("boot and accessibility", () => {
     assert.equal(await frame.locator("h1").count(), 1);
     assert.ok(await frame.locator("article.card").count() > 20);
     assert.deepEqual(await axe(frame), [], "board");
+    await frame.locator("article.card").first().hover();
+    assert.deepEqual(await smallTargets(frame), [], "target size, board");
     await assertClean(page, errors);
   });
 
@@ -48,15 +50,19 @@ describe("boot and accessibility", () => {
     const { page, frame, errors } = await h.open({ seed: 120 });
     await inApp(frame, "(app) => app.loadView({ ...app.view, id: null, name: 'Lanes', swimlanesBy: 'assignee' })");
     assert.deepEqual(await axe(frame), [], "lanes");
+    assert.deepEqual(await smallTargets(frame), [], "target size, lanes");
     await inApp(frame, "(app) => app.setLayout('list')");
     assert.deepEqual(await axe(frame), [], "list");
+    assert.deepEqual(await smallTargets(frame), [], "target size, list");
     await inApp(frame, "(app, store) => app.openDetail(store.index().itemList.find((i) => (store.index().children.get(i.id)?.length ?? 0) > 1), { focus: true })");
     assert.deepEqual(await axe(frame), [], "detail");
+    assert.deepEqual(await smallTargets(frame), [], "target size, detail");
     await inApp(frame, "(app) => app.closeDetail()");
     for (const [action, name] of [["create", "create"], ["palette", "palette"], ["settings", "settings"], ["help", "shortcuts"]]) {
       await inApp(frame, `(app) => app.runAction(${JSON.stringify(action)})`);
       await frame.locator('[role="dialog"]').first().waitFor();
       assert.deepEqual(await axe(frame), [], name);
+      assert.deepEqual(await smallTargets(frame), [], `target size, ${name}`);
       await frame.locator('[role="dialog"]').first().press("Escape");
       await frame.locator('[role="dialog"]').first().waitFor({ state: "detached" });
     }
