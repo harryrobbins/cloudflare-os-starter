@@ -87,10 +87,37 @@ export function createQueryCache(getSource, options = {}) {
     return { index: ix, viewer, now: t, today: new Date(t).toISOString().slice(0, 10) };
   }
 
+  /** @type {Promise<void>|null} */
+  let backfilling = null;
+  /**
+   * The index plus the complete journal history (read from seq 0 once, then kept current by the
+   * normal pulls): what the flow datasets and history() need. `complete` is false only when the
+   * journal is longer than `maxPages` pages of 100 entries.
+   * @param {{ maxPages?: number, fresh?: boolean }} [opts]
+   */
+  async function full(opts = {}) {
+    if (opts.fresh) freshAt = 0;
+    await index();
+    if (!replica.backfill.done) {
+      const maxPages = opts.maxPages ?? 1000;
+      backfilling ??= (async () => {
+        const source = getSource();
+        for (let pages = 0; !replica.backfill.done && pages < maxPages; pages += 25) await replica.backfillHistory(source, 25);
+      })().finally(() => { backfilling = null; });
+      await backfilling;
+    }
+    const ix = await index();
+    return { index: ix, history: replica.history, historyVersion: replica.historyVersion, complete: replica.backfill.done };
+  }
+
   return {
     /** For tests and the harness. */
     replica,
     index,
+    full,
+    context,
+    /** Reads the datastore again now (ignoring the cache's freshness window). */
+    async refresh() { freshAt = 0; return index(); },
     /**
      * Runs WQL over the datastore.
      * @param {unknown} wql @param {{ limit?: number, fields?: string[], viewer?: string|null }} [opts]

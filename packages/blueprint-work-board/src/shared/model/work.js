@@ -219,3 +219,11 @@ export function addDays(day, days) {
 export function daysBetween(a, b) {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 }
+
+/** "30 Sep", or "30 Sep 2027" when not this year. @param {string} day @param {string} today */
+export function shortDate(day, today) {
+  const d = new Date(`${day}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return day;
+  const sameYear = day.slice(0, 4) === today.slice(0, 4);
+  return d.toLocaleDateString(undefined, sameYear ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" });
+}

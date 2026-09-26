@@ -140,7 +140,7 @@ export function seedWork(fake, { items = 300, now = Date.parse("2026-09-26T12:00
       if (chance(0.75)) input.project = projectIds[Math.floor(rng() * projectIds.length)];
       if (chance(0.1)) input.extensions = { customer: pick(CUSTOMERS) };
       const ref = { id: "" };
-      const entry = { ref, created, epic, parent: parent?.ref ?? null, target, assignee };
+      const entry = { ref, created, epic, parent: parent?.ref ?? null, target, assignee, cycle, estimate: input.estimate ?? null, end: created };
       made.push(entry);
       at(created, () => {
         if (parent) input.parent = parent.ref.id;
@@ -157,6 +157,7 @@ export function seedWork(fake, { items = 300, now = Date.parse("2026-09-26T12:00
       if (target === "canceled") move({ state: "canceled" }, ada);
       if (chance(0.1)) move({ priority: weightedPriority() }, pick(people));
       if (chance(0.02) && target !== "in_progress") move({ archived: true }, ada);
+      entry.end = t;
       return entry;
     };
 
@@ -183,6 +184,27 @@ export function seedWork(fake, { items = 300, now = Date.parse("2026-09-26T12:00
     for (let i = 0; i < Math.round(items / 2); i++) {
       const m = pick(made);
       at(m.created + rng() * 20 * DAY, () => fake.run("work.comment.create", { item: m.ref.id, body: pick(COMMENTS) }, { actor: m.assignee && chance(0.5) ? m.assignee : pick(people) }));
+    }
+
+    // Churn that reports must cope with, from its own random stream (so the rest of the seed stays
+    // as it was): reopened items, estimate changes and items moved out of the current cycle.
+    const churn = mulberry32(7);
+    const current = cycles.find((c) => c.offset === 0);
+    const nextCycle = cycles.find((c) => c.offset === 1);
+    for (const m of made) {
+      if (m.epic) continue;
+      const r = churn();
+      if (m.target === "done" && r < 0.06) {
+        const reopenAt = m.end + (0.5 + churn() * 2) * DAY;
+        const who = m.assignee ?? people[Math.floor(churn() * people.length)];
+        at(reopenAt, () => update(m.ref.id, { state: "in_progress" }, who));
+        at(reopenAt + (0.3 + churn() * 1.5) * DAY, () => update(m.ref.id, { state: "done" }, who));
+      } else if (m.estimate !== null && r < 0.16) {
+        const next = [1, 2, 3, 5, 8, 13][Math.floor(churn() * 6)];
+        if (next !== m.estimate) at(m.created + (0.5 + churn() * 4) * DAY, () => update(m.ref.id, { estimate: next }, m.assignee ?? people[0]));
+      } else if (current && nextCycle && m.cycle?.id === current.id && m.target === "todo" && r < 0.3) {
+        at(current.start + (1 + churn() * 3) * DAY, () => { if (/** @type {any} */ (fake.rows.get(m.ref.id)).data.cycle === current.id) update(m.ref.id, { cycle: nextCycle.id }, people[0]); });
+      }
     }
 
     events.sort((a, b) => a.t - b.t);
