@@ -34,6 +34,16 @@ describe("charts", async () => {
     });
   }
 
+  it("legends list only the kinds present, and each kind keeps its colour", () => {
+    const spec = { $schema: "https://vega.github.io/schema/vega-lite/v6.json", data: { name: "workload" }, mark: "bar",
+      encoding: { x: { field: "count", type: "quantitative" }, y: { field: "assignee", type: "nominal" }, color: { field: "kind_label", type: "nominal", scale: { domain: ["Triage", "Backlog", "Unstarted", "Started", "Completed", "Canceled"], scheme: "workboard-kinds" } } } };
+    const rows = [{ assignee: "Ada", kind_label: "Started", count: 2 }, { assignee: "Ada", kind_label: "Unstarted", count: 1 }];
+    const out = JSON.stringify(prepare(spec, "workload", rows, { width: 500, height: 200, theme: "light" }));
+    const k = THEMES.light.kinds;
+    expect(out).toContain(`"domain":["Unstarted","Started"]`);
+    expect(out).toContain(`"range":["${k[2]}","${k[3]}"]`);
+  });
+
   it("never lets a spec's own dataset rows through and keeps the spec's own signals", () => {
     const spec = prepare({ $schema: "https://vega.github.io/schema/vega/v6.json", data: [{ name: "items" }], signals: [{ name: "ink", value: "red" }], marks: [] }, "items", [{ a: 1 }], { width: 100, height: 50, theme: "light" });
     expect(spec.data[0].values).toEqual([{ a: 1 }]);

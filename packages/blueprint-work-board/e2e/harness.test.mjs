@@ -413,6 +413,21 @@ describe("insights", () => {
     await page.keyboard.press("Enter");
     await until(() => inApp(frame, "(app) => Boolean(app.detail.itemId)"), { message: "item opened" });
     assert.match(second ?? "", new RegExp(`^${await inApp(frame, "(app, store) => store.index().items.get(app.detail.itemId).key")}:`));
+    await inApp(frame, "(app) => app.closeDetail()");
+    // Only chains: fewer nodes, still operable; a legend explains shapes and colours.
+    const all = await frame.locator('[data-report="dependencies"] .dep-node').count();
+    await frame.locator('[data-report="dependencies"] .seg', { hasText: "Only chains" }).click();
+    await until(async () => { const n = await frame.locator('[data-report="dependencies"] .dep-node').count(); return n > 0 && n < all; }, { message: "chains only" });
+    assert.match(await frame.locator('[data-report="dependencies"] .graph-legend').textContent() ?? "", /Blocked.*Part of a chain/);
+    await frame.locator('[data-report="dependencies"]').scrollIntoViewIfNeeded();
+    await screenshot(page, "insights-1440-light-chains");
+    // Ask the agent: selectable prompts.
+    await frame.getByRole("button", { name: "Ask the agent" }).click();
+    const prompt = await frame.locator("#wb-ask-main").inputValue();
+    assert.match(prompt, /^Using the Work Board skill, build a burndown for Cycle 24 split by project/);
+    await screenshot(page, "insights-ask-agent-1440-light");
+    assert.deepEqual(await axe(frame), []);
+    await page.keyboard.press("Escape");
     await assertClean(page, errors);
   });
 
@@ -483,6 +498,14 @@ describe("proposals and Jev", () => {
     await inApp(frame, "(app) => app.loadView({ ...app.view, id: 'builtin:triage', name: 'Triage', query: 'kind:triage', layout: 'list' })");
     await frame.getByRole("button", { name: "Triage with Jev" }).click();
     await frame.locator(".suggest-list input").first().waitFor();
+    // Duplicates name the candidate and can be peeked; each item shows its current values.
+    const dup = frame.locator(".peek-dup").first();
+    if (await dup.count()) {
+      await dup.locator("summary").click();
+      assert.match(await dup.textContent() ?? "", /^Peek TW-\d+TW-\d+ .+/);
+    }
+    assert.ok(await frame.locator(".suggest-now").count() > 0);
+    assert.ok(await frame.locator(".suggest-foot .btn.primary").isVisible(), "footer pinned");
     await screenshot(page, "jev-triage-1440-light");
     const rows = await frame.locator(".suggest-list li").allTextContents();
     assert.ok(rows.length > 0 && rows.every((r) => /\d+% likely/.test(r)), rows.slice(0, 3).join(" | "));

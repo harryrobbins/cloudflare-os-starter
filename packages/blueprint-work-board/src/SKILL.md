@@ -133,8 +133,10 @@ Spec rules (`validateReport` enforces them): Vega-Lite or Vega JSON only; no `ur
 images, lookups), no `href` links, no `loader`; signal and selection events only for pointer,
 touch, wheel and key events on the view (no `timer`, no `window:`); inline `values` at most 1 MB;
 the whole report at most 256 KiB. Colours: the schemes `workboard-kinds` (triage, backlog,
-unstarted, started, completed, canceled, in that order) and `workboard-series` follow the board's
-light or dark theme and are colour-blind safe; prefer them to your own colours. Temporal fields
+unstarted, started, completed, canceled, in that order), `workboard-series` (categorical) and
+`workboard-plan` (actual, ideal, projection, scope) follow the board's light or dark theme and are
+colour-blind safe; prefer them to your own colours. A `workboard-kinds` legend lists only the
+kinds present in the rows. Temporal fields
 are UTC: add `scale: { type: "utc" }` and `formatType: "utc"`. Every report gets the dataset's
 one-sentence summary and a data table, so a chart never has to carry the numbers alone.
 
@@ -356,6 +358,8 @@ Parameters: `cycle` (Cycle name, number, current (default), previous or next); `
 | `completed` | number | Of which completed |
 | `remaining` | number | scope − completed |
 | `ideal` | number | The ideal line from the first day's scope to 0 on the last day |
+| `projected` | number | Remaining work projected from today at the pace so far (null before today) |
+| `today` | boolean | The row for today (UTC) |
 | `future` | boolean | The day has not happened yet |
 
 ### `burnup`: Burnup
@@ -371,6 +375,9 @@ Parameters: `scope` (cycle (default) or project); `cycle` (For scope cycle: name
 | `unit` | string | points or count |
 | `scope` | number | Total work in scope at the end of the day (null in the future) |
 | `completed` | number | Completed work at the end of the day |
+| `ideal` | number | Cycles: the straight line from 0 to today's scope on the last day (null for projects) |
+| `projected` | number | Cycles: completed work projected from today at the pace so far (null before today) |
+| `today` | boolean | The row for today (UTC) |
 | `future` | boolean | The day has not happened yet |
 
 ### `throughput`: Throughput

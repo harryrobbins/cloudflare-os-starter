@@ -238,6 +238,19 @@ function scopeSeries(ctx, list, days, member, unit) {
   });
 }
 
+/**
+ * Today's position in a cycle series and the completion pace so far (per day), for projections.
+ * Null when the cycle has not started or has ended.
+ * @param {{ scope: number|null, completed: number|null, future: boolean }[]} series
+ */
+function pacing(series) {
+  const past = series.filter((x) => !x.future);
+  if (!past.length || past.length === series.length) return null;
+  const today = past.length - 1;
+  const now = past[today];
+  return { at: today, scope: /** @type {number} */ (now.scope), completed: /** @type {number} */ (now.completed), rate: /** @type {number} */ (now.completed) / past.length };
+}
+
 /** Items that were ever in a membership (so the unit is chosen from them). @param {Timeline[]} list @param {(p: Point) => boolean} member */
 const everIn = (list, member) => list.filter((tl) => tl.points.some(member));
 
@@ -301,6 +314,8 @@ registerDataset({
     { name: "completed", type: "number", description: "Of which completed" },
     { name: "remaining", type: "number", description: "scope − completed" },
     { name: "ideal", type: "number", description: "The ideal line from the first day's scope to 0 on the last day" },
+    { name: "projected", type: "number", description: "Remaining work projected from today at the pace so far (null before today)" },
+    { name: "today", type: "boolean", description: "The row for today (UTC)" },
     { name: "future", type: "boolean", description: "The day has not happened yet" },
   ],
   resolve: resolveCycleParams,
@@ -314,10 +329,13 @@ registerDataset({
     const planned = list.filter((tl) => tl.item.cycle === p.cycle_id && tl.item.kind !== "canceled" && !tl.item.archived).reduce((s, tl) => s + (unit === "points" ? tl.item.estimate ?? 0 : 1), 0);
     const base = first?.scope ?? planned;
     const unestimated = list.filter((tl) => tl.item.cycle === p.cycle_id && tl.item.estimate === null && !tl.item.archived && tl.item.kind !== "canceled").length;
+    const pace = pacing(series);
     return series.map((s, i) => ({
       day: s.day, cycle: p.cycle, unit, scope: s.scope, completed: s.completed,
       remaining: s.scope === null || s.completed === null ? null : round(s.scope - s.completed, 1),
-      ideal: round(days.length > 1 ? base * (1 - i / (days.length - 1)) : 0, 1), future: s.future,
+      ideal: round(days.length > 1 ? base * (1 - i / (days.length - 1)) : 0, 1),
+      projected: pace && i >= pace.at ? round(Math.max(0, pace.scope - pace.completed - pace.rate * (i - pace.at)), 1) : null,
+      today: pace ? i === pace.at : false, future: s.future,
       ...(i === 0 ? { planned, unestimated } : {}),
     }));
   },
@@ -339,6 +357,9 @@ registerDataset({
     { name: "unit", type: "string", description: "points or count" },
     { name: "scope", type: "number", description: "Total work in scope at the end of the day (null in the future)" },
     { name: "completed", type: "number", description: "Completed work at the end of the day" },
+    { name: "ideal", type: "number", description: "Cycles: the straight line from 0 to today's scope on the last day (null for projects)" },
+    { name: "projected", type: "number", description: "Cycles: completed work projected from today at the pace so far (null before today)" },
+    { name: "today", type: "boolean", description: "The row for today (UTC)" },
     { name: "future", type: "boolean", description: "The day has not happened yet" },
   ],
   resolve: (p, ctx) => {
@@ -362,7 +383,15 @@ registerDataset({
       const from = [p.starts_on, Number.isFinite(firstSeen) ? utcDay(firstSeen) : null].filter(Boolean).toSorted()[0] ?? today;
       days = dayRange(from < plusDays(today, -179) ? plusDays(today, -179) : from, today);
     }
-    return scopeSeries(ctx, list, days, member, unit).map((s) => ({ day: s.day, name: p.scope === "cycle" ? p.cycle : p.project, unit, scope: s.scope, completed: s.completed, future: s.future }));
+    const series = scopeSeries(ctx, list, days, member, unit);
+    const pace = p.scope === "cycle" ? pacing(series) : null;
+    const last = series.filter((x) => !x.future).at(-1)?.scope ?? 0;
+    return series.map((s, i) => ({
+      day: s.day, name: p.scope === "cycle" ? p.cycle : p.project, unit, scope: s.scope, completed: s.completed,
+      ideal: p.scope === "cycle" ? round(days.length > 1 ? last * (i / (days.length - 1)) : last, 1) : null,
+      projected: pace && i >= pace.at ? round(Math.min(pace.scope, pace.completed + pace.rate * (i - pace.at)), 1) : null,
+      today: s.day === today, future: s.future,
+    }));
   },
   summary: (rows, ctx, p) => {
     if (p.scope === "cycle") {

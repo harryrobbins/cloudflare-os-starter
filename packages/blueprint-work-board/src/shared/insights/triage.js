@@ -38,7 +38,7 @@ const STATE_MEANING = {
  * @typedef {import("../model/index.js").WorkIndex} WorkIndex
  * @typedef {import("../model/index.js").ItemView} ItemView
  * @typedef {{ id: string, key: string, field: "priority"|"state"|"label"|"duplicate", text: string, value: string|number,
- *   probability: number, confidence: string, preselect: boolean }} Suggestion
+ *   probability: number, confidence: string, preselect: boolean, candidate?: { key: string, title: string, state: string, description: string } }} Suggestion
  */
 
 /** Lowercase word tokens (3+ letters) of a text. @param {string} text */
@@ -146,7 +146,11 @@ export function readSuggestions(ix, item, meta, answers) {
   if (du?.type === "choice" && /^d\d+$/.test(du.choice)) {
     const other = meta.similar[Number(du.choice.slice(1))];
     const p = Number(du.probabilities?.[du.choice] ?? 0);
-    if (other) add({ id: `${item.key}:duplicate`, field: "duplicate", text: `Duplicate of ${other}`, value: other, probability: p });
+    const cand = other ? ix.byNumber.get(Number(other.replace(/^.*-/, ""))) : null;
+    if (other) {
+      add({ id: `${item.key}:duplicate`, field: "duplicate", text: `Duplicate of ${other}${cand ? ` · ${cand.title.length > 60 ? `${cand.title.slice(0, 59)}…` : cand.title}` : ""}`, value: other, probability: p,
+        ...(cand ? { candidate: { key: cand.key, title: cand.title, state: ix.stateByKey.get(cand.state)?.name ?? cand.state, description: cand.description.slice(0, 280) } } : {}) });
+    }
   }
   const shown = all.filter((s) => s.probability >= BANDS.show).toSorted((a, b) => b.probability - a.probability);
   return { suggestions: shown, hidden: all.length - shown.length };

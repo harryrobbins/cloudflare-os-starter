@@ -121,9 +121,17 @@ export function seedWork(fake, { items = 300, now = Date.parse("2026-09-26T12:00
     /** @type {{ ref: { id: string }, created: number, epic: boolean, parent: { id: string }|null, target: string, assignee: string|null }[]} */
     const made = [];
     let remaining = items;
-    const makeItem = (/** @type {number} */ created, /** @type {{ ref: {id: string}, created: number }|null} */ parent, /** @type {string|null} */ epicTitle) => {
+    // Timing of cycle work comes from its own random stream, so the rest of the seed (titles,
+    // states, people) stays as it was: most of a cycle's scope is planned before it starts, a
+    // little is added mid-cycle, and work completes steadily through the cycle.
+    const pace = mulberry32(99);
+    const makeItem = (/** @type {number} */ createdAt, /** @type {{ ref: {id: string}, created: number }|null} */ parent, /** @type {string|null} */ epicTitle) => {
       const epic = epicTitle !== null;
+      let created = createdAt;
       const { cycle, target } = plan(created, epic);
+      if (cycle && created > cycle.start - 0.3 * DAY && pace() < 0.85) {
+        created = Math.max(start + 0.01 * DAY, (parent?.created ?? 0) + 0.05 * DAY, cycle.start - (0.6 + pace() * 4) * DAY);
+      }
       const assignee = chance(0.7) ? pick(people) : null;
       const by = pick(people);
       const title = epicTitle ?? `${pick(VERBS)} ${pick(THINGS)} ${pick(PLACES)}`.trim();
@@ -149,8 +157,15 @@ export function seedWork(fake, { items = 300, now = Date.parse("2026-09-26T12:00
       // Move through the workflow over time.
       const worker = assignee ?? pick(people);
       let t = created + (0.2 + rng() * 3) * DAY;
-      const move = (/** @type {Record<string, any>} */ patch, /** @type {string} */ who) => { const when = t; at(when, () => update(ref.id, patch, who)); t += (0.3 + rng() * 4) * DAY; };
-      if (cycle) move({ cycle: cycle.id, ...(input.state === "triage" || input.state === "backlog" ? { state: "todo" } : {}) }, ada);
+      let stride = 1;
+      const move = (/** @type {Record<string, any>} */ patch, /** @type {string} */ who) => { const when = t; at(when, () => update(ref.id, patch, who)); t += (0.3 + rng() * 4) * DAY * stride; };
+      if (cycle) {
+        // Planned into the cycle before it starts when the item already exists by then.
+        if (t > cycle.start - 0.2 * DAY && created < cycle.start - 0.3 * DAY) t = Math.max(created + 0.05 * DAY, cycle.start - (0.2 + pace() * 1.5) * DAY);
+        move({ cycle: cycle.id, ...(input.state === "triage" || input.state === "backlog" ? { state: "todo" } : {}) }, ada);
+        const elapsed = Math.min(cycle.end, now) - cycle.start;
+        if (elapsed > 0) { t = Math.max(t, cycle.start + pace() * elapsed * 0.6); stride = cycle.offset === 0 ? 0.25 : 0.45; }
+      }
       if (["in_progress", "in_review", "done"].includes(target)) move({ state: "in_progress" }, worker);
       if (target === "in_review" || (target === "done" && chance(0.7))) move({ state: "in_review" }, worker);
       if (target === "done") move({ state: "done" }, chance(0.5) ? worker : pick(people));
@@ -181,6 +196,20 @@ export function seedWork(fake, { items = 300, now = Date.parse("2026-09-26T12:00
         try { fake.run("work.relation.create", { from: a.ref.id, to: b.ref.id, kind }, { actor: pick(people) }); } catch { /* duplicate: skip */ }
       });
     }
+    // A few blocked chains in the current cycle (A blocks B blocks C), so the dependency graph and
+    // "what's blocking the cycle?" have something real to show.
+    const currentCycle = cycles.find((c) => c.offset === 0);
+    const open = made.filter((m) => !m.epic && m.cycle?.id === currentCycle?.id && ["todo", "in_progress", "in_review"].includes(m.target));
+    for (const size of [3, 3, 2]) {
+      if (open.length < size) break;
+      const chain = open.splice(Math.floor(pace() * (open.length - size + 1)), size);
+      for (let i = 0; i + 1 < chain.length; i++) {
+        const [a, b] = [chain[i], chain[i + 1]];
+        at(Math.max(a.created, b.created) + (0.1 + pace()) * DAY, () => {
+          try { fake.run("work.relation.create", { from: a.ref.id, to: b.ref.id, kind: "blocks" }, { actor: pick(people) }); } catch { /* duplicate: skip */ }
+        });
+      }
+    }
     for (let i = 0; i < Math.round(items / 2); i++) {
       const m = pick(made);
       at(m.created + rng() * 20 * DAY, () => fake.run("work.comment.create", { item: m.ref.id, body: pick(COMMENTS) }, { actor: m.assignee && chance(0.5) ? m.assignee : pick(people) }));
@@ -202,7 +231,7 @@ export function seedWork(fake, { items = 300, now = Date.parse("2026-09-26T12:00
       } else if (m.estimate !== null && r < 0.16) {
         const next = [1, 2, 3, 5, 8, 13][Math.floor(churn() * 6)];
         if (next !== m.estimate) at(m.created + (0.5 + churn() * 4) * DAY, () => update(m.ref.id, { estimate: next }, m.assignee ?? people[0]));
-      } else if (current && nextCycle && m.cycle?.id === current.id && m.target === "todo" && r < 0.3) {
+      } else if (current && nextCycle && m.cycle?.id === current.id && m.target === "todo" && r < 0.2) {
         at(current.start + (1 + churn() * 3) * DAY, () => { if (/** @type {any} */ (fake.rows.get(m.ref.id)).data.cycle === current.id) update(m.ref.id, { cycle: nextCycle.id }, people[0]); });
       }
     }

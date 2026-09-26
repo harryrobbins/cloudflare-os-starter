@@ -82,11 +82,14 @@ so `project:"Billing v2"` turns the whole screen into that project's reports.
 - **Built in:** cumulative flow, cycle time (with the median, the 85th percentile and a rolling
   average), cycle burndown and burnup (choose the cycle; the current one by default), throughput
   per week, created vs resolved, workload by assignee, and the dependency graph (arrows from
-  blocker to blocked; chains in orange; click a node, or Tab into the graph and use the arrow keys
-  and Enter, to open an item).
+  blocker to blocked; chains in orange; **Only chains** hides single blocks; a legend explains the
+  colours and shapes; click a node, or Tab into the graph and use the arrow keys and Enter, to open
+  an item). Burndown and burnup show the ideal line, a projection at the pace so far and today.
 - **Reports are shared** by everyone using the board. Built-ins can be edited (**edited** tag;
   "Reset" restores them) and hidden (bring them back from **Hidden**). **New report** takes a
   Vega-Lite or Vega spec over a dataset; the Workshop agent can write them for you ([SKILL.md](SKILL.md)).
+- **Ask the agent** shows ready-to-paste prompts for the Workshop agent (select and copy them),
+  for example "Using the Work Board skill, build a burndown for Cycle 24 split by project".
 - **Time:** reports read the datastore's change journal from the start, so they cover changes made
   before the board existed. Days are UTC dates. Charts refresh at most every 5 seconds as changes
   arrive.

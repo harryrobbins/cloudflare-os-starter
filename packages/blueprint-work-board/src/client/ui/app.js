@@ -62,6 +62,14 @@ function blankItem() { return { id: "", labels: [], assignee: null, priority: 0,
 /** @param {ViewCfg} v */
 function toDoc(v) { return { id: v.id, name: v.name, query: v.query, layout: v.layout, columnsBy: v.columnsBy, swimlanesBy: v.swimlanesBy, sort: v.sort, display: v.display }; }
 
+/** A read-only prompt to copy (select on focus). @param {string} id @param {string} label @param {string} value @param {number} rows */
+function promptField(id, label, value, rows) {
+  const area = /** @type {HTMLTextAreaElement} */ (h("textarea", { id, readonly: true, rows: String(rows), class: "prompt-text" }));
+  area.value = value;
+  area.addEventListener("focus", () => area.select());
+  return h("div", { class: "field" }, h("label", { for: id }, label), area);
+}
+
 /** A read-only, select-on-focus text field. @param {string} label @param {string} value */
 function keyField(label, value) {
   const input = /** @type {HTMLInputElement} */ (h("input", { type: "text", readonly: true, value, "aria-label": label, class: "key-field" }));
@@ -848,6 +856,7 @@ export function createBoardApp(appOptions) {
       case "insights:open": { const it = itemByKey(store.index(), payload); if (it) openDetail(it, { focus: true }); else toast(`${payload} is not on the board.`); break; }
       case "insights:params": insightParams.set(payload.id, { ...insightParams.get(payload.id), ...payload.params }); live.announce("Updating the report."); schedule(); break;
       case "insights:new": editReport(null); break;
+      case "insights:ask": askAgent(); break;
       case "insights:hidden": hiddenReports(payload); break;
       case "hover": hoverId = payload; break;
       case "announce": live.announce(payload); break;
@@ -1229,6 +1238,26 @@ export function createBoardApp(appOptions) {
       validate: (d) => store.call("validateReport", d),
       save: async (d) => { const saved = await store.saveReport(d); live.announce(`Saved report “${saved.title}”.`); toast(`Saved report “${saved.title}”.`); insights.key = ""; renderLayout(); } });
   }
+  /** Ready-to-paste prompts for the Workshop agent (selectable text; the sandbox has no clipboard). */
+  function askAgent() {
+    const index = store.index();
+    const utc = new Date(now()).toISOString().slice(0, 10);
+    const cycle = index.cycles.find((cy) => cy.start && cy.end && cy.start <= utc && utc <= cy.end)?.name ?? "the current cycle";
+    const scope = view.query ? ` for items matching \`${view.query}\`` : "";
+    const suggested = `Using the Work Board skill, build a burndown for ${cycle} split by project${scope}, and save it as a report.`;
+    const examples = [
+      `Using the Work Board skill, what's blocking ${cycle}? List the blockers first, with who owns each.`,
+      `Using the Work Board skill, who is overloaded in ${cycle}? Propose re-assignments I can apply.`,
+      "Using the Work Board skill, triage everything in Triage and propose the changes for me to review.",
+    ];
+    layers.openDialog({ title: "Ask the Workshop agent", size: "md", className: "ask-agent",
+      description: "The agent in this Workshop reads the board with its reporting skill (SKILL.md): it answers questions, builds reports and proposes changes you apply. Select a prompt, copy it (Ctrl/⌘+C) and paste it into the agent's chat.",
+      content: (close) => [promptField("wb-ask-main", "Suggested prompt", suggested, 3),
+        h("h3", { class: "tray-sub" }, "More examples"), ...examples.map((e, i) => promptField(`wb-ask-${i}`, `Example ${i + 1}`, e, 3)),
+        h("div", { class: "row end" }, h("button", { type: "button", class: "btn", onclick: () => close("done") }, "Done"))],
+      initialFocus: () => /** @type {HTMLElement|null} */ (doc.getElementById("wb-ask-main")) });
+  }
+
   /** @param {HTMLElement} anchor */
   function hiddenReports(anchor) {
     const hidden = (store.reports ?? []).filter((r) => r.hidden);

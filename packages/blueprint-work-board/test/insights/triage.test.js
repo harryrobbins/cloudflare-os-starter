@@ -51,7 +51,7 @@ describe("triage request", () => {
     });
     expect(suggestions.map((s) => [s.text, s.preselect, s.confidence])).toEqual([
       ["Add label Bug", true, "95% likely"], ["Priority No priority → High", true, "93% likely"],
-      ["State Triage → Todo", false, "70% likely"], ["Duplicate of WRK-1", false, "55% likely"],
+      ["State Triage → Todo", false, "70% likely"], ["Duplicate of WRK-1 · Login redirect loops on Safari", false, "55% likely"],
     ]);
     expect(hidden).toBe(2);
     const same = readSuggestions(ix, item, meta, { priority: { type: "choice", choice: "none", probabilities: { none: 0.99 } } });

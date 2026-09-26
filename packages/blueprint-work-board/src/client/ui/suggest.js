@@ -13,7 +13,8 @@ import { suggestionsToChanges } from "../../shared/insights/triage.js";
  * @typedef {import("../../shared/insights/triage.js").Suggestion} Suggestion
  * @param {{
  *   layers: ReturnType<typeof import("./overlay.js").createLayers>, title: string, count: number,
- *   triage: () => Promise<{ results: { key: string, title: string, suggestions: Suggestion[], hidden: number }[], limited: string[], message?: string }>,
+ *   triage: () => Promise<{ results: { key: string, title: string, suggestions: Suggestion[], hidden: number,
+ *     current?: { state: string, priority: string, labels: string[], assignee: string|null } }[], limited: string[], message?: string }>,
  *   apply: (changes: any[], meta: { keys: string[] }) => Promise<void>, save: (changes: any[], meta: { keys: string[] }) => Promise<void>,
  *   announce: (text: string, opts?: any) => void,
  * }} opts
@@ -32,7 +33,7 @@ export function openSuggestions(opts) {
   const dlg = opts.layers.openDialog({
     title: opts.title, size: "md", className: "suggest",
     description: "Jev gives calibrated probabilities. Suggestions of 90% or more are selected for you, 50–90% are shown unselected, and less likely ones are hidden. Nothing changes until you apply; the changes are attributed to you.",
-    content: (close) => [status, body, error, h("div", { class: "row end" }, h("button", { type: "button", class: "btn ghost", onclick: () => close("cancel") }, "Cancel"), saveBtn, applyBtn)],
+    content: (close) => [status, body, error, h("div", { class: "row end suggest-foot" }, h("button", { type: "button", class: "btn ghost", onclick: () => close("cancel") }, "Cancel"), saveBtn, applyBtn)],
     initialFocus: () => status.nextElementSibling?.querySelector("input") ?? null,
   });
 
@@ -49,6 +50,7 @@ export function openSuggestions(opts) {
     opts.announce(status.textContent ?? "");
     setChildren(body, out.results.map((r) => h("section", { class: "suggest-item", "aria-labelledby": `sg-${r.key}` },
       h("h3", { id: `sg-${r.key}` }, h("span", { class: "key" }, r.key), " ", r.title),
+      r.current ? h("p", { class: "suggest-now" }, h("span", { class: "muted" }, "Now: "), [r.current.state, r.current.priority, r.current.labels.length ? `labels ${r.current.labels.join(", ")}` : "no labels", r.current.assignee ?? "unassigned"].join(" · ")) : null,
       r.suggestions.length ? h("ul", { class: "suggest-list" }, r.suggestions.map((s) => {
         byId.set(s.id, s);
         if (s.preselect) chosen.add(s.id);
@@ -56,7 +58,10 @@ export function openSuggestions(opts) {
         const box = /** @type {HTMLInputElement} */ (h("input", { type: "checkbox", id, checked: s.preselect }));
         box.addEventListener("change", () => { if (box.checked) chosen.add(s.id); else chosen.delete(s.id); sync(); });
         return h("li", null, h("label", { class: "check-label", for: id }, box, h("span", null, s.text)),
-          h("span", { class: `confidence ${s.probability >= 0.9 ? "high" : "mid"}` }, s.confidence, s.probability >= 0.9 ? " · pre-selected" : ""));
+          h("span", { class: `confidence ${s.probability >= 0.9 ? "high" : "mid"}` }, s.confidence, s.probability >= 0.9 ? " · pre-selected" : ""),
+          s.candidate ? h("details", { class: "peek-dup" }, h("summary", null, `Peek ${s.candidate.key}`),
+            h("p", null, h("strong", null, `${s.candidate.key} ${s.candidate.title}`), h("span", { class: "muted" }, ` · ${s.candidate.state}`)),
+            s.candidate.description ? h("p", { class: "muted" }, `${s.candidate.description}${s.candidate.description.length >= 280 ? "…" : ""}`) : null) : null);
       })) : h("p", { class: "muted" }, "Nothing Jev is confident about for this item."),
       r.hidden ? h("p", { class: "hint" }, `${r.hidden} less likely ${r.hidden === 1 ? "suggestion" : "suggestions"} hidden.`) : null)));
     sync();

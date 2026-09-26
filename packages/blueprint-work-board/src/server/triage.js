@@ -5,7 +5,8 @@
 // turns chosen suggestions into a proposal.
 
 import { JEV_BINDING, TRIAGE_LIMITS, buildTriageRequest, readSuggestions } from "../shared/insights/triage.js";
-import { itemByKey } from "../shared/model/index.js";
+import { itemByKey, personName } from "../shared/model/index.js";
+import { PRIORITIES } from "../shared/model/work.js";
 
 /** @param {string} message */
 const invalid = (message) => new Error(`invalid_request: ${message}`);
@@ -76,7 +77,11 @@ export function createTriage({ getEnv, queries, now = () => Date.now() }) {
         cost += Number(decision?.cost ?? 0) || 0;
         model = decision?.model ?? model;
         const { suggestions, hidden } = readSuggestions(ix, item, meta, decision?.answers ?? {});
-        const result = { key: item.key, title: item.title, revision: item.revision, suggestions, hidden, cached: false };
+        const current = {
+          state: ix.stateByKey.get(item.state)?.name ?? item.state, priority: PRIORITIES[item.priority].name,
+          labels: item.labels.map((l) => ix.labelByKey.get(l)?.name ?? l), assignee: item.assignee ? personName(ix, item.assignee) : null,
+        };
+        const result = { key: item.key, title: item.title, revision: item.revision, current, suggestions, hidden, cached: false };
         cache.set(cacheKey, result);
         while (cache.size > CACHE) cache.delete(/** @type {string} */ (cache.keys().next().value));
         results.push(result);

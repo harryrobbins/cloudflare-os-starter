@@ -87,6 +87,9 @@ describe("flow datasets", () => {
       ["2026-09-26", null, null, null],
     ]);
     expect(r.rows.map((x) => x.ideal)).toEqual([10, 8.3, 6.7, 5, 3.3, 1.7, 0]);
+    // Projection from today at the pace so far (3 done in 5 days = 0.6 a day), and today's row.
+    expect(r.rows.map((x) => x.projected)).toEqual([null, null, null, null, 9, 8.4, 7.8]);
+    expect(r.rows.map((x) => x.today)).toEqual([false, false, false, false, true, false, false]);
     expect(r.rows[0].unit).toBe("points");
     expect(r.rows.filter((x) => x.future).length).toBe(2);
     // 3 of 12 done after 5 days: 9 remaining needs 15 more days: 13 days late.
@@ -99,6 +102,9 @@ describe("flow datasets", () => {
     const { ctx } = await journal();
     const r = computeDataset("burnup", ctx, { params: { cycle: "current" } });
     expect(r.rows.slice(0, 5).map((x) => [x.scope, x.completed])).toEqual([[10, 0], [10, 0], [13, 3], [12, 0], [12, 3]]);
+    expect(r.rows.map((x) => x.ideal)).toEqual([0, 2, 4, 6, 8, 10, 12]);
+    expect(r.rows.map((x) => x.projected)).toEqual([null, null, null, null, 3, 3.6, 4.2]);
+    expect(r.rows.find((x) => x.today)?.day).toBe("2026-09-24");
     expect(r.summary).toMatch(/^Cycle 7: 3 of 12 points done \(25%\)\. Scope grew 20% this cycle; projected to finish 13 days late\.$/);
     expect(() => computeDataset("burnup", ctx, { params: { scope: "project" } })).toThrow(/^invalid_request: No project matches/);
     expect(() => computeDataset("burnup", ctx, { params: { scope: "team" } })).toThrow(/scope is cycle or project/);

@@ -2,8 +2,9 @@
 // The built-in reports: a Vega-Lite (or, for the dependency graph, Vega) spec bound to a named
 // dataset. Specs read their rows from `{ "name": "<dataset>" }`; the Reports screen (and any
 // renderer) supplies the rows. Colours come from two named schemes the renderer registers for
-// the current theme: `workboard-kinds` (one colour per state kind, fixed order) and
-// `workboard-series` (categorical series). Agents may use both in their own specs.
+// the current theme: `workboard-kinds` (one colour per state kind, fixed order),
+// `workboard-series` (categorical series) and `workboard-plan` (actual, ideal, projection, scope:
+// blue, grey, blue, orange). Agents may use them in their own specs.
 
 export const KIND_DOMAIN = Object.freeze(["Triage", "Backlog", "Unstarted", "Started", "Completed", "Canceled"]);
 const LITE = "https://vega.github.io/schema/vega-lite/v6.json";
@@ -37,64 +38,80 @@ export const BUILTIN_REPORTS = [
   },
   {
     id: "cycle-time", title: "Cycle time", builtin: true, dataset: "cycle_time", params: { days: 90 }, query: "",
-    description: "Days from starting to finishing each completed item, with the rolling average and the 50th and 85th percentiles.",
+    description: "Days from starting to finishing each completed item, with the rolling average, the median and the 85th percentile.",
     spec: {
       $schema: LITE, data: { name: "cycle_time" },
+      encoding: { x: { field: "completed", type: "temporal", title: null, scale: { type: "utc" }, axis: { format: "%d %b", labelOverlap: true, tickCount: 6 } } },
       layer: [
         {
-          mark: { type: "point", filled: true, size: 48, opacity: 0.75 },
+          mark: { type: "point", filled: true, size: 44, opacity: 0.7 },
           encoding: {
-            x: { field: "completed", type: "temporal", title: null, scale: { type: "utc" }, axis: { format: "%d %b", labelOverlap: true, tickCount: 6 } },
-            y: { field: "days", type: "quantitative", title: "Days", scale: { type: "sqrt", zero: true } },
+            y: { field: "days", type: "quantitative", title: "Days", scale: { zero: true, nice: true }, axis: { tickCount: 5 } },
             color: { datum: "Item", type: "nominal", scale: { domain: ["Item", "Rolling average"], scheme: "workboard-series" }, title: null },
             tooltip: [{ field: "key", title: "Item" }, { field: "title", title: "Title" }, { field: "days", title: "Days" }, { field: "assignee", title: "Assignee" }, { field: "completed", type: "temporal", title: "Completed", format: "%d %b", formatType: "utc" }],
           },
         },
-        { mark: { type: "line", strokeWidth: 2, interpolate: "monotone" }, encoding: { x: { field: "completed", type: "temporal", scale: { type: "utc" } }, y: { field: "rolling_avg", type: "quantitative" }, color: { datum: "Rolling average", type: "nominal" } } },
-        { mark: { type: "rule", strokeDash: [4, 4], color: { expr: "muted" } }, encoding: { y: { aggregate: "max", field: "p50", type: "quantitative" } } },
-        { mark: { type: "rule", strokeDash: [2, 3], color: { expr: "muted" } }, encoding: { y: { aggregate: "max", field: "p85", type: "quantitative" } } },
+        { mark: { type: "line", strokeWidth: 2, interpolate: "monotone" }, encoding: { y: { field: "rolling_avg", type: "quantitative" }, color: { datum: "Rolling average", type: "nominal" } } },
+        { mark: { type: "rule", strokeDash: [4, 4], color: { expr: "muted" } }, encoding: { x: null, y: { aggregate: "max", field: "p50", type: "quantitative" } } },
+        { mark: { type: "rule", strokeDash: [2, 3], color: { expr: "muted" } }, encoding: { x: null, y: { aggregate: "max", field: "p85", type: "quantitative" } } },
         {
-          mark: { type: "text", align: "left", dx: 2, dy: -6, color: { expr: "muted" }, fontSize: 11 },
-          transform: [{ aggregate: [{ op: "max", field: "p50", as: "v50" }, { op: "min", field: "completed", as: "x50" }] }, { calculate: "'median ' + datum.v50 + ' d'", as: "label50" }],
-          encoding: { x: { field: "x50", type: "temporal", scale: { type: "utc" } }, y: { field: "v50", type: "quantitative" }, text: { field: "label50" } },
+          // Rule labels sit outside the plot, at its right edge, so they never cover points.
+          mark: { type: "text", align: "left", baseline: "middle", x: { expr: "width" }, dx: 6, color: { expr: "muted" }, fontSize: 11 },
+          transform: [{ aggregate: [{ op: "max", field: "p50", as: "v50" }] }, { calculate: "'median ' + datum.v50 + ' d'", as: "label50" }],
+          encoding: { x: null, y: { field: "v50", type: "quantitative" }, text: { field: "label50" } },
         },
         {
-          mark: { type: "text", align: "right", dx: -2, dy: -6, color: { expr: "muted" }, fontSize: 11 },
-          transform: [{ aggregate: [{ op: "max", field: "p85", as: "v85" }, { op: "max", field: "completed", as: "x85" }] }, { calculate: "'85% within ' + datum.v85 + ' d'", as: "label85" }],
-          encoding: { x: { field: "x85", type: "temporal", scale: { type: "utc" } }, y: { field: "v85", type: "quantitative" }, text: { field: "label85" } },
+          mark: { type: "text", align: "left", baseline: "middle", x: { expr: "width" }, dx: 6, color: { expr: "muted" }, fontSize: 11 },
+          transform: [{ aggregate: [{ op: "max", field: "p85", as: "v85" }] }, { calculate: "'85% ≤ ' + datum.v85 + ' d'", as: "label85" }],
+          encoding: { x: null, y: { field: "v85", type: "quantitative" }, text: { field: "label85" } },
         },
       ],
     },
   },
   {
     id: "burndown", title: "Cycle burndown", builtin: true, dataset: "cycle_burndown", params: { cycle: "current" }, query: "", controls: ["cycle"],
-    description: "Work remaining in the cycle each day against the ideal straight line to zero.",
+    description: "Work remaining in the cycle each day, against the ideal straight line to zero and a projection at the pace so far.",
     spec: {
       $schema: LITE, data: { name: "cycle_burndown" },
-      transform: [{ fold: ["remaining", "ideal"], as: ["series", "value"] }, { calculate: "datum.series === 'remaining' ? 'Remaining' : 'Ideal'", as: "Series" }],
-      mark: { type: "line", strokeWidth: 2, point: { filled: true, size: 30 } },
-      encoding: {
-        x: dayAxis,
-        y: { field: "value", type: "quantitative", title: "Remaining" },
-        color: { field: "Series", type: "nominal", title: null, scale: { domain: ["Remaining", "Ideal"], scheme: "workboard-series" } },
-        strokeDash: { field: "Series", type: "nominal", scale: { domain: ["Remaining", "Ideal"], range: [[1, 0], [5, 4]] }, legend: null },
-        tooltip: [{ field: "day", type: "temporal", title: "Day", format: "%a %d %b", formatType: "utc" }, { field: "remaining", title: "Remaining" }, { field: "scope", title: "Scope" }, { field: "completed", title: "Done" }, { field: "ideal", title: "Ideal" }],
-      },
+      layer: [
+        {
+          transform: [{ fold: ["remaining", "ideal", "projected"], as: ["series", "value"] }, { filter: "datum.value !== null" },
+            { calculate: "datum.series === 'remaining' ? 'Remaining' : datum.series === 'ideal' ? 'Ideal' : 'Projected'", as: "Series" }],
+          mark: { type: "line", strokeWidth: 2 },
+          encoding: {
+            x: dayAxis,
+            y: { field: "value", type: "quantitative", title: "Remaining", axis: { tickCount: 5 } },
+            color: { field: "Series", type: "nominal", title: null, scale: { domain: ["Remaining", "Ideal", "Projected"], scheme: "workboard-plan" } },
+            strokeDash: { field: "Series", type: "nominal", scale: { domain: ["Remaining", "Ideal", "Projected"], range: [[1, 0], [5, 4], [2, 3]] }, legend: null },
+            tooltip: [{ field: "day", type: "temporal", title: "Day", format: "%a %d %b", formatType: "utc" }, { field: "Series", title: "Line" }, { field: "value", title: "Value" }, { field: "scope", title: "Scope" }, { field: "completed", title: "Done" }],
+          },
+        },
+        { transform: [{ filter: "datum.today" }], mark: { type: "rule", strokeDash: [1, 2], color: { expr: "muted" } }, encoding: { x: { field: "day", type: "temporal", scale: { type: "utc" } } } },
+        { transform: [{ filter: "datum.today" }], mark: { type: "text", y: 0, dy: -6, align: "center", baseline: "bottom", color: { expr: "muted" }, fontSize: 11, text: "Today" }, encoding: { x: { field: "day", type: "temporal", scale: { type: "utc" } } } },
+      ],
     },
   },
   {
     id: "burnup", title: "Cycle burnup", builtin: true, dataset: "burnup", params: { scope: "cycle", cycle: "current" }, query: "", controls: ["cycle"],
-    description: "Scope and completed work in the cycle each day: the gap is what is left, a rising scope line is scope creep.",
+    description: "Scope and completed work in the cycle each day, with the ideal pace and a projection. The gap is what is left; a rising scope line is scope creep.",
     spec: {
       $schema: LITE, data: { name: "burnup" },
-      transform: [{ fold: ["scope", "completed"], as: ["series", "value"] }, { calculate: "datum.series === 'scope' ? 'Scope' : 'Completed'", as: "Series" }],
-      mark: { type: "line", strokeWidth: 2, interpolate: "step-after" },
-      encoding: {
-        x: dayAxis,
-        y: { field: "value", type: "quantitative", title: "Work" },
-        color: { field: "Series", type: "nominal", title: null, scale: { domain: ["Scope", "Completed"], scheme: "workboard-series" } },
-        tooltip: [{ field: "day", type: "temporal", title: "Day", format: "%a %d %b", formatType: "utc" }, { field: "scope", title: "Scope" }, { field: "completed", title: "Completed" }],
-      },
+      layer: [
+        {
+          transform: [{ fold: ["scope", "completed", "ideal", "projected"], as: ["series", "value"] }, { filter: "datum.value !== null" },
+            { calculate: "{ scope: 'Scope', completed: 'Completed', ideal: 'Ideal', projected: 'Projected' }[datum.series]", as: "Series" }],
+          mark: { type: "line", strokeWidth: 2, interpolate: "linear" },
+          encoding: {
+            x: dayAxis,
+            y: { field: "value", type: "quantitative", title: "Work", axis: { tickCount: 5 } },
+            color: { field: "Series", type: "nominal", title: null, scale: { domain: ["Completed", "Ideal", "Projected", "Scope"], scheme: "workboard-plan" } },
+            strokeDash: { field: "Series", type: "nominal", scale: { domain: ["Completed", "Ideal", "Projected", "Scope"], range: [[1, 0], [5, 4], [2, 3], [1, 0]] }, legend: null },
+            tooltip: [{ field: "day", type: "temporal", title: "Day", format: "%a %d %b", formatType: "utc" }, { field: "Series", title: "Line" }, { field: "value", title: "Value" }],
+          },
+        },
+        { transform: [{ filter: "datum.today" }], mark: { type: "rule", strokeDash: [1, 2], color: { expr: "muted" } }, encoding: { x: { field: "day", type: "temporal", scale: { type: "utc" } } } },
+        { transform: [{ filter: "datum.today" }], mark: { type: "text", y: 0, dy: -6, align: "center", baseline: "bottom", color: { expr: "muted" }, fontSize: 11, text: "Today" }, encoding: { x: { field: "day", type: "temporal", scale: { type: "utc" } } } },
+      ],
     },
   },
   {
@@ -166,7 +183,7 @@ export const BUILTIN_REPORTS = [
             enter: { fill: { scale: "kind", field: "kind" }, stroke: { signal: "surface" }, strokeWidth: { value: 2 } },
             update: {
               shape: [{ test: "datum.blocked", value: "diamond" }, { value: "circle" }],
-              size: [{ test: "datum.blocking > 1", value: 320 }, { value: 200 }],
+              size: [{ test: "datum.blocking > 1", value: 700 }, { value: 460 }],
               opacity: [{ test: "datum.context", value: 0.55 }, { value: 1 }],
               tooltip: { signal: "{ title: datum.key + ' ' + datum.title, State: datum.state, Assignee: datum.assignee || 'Unassigned', Blocked: datum.blocked ? 'yes' : 'no', Blocks: datum.blocking }" },
               cursor: { value: "pointer" },
@@ -176,7 +193,7 @@ export const BUILTIN_REPORTS = [
             type: "force", iterations: 300, static: true, signal: "force",
             forces: [
               { force: "center", x: { signal: "cx" }, y: { signal: "cy" } },
-              { force: "collide", radius: 22 },
+              { force: "collide", radius: 28 },
               { force: "nbody", strength: -90 },
               { force: "link", links: "link-data", distance: 64, id: "datum.key" },
               { force: "x", x: "datum.tx", strength: 0.03 },
@@ -185,17 +202,22 @@ export const BUILTIN_REPORTS = [
           }],
         },
         {
-          name: "labels", type: "text", from: { data: "nodes" }, interactive: false,
-          encode: { update: { x: { field: "x" }, y: { field: "y", offset: 18 }, text: { field: "datum.key" }, align: { value: "center" }, fontSize: { value: 10 }, fill: { signal: "ink" } } },
+          // A plate behind each key keeps it legible where a link passes under it.
+          name: "label-plates", type: "rect", from: { data: "nodes" }, interactive: false, zindex: 2,
+          encode: { update: { x: { field: "x", offset: 12 }, width: { signal: "length(datum.datum.key) * 6.6 + 6" }, y: { field: "y", offset: -8 }, height: { value: 16 }, fill: { signal: "surface" }, fillOpacity: { value: 0.85 }, cornerRadius: { value: 3 } } },
+        },
+        {
+          name: "labels", type: "text", from: { data: "nodes" }, interactive: false, zindex: 2,
+          encode: { update: { x: { field: "x", offset: 15 }, y: { field: "y" }, text: { field: "datum.key" }, align: { value: "left" }, baseline: { value: "middle" }, fontSize: { value: 11 }, fill: { signal: "ink" } } },
         },
         {
           name: "arrows", type: "symbol", from: { data: "links" }, interactive: false,
           encode: {
             update: {
-              shape: { value: "triangle-up" }, size: { value: 60 },
+              shape: { value: "triangle-up" }, size: { value: 110 },
               fill: [{ test: "datum.datum.critical", signal: "linkHot" }, { signal: "linkCold" }],
-              x: { signal: "datum.datum.target.x - 14 * cos(atan2(datum.datum.target.y - datum.datum.source.y, datum.datum.target.x - datum.datum.source.x))" },
-              y: { signal: "datum.datum.target.y - 14 * sin(atan2(datum.datum.target.y - datum.datum.source.y, datum.datum.target.x - datum.datum.source.x))" },
+              x: { signal: "datum.datum.target.x - 20 * cos(atan2(datum.datum.target.y - datum.datum.source.y, datum.datum.target.x - datum.datum.source.x))" },
+              y: { signal: "datum.datum.target.y - 20 * sin(atan2(datum.datum.target.y - datum.datum.source.y, datum.datum.target.x - datum.datum.source.x))" },
               angle: { signal: "90 + atan2(datum.datum.target.y - datum.datum.source.y, datum.datum.target.x - datum.datum.source.x) * 180 / PI" },
             },
           },

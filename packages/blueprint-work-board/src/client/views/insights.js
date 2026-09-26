@@ -5,11 +5,12 @@
 // view's filter applies to every report. Data comes from the gadget server in one batched call
 // (`insights()`); the app owns fetching and hands this view a model.
 
-import { h, reconcile, relativeTime, setChildren } from "../ui/dom.js";
+import { h, reconcile, relativeTime, setChildren, svg } from "../ui/dom.js";
 import { icon } from "../ui/icons.js";
-import { currentTheme, focusableNodes, renderChart } from "../ui/chart.js";
+import { THEMES, currentTheme, fitToContent, focusableNodes, renderChart } from "../ui/chart.js";
 
 const CHART_HEIGHT = 220;
+const GRAPH_HEIGHT = 260;
 const TABLE_ROWS = 200;
 
 /**
@@ -48,6 +49,50 @@ function isEmpty(r, result) {
   return false;
 }
 
+/** A small legend shape. @param {string} d @param {string} paint */
+const shape = (d, paint) => svg("svg", { width: "14", height: "14", viewBox: "0 0 14 14", "aria-hidden": "true" }, svg("path", { d, fill: paint }));
+/** A legend entry. @param {Node} mark @param {string} label */
+const item = (mark, label) => h("li", null, mark, h("span", null, label));
+
+/**
+ * The dependency graph's rows for a mode: everything, or only chains (edges that are part of a
+ * chain of two or more blocks, and their items).
+ * @param {Record<string, any>[]} rows @param {"all"|"chains"} mode
+ */
+export function graphRows(rows, mode) {
+  if (mode === "all") return rows;
+  const edges = rows.filter((x) => x.type === "edge" && x.critical);
+  const keys = new Set(edges.flatMap((e) => [e.source, e.target]));
+  return [...rows.filter((x) => x.type === "node" && keys.has(x.key)), ...edges];
+}
+
+/**
+ * On a narrow card the built-in graph is laid out taller than wide (a stronger pull to the
+ * vertical centre line), so it fills the phone's width instead of shrinking.
+ * @param {Record<string, any>} spec
+ */
+export function tallGraph(spec) {
+  const out = structuredClone(spec);
+  for (const f of out.marks?.find((/** @type {any} */ m) => m.name === "nodes")?.transform?.[0]?.forces ?? []) {
+    if (f.force === "x") f.strength = 0.07;
+    if (f.force === "y") f.strength = 0.035;
+  }
+  return out;
+}
+
+/**
+ * A built-in burndown or burnup names its unit on the y axis ("Points remaining", "Items").
+ * @param {Report} r @param {Result|null} result
+ */
+export function specFor(r, result) {
+  const unit = result?.rows?.[0]?.unit;
+  if (!r.builtin || !unit || (r.dataset !== "cycle_burndown" && r.dataset !== "burnup")) return r.spec;
+  const spec = structuredClone(r.spec);
+  const y = spec.layer?.[0]?.encoding?.y;
+  if (y) y.title = r.dataset === "cycle_burndown" ? (unit === "points" ? "Points remaining" : "Items remaining") : (unit === "points" ? "Points" : "Items");
+  return spec;
+}
+
 /**
  * @param {{ doc: Document, onAction: (type: string, payload?: any) => void }} deps
  */
@@ -60,6 +105,10 @@ export function createInsightsView({ doc, onAction }) {
   const charts = new Map();
   /** @type {Set<string>} */
   const openTables = new Set();
+  /** @type {Map<string, "all"|"chains">} dependency graph mode per report */
+  const graphModes = new Map();
+  /** @param {Report} r @param {Result} result */
+  const shownRows = (r, result) => (r.dataset === "dependencies" ? graphRows(result.rows, graphModes.get(r.id) ?? "all") : result.rows);
   /** @type {InsightsModel|null} */
   let model = null;
   let theme = currentTheme(win);
@@ -106,6 +155,7 @@ export function createInsightsView({ doc, onAction }) {
       status,
       !m.historyComplete ? h("span", { class: "muted" }, "History is partial: the journal is longer than the board reads.") : null,
       m.hiddenCount ? h("button", { type: "button", class: "btn sm", onclick: (/** @type {Event} */ e) => onAction("insights:hidden", e.currentTarget) }, `Hidden (${m.hiddenCount})`) : null,
+      h("button", { type: "button", class: "btn sm", "aria-haspopup": "dialog", title: "Prompts to paste into the Workshop agent's chat", onclick: () => onAction("insights:ask") }, icon("sparkle", { size: 14 }), "Ask the agent"),
       m.canWrite ? h("button", { type: "button", class: "btn sm", onclick: () => onAction("insights:new") }, icon("plus", { size: 14 }), "New report") : null);
   }
 
@@ -122,8 +172,8 @@ export function createInsightsView({ doc, onAction }) {
   function fill(section, r, m) {
     const result = m.results?.[r.id] ?? null;
     const params = { ...r.params, ...m.params(r.id) };
-    const sig = JSON.stringify([r.title, r.description, r.spec, r.customised, result?.summary, result?.error, result?.total, params, m.loading && !m.results, m.canWrite, m.cycles, openTables.has(r.id), theme]);
-    const chartSig = JSON.stringify([result ? m.at : null, result?.params, r.spec, theme]);
+    const sig = JSON.stringify([r.title, r.description, r.spec, r.customised, result?.summary, result?.error, result?.total, params, m.loading && !m.results, m.canWrite, m.cycles, openTables.has(r.id), theme, graphModes.get(r.id)]);
+    const chartSig = JSON.stringify([result ? m.at : null, result?.params, r.spec, theme, graphModes.get(r.id)]);
     const structure = section.dataset.sig !== sig;
     if (structure) {
       section.dataset.sig = sig;
@@ -147,8 +197,18 @@ export function createInsightsView({ doc, onAction }) {
       select.addEventListener("change", () => onAction("insights:params", { id: r.id, params: { cycle: select.value } }));
       controls.push(h("label", { class: "sr-only", for: id }, `Cycle for ${r.title}`), select);
     }
-    const graph = TABLES[r.id]?.graph === true && r.dataset === "dependencies";
-    const empty = result && !result.error && isEmpty(r, result);
+    const graph = r.dataset === "dependencies";
+    const mode = graphModes.get(r.id) ?? "all";
+    if (graph && result && !result.error && result.rows.some((x) => x.type === "edge")) {
+      const seg = (/** @type {"all"|"chains"} */ value, /** @type {string} */ label) => h("button", { type: "button", class: "seg", "data-focus-key": `mode-${value}`, "aria-pressed": String(mode === value),
+        onclick: () => { graphModes.set(r.id, value); if (model) update(model); focusKey(r.id, `mode-${value}`); onAction("announce", value === "chains" ? "Showing only chains of blocked work." : "Showing every blocking relation."); } }, label);
+      controls.push(h("div", { class: "segmented sm", role: "group", "aria-label": `Show in ${r.title}` }, seg("all", "All"), seg("chains", "Only chains")));
+    }
+    const empty = result && !result.error && isEmpty(r, { ...result, rows: shownRows(r, result) });
+    const emptyText = graph
+      ? (result?.rows.some((x) => x.type === "edge") ? "No chains right now: every blocked item waits on a single blocker that is itself free to start. Choose All to see them."
+        : "Nothing is blocked right now. When an item blocks another (in an item's details, Relations → Blocks), the chain appears here as a graph.")
+      : result?.summary || "Nothing to show.";
     const chartBox = h("div", {
       class: `report-chart${graph ? " graph" : ""}`, "data-chart": r.id,
       role: graph && !empty ? "group" : "img",
@@ -165,8 +225,10 @@ export function createInsightsView({ doc, onAction }) {
             onclick: (/** @type {Event} */ e) => onAction("insights:menu", { report: r, anchor: e.currentTarget }) }, icon("more", { size: 16 })))),
       h("figure", { class: "report-figure", "aria-labelledby": tid, "aria-describedby": sid },
         result?.error ? h("p", { class: "report-empty bad", role: "alert" }, result.error.replace(/^[a-z_]+:\s*/, ""))
-          : empty ? h("p", { class: "report-empty" }, icon("info", { size: 16 }), h("span", null, result?.summary || "Nothing to show."))
+          : empty ? h("p", { class: "report-empty" }, icon("info", { size: 16 }), h("span", null, emptyText))
             : chartBox,
+        graph && result && !result.error && !empty ? graphLegend(shownRows(r, result)) : null,
+        graph && !empty ? h("p", { class: "graph-focus", "aria-hidden": "true" }) : null,
         h("figcaption", { id: sid, class: "report-summary" }, result ? (result.error ? "" : result.summary) : h("span", { class: "sk-line", "aria-hidden": "true" }), result ? null : h("span", { class: "sr-only" }, "Loading"))),
       h("div", { class: "report-foot" },
         h("button", { type: "button", class: "btn ghost sm", "data-focus-key": "data", "aria-expanded": String(tableOpen), "aria-controls": did, disabled: !result || Boolean(result.error),
@@ -175,6 +237,24 @@ export function createInsightsView({ doc, onAction }) {
         result && !result.error ? h("span", { class: "muted" }, `${result.total.toLocaleString("en")} ${result.total === 1 ? "row" : "rows"}`) : null),
       h("div", { id: did, class: "report-data", hidden: !tableOpen }, tableOpen && result ? table(r, result) : null));
     if (had) focusKey(r.id, had);
+  }
+
+  /** What the dependency graph's colours and shapes mean (only what is shown). @param {Record<string, any>[]} rows */
+  function graphLegend(rows) {
+    const nodes = rows.filter((x) => x.type === "node");
+    const kinds = ["triage", "backlog", "unstarted", "started", "completed", "canceled"];
+    const names = { triage: "Triage", backlog: "Backlog", unstarted: "Not started", started: "In progress", completed: "Completed", canceled: "Canceled" };
+    const colors = THEMES[theme].kinds;
+    const circle = "M7 2a5 5 0 1 1 0 10A5 5 0 0 1 7 2z", diamond = "M7 1l6 6-6 6-6-6z";
+    const present = kinds.filter((k) => nodes.some((n) => n.kind === k));
+    return h("ul", { class: "graph-legend", "aria-label": "Legend" },
+      present.map((k) => item(shape(circle, colors[kinds.indexOf(k)]), /** @type {Record<string, string>} */ (names)[k])),
+      item(shape(diamond, "currentColor"), "Blocked"),
+      item(shape(circle, "currentColor"), "Free to start"),
+      nodes.some((n) => n.blocking > 1) ? item(svg("svg", { width: "14", height: "14", viewBox: "0 0 14 14", "aria-hidden": "true" }, svg("circle", { cx: "7", cy: "7", r: "6", fill: "currentColor" })), "Larger: blocks 2 or more") : null,
+      rows.some((x) => x.type === "edge" && x.critical) ? item(svg("svg", { width: "18", height: "14", viewBox: "0 0 18 14", "aria-hidden": "true" }, svg("path", { d: "M1 7h16", stroke: THEMES[theme].linkHot, "stroke-width": "2.5" })), "Part of a chain") : null,
+      nodes.some((n) => n.context) ? item(shape(circle, "currentColor"), "Faded: outside the filter") : null,
+      h("li", { class: "muted" }, "Done items drop out: a finished blocker no longer blocks."));
   }
 
   /** @param {string} id @param {string} key */
@@ -202,14 +282,17 @@ export function createInsightsView({ doc, onAction }) {
     box.replaceChildren(canvas);
     try {
       const { destroy } = await renderChart(canvas, {
-        spec: r.spec, dataset: r.dataset, rows: result.rows, width, height: CHART_HEIGHT, theme, tooltipHost: section,
+        spec: r.builtin && r.dataset === "dependencies" && width < 440 ? tallGraph(r.spec) : specFor(r, result), dataset: r.dataset, rows: shownRows(r, result), width, height: r.dataset === "dependencies" ? (width < 440 ? 300 : GRAPH_HEIGHT) : CHART_HEIGHT, theme, tooltipHost: section,
         onClick: (d) => { if (typeof d?.key === "string" && r.dataset === "dependencies") onAction("insights:open", d.key); },
       });
       if (state.sig !== sig) { destroy(); return; }
       state.destroy = destroy;
       for (const a of ["role", "aria-roledescription", "aria-label", "tabindex"]) canvas.removeAttribute(a);
       if (r.dataset === "dependencies") {
+        fitToContent(canvas, { maxScale: 1.6 });
+        const caption = /** @type {HTMLElement|null} */ (section.querySelector(".graph-focus"));
         focusableNodes(box, {
+          onFocus: (d) => { if (caption) caption.textContent = d ? `${d.key} · ${String(d.title).length > 70 ? `${String(d.title).slice(0, 69)}…` : d.title} · ${d.state}${d.assignee ? ` · ${d.assignee}` : ""}` : ""; },
           label: (d) => `${d.key}: ${d.title}. ${d.state}${d.assignee ? `, ${d.assignee}` : ""}.${d.blocked ? ` Blocked${d.depth > 1 ? ` (chain ${d.depth} deep)` : ""}.` : ""}${d.blocking ? ` Blocks ${d.blocking} ${d.blocking === 1 ? "item" : "items"}.` : ""}${d.context ? " Outside the filter." : ""} Press Enter to open.`,
           open: (d) => onAction("insights:open", d.key),
         });
@@ -225,8 +308,9 @@ export function createInsightsView({ doc, onAction }) {
     const spec = TABLES[r.builtin !== false ? r.id : ""] ?? null;
     const caption = h("caption", { class: "sr-only" }, `${r.title}: data`);
     if (spec?.graph) {
-      const nodes = result.rows.filter((x) => x.type === "node");
-      const edges = result.rows.filter((x) => x.type === "edge");
+      const rows = shownRows(r, result);
+      const nodes = rows.filter((x) => x.type === "node");
+      const edges = rows.filter((x) => x.type === "edge");
       const blockers = (/** @type {string} */ key) => edges.filter((e) => e.target === key).map((e) => e.source).join(", ") || "—";
       const blocks = (/** @type {string} */ key) => edges.filter((e) => e.source === key).map((e) => e.target).join(", ") || "—";
       return tableOf(caption, ["Item", "Title", "State", "Blocked by", "Blocks"],

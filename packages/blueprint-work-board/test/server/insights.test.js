@@ -224,6 +224,8 @@ describe("Jev triage", () => {
     expect(out.model).toBe("fake-jev");
     const [res] = out.results;
     expect(res.key).toBe(key);
+    expect(res.current).toMatchObject({ state: "Triage" });
+    expect(Array.isArray(res.current.labels)).toBe(true);
     expect(res.suggestions.length).toBeGreaterThan(0);
     for (const s of res.suggestions) {
       expect(s.probability).toBeGreaterThanOrEqual(0.5);

@@ -70,6 +70,21 @@ describe("Insights layout", () => {
     expect(text(root.querySelector('[data-report="bugs-by-person"] .report-title'))).toMatch(/Bugs by person\s*custom/);
   });
 
+  it("Ask the agent shows ready-to-paste prompts as selectable text", async () => {
+    const { app, root } = await mount({ seed: 60 });
+    app.setLayout("insights");
+    await until(() => app.insights.results, { timeout: 5000 });
+    /** @type {HTMLButtonElement} */ ([...root.querySelectorAll("button")].find((b) => text(b) === "Ask the agent")).click();
+    await settle();
+    const dlg = /** @type {HTMLElement} */ (root.querySelector(".ask-agent"));
+    const areas = /** @type {HTMLTextAreaElement[]} */ ([...dlg.querySelectorAll("textarea")]);
+    expect(areas).toHaveLength(4);
+    expect(areas[0].readOnly).toBe(true);
+    expect(areas[0].value).toBe("Using the Work Board skill, build a burndown for Cycle 24 split by project, and save it as a report.");
+    expect(document.activeElement).toBe(areas[0]);
+    expect(await axe(root)).toEqual([]);
+  });
+
   it("opens the report editor, validates on the server and refuses a url spec", async () => {
     const { app, root } = await mount({ seed: 20 });
     app.setLayout("insights");
@@ -102,6 +117,14 @@ describe("Insights layout", () => {
     await settle();
     expect(app.detail.itemId).toBeTruthy();
     expect(root.querySelector(".report-chart.graph")?.getAttribute("role")).toBe("group");
+    // Legend and the All / Only chains toggle.
+    const legend = text(/** @type {Element} */ (root.querySelector('[data-report="dependencies"] .graph-legend')));
+    expect(legend).toMatch(/Blocked.*Free to start/);
+    const all = root.querySelectorAll('[data-report="dependencies"] .dep-node').length;
+    /** @type {HTMLButtonElement} */ ([...root.querySelectorAll('[data-report="dependencies"] .seg')].find((b) => text(b) === "Only chains")).click();
+    await until(() => root.querySelector('[data-report="dependencies"] .seg[aria-pressed="true"]')?.textContent === "Only chains");
+    await until(() => { const n = root.querySelectorAll('[data-report="dependencies"] .dep-node').length; return (n > 0 && n < all) || root.querySelector('[data-report="dependencies"] .report-empty'); }, { timeout: 5000, message: "chains only" });
+    expect(await axe(root)).toEqual([]);
   });
 });
 
