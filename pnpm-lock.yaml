@@ -353,12 +353,24 @@ importers:
 
   packages/blueprint-work-board:
     devDependencies:
+      axe-core:
+        specifier: 4.13.0
+        version: 4.13.0
+      capnweb:
+        specifier: 'catalog:'
+        version: 0.11.1
       esbuild:
         specifier: 0.28.1
         version: 0.28.1
       jsdom:
         specifier: 26.1.0
         version: 26.1.0(supports-color@10.2.2)
+      playwright:
+        specifier: 1.61.0
+        version: 1.61.0
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.0)(@vitest/browser-preview@4.1.10)(jsdom@26.1.0(supports-color@10.2.2))(vite@7.3.6(@types/node@26.1.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.51.2))
@@ -3034,6 +3046,10 @@ packages:
 
   aws4fetch@1.0.20:
     resolution: {integrity: sha512-/djoAN709iY65ETD6LKCtyyEI04XIBP5xVvfmNxsEP0uJB5tyaGBztSryRr4HqMStr9R06PisQE7m9zDTXKu6g==}
+
+  axe-core@4.13.0:
+    resolution: {integrity: sha512-UzGt8zg7Ny8djbYMhxl2zuEevVa7r2gJjYY5Lwr1xM7+XU2nd6CkIWFTVcCIbAP63vSz71NaVyyuSk9lHKcy0A==}
+    engines: {node: '>=4'}
 
   baseline-browser-mapping@2.11.25:
     resolution: {integrity: sha512-gMmEShwwq7FJqMwvfRwvCl00v4kN+KOfJqXn+f4nrufak5gNHJOksd/60Dvjuz7sI8Y5WiSFBa8FEYr+zoyqCw==}
@@ -5893,6 +5909,8 @@ snapshots:
   async-exit-hook@2.0.1: {}
 
   aws4fetch@1.0.20: {}
+
+  axe-core@4.13.0: {}
 
   baseline-browser-mapping@2.11.25: {}
 
