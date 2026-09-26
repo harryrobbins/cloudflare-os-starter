@@ -83,6 +83,7 @@ export function createStore(options) {
     jev: false,
     /** @type {any[]|null} report documents (built-in and saved); null until first needed */ reports: null,
     /** @type {any[]} open and partly applied proposals */ proposals: [],
+    /** @type {any[]} proposals applied or withdrawn from this board in this session (newest first) */ recentProposals: [],
   };
   let polls = 0;
   let nextChangeId = 1;
@@ -602,6 +603,7 @@ export function createStore(options) {
   /** @param {any} p */
   function putProposal(p) {
     const active = p.status === "open" || p.status === "partial";
+    s.recentProposals = active ? s.recentProposals.filter((x) => x.id !== p.id) : [p, ...s.recentProposals.filter((x) => x.id !== p.id)].slice(0, 5);
     s.proposals = active ? [p, ...s.proposals.filter((x) => x.id !== p.id)].toSorted((a, b) => String(b.created_at).localeCompare(String(a.created_at))) : s.proposals.filter((x) => x.id !== p.id);
     notify("proposals");
     return p;
@@ -648,6 +650,7 @@ export function createStore(options) {
     get jev() { return s.jev; },
     get reports() { return s.reports; },
     get proposals() { return s.proposals; },
+    get recentProposals() { return s.recentProposals; },
     call, loadReports, saveReport, deleteReport, restoreReport, loadProposals, propose, refreshProposal, withdrawProposal, recordProposalOutcome,
     get prefs() { return s.prefs; },
     get changes() { return s.changes; },

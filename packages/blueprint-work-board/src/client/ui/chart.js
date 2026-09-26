@@ -167,6 +167,13 @@ export function focusableNodes(container, opts) {
   const nodes = /** @type {SVGElement[]} */ ([...container.querySelectorAll("g.mark-symbol.nodes path")])
     .filter((el) => /** @type {any} */ (el).__data__?.datum?.key);
   const datum = (/** @type {Element} */ el) => /** @type {any} */ (el).__data__.datum;
+  // Only the nodes speak: Vega's own roles on marks and groups would be unlabelled images.
+  const nodeSet = new Set(nodes);
+  for (const el of container.querySelectorAll("svg [role], svg [aria-roledescription]")) {
+    if (nodeSet.has(/** @type {SVGElement} */ (el))) continue;
+    el.removeAttribute("role"); el.removeAttribute("aria-roledescription"); el.removeAttribute("aria-label");
+  }
+  for (const g of container.querySelectorAll("svg g.mark-path, svg g.mark-text, svg g.mark-symbol:not(.nodes)")) g.setAttribute("aria-hidden", "true");
   nodes.sort((a, b) => String(datum(a).key).localeCompare(String(datum(b).key), undefined, { numeric: true }));
   nodes.forEach((el, i) => {
     el.setAttribute("tabindex", i === 0 ? "0" : "-1");

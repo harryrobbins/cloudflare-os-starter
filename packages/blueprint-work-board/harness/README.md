@@ -34,6 +34,7 @@ server in its own process group, checks one seeded board and a manual-approval c
 | `people=0` | Start with an empty people document (colleagues show as accounts until they open the board) |
 | `timestamps=0` | Records and change entries carry no timestamps (the service before its `created_at` change); default on |
 | `now=2026-09-26T12:00:00Z` | Fake clock base; the seed's history ends just before it. Default real now |
+| `jev=0` | Leave the optional Jev connector (`JEV`) unconnected. Default: a deterministic fake Jev (`test/fake-jev.js`, 150 ms per call) |
 | `anon=1` | Pane 1 has no signed-in viewer (`gadgetViewer` null; `$createViewerAssertion` fails `forbidden:`) |
 | `cspProbe=0` | Byte-identical platform frame document (no CSP violation reporter) |
 
@@ -51,6 +52,7 @@ reload recovers), **Reload pane N**.
 | Member | Does |
 | --- | --- |
 | `ready`, `seedMs`, `handshakes`, `generation` | Page ready; seed time; RPC sessions opened; facet generation |
+| `jev` | The fake Jev (`calls` lists every `decide()` request), or null with `jev=0` |
 | `fake` | The `FakeRecords` instance: `rows`, `journal`, `actions`, `run(command, input, {actor, revision})`, `approve`/`reject`/`approveAll`, `pendingActions()`, `setApproval`, `setEpoch`, `failNext(method, message, count)`, `calls` |
 | `api`, `rpc(method, ...args)` | The gadget server; call any RPC as the in-Workshop agent would (e.g. `rpc("query", "is:blocked")`) |
 | `storage` | The server's in-memory storage (`storage.map`: `view:*`, `pref:*`, `settings`) |

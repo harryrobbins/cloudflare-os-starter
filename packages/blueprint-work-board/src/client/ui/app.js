@@ -211,11 +211,11 @@ export function createBoardApp(appOptions) {
     retry: (c) => { const r = store.retry(c); if (!r.ok) toast(r.error ?? "Could not retry."); },
     announce: (t) => live.announce(t),
     canSuggest: () => store.jev && store.canWrite() && store.planning,
-    suggest: (item) => suggest([item]),
+    suggest: (item) => suggestWithJev([item]),
   } });
 
   const tray = createProposalsTray({ layers, controller: {
-    proposals: () => store.proposals, now, canWrite: () => store.canWrite(), signedIn: () => Boolean(store.viewer?.id),
+    proposals: () => store.proposals, recent: () => store.recentProposals, now, canWrite: () => store.canWrite(), signedIn: () => Boolean(store.viewer?.id),
     state: (p, ch) => changeState(store, ch, liveChange(p.id, ch.n)),
     apply: (p, ns) => applyFromTray(p, ns),
     refresh: async (p) => { await store.refreshProposal(p.id); },
@@ -405,7 +405,7 @@ export function createBoardApp(appOptions) {
       h("button", { type: "button", class: `btn view-switch${dirty ? " dirty" : ""}`, "aria-haspopup": "dialog", onclick: (/** @type {Event} */ e) => viewsMenu(/** @type {HTMLElement} */ (e.currentTarget)) },
         icon("eye", { size: 14 }), h("span", { class: "view-name" }, view.name), dirty ? h("span", { class: "dirty-dot", title: "Unsaved changes" }, h("span", { class: "sr-only" }, ", unsaved changes")) : null, icon("chevronDown", { size: 12 })),
       h("div", { class: "segmented", role: "group", "aria-label": "Layout" }, layoutsList.map((id) => h("button", {
-        type: "button", class: "seg", "aria-pressed": String(view.layout === id), title: id === "insights" ? "Insights: reports and charts (G then I)" : `${/** @type {any} */ (LAYOUT_LABELS)[id]} (${keyLabel("Mod+b", mac)} switches board and list)`, onclick: () => setLayout(id),
+        type: "button", class: "seg", "aria-pressed": String(view.layout === id), "aria-label": /** @type {any} */ (LAYOUT_LABELS)[id], title: id === "insights" ? "Insights: reports and charts (G then I)" : `${/** @type {any} */ (LAYOUT_LABELS)[id]} (${keyLabel("Mod+b", mac)} switches board and list)`, onclick: () => setLayout(id),
       }, icon(id === "board" ? "board" : id === "list" ? "list" : "chart", { size: 14 }), h("span", { class: "seg-label" }, /** @type {any} */ (LAYOUT_LABELS)[id])))),
       view.layout !== "insights" ? h("button", { type: "button", class: "btn", "aria-haspopup": "dialog", onclick: (/** @type {Event} */ e) => displayMenu(/** @type {HTMLElement} */ (e.currentTarget)) }, icon("lanes", { size: 14 }), "Display") : null,
       triageView && store.jev && store.canWrite() && store.planning && view.layout !== "insights" ? h("button", { type: "button", class: "btn", "aria-haspopup": "dialog", title: "Ask Jev to suggest priority, state, labels and duplicates for the items in triage", onclick: () => runAction("triageJev") }, icon("sparkle", { size: 14 }), "Triage with Jev") : null,
@@ -1281,7 +1281,7 @@ export function createBoardApp(appOptions) {
   }
 
   /** Jev triage suggestions for items, applied (or saved) as a proposal. @param {ItemView[]} items */
-  function suggest(items) {
+  function suggestWithJev(items) {
     if (!items.length) return;
     const keys = items.map((i) => i.key);
     const title = items.length === 1 ? `Jev suggestions for ${keys[0]}` : `Jev triage: ${items.length} items`;
@@ -1328,10 +1328,10 @@ export function createBoardApp(appOptions) {
     triageJev: { label: "Triage with Jev", group: "Item", when: () => store.jev && store.canWrite() && store.planning, run: () => {
       const picked = selection.size ? targets() : computeItems().items.filter((i) => i.kind === "triage");
       if (!picked.length) { live.announce("Nothing to triage: select items or open the Triage view."); toast("Select items, or open the Triage view, to triage with Jev."); return; }
-      suggest(picked.slice(0, 20));
+      suggestWithJev(picked.slice(0, 20));
       if (picked.length > 20) toast(`Jev looks at 20 items at a time; the first 20 of ${picked.length} are in this batch.`);
     } },
-    suggest: { label: "Suggest with Jev (triage this item)", group: "Item", when: () => store.jev && store.canWrite() && store.planning && targets().length === 1, run: () => suggest(targets()) },
+    suggest: { label: "Suggest with Jev (triage this item)", group: "Item", when: () => store.jev && store.canWrite() && store.planning && targets().length === 1, run: () => suggestWithJev(targets()) },
     newReport: { label: "New report…", group: "View", when: () => store.canWrite(), run: () => { setLayout("insights"); editReport(null); } },
     saveView: { label: "Save view", group: "View", when: () => store.canWrite(), run: () => { void saveCurrentView(); } },
     saveViewAs: { label: "Save as a new view…", group: "View", when: () => store.canWrite(), run: () => saveViewDialog(false) },

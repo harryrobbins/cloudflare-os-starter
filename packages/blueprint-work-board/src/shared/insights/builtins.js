@@ -54,14 +54,14 @@ export const BUILTIN_REPORTS = [
         { mark: { type: "rule", strokeDash: [4, 4], color: { expr: "muted" } }, encoding: { y: { aggregate: "max", field: "p50", type: "quantitative" } } },
         { mark: { type: "rule", strokeDash: [2, 3], color: { expr: "muted" } }, encoding: { y: { aggregate: "max", field: "p85", type: "quantitative" } } },
         {
-          mark: { type: "text", align: "right", dx: -2, dy: -6, color: { expr: "muted" }, fontSize: 11 },
-          transform: [{ aggregate: [{ op: "max", field: "p50", as: "v" }, { op: "max", field: "completed", as: "x" }] }, { calculate: "'50%: ' + datum.v + ' d'", as: "label" }],
-          encoding: { x: { field: "x", type: "temporal", scale: { type: "utc" } }, y: { field: "v", type: "quantitative" }, text: { field: "label" } },
+          mark: { type: "text", align: "left", dx: 2, dy: -6, color: { expr: "muted" }, fontSize: 11 },
+          transform: [{ aggregate: [{ op: "max", field: "p50", as: "v50" }, { op: "min", field: "completed", as: "x50" }] }, { calculate: "'median ' + datum.v50 + ' d'", as: "label50" }],
+          encoding: { x: { field: "x50", type: "temporal", scale: { type: "utc" } }, y: { field: "v50", type: "quantitative" }, text: { field: "label50" } },
         },
         {
           mark: { type: "text", align: "right", dx: -2, dy: -6, color: { expr: "muted" }, fontSize: 11 },
-          transform: [{ aggregate: [{ op: "max", field: "p85", as: "v" }, { op: "max", field: "completed", as: "x" }] }, { calculate: "'85%: ' + datum.v + ' d'", as: "label" }],
-          encoding: { x: { field: "x", type: "temporal", scale: { type: "utc" } }, y: { field: "v", type: "quantitative" }, text: { field: "label" } },
+          transform: [{ aggregate: [{ op: "max", field: "p85", as: "v85" }, { op: "max", field: "completed", as: "x85" }] }, { calculate: "'85% within ' + datum.v85 + ' d'", as: "label85" }],
+          encoding: { x: { field: "x85", type: "temporal", scale: { type: "utc" } }, y: { field: "v85", type: "quantitative" }, text: { field: "label85" } },
         },
       ],
     },
@@ -161,18 +161,6 @@ export const BUILTIN_REPORTS = [
           transform: [{ type: "linkpath", require: { signal: "force" }, shape: "line", sourceX: "datum.source.x", sourceY: "datum.source.y", targetX: "datum.target.x", targetY: "datum.target.y" }],
         },
         {
-          name: "arrows", type: "symbol", from: { data: "link-data" }, interactive: false,
-          encode: {
-            update: {
-              shape: { value: "triangle-up" }, size: { value: 60 },
-              fill: [{ test: "datum.critical", signal: "linkHot" }, { signal: "linkCold" }],
-              x: { signal: "datum.target.x - 13 * cos(atan2(datum.target.y - datum.source.y, datum.target.x - datum.source.x))" },
-              y: { signal: "datum.target.y - 13 * sin(atan2(datum.target.y - datum.source.y, datum.target.x - datum.source.x))" },
-              angle: { signal: "90 + atan2(datum.target.y - datum.source.y, datum.target.x - datum.source.x) * 180 / PI" },
-            },
-          },
-        },
-        {
           name: "nodes", type: "symbol", zindex: 1, from: { data: "node-data" },
           encode: {
             enter: { fill: { scale: "kind", field: "kind" }, stroke: { signal: "surface" }, strokeWidth: { value: 2 } },
@@ -188,17 +176,29 @@ export const BUILTIN_REPORTS = [
             type: "force", iterations: 300, static: true, signal: "force",
             forces: [
               { force: "center", x: { signal: "cx" }, y: { signal: "cy" } },
-              { force: "collide", radius: 16 },
-              { force: "nbody", strength: -36 },
-              { force: "link", links: "link-data", distance: 46, id: "datum.key" },
-              { force: "x", x: "datum.tx", strength: 0.04 },
-              { force: "y", y: "datum.ty", strength: 0.08 },
+              { force: "collide", radius: 22 },
+              { force: "nbody", strength: -90 },
+              { force: "link", links: "link-data", distance: 64, id: "datum.key" },
+              { force: "x", x: "datum.tx", strength: 0.03 },
+              { force: "y", y: "datum.ty", strength: 0.06 },
             ],
           }],
         },
         {
           name: "labels", type: "text", from: { data: "nodes" }, interactive: false,
           encode: { update: { x: { field: "x" }, y: { field: "y", offset: 18 }, text: { field: "datum.key" }, align: { value: "center" }, fontSize: { value: 10 }, fill: { signal: "ink" } } },
+        },
+        {
+          name: "arrows", type: "symbol", from: { data: "links" }, interactive: false,
+          encode: {
+            update: {
+              shape: { value: "triangle-up" }, size: { value: 60 },
+              fill: [{ test: "datum.datum.critical", signal: "linkHot" }, { signal: "linkCold" }],
+              x: { signal: "datum.datum.target.x - 14 * cos(atan2(datum.datum.target.y - datum.datum.source.y, datum.datum.target.x - datum.datum.source.x))" },
+              y: { signal: "datum.datum.target.y - 14 * sin(atan2(datum.datum.target.y - datum.datum.source.y, datum.datum.target.x - datum.datum.source.x))" },
+              angle: { signal: "90 + atan2(datum.datum.target.y - datum.datum.source.y, datum.datum.target.x - datum.datum.source.x) * 180 / PI" },
+            },
+          },
         },
       ],
     },

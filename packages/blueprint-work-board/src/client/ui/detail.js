@@ -29,6 +29,7 @@ import { personName, progressOf, relationsFor } from "../../shared/model/index.j
  *   editComment: (c: import("../../shared/model/index.js").CommentView, body: string) => { ok: boolean, error?: string },
  *   open: (item: ItemView) => void, close: () => void, showKey: (item: ItemView, anchor: HTMLElement) => void, retry: (c: import("../store/store.js").Change) => void,
  *   announce: (text: string) => void,
+ *   canSuggest?: () => boolean, suggest?: (item: ItemView) => void,
  * }} DetailController
  */
 
@@ -118,6 +119,7 @@ export function createDetail({ doc, controller: c }) {
         parent ? h("button", { type: "button", class: "crumb", onclick: () => c.open(parent), title: parent.title }, parent.key, h("span", { "aria-hidden": "true" }, " ›")) : null,
         h("span", { class: "detail-key", tabindex: "-1" }, item.key),
         h("span", { class: "grow" }),
+        c.canSuggest?.() ? h("button", { type: "button", class: "btn ghost sm", "aria-haspopup": "dialog", title: "Ask Jev to suggest priority, state, labels and duplicates", onclick: () => c.suggest?.(item) }, icon("sparkle", { size: 13 }), "Suggest") : null,
         h("button", { type: "button", class: "btn ghost sm", "aria-haspopup": "dialog", title: "Show the key and a link to share", onclick: (/** @type {Event} */ e) => c.showKey(item, /** @type {HTMLElement} */ (e.currentTarget)) }, "Share…"),
         h("button", { type: "button", class: "icon-btn", "aria-label": "Close details", title: "Close (Esc)", onclick: () => c.close() }, h("span", { class: "x", "aria-hidden": "true" }, "×"))),
       title, pills);

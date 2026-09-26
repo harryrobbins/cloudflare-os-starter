@@ -10,13 +10,14 @@ import { icon } from "./icons.js";
 /**
  * @typedef {import("../store/apply.js").ChangeState} ChangeState
  * @typedef {{
- *   proposals: () => any[], now: () => number, canWrite: () => boolean, signedIn: () => boolean,
+ *   proposals: () => any[], recent: () => any[], now: () => number, canWrite: () => boolean, signedIn: () => boolean,
  *   state: (p: any, c: any) => { state: ChangeState, text: string, selectable: boolean },
  *   apply: (p: any, ns: number[]) => Promise<void>|void, refresh: (p: any) => Promise<void>, withdraw: (p: any) => Promise<void>,
  *   history: () => Promise<any[]>, openItem: (key: string) => void, announce: (text: string, opts?: any) => void,
  * }} TrayController
  */
 
+/** @type {Record<string, string>} */
 const STATE_CLASS = { ready: "ready", stale: "warn", noop: "muted", invalid: "bad", sent: "pending", pending: "pending", applied: "ok", conflict: "bad", rejected: "bad" };
 
 /** @param {any} p */
@@ -39,6 +40,8 @@ export function createProposalsTray({ layers, controller: c }) {
   let historyOpen = false;
   /** @type {Set<string>} */
   const busy = new Set();
+  /** @type {string|null} */
+  let lastKey = null;
 
   /** @param {any} p */
   function selection(p) {
@@ -54,18 +57,30 @@ export function createProposalsTray({ layers, controller: c }) {
     const active = /** @type {HTMLElement|null} */ (body.ownerDocument.activeElement);
     const focusKey = active && body.contains(active) ? active.dataset?.focusKey ?? null : null;
     const list = c.proposals();
+    const recent = c.recent();
     const canApply = c.canWrite();
     setChildren(body,
       !canApply ? h("p", { class: "banner info" }, c.signedIn() ? "This board is read-only for you: you can review proposals but not apply them." : "Sign in to the Workshop to apply proposals.") : null,
       list.length ? list.map((p) => proposal(p, canApply)) : h("div", { class: "tray-empty" }, icon("inbox", { size: 20 }),
         h("p", null, h("strong", null, "No proposals waiting.")),
         h("p", { class: "muted" }, "When the Workshop agent or Jev triage suggests changes, they appear here for you to review and apply.")),
+      recent.length ? h("section", { class: "tray-recent", "aria-labelledby": "tray-recent-h" }, h("h3", { id: "tray-recent-h", class: "tray-sub" }, "Just applied from this board"),
+        recent.map((p) => proposal(p, false))) : null,
       h("details", { class: "tray-history", open: historyOpen, ontoggle: (/** @type {Event} */ e) => { historyOpen = /** @type {HTMLDetailsElement} */ (e.currentTarget).open; if (historyOpen && !history) void loadHistory(); } },
         h("summary", { "data-focus-key": "history" }, "Recently applied or withdrawn"),
         history === null ? h("p", { class: "muted" }, "Loading…") : history.length ? h("ul", { class: "tray-history-list" }, history.map((p) => h("li", null,
           h("strong", null, p.title), " · ", p.status === "withdrawn" ? "withdrawn" : p.status === "applied" ? `applied${p.applied_by ? ` by ${p.applied_by.name}` : ""}` : "partly applied",
           h("span", { class: "muted" }, ` · ${relativeTime(Date.parse(p.updated_at), c.now())}`)))) : h("p", { class: "muted" }, "Nothing yet.")));
-    if (focusKey) /** @type {HTMLElement|null} */ (body.querySelector(`[data-focus-key="${focusKey}"]`))?.focus();
+    const doc = body.ownerDocument;
+    const restored = focusKey ? /** @type {HTMLElement|null} */ (body.querySelector(`[data-focus-key="${focusKey}"]:not(:disabled)`)) : null;
+    if (restored) { restored.focus(); lastKey = focusKey; return; }
+    // A modal never loses focus to the page: back to the last control, else the first one.
+    if (!doc.activeElement || doc.activeElement === doc.body || !dlg?.el.contains(doc.activeElement)) {
+      const back = (lastKey ? /** @type {HTMLElement|null} */ (body.querySelector(`[data-focus-key="${lastKey}"]:not(:disabled)`)) : null)
+        ?? /** @type {HTMLElement|null} */ (body.querySelector("input:not(:disabled), button:not(:disabled), summary"));
+      back?.focus();
+    }
+    if (focusKey) lastKey = focusKey;
   }
 
   async function loadHistory() {
@@ -112,12 +127,20 @@ export function createProposalsTray({ layers, controller: c }) {
 
   /** @param {any} p @param {() => Promise<void>|void} fn @param {string|null} done */
   async function run(p, fn, done) {
+    const active = /** @type {HTMLElement|null} */ (body.ownerDocument.activeElement);
+    const key = active && body.contains(active) ? active.dataset?.focusKey ?? null : null;
     busy.add(p.id);
     render();
     try { await fn(); if (done) c.announce(done); } catch (err) { c.announce(`Could not update the proposal: ${String(/** @type {any} */ (err)?.message ?? err).replace(/^[a-z_]+:\s*/, "")}`, { assertive: true }); }
     busy.delete(p.id);
     selected.delete(p.id);
     render();
+    // Keep keyboard focus in the tray: on the same control, else this proposal, else the first control.
+    const again = key ? /** @type {HTMLElement|null} */ (body.querySelector(`[data-focus-key="${key}"]:not(:disabled)`)) : null;
+    const fallback = /** @type {HTMLElement|null} */ (body.querySelector(`[data-proposal="${p.id}"] button:not(:disabled), [data-proposal="${p.id}"] h3`) ?? body.querySelector("input:not(:disabled), button:not(:disabled), summary"));
+    const target = again ?? fallback;
+    if (target && target.tagName === "H3") target.setAttribute("tabindex", "-1");
+    target?.focus();
   }
 
   /** @param {ChangeState} s */
