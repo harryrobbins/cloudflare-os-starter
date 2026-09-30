@@ -192,6 +192,16 @@ The Docs harness e2e covers these flows:
 
 One Whiteboard harness test ("connect without dragging") failed once in a full run and passed in three reruns.
 
+**Local platform e2e: 1/1.** This ran the real Workshop on this machine, with the packed archive uploaded, the real sandboxed iframe and Cap'n Web RPC (`packages/blueprint-docs/e2e/platform.test.mjs`). The test covered this sequence:
+
+1. Alice inserts a drawing and draws in it.
+2. Bob joins through a use-role share link and sees the preview.
+3. Both open the drawing, and a note Alice adds appears live in Bob's editor.
+4. Both previews update.
+5. The Markdown export carries the drawing as an SVG image.
+
+No blocked-form or RPC errors appeared in either console.
+
 **Still open:**
 - Signed-in production checks.
 - A real agent trial from a Workshop chat, which needs a model.
