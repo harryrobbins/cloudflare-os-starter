@@ -131,6 +131,18 @@ try {
     }
   }
 
+  // --- active speaker -------------------------------------------------------
+  // The fake microphone beeps, so somebody is always loud enough. The SFU negotiates no
+  // ssrc-audio-level extension, so this proves the inbound-rtp audioLevel fallback.
+  const highlighted = await until(async () => {
+    for (const person of people) {
+      const speaking = await person.page.locator("[data-testid='call-tile'][data-speaking='true']").count()
+      if (speaking === 0) return false
+    }
+    return true
+  }, 10_000, 'a speaking tile for everyone').then(() => true, () => false)
+  check('active speaker highlights a tile for everybody', highlighted)
+
   // --- camera off past the SFU's 30 s inactivity window ---------------------
   const [first, second] = people
   await first.page.getByRole('button', { name: /^Turn camera off/ }).click()
