@@ -24,7 +24,7 @@ drafts and existing catch-up. No new native client or generic gadget sharing mec
 - [x] Phone Enter inserts a newline; explicit Send sends; composition never sends prematurely.
 - [x] Replace stale sockets on network return or resume after suspension; ignore old socket events.
 - [x] Verify targeted unit/type tests and mobile browser flows, plus desktop/compact regressions.
-- [ ] Merge to main including the previously present repository changes requested for deployment.
+- [x] Merge to main including the previously present repository changes requested for deployment.
 - [ ] Run canonical release validation, serial production deploy, and record live evidence.
 
 ## Acceptance evidence
@@ -72,3 +72,11 @@ is its output smoke test; no broader skill benchmark is claimed.
 The browser regression also found cached conversation navigation returning a 404 when
 the asset binding returned 304 for the HTML fallback. Fallback fetches now omit cache
 validators; the new Worker regression and the complete Chromium integration pass.
+
+The first full production release stopped before uploads: Whiteboard's 50-viewer and
+adversarial lexer tests exceeded Vitest's default 5s runner timeout. The isolated lexer
+finished in 6.3s, within its existing 15s assertion. The full suite exposed CPU contention
+in another serialization test. Whiteboard now caps test workers at four and gives the
+two large simulations 20s runner headroom; traffic/work/time assertions are unchanged.
+All 672 Node and 21 workerd Whiteboard tests pass with these settings. Production release
+validation must pass again before uploading.
