@@ -1644,7 +1644,7 @@ export class ChatStore {
     if (this.#state.callUi.chatOpen !== chatOpen) this.#setCallUi({ chatOpen });
   }
 
-  setCallStart(start: { audio?: boolean; video?: boolean }): void {
+  setCallStart(start: { audio?: boolean; video?: boolean; noiseSuppression?: boolean; backgroundBlur?: boolean }): void {
     const callStart = { ...this.#state.callStart, ...start };
     this.#patch({ callStart });
     saveCallPrefs({ devices: this.#state.callDevices, start: callStart });
@@ -1690,6 +1690,8 @@ export class ChatStore {
         channelId,
         audio: this.#state.callStart.audio,
         video: this.#state.callStart.video,
+        noiseSuppression: this.#state.callStart.noiseSuppression === true,
+        backgroundBlur: this.#state.callStart.backgroundBlur === true,
         devices: this.#state.callDevices,
       });
       // A `call` event can beat the join's own answer; hand the engine the latest room either way.
@@ -1814,6 +1816,25 @@ export class ChatStore {
     const who = room?.participants.find((entry) => entry.id === participantId);
     const name = who === undefined ? "Someone" : (this.#state.users[who.userId]?.name ?? "Someone");
     this.announce(`${name} reacted ${emoji}`);
+  }
+
+  /**
+   * Quality phase 2 effects: switched live in the call and remembered for the next one. An effect
+   * the CPU monitor turned off stays remembered as chosen; the person decides whether to try again.
+   */
+  async toggleCallEffect(effect: "noiseSuppression" | "backgroundBlur"): Promise<void> {
+    const engine = this.#callEngine;
+    if (engine === null || !isLivePhase(this.#state.call.phase)) return;
+    const next = this.#state.call[effect] !== "on" && this.#state.call[effect] !== "starting";
+    this.setCallStart({ [effect]: next });
+    const name = effect === "noiseSuppression" ? "Noise suppression" : "Background blur";
+    this.announce(`${name} ${next ? "on" : "off"}`);
+    try {
+      await (effect === "noiseSuppression" ? engine.setNoiseSuppression(next) : engine.setBackgroundBlur(next));
+    } catch (cause) {
+      this.#toast({ tone: "error", title: `Could not switch ${name.toLowerCase()}`, body: describe(cause) });
+    }
+    if (next && this.#state.call[effect] === "failed") this.announce(`${name} could not start`);
   }
 
   /** Chosen audio-only: pause everyone's video and turn the camera off, to save bandwidth or focus. */

@@ -32,6 +32,9 @@ export default defineConfig(({ mode }) => {
       // Linux filesystem, where inotify works.
       watch: { ignored: ["**/node_modules/**", "**/.wrangler/**", "**/dist/**"] },
     },
+    // The background-blur worker is a module worker: MediaPipe falls back to `import()` for its Wasm
+    // loader there, which an IIFE worker bundle would not allow.
+    worker: { format: "es" },
     build: {
       outDir: "dist",
       emptyOutDir: true,

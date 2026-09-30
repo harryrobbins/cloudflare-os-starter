@@ -14,6 +14,7 @@ export interface FakeCallEngine extends CallEngine {
   readonly video: boolean[];
   readonly audioOnly: boolean[];
   readonly pictureInPicture: boolean[];
+  readonly effects: [string, boolean][];
   readonly devices: Partial<DeviceChoice>[];
   left: number;
   disposed: number;
@@ -35,6 +36,7 @@ export function createFakeCallEngine(): FakeCallEngine {
     video: [],
     audioOnly: [],
     pictureInPicture: [],
+    effects: [],
     devices: [],
     left: 0,
     disposed: 0,
@@ -83,6 +85,14 @@ export function createFakeCallEngine(): FakeCallEngine {
     async setVideoEnabled(enabled) {
       fake.video.push(enabled);
       fake.set({ videoEnabled: enabled });
+    },
+    async setNoiseSuppression(enabled) {
+      fake.effects.push(["noise", enabled]);
+      fake.set({ noiseSuppression: enabled ? "on" : "off" });
+    },
+    async setBackgroundBlur(enabled) {
+      fake.effects.push(["blur", enabled]);
+      fake.set({ backgroundBlur: enabled ? "on" : "off" });
     },
     setPictureInPicture(open) {
       fake.pictureInPicture.push(open);

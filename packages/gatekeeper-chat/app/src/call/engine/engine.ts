@@ -79,10 +79,12 @@ import type {
   ConnectionQuality,
   CreateCallEngine,
   DeviceChoice,
+  EffectState,
   JoinOptions,
   QualityLimitation,
   RemoteMedia,
   TileSize,
+  TrackProcessor,
 } from "./types.js";
 
 /** Timings. Exported so tests and diagnostics can name them. */
@@ -175,9 +177,24 @@ const IDLE_SNAPSHOT: CallSnapshot = Object.freeze({
   limitation: "none",
   audioOnly: false,
   audioOnlyChosen: false,
+  noiseSuppression: "unsupported",
+  backgroundBlur: "unsupported",
 });
 
 const NO_DEVICES: DeviceChoice = { audioInputId: null, videoInputId: null, audioOutputId: null };
+
+type CallTrackKindAv = "audio" | "video";
+
+/** One effect: whether it is wanted, and the processor currently built (around `source`). */
+interface EffectSlot {
+  wanted: boolean;
+  source: MediaStreamTrack | null;
+  processor: TrackProcessor | null;
+  /** The build in flight, so a second request waits for it instead of starting another. */
+  starting: Promise<void> | null;
+  /** Turned off by the CPU monitor rather than by the person. */
+  shedForCpu: boolean;
+}
 
 export const createCallEngine: CreateCallEngine = (deps) => new Engine(deps);
 
@@ -245,6 +262,12 @@ class Engine implements CallEngine {
   private cameraBeforeAudioOnly = false;
   /** `setPictureInPicture(true)`: the call is on screen in its own window whatever this tab does. */
   private pictureInPicture = false;
+
+  // Quality phase 2 effects: what the person asked for, and the processor built around which track.
+  private readonly effects: Record<CallTrackKindAv, EffectSlot> = {
+    audio: { wanted: false, source: null, processor: null, starting: null, shedForCpu: false },
+    video: { wanted: false, source: null, processor: null, starting: null, shedForCpu: false },
+  };
   private telemetry: CallTelemetry | null = null;
   private telemetryTimer: unknown = null;
   /** When stats reports went out, for the per-minute cap. Survives calls: the cap is the server's. */
@@ -308,7 +331,14 @@ class Engine implements CallEngine {
       videoEnabled: this.videoOn,
       localVideo: this.localVideo(),
       error: warnings.length > 0 ? warnings.join(" ") : null,
+      noiseSuppression: this.effectSupported("audio") ? "off" : "unsupported",
+      backgroundBlur: this.effectSupported("video") ? "off" : "unsupported",
     });
+    // Effects chosen before joining are built now, so the first packets are already processed.
+    this.effects.audio.wanted = options.noiseSuppression === true && this.effectSupported("audio");
+    this.effects.video.wanted = options.backgroundBlur === true && this.effectSupported("video");
+    await Promise.all([this.syncEffect("audio", gen), this.syncEffect("video", gen)]);
+    if (gen !== this.gen) throw new Error("The join was cancelled.");
 
     let joined;
     try {
@@ -436,6 +466,8 @@ class Engine implements CallEngine {
         });
       }
       camera?.stop();
+      // A blur around the stopped camera has nothing to process; it is rebuilt when the camera is back.
+      if (this.effects.video.processor !== null) await this.syncEffect("video", gen);
       return;
     }
     if (this.videoOn) return;
@@ -456,13 +488,18 @@ class Engine implements CallEngine {
     this.set({ videoEnabled: true, localVideo: this.localVideo(), error: null });
     this.beat();
     const publication = this.pubs.get("video");
+    if (this.effects.video.wanted) {
+      await this.syncEffect("video", gen);
+      if (gen !== this.gen) return;
+    }
+    const sent = this.sentTrack("video") ?? track;
     if (publication) {
-      await publication.transceiver.sender.replaceTrack(track).catch((error: unknown) => {
+      await publication.transceiver.sender.replaceTrack(sent).catch((error: unknown) => {
         this.log("replace-track-failed", { kind: "video", error: describeError(error) });
       });
     } else if (this.snap.phase === "connected") {
       // Joined with the camera off: publish it now. While reconnecting, the rebuild publishes it.
-      const ok = await this.publishLate(gen, { kind: "video", track });
+      const ok = await this.publishLate(gen, { kind: "video", track: sent });
       if (!ok && gen === this.gen && this.snap.phase === "connected") {
         this.set({ error: "Could not start your camera in the call." });
       }
@@ -564,12 +601,14 @@ class Engine implements CallEngine {
     }
   }
 
+  /** The camera as sent: blurred when that effect is on, so the preview shows what others see. */
   private localVideo(): MediaStream | null {
-    if (!this.camera || !this.videoOn) {
+    const track = this.sentTrack("video");
+    if (!track) {
       this.localVideoStream = null;
       return null;
     }
-    if (this.localVideoStream?.getVideoTracks()[0] !== this.camera) this.localVideoStream = new MediaStream([this.camera]);
+    if (this.localVideoStream?.getVideoTracks()[0] !== track) this.localVideoStream = new MediaStream([track]);
     return this.localVideoStream;
   }
 
@@ -698,7 +737,10 @@ class Engine implements CallEngine {
     this.audioOn = true;
     this.set({ audioEnabled: true, error: null });
     this.beat();
-    if (this.snap.phase === "connected") await this.publishLate(gen, { kind: "audio", track });
+    if (this.effects.audio.wanted) await this.syncEffect("audio", gen);
+    if (gen === this.gen && this.snap.phase === "connected") {
+      await this.publishLate(gen, { kind: "audio", track: this.sentTrack("audio") ?? track });
+    }
   }
 
   private async switchInput(kind: "audio" | "video", gen: number): Promise<void> {
@@ -727,6 +769,8 @@ class Engine implements CallEngine {
       });
     }
     old.stop();
+    // An effect was built around the old device: rebuild it around the new one.
+    if (this.effects[kind].wanted || this.effects[kind].processor !== null) await this.syncEffect(kind, gen);
     if (kind === "video") this.set({ localVideo: this.localVideo() });
   }
 
@@ -746,8 +790,10 @@ class Engine implements CallEngine {
   /** What this participant should be publishing right now (used by join and by every rebuild). */
   private localPublishItems(): PublishItem[] {
     const items: PublishItem[] = [];
-    if (this.mic) items.push({ kind: "audio", track: this.mic });
-    if (this.camera && this.videoOn) items.push({ kind: "video", track: this.camera });
+    const mic = this.sentTrack("audio");
+    const camera = this.sentTrack("video");
+    if (mic) items.push({ kind: "audio", track: mic });
+    if (camera) items.push({ kind: "video", track: camera });
     if (this.screen) items.push({ kind: "screen", track: this.screen });
     return items;
   }
@@ -1281,6 +1327,10 @@ class Engine implements CallEngine {
     this.chosenAudioOnly = false;
     this.cameraBeforeAudioOnly = false;
     this.pictureInPicture = false;
+    for (const slot of Object.values(this.effects)) {
+      slot.processor?.close();
+      Object.assign(slot, { wanted: false, source: null, processor: null, starting: null, shedForCpu: false });
+    }
     this.remoteQuality.clear();
     this.downlink = new DownlinkAdaptation();
     this.sendAdaptation = new SendAdaptation();
@@ -1457,6 +1507,136 @@ class Engine implements CallEngine {
     return this.chosenAudioOnly || this.downlink.mode === "audio-only" || this.hiddenPaused.has(participantId);
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // Quality phase 2 effects
+
+  async setNoiseSuppression(enabled: boolean): Promise<void> {
+    await this.setEffect("audio", enabled);
+  }
+
+  async setBackgroundBlur(enabled: boolean): Promise<void> {
+    await this.setEffect("video", enabled);
+  }
+
+  private async setEffect(kind: CallTrackKindAv, enabled: boolean): Promise<void> {
+    if (!this.session) return;
+    const slot = this.effects[kind];
+    if (enabled && !this.effectSupported(kind)) {
+      this.setEffectState(kind, "unsupported");
+      return;
+    }
+    slot.wanted = enabled;
+    slot.shedForCpu = false;
+    this.log("effect", { kind, enabled });
+    await this.syncEffect(kind, this.gen);
+  }
+
+  private effectSupported(kind: CallTrackKindAv): boolean {
+    try {
+      return (kind === "audio" ? this.env.supportsNoiseSuppression?.() : this.env.supportsBackgroundBlur?.()) === true;
+    } catch {
+      return false;
+    }
+  }
+
+  private setEffectState(kind: CallTrackKindAv, state: EffectState): void {
+    this.set(kind === "audio" ? { noiseSuppression: state } : { backgroundBlur: state });
+  }
+
+  /** The raw capture an effect wraps now: the microphone, or the camera while it is on. */
+  private rawTrack(kind: CallTrackKindAv): MediaStreamTrack | null {
+    return kind === "audio" ? this.mic : this.videoOn ? this.camera : null;
+  }
+
+  /** What the sender for `kind` carries: the processed track when an effect is built for this raw one. */
+  private sentTrack(kind: CallTrackKindAv): MediaStreamTrack | null {
+    const slot = this.effects[kind];
+    const raw = this.rawTrack(kind);
+    return slot.processor !== null && raw !== null && slot.source === raw ? slot.processor.track : raw;
+  }
+
+  /** Makes the sender match what is wanted. One build per kind at a time; later calls wait their turn. */
+  private async syncEffect(kind: CallTrackKindAv, gen: number): Promise<void> {
+    const slot = this.effects[kind];
+    while (slot.starting !== null) await slot.starting;
+    const run = this.syncEffectNow(kind, gen);
+    slot.starting = run;
+    try {
+      await run;
+    } finally {
+      if (slot.starting === run) slot.starting = null;
+    }
+  }
+
+  private async syncEffectNow(kind: CallTrackKindAv, gen: number): Promise<void> {
+    if (gen !== this.gen) return;
+    const slot = this.effects[kind];
+    const raw = this.rawTrack(kind);
+    if (slot.processor !== null && (!slot.wanted || slot.source !== raw)) {
+      const stale = slot.processor;
+      slot.processor = null;
+      slot.source = null;
+      // The raw track goes back on the sender before the processed one stops: no gap in what is sent.
+      if (raw !== null) await this.replaceSent(kind, raw);
+      stale.close();
+      if (kind === "video") this.set({ localVideo: this.localVideo() });
+    }
+    if (!slot.wanted) {
+      this.setEffectState(kind, !this.effectSupported(kind) ? "unsupported" : slot.shedForCpu ? "cpu" : "off");
+      return;
+    }
+    // Wanted, and either built already or with nothing to process yet (camera off): it is on.
+    if (slot.processor !== null || raw === null) {
+      this.setEffectState(kind, "on");
+      return;
+    }
+    this.setEffectState(kind, "starting");
+    let processor: TrackProcessor | null = null;
+    try {
+      processor =
+        (await (kind === "audio" ? this.env.createNoiseSuppressor?.(raw) : this.env.createBackgroundBlur?.(raw))) ?? null;
+    } catch (error) {
+      this.log("effect-failed", { kind, error: errorName(error) });
+    }
+    // Superseded while it loaded (left, switched device, switched off): whoever changed it syncs again.
+    if (gen !== this.gen || raw !== this.rawTrack(kind) || !slot.wanted) {
+      processor?.close();
+      return;
+    }
+    if (processor === null) {
+      slot.wanted = false;
+      this.setEffectState(kind, "failed");
+      return;
+    }
+    slot.processor = processor;
+    slot.source = raw;
+    await this.replaceSent(kind, processor.track);
+    this.setEffectState(kind, "on");
+    if (kind === "video") this.set({ localVideo: this.localVideo() });
+  }
+
+  private async replaceSent(kind: CallTrackKindAv, track: MediaStreamTrack): Promise<void> {
+    const publication = this.pubs.get(kind);
+    if (!publication) return;
+    await publication.transceiver.sender.replaceTrack(track).catch((error: unknown) => {
+      this.log("replace-track-failed", { kind, error: describeError(error) });
+    });
+  }
+
+  /** Sustained CPU strain: turns off the costliest effect that is on. True when there was one. */
+  private shedEffect(): boolean {
+    for (const kind of ["video", "audio"] as const) {
+      const slot = this.effects[kind];
+      if (!slot.wanted) continue;
+      slot.wanted = false;
+      slot.shedForCpu = true;
+      this.log("effect-shed", { kind });
+      void this.syncEffect(kind, this.gen);
+      return true;
+    }
+    return false;
+  }
+
   setPictureInPicture(open: boolean): void {
     if (this.pictureInPicture === open) return;
     this.pictureInPicture = open;
@@ -1594,7 +1774,10 @@ class Engine implements CallEngine {
     if (camera && reason !== null) {
       const action = this.sendAdaptation.sample(now, reason);
       limitation = this.sendAdaptation.limitation;
-      if (action) {
+      // Effects are the first thing to go: a blur costs more than any simulcast layer.
+      if (action === "shed" && this.shedEffect()) {
+        // This round's shed was the effect.
+      } else if (action) {
         const layers = await this.stepSendLayers(camera, action);
         if (gen !== this.gen) return;
         if (layers !== null) sendLayers = layers;

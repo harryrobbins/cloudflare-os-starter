@@ -58,7 +58,28 @@ export interface CallEnvironment {
   isDocumentHidden?(): boolean;
   /** `document` `visibilitychange`; returns an unsubscribe. Optional. */
   onVisibilityChange?(listener: () => void): () => void;
+  /**
+   * Quality phase 2 effects. Each wraps a raw capture track and returns the processed track to send,
+   * or null when this browser cannot run it. Absent means unsupported. `supports*` answers without
+   * loading anything, so the UI can hide a switch that would never work.
+   */
+  supportsNoiseSuppression?(): boolean;
+  createNoiseSuppressor?(microphone: MediaStreamTrack): Promise<TrackProcessor | null>;
+  supportsBackgroundBlur?(): boolean;
+  createBackgroundBlur?(camera: MediaStreamTrack): Promise<TrackProcessor | null>;
 }
+
+/** A capture track run through an effect: `track` is what is sent; `close` stops the processing. */
+export interface TrackProcessor {
+  readonly track: MediaStreamTrack;
+  close(): void;
+}
+
+/**
+ * An optional effect's state for the UI. `cpu` means the engine turned it off because the device
+ * could not keep up; `failed` that it could not start. Either can be switched on again.
+ */
+export type EffectState = "unsupported" | "off" | "starting" | "on" | "cpu" | "failed";
 
 export type CallPhase =
   /** No call. */
@@ -88,6 +109,9 @@ export interface JoinOptions {
   /** Start with the camera on. */
   readonly video: boolean;
   readonly devices: DeviceChoice;
+  /** Quality phase 2: start with these effects on, where supported. */
+  readonly noiseSuppression?: boolean;
+  readonly backgroundBlur?: boolean;
 }
 
 /** One remote participant's media, keyed by participant id in {@link CallSnapshot.remotes}. */
@@ -165,6 +189,10 @@ export interface CallSnapshot {
   readonly audioOnlyChosen?: boolean;
   /** How many simulcast layers we currently send for the camera (3 = all; fewer under CPU limits). */
   readonly sendLayers?: number;
+  /** ML noise suppression on the microphone (RNNoise). Absent reads as `unsupported`. */
+  readonly noiseSuppression?: EffectState;
+  /** Background blur on the camera (MediaPipe segmentation). Absent reads as `unsupported`. */
+  readonly backgroundBlur?: EffectState;
 }
 
 /**
@@ -217,6 +245,14 @@ export interface CallEngine {
    * the window report their own sizes).
    */
   setPictureInPicture(open: boolean): void;
+
+  /**
+   * Quality phase 2 effects, off by default. Turning one on builds the processor around the current
+   * track and swaps it onto the sender (no renegotiation); a device switch rebuilds it; sustained CPU
+   * strain turns it off (`cpu`) before any simulcast layer is shed. Resolves when the swap is done.
+   */
+  setNoiseSuppression(enabled: boolean): Promise<void>;
+  setBackgroundBlur(enabled: boolean): Promise<void>;
 
   /** The UI reports tile sizes whenever layout changes; the engine debounces layer switches. */
   setTileSizes(sizes: Readonly<Record<ParticipantId, TileSize>>): void;

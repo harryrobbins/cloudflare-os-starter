@@ -16,7 +16,9 @@ import {
   HandPalm,
   Microphone,
   Smiley,
+  UserFocus,
   Users,
+  Waveform,
   MicrophoneSlash,
   PhoneDisconnect,
   Monitor,
@@ -29,6 +31,7 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { CALL_REACTIONS } from "../../contract.js";
+import type { EffectState } from "../engine/types.js";
 import { useChat, useStore } from "../../hooks/store.js";
 
 import { DeviceSelects, useDeviceLists } from "./DeviceSelects.js";
@@ -218,6 +221,7 @@ export function CallControls({ layout, pip = false }: { layout: "page" | "dock";
               />
               {screenItem}
               <AudioOnlyItem disabled={!live} onDone={() => setMenu(null)} />
+              <EffectItems disabled={!live} />
               {canFloat && (
                 <MenuItem icon={<PictureInPicture size={15} />} label="Float the call over other tabs" onClick={float} />
               )}
@@ -254,6 +258,7 @@ export function CallControls({ layout, pip = false }: { layout: "page" | "dock";
               <InCallDevices />
               <div className="-mx-3 mt-3 -mb-3 border-t border-kumo-line py-1">
                 <AudioOnlyItem disabled={!live} onDone={() => setMenu(null)} />
+                <EffectItems disabled={!live} />
               </div>
             </div>
           )}
@@ -331,31 +336,35 @@ export function ParticipantList(): ReactNode {
   );
 }
 
-/**
- * "Audio only": everyone's video paused and the camera off, until chosen again. A checkbox menu item,
- * so its state is read out; the tiles show "Video paused" while it is on.
- */
-function AudioOnlyItem({ disabled, onDone }: { disabled: boolean; onDone: () => void }): ReactNode {
-  const store = useStore();
-  const on = useChat((state) => state.call.audioOnlyChosen === true);
+/** A switch in the call menus: a checkbox menu item, so screen readers read its state. */
+function SwitchItem({
+  icon,
+  label,
+  hint,
+  on,
+  disabled,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  hint: string;
+  on: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}): ReactNode {
   return (
     <button
       type="button"
       role="menuitemcheckbox"
       aria-checked={on}
       disabled={disabled}
-      onClick={() => {
-        onDone();
-        void store.toggleCallAudioOnly();
-      }}
+      onClick={onClick}
       className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-[13px] text-kumo-default transition-colors hover:bg-kumo-tint disabled:cursor-not-allowed disabled:opacity-50"
     >
-      <span className={on ? "text-kumo-brand" : "text-kumo-subtle"}>
-        <SpeakerHigh size={15} weight={on ? "fill" : "regular"} />
-      </span>
+      <span className={on ? "text-kumo-brand" : "text-kumo-subtle"}>{icon}</span>
       <span className="flex-1">
-        Audio only
-        <span className="block text-[11px] text-kumo-inactive">Pause everyone's video and your camera</span>
+        {label}
+        <span className="block text-[11px] text-kumo-inactive">{hint}</span>
       </span>
       <span
         aria-hidden="true"
@@ -367,6 +376,69 @@ function AudioOnlyItem({ disabled, onDone }: { disabled: boolean; onDone: () => 
         <span className="h-3 w-3 rounded-full bg-white" />
       </span>
     </button>
+  );
+}
+
+/** "Audio only": everyone's video paused and the camera off, until chosen again. */
+function AudioOnlyItem({ disabled, onDone }: { disabled: boolean; onDone: () => void }): ReactNode {
+  const store = useStore();
+  const on = useChat((state) => state.call.audioOnlyChosen === true);
+  return (
+    <SwitchItem
+      icon={<SpeakerHigh size={15} weight={on ? "fill" : "regular"} />}
+      label="Audio only"
+      hint="Pause everyone's video and your camera"
+      on={on}
+      disabled={disabled}
+      onClick={() => {
+        onDone();
+        void store.toggleCallAudioOnly();
+      }}
+    />
+  );
+}
+
+const EFFECT_HINTS: Readonly<Record<EffectState, string | null>> = {
+  unsupported: null,
+  off: null,
+  starting: "Starting…",
+  on: null,
+  cpu: "Turned off because your device was busy",
+  failed: "Could not start in this browser",
+};
+
+/**
+ * Noise suppression and background blur (quality phase 2), each only where this browser can run
+ * it. The menu stays open: the switch shows "Starting…" while the model loads.
+ */
+function EffectItems({ disabled }: { disabled: boolean }): ReactNode {
+  const store = useStore();
+  const noise = useChat((state) => state.call.noiseSuppression ?? "unsupported");
+  const blur = useChat((state) => state.call.backgroundBlur ?? "unsupported");
+  const video = useChat((state) => state.call.videoEnabled);
+  return (
+    <>
+      {noise !== "unsupported" && (
+        <SwitchItem
+          icon={<Waveform size={15} weight={noise === "on" ? "fill" : "regular"} />}
+          label="Noise suppression"
+          hint={EFFECT_HINTS[noise] ?? "Filter out keyboards, fans and background chatter"}
+          on={noise === "on" || noise === "starting"}
+          disabled={disabled || noise === "starting"}
+          onClick={() => void store.toggleCallEffect("noiseSuppression")}
+        />
+      )}
+      {blur !== "unsupported" && (
+        <SwitchItem
+          icon={<UserFocus size={15} weight={blur === "on" ? "fill" : "regular"} />}
+          label="Blur background"
+          hint={EFFECT_HINTS[blur] ?? (video ? "Keep you sharp and your room out of focus" : "Applies when your camera is on")}
+          on={blur === "on" || blur === "starting"}
+          disabled={disabled || blur === "starting"}
+          onClick={() => void store.toggleCallEffect("backgroundBlur")}
+        />
+      )}
+    </>
   );
 }
 

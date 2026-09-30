@@ -190,7 +190,13 @@ export interface ChatState {
   /** Remembered per browser; null ids mean the system default. */
   readonly callDevices: DeviceChoice;
   /** Whether the next join starts with the microphone and the camera on. */
-  readonly callStart: { readonly audio: boolean; readonly video: boolean };
+  readonly callStart: {
+    readonly audio: boolean;
+    readonly video: boolean;
+    /** Quality phase 2 effects, remembered like the toggles; absent is off. */
+    readonly noiseSuppression?: boolean;
+    readonly backgroundBlur?: boolean;
+  };
   /**
    * Where the shell has put this frame (`chat:layout`): its full `/chat` page, the dock, or out of
    * sight behind the floating call pill. Null when no shell has said, standalone included.

@@ -540,6 +540,108 @@ describe("chosen audio-only", () => {
   });
 });
 
+describe("effects (quality phase 2)", () => {
+  const both = { effects: { noise: true, blur: true } };
+  const micSender = (env: FakeEnvironment): FakeSender => env.pc.transceivers[0]!.sender;
+
+  it("reports unsupported effects and ignores a request for one", async () => {
+    const { env, engine } = await joinWith(callState([]));
+    expect(engine.snapshot()).toMatchObject({ noiseSuppression: "unsupported", backgroundBlur: "unsupported" });
+    await engine.setNoiseSuppression(true);
+    expect(env.effects).toHaveLength(0);
+    expect(engine.snapshot().noiseSuppression).toBe("unsupported");
+  });
+
+  it("swaps the processed track onto the sender and back, with no renegotiation", async () => {
+    const { env, sig, engine } = await joinWith(callState([]), both);
+    expect(engine.snapshot()).toMatchObject({ noiseSuppression: "off", backgroundBlur: "off" });
+    const offers = sig.calls("publishTracks").length;
+    const rawMic = micSender(env).track;
+
+    await engine.setNoiseSuppression(true);
+    const noise = env.effects.find((effect) => effect.kind === "noise")!;
+    expect(noise.source).toBe(rawMic);
+    expect(micSender(env).track).toBe(noise.track);
+    expect(engine.snapshot().noiseSuppression).toBe("on");
+
+    await engine.setBackgroundBlur(true);
+    const blur = env.effects.find((effect) => effect.kind === "blur")!;
+    expect(cameraSender(env).track).toBe(blur.track);
+    // The preview shows what others see.
+    expect(engine.snapshot().localVideo?.getVideoTracks()[0]).toBe(blur.track);
+
+    await engine.setNoiseSuppression(false);
+    expect(micSender(env).track).toBe(rawMic);
+    expect(noise.closed).toBe(true);
+    expect(engine.snapshot().noiseSuppression).toBe("off");
+    expect(sig.calls("publishTracks")).toHaveLength(offers);
+  });
+
+  it("starts chosen effects before the first publish", async () => {
+    const { env, sig } = await joinWith(callState([]), both, { noiseSuppression: true, backgroundBlur: true });
+    const published = env.effects.map((effect) => effect.track);
+    expect(published).toHaveLength(2);
+    expect(sig.calls("publishTracks")).toHaveLength(1);
+    expect(micSender(env).track).toBe(published[0]);
+    expect(cameraSender(env).track).toBe(published[1]);
+  });
+
+  it("rebuilds around a new device, and drops blur while the camera is off", async () => {
+    const { env, engine } = await joinWith(callState([]), both);
+    await engine.setBackgroundBlur(true);
+    const first = env.effects[0]!;
+    await engine.setDevices({ videoInputId: "cam-2" });
+    expect(first.closed).toBe(true);
+    const second = env.effects[1]!;
+    expect(second.source).not.toBe(first.source);
+    expect(cameraSender(env).track).toBe(second.track);
+
+    await engine.setVideoEnabled(false);
+    expect(second.closed).toBe(true);
+    expect(engine.snapshot().backgroundBlur).toBe("on");
+    await engine.setVideoEnabled(true);
+    const third = env.effects[2]!;
+    expect(cameraSender(env).track).toBe(third.track);
+  });
+
+  it("marks an effect that fails to start, and leaves the raw track on the sender", async () => {
+    const { env, engine } = await joinWith(callState([]), { ...both, effectError: "no wasm" });
+    const rawMic = micSender(env).track;
+    await engine.setNoiseSuppression(true);
+    expect(engine.snapshot().noiseSuppression).toBe("failed");
+    expect(micSender(env).track).toBe(rawMic);
+  });
+
+  it("sheds blur, then noise suppression, before any simulcast layer under sustained cpu", async () => {
+    const { env, engine } = await joinWith(callState([]), both);
+    await engine.setBackgroundBlur(true);
+    await engine.setNoiseSuppression(true);
+    const sender = cameraSender(env);
+    const active = (): boolean[] => sender.encodings.map((encoding) => encoding.active !== false);
+    sender.stats = { qualityLimitationReason: "cpu" };
+    await ticks(3);
+    await settle();
+    expect(engine.snapshot()).toMatchObject({ backgroundBlur: "cpu", noiseSuppression: "on" });
+    expect(active()).toEqual([true, true, true]);
+    await ticks(3);
+    await settle();
+    expect(engine.snapshot()).toMatchObject({ backgroundBlur: "cpu", noiseSuppression: "cpu" });
+    expect(active()).toEqual([true, true, true]);
+    await ticks(3);
+    expect(active()).toEqual([false, true, true]);
+    // Switching one back on is allowed.
+    await engine.setNoiseSuppression(true);
+    expect(engine.snapshot().noiseSuppression).toBe("on");
+  });
+
+  it("closes every processor on leave", async () => {
+    const { env, engine } = await joinWith(callState([]), both, { noiseSuppression: true, backgroundBlur: true });
+    await engine.leave();
+    expect(env.effects.every((effect) => effect.closed)).toBe(true);
+    expect(engine.snapshot().noiseSuppression).toBe("unsupported");
+  });
+});
+
 describe("telemetry", () => {
   it("posts a summary every 60 s with codec names, relay flag and counters, and nothing identifying", async () => {
     const { env, sig, engine } = await joinWith(callState([participant("p2", ["audio", "video"])]));

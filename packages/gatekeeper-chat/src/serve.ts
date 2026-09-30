@@ -145,13 +145,15 @@ async function serveApp(request: Request, env: ChatEnv, url: URL): Promise<Respo
  * there to stop script injection, and a style attribute is not that. Images and media allow `data:`
  * and `blob:` for monograms and upload previews. The socket is same-origin, but older Safari does not
  * read `'self'` as covering `wss:`, so the explicit socket origin is listed too. `frame-ancestors
- * 'self'` is what lets the shell's dock frame this app and nobody else.
+ * 'self'` is what lets the shell's dock frame this app and nobody else. `'wasm-unsafe-eval'` allows
+ * compiling WebAssembly and nothing else (no `eval`, no inline script): the call's optional noise
+ * suppression and background blur run bundled Wasm (RNNoise, MediaPipe) served from this origin.
  */
 export function contentSecurityPolicy(env: Pick<ChatEnv, "PUBLIC_BASE_URL">, requestOrigin: string): string {
   const socket = socketOrigin(env.PUBLIC_BASE_URL) ?? socketOrigin(requestOrigin);
   return [
     "default-src 'self'",
-    "script-src 'self'",
+    "script-src 'self' 'wasm-unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "media-src 'self' blob:",

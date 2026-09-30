@@ -395,6 +395,15 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
       };
     },
 
+    // The mock sends nothing, so an effect is only a switch in the snapshot.
+    async setNoiseSuppression(enabled: boolean): Promise<void> {
+      set({ noiseSuppression: enabled ? "on" : "off" });
+    },
+
+    async setBackgroundBlur(enabled: boolean): Promise<void> {
+      set({ backgroundBlur: enabled ? "on" : "off" });
+    },
+
     setPictureInPicture(): void {
       // Nothing to pause in the mock.
     },

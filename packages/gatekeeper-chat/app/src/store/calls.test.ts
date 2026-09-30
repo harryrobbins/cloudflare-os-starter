@@ -516,7 +516,14 @@ describe("joining and leaving", () => {
     expect(store.state.callUi).toMatchObject({ channelId: "c1", prejoin: true });
     await store.joinCall("c1");
     expect(engine.joins).toEqual([
-      { channelId: "c1", audio: true, video: false, devices: { audioInputId: "mic-2", videoInputId: null, audioOutputId: null } },
+      {
+        channelId: "c1",
+        audio: true,
+        video: false,
+        devices: { audioInputId: "mic-2", videoInputId: null, audioOutputId: null },
+        noiseSuppression: false,
+        backgroundBlur: false,
+      },
     ]);
     expect(store.state.call.phase).toBe("connected");
     expect(store.state.callUi.prejoin).toBe(false);
@@ -619,6 +626,22 @@ describe("joining and leaving", () => {
     await store.toggleCallAudioOnly();
     expect(engine.audioOnly).toEqual([true, false]);
     expect(store.state.announcement).toBe("Video is back on");
+  });
+
+  it("switches effects live, remembers them for the next join, and announces them", async () => {
+    const { store, engine } = await harness();
+    await store.joinCall("c1");
+    await store.toggleCallEffect("noiseSuppression");
+    expect(engine.effects).toEqual([["noise", true]]);
+    expect(store.state.announcement).toBe("Noise suppression on");
+    expect(loadCallPrefs().start).toMatchObject({ noiseSuppression: true });
+    await store.leaveCall();
+    await store.joinCall("c1");
+    expect(engine.joins.at(-1)).toMatchObject({ noiseSuppression: true, backgroundBlur: false });
+    engine.set({ noiseSuppression: "on" });
+    await store.toggleCallEffect("noiseSuppression");
+    expect(engine.effects.at(-1)).toEqual(["noise", false]);
+    expect(loadCallPrefs().start.noiseSuppression).toBeUndefined();
   });
 
   it("disposes the engine on unload without leaving", async () => {
