@@ -67,7 +67,7 @@ import { routePathD } from "../../../shared/connectors.js";
  * @property {(patch: {marquee?: Rect|null, hoverId?: string|null, guides?: Guide[]}) => void} setOverlay
  * @property {(type: ObjectType) => Partial<Style>} toolStyle
  * @property {(id: string|undefined, type: ObjectType) => void} finishCreate
- * @property {(id: string) => void} editText
+ * @property {(id: string, at?: {x: number, y: number}) => void} editText  `at`: the double-click point (a table edits that cell)
  * @property {(clientX: number, clientY: number, ids: string[], pointerType?: string) => void} contextMenu
  * @property {(id: string, p: PointerSample) => boolean} registerClick  true on a double click
  * @property {() => void} announceSelection
@@ -264,7 +264,7 @@ export function objectPressGesture(ctx, p, hit) {
       if (!drag) {
         if (q.shift && wasSelected) ctx.setSelection(before.filter((id) => id !== hit.id), { announce: true });
         else if (!q.shift && wasSelected && before.length > 1) ctx.setSelection([hit.id], { announce: true });
-        if (!q.shift && ctx.registerClick(hit.id, q) && TEXT_EDITABLE.includes(hit.type)) ctx.editText(hit.id);
+        if (!q.shift && ctx.registerClick(hit.id, q) && TEXT_EDITABLE.includes(hit.type)) ctx.editText(hit.id, { x: q.x, y: q.y });
         return;
       }
       const { dx, dy } = delta(q);

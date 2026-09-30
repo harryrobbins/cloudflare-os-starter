@@ -484,7 +484,7 @@ describe("gestures", () => {
     const { ctx } = setup(board(a));
     ctx.registerClick = () => true;
     G.objectPressGesture(ctx, pt(10, 10), a).up(pt(10, 10));
-    expect(ctx.editText).toHaveBeenCalledWith(a.id);
+    expect(ctx.editText).toHaveBeenCalledWith(a.id, expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }));
   });
 
   it("resize commits geometry and membership in one update", () => {

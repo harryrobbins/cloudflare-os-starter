@@ -3,7 +3,9 @@
 // (one <g> per object, patched per object), and the server serialises the same nodes into the SVG
 // export, so an export is the board as drawn. No DOM access here.
 
-import { fmt, center, connectorRoute, penWorldPoints, polylineMidpoint, strokePathD, textLayout, textWidth, fitCamera, boardBounds, rotatedBounds } from "./geometry.js";
+import { fmt, center, connectorRoute, penWorldPoints, polylineMidpoint, strokePathD, textLayout, textWidth, fitCamera, boardBounds, rotatedBounds, wrapText, LINE_HEIGHT } from "./geometry.js";
+import { diagramHash } from "./diagram.js";
+import { tableLayout } from "./table.js";
 import { DEFAULT_TITLE, sortedObjects } from "./protocol.js";
 import { getIcon, iconPaths, iconPlacement, iconTextBox, DEFAULT_ICON_STROKE, DEFAULT_INK } from "./icons/registry.js";
 import { codeLayout, fitColumns, CODE_FONT_FAMILY, CODE_CHAR_EM } from "./code/layout.js";
@@ -51,7 +53,7 @@ export function h(tag, attrs, children) {
  * @returns {VNode|null}
  */
 export function textNode(o) {
-  if (!o.text || o.type === "pen" || o.type === "connector" || o.type === "code") return null;
+  if (!o.text || o.type === "pen" || o.type === "connector" || o.type === "code" || o.type === "table" || o.type === "diagram") return null;
   if (o.type === "icon" && !iconTextBox(o)) return null;
   const layout = textLayout(o);
   if (!layout.lines.length) return null;
@@ -84,9 +86,10 @@ export function dashAttrs(dash, width) {
 /**
  * The shape (without text) of a non-connector object.
  * @param {WhiteboardObject} o
+ * @param {Images} [images]  diagram renders by object id
  * @returns {VNode[]}
  */
-function shapeNodes(o) {
+function shapeNodes(o, images) {
   const s = o.style;
   const paint = {
     fill: s.fill, stroke: s.stroke === "none" || !s.strokeWidth ? "none" : s.stroke,
@@ -103,7 +106,8 @@ function shapeNodes(o) {
       const shape = shapeOf(o) ?? "rect";
       if (shape === "rect") return [h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, rx: 4, ...paint, ...dash })];
       const g = shapeOutline(shape, o.w, o.h);
-      const nodes = [h("path", { d: cmdsToPath(g.cmds, o.x, o.y, fmt), ...paint, ...dash, "stroke-linejoin": "round" })];
+      const nodes = (g.behind ?? []).map((b) => h("path", { d: cmdsToPath(b, o.x, o.y, fmt), ...paint, ...dash, "stroke-linejoin": "round" }));
+      nodes.push(h("path", { d: cmdsToPath(g.cmds, o.x, o.y, fmt), ...paint, ...dash, "stroke-linejoin": "round" }));
       if (g.detail && paint.stroke !== "none") {
         nodes.push(h("path", { d: cmdsToPath(g.detail, o.x, o.y, fmt), fill: "none", stroke: paint.stroke, "stroke-width": paint["stroke-width"], ...dash }));
       }
@@ -125,6 +129,10 @@ function shapeNodes(o) {
       return iconNodes(o);
     case "code":
       return codeNodes(o);
+    case "table":
+      return tableNodes(o);
+    case "diagram":
+      return diagramNodes(o, images);
     default:
       return [];
   }
@@ -242,6 +250,92 @@ function codeNodes(o) {
     x: o.x, y: m.bodyY, width: o.w, height: bodyH,
     viewBox: `${fmt(o.x)} ${fmt(m.bodyY)} ${fmt(o.w)} ${fmt(bodyH)}`, overflow: "hidden",
   }, clip));
+  return nodes;
+}
+
+/**
+ * Rendered diagrams by object id, as the canvas and the export know them: `href` is a data: URL
+ * of the SVG (drawn with <image>, so it can never run script), `status` what to say otherwise.
+ * @typedef {Map<string, {hash: string, status: string, href?: string, error?: string}>} Images
+ */
+
+/**
+ * A table: background, shaded header row, grid and wrapped cell text (src/shared/table.js).
+ * @param {WhiteboardObject} o
+ * @returns {VNode[]}
+ */
+function tableNodes(o) {
+  const L = tableLayout(o);
+  const s = o.style;
+  const line = s.stroke === "none" ? "#9ca3af" : s.stroke;
+  const width = Math.max(0.5, s.strokeWidth || 1);
+  /** @type {VNode[]} */
+  const nodes = [h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, fill: s.fill === "none" ? "#ffffff" : s.fill })];
+  if (o.header && L.rows > 1) nodes.push(h("rect", { x: o.x, y: o.y, width: o.w, height: L.rowH, fill: line, "fill-opacity": "0.14" }));
+  let d = "";
+  for (let r = 1; r < L.rows; r++) d += `M${fmt(o.x)} ${fmt(o.y + r * L.rowH)}H${fmt(o.x + o.w)}`;
+  for (let c = 1; c < L.cols; c++) d += `M${fmt(L.xs[c])} ${fmt(o.y)}V${fmt(o.y + o.h)}`;
+  if (d) nodes.push(h("path", { d, fill: "none", stroke: line, "stroke-width": width }));
+  nodes.push(h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, fill: "none", stroke: line, "stroke-width": width }));
+  const anchor = s.align === "center" ? "middle" : s.align === "right" ? "end" : "start";
+  for (const cell of L.cells) {
+    if (!cell.lines.length) continue;
+    const x = anchor === "middle" ? cell.x + cell.w / 2 : anchor === "end" ? cell.x + cell.w : cell.x;
+    nodes.push(h("text", {
+      x, y: cell.baseline, "font-size": s.fontSize, "font-family": FONT_FAMILY, fill: s.textColor, "text-anchor": anchor,
+      "font-weight": cell.header ? "600" : null, style: "white-space:pre",
+    }, cell.lines.map((t, i) => ({ tag: "tspan", attrs: { x: fmt(x), ...(i === 0 ? {} : { dy: fmt(L.lineHeight) }) }, text: t || " " }))));
+  }
+  return nodes;
+}
+
+/**
+ * A diagram: its render as an image when there is one for its current source (see
+ * src/shared/diagram.js), else a placeholder with its language, a status line and the start of
+ * its source.
+ * @param {WhiteboardObject} o @param {Images} [images]
+ * @returns {VNode[]}
+ */
+function diagramNodes(o, images) {
+  const s = o.style;
+  const img = images?.get(o.id);
+  const current = img && img.hash === diagramHash(o) ? img : null;
+  /** @type {VNode[]} */
+  const nodes = [h("rect", {
+    x: o.x, y: o.y, width: o.w, height: o.h, rx: 6, fill: s.fill === "none" ? "#ffffff" : s.fill,
+    stroke: s.stroke === "none" ? "none" : s.stroke, "stroke-width": s.stroke === "none" ? null : Math.max(0.5, s.strokeWidth || 1),
+  })];
+  const pad = Math.min(12, o.w / 10, o.h / 10);
+  if (current?.href) {
+    nodes.push(h("image", {
+      x: o.x + pad, y: o.y + pad, width: Math.max(1, o.w - 2 * pad), height: Math.max(1, o.h - 2 * pad),
+      href: current.href, preserveAspectRatio: "xMidYMid meet",
+    }));
+    return nodes;
+  }
+  const fs = Math.max(8, Math.min(s.fontSize, o.h / 6));
+  const label = o.syntax === "mermaid" ? "Mermaid diagram" : "D2 diagram";
+  const status = !o.text?.trim() ? "Empty: double-click to write its source"
+    : !current ? (img?.status === "pending" ? "Rendering…" : "Not rendered yet")
+    : current.status === "unavailable" ? "Renderer not connected: connect MermaiD2 to this board as MERMAID2"
+    : current.status === "error" ? `Could not render: ${current.error ?? "error"}`
+    : current.status === "pending" ? "Rendering…" : "";
+  const color = current?.status === "error" ? "#b91c1c" : "#6b7280";
+  const room = Math.max(1, o.w - 2 * pad);
+  nodes.push(h("text", { x: o.x + pad, y: o.y + pad + fs, "font-size": fs, "font-family": FONT_FAMILY, "font-weight": "600", fill: "#374151" }, [{ tag: "tspan", attrs: {}, text: label }]));
+  const statusLines = wrapText(status, room, fs * 0.9, 2);
+  const lh = fs * LINE_HEIGHT;
+  nodes.push(h("text", { x: o.x + pad, y: o.y + pad + fs + lh, "font-size": fs * 0.9, "font-family": FONT_FAMILY, fill: color },
+    statusLines.map((t, i) => ({ tag: "tspan", attrs: { x: fmt(o.x + pad), ...(i ? { dy: fmt(lh * 0.9) } : {}) }, text: t }))));
+  const top = o.y + pad + fs + lh * (1 + statusLines.length * 0.9) + lh * 0.3;
+  const maxLines = Math.max(0, Math.floor((o.y + o.h - pad - top) / (lh * 0.9)));
+  const src = (o.text ?? "").split("\n").slice(0, maxLines);
+  if (src.length && maxLines > 0) {
+    nodes.push(h("svg", { x: o.x + pad, y: top, width: room, height: Math.max(1, o.y + o.h - pad - top), overflow: "hidden" }, [
+      h("text", { x: 0, y: fs * 0.85, "font-size": fs * 0.85, "font-family": CODE_FONT_FAMILY, fill: "#4b5563", style: "white-space:pre", "xml:space": "preserve" },
+        src.map((t, i) => ({ tag: "tspan", attrs: { x: "0", ...(i ? { dy: fmt(lh * 0.9) } : {}) }, text: t || " " }))),
+    ]));
+  }
   return nodes;
 }
 
@@ -389,7 +483,7 @@ function connectorNode(o, resolve, env) {
  */
 export function objectNode(o, resolve, env) {
   if (o.type === "connector") return connectorNode(o, resolve, env);
-  const children = shapeNodes(o);
+  const children = shapeNodes(o, /** @type {any} */ (env)?.images);
   const text = textNode(o);
   if (text) children.push(text);
   const c = center(o);
@@ -431,10 +525,10 @@ export const EXPORT_TEXT_BUDGET = 2_000_000;
  * The whole board (or one frame and its members) as a standalone SVG document. At most
  * EXPORT_TEXT_BUDGET characters of text are laid out, in stacking order.
  * @param {BoardSnapshot} board
- * @param {{padding?: number, frameId?: string|null}} [options]
+ * @param {{padding?: number, frameId?: string|null, images?: Images}} [options]  images: diagram renders
  * @returns {string}
  */
-export function boardToSvg(board, { padding = 40, frameId = null } = {}) {
+export function boardToSvg(board, { padding = 40, frameId = null, images = undefined } = {}) {
   const all = board.objects ?? {};
   /** @type {Record<string, WhiteboardObject>} */
   let objects = all;
@@ -449,6 +543,7 @@ export function boardToSvg(board, { padding = 40, frameId = null } = {}) {
   }
   // Elbow connectors route around the whole board's objects, as on the canvas (a frame export too).
   const env = createRouteEnv(all, { memo: true });
+  if (images) /** @type {any} */ (env).images = images;
   const bounds = boardBounds(objects, env) ?? { x: 0, y: 0, w: 800, h: 600 };
   // Frame names sit above the frame; leave room for them.
   const top = Math.min(bounds.y, ...Object.values(objects).filter((o) => o.type === "frame").map((f) => f.y - f.style.fontSize * 1.25 - 4));

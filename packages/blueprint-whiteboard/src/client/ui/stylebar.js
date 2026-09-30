@@ -21,6 +21,7 @@ import { canEditText } from "./canvas/model.js";
 import { objectLink } from "../../shared/link-card.js";
 import { openWebsiteDialog } from "./share.js";
 import { createCodeControls } from "./code-block.js";
+import { createTableDiagramControls } from "./table-diagram.js";
 import { canResetRoute, hasRouteHandles } from "./canvas/route-edit.js";
 
 /** @typedef {import("./app.js").App} App */
@@ -28,13 +29,13 @@ import { canResetRoute, hasRouteHandles } from "./canvas/route-edit.js";
 /** @typedef {import("../../shared/protocol.js").ObjectType} ObjectType */
 /** @typedef {import("../../shared/protocol.js").Style} Style */
 
-const FILL_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame", "icon"]);
-const STROKE_TYPES = new Set(["rect", "ellipse", "frame", "pen", "connector", "icon"]);
+const FILL_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame", "icon", "table"]);
+const STROKE_TYPES = new Set(["rect", "ellipse", "frame", "pen", "connector", "icon", "table"]);
 // Text controls apply to icons only when they hold text (stencils); see textObjs in render().
-const TEXT_COLOR_TYPES = new Set(["sticky", "rect", "ellipse", "text", "connector", "icon"]);
+const TEXT_COLOR_TYPES = new Set(["sticky", "rect", "ellipse", "text", "connector", "icon", "table"]);
 const WIDTH_TYPES = new Set(["rect", "ellipse", "frame", "pen", "connector", "icon"]);
-const FONT_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame", "connector", "icon"]);
-const ALIGN_TYPES = new Set(["sticky", "rect", "ellipse", "text", "icon"]);
+const FONT_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame", "connector", "icon", "table"]);
+const ALIGN_TYPES = new Set(["sticky", "rect", "ellipse", "text", "icon", "table"]);
 const MOVABLE = (/** @type {WhiteboardObject} */ o) => o.type !== "connector";
 const RESIZABLE = MOVABLE;
 const ROTATABLE_TYPES = new Set(/** @type {readonly string[]} */ (ROTATABLE));
@@ -74,7 +75,7 @@ export function objectLabel(o) {
 
 /** @param {ObjectType} type */
 export function typeLabel(type) {
-  return { sticky: "Sticky note", rect: "Rectangle", ellipse: "Ellipse", text: "Text", frame: "Frame", pen: "Drawing", connector: "Connector", icon: "Icon", code: "Code block" }[type] ?? type;
+  return { sticky: "Sticky note", rect: "Rectangle", ellipse: "Ellipse", text: "Text", frame: "Frame", pen: "Drawing", connector: "Connector", icon: "Icon", code: "Code block", table: "Table", diagram: "Diagram" }[type] ?? type;
 }
 
 /** @param {App} app */
@@ -94,6 +95,7 @@ export function createStyleBar(app) {
   let renderKey = "";
   const arrange = createArrange(app);
   const code = createCodeControls(app);
+  const tableDiagram = createTableDiagramControls(app);
 
   /** @returns {WhiteboardObject[]} */
   function selected() {
@@ -321,7 +323,8 @@ export function createStyleBar(app) {
       }
       return;
     }
-    const key = objs.map((o) => `${o.id}:${o.version}:${JSON.stringify(o.style)}:${o.routing ?? ""}:${o.w}:${o.h}:${o.rot}`).join("|");
+    const key = objs.map((o) => `${o.id}:${o.version}:${JSON.stringify(o.style)}:${o.routing ?? ""}:${o.w}:${o.h}:${o.rot}` +
+      (o.type === "diagram" ? `:${canvas.getDiagramRender?.(o.id)?.status ?? ""}` : "")).join("|");
     if (key === renderKey && !el.hidden) return;
     renderKey = key;
     const types = new Set(objs.map((o) => o.type));
@@ -365,7 +368,7 @@ export function createStyleBar(app) {
       }, shapeIcon(current ?? "rect", 18));
       b.addEventListener("click", () => openPicker(b, {
         label: "Shape", choices: SHAPE_CHOICES.filter((c) => c.value !== "ellipse"), current, icon: (v) => shapeIcon(v, 22),
-        columns: 4, className: "shape-pop",
+        columns: 7, className: "shape-pop",
         onPick: (v) => { update((o) => o.type === "rect", () => ({ style: { shape: v } })); app.announce?.(`Shape: ${shapeLabel(v)}`); },
       }));
       groups.push(h("div", { class: "style-group shape-group", role: "group", "aria-label": "Shape" }, b));
@@ -468,6 +471,7 @@ export function createStyleBar(app) {
     }
     const codeGroup = code.group(objs, btn);
     if (codeGroup) groups.push(codeGroup);
+    groups.push(...tableDiagram.groups(objs, btn));
     groups.push(...arrange.groups(objs, btn));
     groups.push(h("div", { class: "style-group arrange-group", role: "group", "aria-label": "Arrange" },
       canConnect(objs)
@@ -540,6 +544,7 @@ export function createStyleBar(app) {
       if (objs.length === 1 && canEditText(objs[0])) items.push({ label: "Edit text", className: "ctx-edit", onSelect: editText });
       if (canConnect(objs)) items.push({ label: "Connect", className: "ctx-connect", onSelect: connect });
       items.push(...code.menuItems(objs));
+      items.push(...tableDiagram.menuItems(objs));
       if (objs.length === 1 && hasRouteHandles(objs[0])) items.push({ label: "Edit route", className: "ctx-route-edit", onSelect: () => { canvas.editRoute?.(objs[0].id); } });
       if (objs.some(canResetRoute)) items.push({ label: "Reset route", className: "ctx-route-reset", onSelect: () => { canvas.resetRoute?.(objs.map((o) => o.id)); } });
       items.push(...arrange.menuItems(objs, { x: at.x, y: at.y, returnFocus: canvas.element, avoid: at.rect ?? null, pointerType: at.pointerType }));

@@ -95,6 +95,9 @@ const ICON_PATHS = {
   arrowStart: "M19 12H5M10 7l-5 5 5 5",
   arrowEnd: "M5 12h14M14 7l5 5-5 5",
   swap: "M4 8h14l-3-3M20 16H6l3 3",
+  table: "M4 5h16v14H4zM4 10h16M4 15h16M10 5v14",
+  code: "M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 5.5l-3 13",
+  diagram: "M3 4h7v5H3zM14 15h7v5h-7zM6.5 9v4.5h11V15",
   rotateCw: "M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5",
   rotateCcw: "M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5",
 };

@@ -107,6 +107,9 @@
  *
  * Server history (activity panel, and undoing a change made before a reload).
  * @property {(limit?: number) => Promise<HistoryEntry[]>} loadHistory
+ * @property {(id: string) => Promise<(import("../shared/diagram.js").DiagramRender & {id: string})|null>} [getDiagramRender]
+ *   a diagram's render (the server renders it when it has to), or null when `id` is not a diagram
+ *   or this server cannot render
  * @property {(historyId: string) => Promise<void>} undoHistory
  *
  * Presence (src/client/sync/presence.js). Fields left out keep their value. Boundaries (selection

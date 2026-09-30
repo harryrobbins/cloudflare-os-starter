@@ -20,6 +20,7 @@ import { codeHeight, codeMetrics, CODE_FONT_FAMILY, CODE_LINE_HEIGHT, TAB_WIDTH 
 import { codeTheme } from "../../../shared/code/theme.js";
 import { applyEdit, indentEdit, indentUnitOf, newlineEdit } from "./code-editing.js";
 import { keyAction } from "./keymap.js";
+import { tableLayout, cellsOf } from "../../../shared/table.js";
 
 /** @typedef {import("../../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("../../../shared/protocol.js").ObjectPatch} ObjectPatch */
@@ -38,18 +39,44 @@ import { keyAction } from "./keymap.js";
  * @property {string} color
  * @property {number} maxLength
  * @property {{background: string, padLeft: number, pad: number, wrap: boolean, language: string}} [code]
- *   code blocks: the editor covers the body (below the header) in the block's monospace font
+ *   code blocks: the editor covers the body (below the header) in the block's monospace font;
+ *   diagrams: their source, over the whole diagram
+ * @property {boolean} [bold]  a table's header cell
+ * @property {string} [background]  a table cell: covers the cell's drawn text
  */
+
+/** A table cell being edited. @typedef {{r: number, c: number}} Cell */
 
 /**
  * @param {WhiteboardObject} o @param {(id: string) => WhiteboardObject|undefined} resolve
  * @param {import("../../../shared/connectors.js").RouteEnv} [env]
+ * @param {Cell|null} [cell]  tables: the cell (default the first)
  * @returns {EditorBox|null}
  */
-export function editorBox(o, resolve, env) {
+export function editorBox(o, resolve, env, cell = null) {
   if (!canEditText(o)) return null;
   const fontSize = o.style.fontSize;
   const lineHeight = fontSize * LINE_HEIGHT;
+  if (o.type === "table") {
+    const L = tableLayout(o);
+    const r = Math.min(L.rows - 1, cell?.r ?? 0), cc = Math.min(L.cols - 1, cell?.c ?? 0);
+    const t = L.cells[r * L.cols + cc];
+    const c = center(o);
+    return {
+      x: t.x, y: t.y, w: t.w, h: t.h, cx: c.x, cy: c.y, rot: 0, fontSize, align: o.style.align,
+      singleLine: false, centerVertically: true, chrome: "none", color: o.style.textColor, maxLength: LIMITS.tableCell,
+      bold: t.header, background: o.style.fill === "none" ? "#ffffff" : o.style.fill,
+    };
+  }
+  if (o.type === "diagram") {
+    const c = center(o);
+    const pad = Math.min(12, o.w / 10, o.h / 10);
+    return {
+      x: o.x, y: o.y, w: o.w, h: o.h, cx: c.x, cy: c.y, rot: 0, fontSize: Math.max(12, Math.min(fontSize, 16)),
+      align: "left", singleLine: false, centerVertically: false, chrome: "none", color: "#1f2937", maxLength: LIMITS.diagramText,
+      code: { background: "#f9fafb", padLeft: pad, pad, wrap: false, language: "plain" },
+    };
+  }
   if (o.type === "connector") {
     const route = connectorRouteOf(o, resolve, env);
     if (!route) return null;
@@ -99,6 +126,7 @@ export function textPatch(o, value) {
   const text = o.type === "frame" ? cleanLine(value, LIMITS.frameName)
     : o.type === "connector" ? cleanLine(value, LIMITS.connectorLabel)
     : o.type === "code" ? cleanCode(value)
+    : o.type === "diagram" ? cleanText(value, LIMITS.diagramText)
     : cleanText(value, LIMITS.text);
   /** @type {ObjectPatch} */
   const patch = {};
@@ -121,7 +149,9 @@ export function textPatch(o, value) {
  * @property {(id: string) => WhiteboardObject|undefined} resolve
  * @property {import("../../../shared/connectors.js").RouteEnv} [routeEnv]
  * @property {() => Camera} getCamera
- * @property {(id: string, value: string) => void} onCommit
+ * @property {(id: string, value: string, cell: Cell|null) => void} onCommit  `cell`: the table cell edited
+ * @property {(id: string, cell: Cell, move: "next"|"prev"|"down") => void} [onCellMove]  Tab, Shift+Tab
+ *   or Enter in a table cell, after that cell was committed
  * @property {(id: string) => void} onClose
  * @property {(id: string, text: string) => string|null} [onCodePaste]  paste into an EMPTY code
  *   block: may set its language and returns the text to insert instead (null: paste as is)
@@ -142,23 +172,32 @@ export class TextEditor {
     /** @type {EditorBox|null} */
     this.box = null;
     this.closing = false;
+    /** @type {Cell|null} */
+    this.cell = null;
   }
 
   get isOpen() {
     return this.id !== null;
   }
 
-  /** @param {string} id @returns {boolean} opened */
-  open(id) {
-    if (this.id === id) { this.textarea?.focus(); return true; }
-    if (this.id) this.commit();
+  /** @param {string} id @param {Cell|null} [cell]  tables: the cell to edit @returns {boolean} opened */
+  open(id, cell = null) {
     const o = this.deps.getObject(id);
+    if (o?.type === "table") {
+      const cells = cellsOf(o);
+      cell = { r: Math.max(0, Math.min(cells.length - 1, cell?.r ?? 0)), c: Math.max(0, Math.min(cells[0].length - 1, cell?.c ?? 0)) };
+    } else cell = null;
+    if (this.id === id && (!cell || (this.cell?.r === cell.r && this.cell?.c === cell.c))) { this.textarea?.focus(); return true; }
+    if (this.id) this.commit();
     if (!o) return false;
-    const box = editorBox(o, this.deps.resolve, this.deps.routeEnv);
+    const box = editorBox(o, this.deps.resolve, this.deps.routeEnv, cell);
     if (!box) return false;
     const ta = document.createElement("textarea");
     ta.className = "wb-editor" + (box.chrome === "label" ? " wb-editor-label" : box.chrome === "frame" ? " wb-editor-frame" : "");
-    ta.setAttribute("aria-label", o.type === "frame" ? "Frame name" : o.type === "connector" ? "Connector label" : o.type === "code" ? "Code" : "Text");
+    ta.setAttribute("aria-label", o.type === "frame" ? "Frame name" : o.type === "connector" ? "Connector label" : o.type === "code" ? "Code"
+      : o.type === "diagram" ? (o.syntax === "mermaid" ? "Mermaid source" : "D2 source")
+      : o.type === "table" && cell ? `Row ${cell.r + 1}, column ${cell.c + 1}` : "Text");
+    if (cell) ta.setAttribute("aria-description", "Tab: next cell. Shift+Tab: previous cell. Enter: cell below. Shift+Enter: new line. Escape: done.");
     ta.spellcheck = !box.code;
     if (box.code) {
       ta.classList.add("wb-editor-code");
@@ -169,7 +208,7 @@ export class TextEditor {
       ta.addEventListener("paste", (e) => this.onPaste(e));
     }
     ta.maxLength = box.maxLength;
-    ta.value = o.text || "";
+    ta.value = cell ? cellsOf(o)[cell.r][cell.c] ?? "" : o.text || "";
     ta.rows = 1;
     ta.addEventListener("keydown", (e) => this.onKey(e));
     ta.addEventListener("input", () => this.position());
@@ -179,13 +218,14 @@ export class TextEditor {
       ta.addEventListener(type, (e) => e.stopPropagation());
     }
     this.id = id;
+    this.cell = cell;
     this.textarea = ta;
     this.box = box;
     this.deps.host.appendChild(ta);
     this.position();
     ta.focus({ preventScroll: true });
     ta.setSelectionRange(ta.value.length, ta.value.length);
-    if (o.type === "frame" || o.type === "connector") ta.select();
+    if (o.type === "frame" || o.type === "connector" || cell) ta.select();
     return true;
   }
 
@@ -213,6 +253,14 @@ export class TextEditor {
     }
     const ta = this.textarea;
     const code = this.box?.code;
+    if (this.cell && this.id && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey))) {
+      e.preventDefault();
+      const id = this.id, cell = this.cell;
+      const move = e.key === "Enter" ? "down" : e.shiftKey ? "prev" : "next";
+      this.commit();
+      this.deps.onCellMove?.(id, cell, move);
+      return;
+    }
     if (code && ta && !e.ctrlKey && !e.metaKey && !e.altKey) {
       if (e.key === "Tab") {
         e.preventDefault();
@@ -261,7 +309,12 @@ export class TextEditor {
     if (!this.id) return;
     const o = this.deps.getObject(this.id);
     if (!o) { this.close(); return; }
-    const box = editorBox(o, this.deps.resolve, this.deps.routeEnv);
+    if (this.cell && o.type === "table") {
+      // Rows or columns removed elsewhere: stay within the table.
+      const cells = cellsOf(o);
+      this.cell = { r: Math.min(this.cell.r, cells.length - 1), c: Math.min(this.cell.c, cells[0].length - 1) };
+    }
+    const box = editorBox(o, this.deps.resolve, this.deps.routeEnv, this.cell);
     if (!box) { this.close(); return; }
     this.box = box;
     this.position();
@@ -294,10 +347,11 @@ export class TextEditor {
       fontSize: `${box.fontSize}px`,
       lineHeight: String(LINE_HEIGHT),
       fontFamily: FONT_FAMILY,
-      fontWeight: box.chrome === "frame" ? "600" : "400",
+      fontWeight: box.chrome === "frame" || box.bold ? "600" : "400",
       textAlign: box.align,
       color: box.color,
       whiteSpace: box.singleLine ? "pre" : "pre-wrap",
+      background: box.background ?? "",
     });
     ta.style.height = "0px";
     const content = Math.max(lineHeight, ta.scrollHeight);
@@ -321,7 +375,7 @@ export class TextEditor {
     const value = this.textarea?.value ?? "";
     this.closing = true;
     try {
-      this.deps.onCommit(id, value);
+      this.deps.onCommit(id, value, this.cell);
     } finally {
       this.closing = false;
       this.close();
@@ -334,6 +388,7 @@ export class TextEditor {
     const id = this.id;
     const ta = this.textarea;
     this.id = null;
+    this.cell = null;
     this.textarea = null;
     this.box = null;
     ta?.remove();

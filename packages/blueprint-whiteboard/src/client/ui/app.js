@@ -224,6 +224,9 @@ export function mountApp(root, store, { embedded = false } = {}) {
       case "editing":
         styleBar.render();
         break;
+      case "diagram":
+        if (canvas.getSelection().includes(/** @type {any} */ (event).id)) styleBar.render();
+        break;
       case "follow":
         people.render(uiStore.getState());
         break;

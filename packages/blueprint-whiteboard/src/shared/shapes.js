@@ -16,27 +16,37 @@
 
 /**
  * Shape ids in picker order, with labels and search words.
- * @type {ReadonlyArray<{id: string, label: string, words: string}>}
+ * @type {ReadonlyArray<{id: string, label: string, group: string, words: string}>}
  */
 export const SHAPES = Object.freeze([
-  { id: "rect", label: "Rectangle", words: "box square process step" },
-  { id: "rounded", label: "Rounded rectangle", words: "box card round" },
-  { id: "pill", label: "Pill", words: "stadium terminator start end capsule" },
-  { id: "diamond", label: "Diamond", words: "decision rhombus choice if condition" },
-  { id: "triangle", label: "Triangle", words: "warning pyramid delta" },
-  { id: "hexagon", label: "Hexagon", words: "preparation six" },
-  { id: "octagon", label: "Octagon", words: "stop eight" },
-  { id: "pentagon", label: "Pentagon", words: "five" },
-  { id: "parallelogram", label: "Parallelogram", words: "input output data io slanted" },
-  { id: "trapezoid", label: "Trapezoid", words: "manual operation" },
-  { id: "cylinder", label: "Database", words: "cylinder db storage sql table data store" },
-  { id: "document", label: "Document", words: "page paper report file wave" },
-  { id: "cloud", label: "Cloud", words: "internet network saas hosting" },
-  { id: "callout", label: "Speech bubble", words: "callout comment say chat quote" },
-  { id: "star", label: "Star", words: "favourite favorite highlight" },
-  { id: "cross", label: "Cross", words: "plus add" },
-  { id: "arrow", label: "Block arrow", words: "arrow right next direction" },
-  { id: "chevron", label: "Chevron", words: "step stage phase process arrow" },
+  { id: "rect", label: "Rectangle", group: "Basic", words: "box square process step" },
+  { id: "rounded", label: "Rounded rectangle", group: "Basic", words: "box card round" },
+  { id: "pill", label: "Pill", group: "Basic", words: "stadium terminator start end capsule" },
+  { id: "diamond", label: "Diamond", group: "Basic", words: "decision rhombus choice if condition" },
+  { id: "triangle", label: "Triangle", group: "Basic", words: "warning pyramid delta" },
+  { id: "rightTriangle", label: "Right triangle", group: "Basic", words: "corner angle" },
+  { id: "pentagon", label: "Pentagon", group: "Basic", words: "five" },
+  { id: "hexagon", label: "Hexagon", group: "Basic", words: "preparation six" },
+  { id: "octagon", label: "Octagon", group: "Basic", words: "stop eight" },
+  { id: "parallelogram", label: "Parallelogram", group: "Basic", words: "input output data io slanted" },
+  { id: "trapezoid", label: "Trapezoid", group: "Basic", words: "manual operation" },
+  { id: "star", label: "Star", group: "Basic", words: "favourite favorite highlight" },
+  { id: "cross", label: "Cross", group: "Basic", words: "plus add" },
+  { id: "cube", label: "Cube", group: "Basic", words: "box 3d block package" },
+  { id: "cylinder", label: "Database", group: "Flowchart", words: "cylinder db storage sql table data store" },
+  { id: "queue", label: "Queue", group: "Flowchart", words: "horizontal cylinder stream topic bus direct access storage" },
+  { id: "document", label: "Document", group: "Flowchart", words: "page paper report file wave" },
+  { id: "multidoc", label: "Multiple documents", group: "Flowchart", words: "documents pages reports files stack" },
+  { id: "note", label: "Note", group: "Flowchart", words: "folded corner memo card page" },
+  { id: "subprocess", label: "Subprocess", group: "Flowchart", words: "predefined process subroutine function" },
+  { id: "manualInput", label: "Manual input", group: "Flowchart", words: "keyboard entry form" },
+  { id: "delay", label: "Delay", group: "Flowchart", words: "wait pause d shape" },
+  { id: "offpage", label: "Off-page link", group: "Flowchart", words: "connector continue reference" },
+  { id: "cloud", label: "Cloud", group: "Flowchart", words: "internet network saas hosting" },
+  { id: "callout", label: "Speech bubble", group: "Arrows and callouts", words: "callout comment say chat quote" },
+  { id: "arrow", label: "Block arrow", group: "Arrows and callouts", words: "arrow right next direction" },
+  { id: "doubleArrow", label: "Double arrow", group: "Arrows and callouts", words: "both ways two way exchange" },
+  { id: "chevron", label: "Chevron", group: "Arrows and callouts", words: "step stage phase process arrow" },
 ]);
 
 /** Default sizes (a click with the tool, the Add menu), chosen so each shape looks like itself. */
@@ -44,6 +54,8 @@ const SIZES = /** @type {Record<string, [number, number]>} */ ({
   pill: [200, 80], diamond: [180, 120], triangle: [160, 140], octagon: [140, 140], pentagon: [150, 140],
   parallelogram: [200, 110], trapezoid: [200, 110], cylinder: [140, 160], document: [200, 130], cloud: [220, 140],
   callout: [200, 140], star: [150, 145], cross: [130, 130], arrow: [200, 110], chevron: [180, 100],
+  multidoc: [200, 140], note: [160, 160], subprocess: [200, 110], manualInput: [200, 110], delay: [180, 110],
+  offpage: [120, 120], queue: [220, 100], cube: [160, 150], rightTriangle: [150, 130], doubleArrow: [220, 100],
 });
 
 /** The default size of shape `id` (a rectangle's 200 x 120 for the rest). @param {string} id */
@@ -105,6 +117,12 @@ function roundedRect(w, h, r) {
   ];
 }
 
+/** A document page (wavy bottom) at (x, y), dw x dh. @param {number} x @param {number} y @param {number} dw @param {number} dh @returns {Cmd[]} */
+function docPath(x, y, dw, dh) {
+  const a = dh * 0.08;
+  return [["M", x, y], ["L", x + dw, y], ["L", x + dw, y + dh - a], ["C", x + dw * 0.7, y + dh - 3 * a, x + dw * 0.3, y + dh + a, x, y + dh - a], ["Z"]];
+}
+
 const CLOUD = [
   ["M", 44, 110], ["C", 18, 110, 0, 92, 0, 70], ["C", 0, 50, 16, 34, 36, 32], ["C", 42, 13, 60, 0, 82, 0],
   ["C", 104, 0, 122, 12, 128, 30], ["C", 156, 28, 180, 48, 180, 72], ["C", 180, 94, 162, 110, 140, 110], ["Z"],
@@ -112,9 +130,11 @@ const CLOUD = [
 
 /**
  * The outline of shape `id` in a w x h box (local coordinates), an optional detail path drawn
- * over it without fill (the cylinder's rim), and the box its text goes in.
+ * over it without fill (the cylinder's rim), outlines drawn behind it with the same paint (the
+ * pages of a document stack), and the box its text goes in. Hit testing and connector anchors use
+ * `cmds` only.
  * @param {string} id @param {number} w @param {number} h
- * @returns {{cmds: Cmd[], detail: Cmd[]|null, text: Rect}}
+ * @returns {{cmds: Cmd[], detail: Cmd[]|null, text: Rect, behind?: Cmd[][]}}
  */
 export function shapeOutline(id, w, h) {
   const m = Math.min(w, h);
@@ -172,6 +192,66 @@ export function shapeOutline(id, w, h) {
       return {
         cmds: [["M", 0, 0], ["L", w, 0], ["L", w, h - a], ["C", w * 0.7, h - 3 * a, w * 0.3, h + a, 0, h - a], ["Z"]],
         detail: null, text: { x: 0, y: 0, w, h: Math.max(1, h - 2 * a) },
+      };
+    }
+    case "multidoc": {
+      const o = Math.min(w, h) * 0.07, dw = w - 2 * o, dh = h - 2 * o;
+      return {
+        cmds: docPath(0, 2 * o, dw, dh), detail: null, behind: [docPath(2 * o, 0, dw, dh), docPath(o, o, dw, dh)],
+        text: { x: 0, y: 2 * o, w: dw, h: Math.max(1, dh * 0.84) },
+      };
+    }
+    case "note": {
+      const f = Math.min(w, h) * 0.2;
+      return {
+        cmds: polygon([0, 0, w - f, 0, w, f, w, h, 0, h]), detail: [["M", w - f, 0], ["L", w - f, f], ["L", w, f]],
+        text: { x: 0, y: f * 0.5, w, h: Math.max(1, h - f * 0.5) },
+      };
+    }
+    case "subprocess": {
+      const k = Math.min(w * 0.12, h * 0.3);
+      return {
+        cmds: polygon([0, 0, w, 0, w, h, 0, h]), detail: [["M", k, 0], ["L", k, h], ["M", w - k, 0], ["L", w - k, h]],
+        text: { x: k, y: 0, w: Math.max(1, w - 2 * k), h },
+      };
+    }
+    case "manualInput":
+      return { cmds: polygon([0, h * 0.3, w, 0, w, h, 0, h]), detail: null, text: { x: 0, y: h * 0.25, w, h: h * 0.75 } };
+    case "delay": {
+      const r = Math.min(h / 2, w / 2), k = r * K;
+      return {
+        cmds: [["M", 0, 0], ["L", w - r, 0], ["C", w - r + k, 0, w, r - k, w, r], ["L", w, h - r], ["C", w, h - r + k, w - r + k, h, w - r, h], ["L", 0, h], ["Z"]],
+        detail: null, text: { x: 0, y: 0, w: Math.max(1, w - r * 0.4), h },
+      };
+    }
+    case "offpage":
+      return { cmds: polygon([0, 0, w, 0, w, h * 0.65, w / 2, h, 0, h * 0.65]), detail: null, text: { x: 0, y: 0, w, h: h * 0.68 } };
+    case "queue": {
+      const ry = h / 2, rx = Math.min(w * 0.15, h * 0.3), kx = rx * K, ky = ry * K;
+      return {
+        cmds: [
+          ["M", rx, 0], ["L", w - rx, 0], ["C", w - rx + kx, 0, w, ry - ky, w, ry], ["C", w, ry + ky, w - rx + kx, h, w - rx, h],
+          ["L", rx, h], ["C", rx - kx, h, 0, ry + ky, 0, ry], ["C", 0, ry - ky, rx - kx, 0, rx, 0], ["Z"],
+        ],
+        detail: [["M", w - rx, 0], ["C", w - rx - kx, 0, w - 2 * rx, ry - ky, w - 2 * rx, ry], ["C", w - 2 * rx, ry + ky, w - rx - kx, h, w - rx, h]],
+        text: { x: rx * 0.6, y: 0, w: Math.max(1, w - rx * 2.6), h },
+      };
+    }
+    case "cube": {
+      const d = Math.min(w, h) * 0.18;
+      return {
+        cmds: polygon([0, d, d, 0, w, 0, w, h - d, w - d, h, 0, h]),
+        detail: [["M", 0, d], ["L", w - d, d], ["L", w, 0], ["M", w - d, d], ["L", w - d, h]],
+        text: { x: 0, y: d, w: w - d, h: h - d },
+      };
+    }
+    case "rightTriangle":
+      return { cmds: polygon([0, 0, w, h, 0, h]), detail: null, text: { x: w * 0.04, y: h * 0.5, w: w * 0.55, h: h * 0.47 } };
+    case "doubleArrow": {
+      const hl = Math.min(w * 0.3, h * 0.6);
+      return {
+        cmds: polygon([0, h / 2, hl, 0, hl, h * 0.25, w - hl, h * 0.25, w - hl, 0, w, h / 2, w - hl, h, w - hl, h * 0.75, hl, h * 0.75, hl, h]),
+        detail: null, text: { x: hl * 0.6, y: h * 0.25, w: Math.max(1, w - hl * 1.2), h: h * 0.5 },
       };
     }
     case "cloud":
@@ -291,8 +371,8 @@ export function insideShape(id, w, h, x, y) {
 /**
  * Where a connector meets shape `id` on `side`, in local coordinates: the outermost crossing of
  * the outline on the line from the box centre towards that side's midpoint (so an end never sits
- * inside the shape, and an elbow's stub leaves along the same line). Null when the outline does
- * not cross it.
+ * inside the shape, and an elbow's stub leaves along the same line). When the outline only meets
+ * that line at the centre, the outline point nearest the side's midpoint. Null for an empty outline.
  * @param {string} id @param {number} w @param {number} h @param {"top"|"right"|"bottom"|"left"} side
  * @returns {Point|null}
  */
@@ -312,6 +392,18 @@ export function localOutlineAnchor(id, w, h, side) {
     const along = (v - (horizontal ? cx : cy)) * dir;
     if (along > best) best = along;
   }
-  if (!Number.isFinite(best) || best <= 0) return null;
-  return horizontal ? { x: cx + best * dir, y: cy } : { x: cx, y: cy + best * dir };
+  if (Number.isFinite(best) && best > 1e-6) return horizontal ? { x: cx + best * dir, y: cy } : { x: cx, y: cy + best * dir };
+  // The outline passes through the centre on that side (a right triangle's hypotenuse): the
+  // outline point nearest the side's midpoint instead.
+  const m = { top: { x: cx, y: 0 }, bottom: { x: cx, y: h }, left: { x: 0, y: cy }, right: { x: w, y: cy } }[side];
+  let near = null, nd = Infinity;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[j], b = poly[i];
+    const dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
+    const t = len2 ? Math.max(0, Math.min(1, ((m.x - a.x) * dx + (m.y - a.y) * dy) / len2)) : 0;
+    const p = { x: a.x + t * dx, y: a.y + t * dy };
+    const d = Math.hypot(p.x - m.x, p.y - m.y);
+    if (d < nd) { nd = d; near = p; }
+  }
+  return near;
 }

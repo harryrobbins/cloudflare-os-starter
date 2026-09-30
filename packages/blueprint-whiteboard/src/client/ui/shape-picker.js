@@ -14,9 +14,9 @@ import { buildNode, svgEl } from "./canvas/layers.js";
 
 /** Shape choices in picker order: the rectangle variants with the ellipse (its own type) third. */
 export const SHAPE_CHOICES = Object.freeze([
-  ...SHAPES.slice(0, 2).map((s) => ({ value: s.id, label: s.label })),
-  { value: "ellipse", label: "Ellipse" },
-  ...SHAPES.slice(2).map((s) => ({ value: s.id, label: s.label })),
+  ...SHAPES.slice(0, 2).map((s) => ({ value: s.id, label: s.label, group: s.group })),
+  { value: "ellipse", label: "Ellipse", group: "Basic" },
+  ...SHAPES.slice(2).map((s) => ({ value: s.id, label: s.label, group: s.group })),
 ]);
 
 /** Marker choices for connector ends, in picker order. */
@@ -71,6 +71,7 @@ export function shapeIcon(id, size = 20) {
     return svg;
   }
   const g = shapeOutline(id, w, hh);
+  for (const b of g.behind ?? []) svg.appendChild(svgEl("path", { d: cmdsToPath(b, x, y), ...paint }));
   svg.appendChild(svgEl("path", { d: cmdsToPath(g.cmds, x, y), ...paint }));
   if (g.detail) svg.appendChild(svgEl("path", { d: cmdsToPath(g.detail, x, y), ...paint }));
   return svg;
@@ -122,7 +123,7 @@ export function closePicker() {
 /**
  * Opens a grid popover of icon choices next to `anchor`.
  * @param {HTMLElement} anchor
- * @param {{label: string, choices: ReadonlyArray<{value: string, label: string}>, current: string|null,
+ * @param {{label: string, choices: ReadonlyArray<{value: string, label: string, group?: string}>, current: string|null,
  *   icon: (value: string) => Element, onPick: (value: string) => void, columns?: number, className?: string}} opts
  */
 export function openPicker(anchor, { label, choices, current, icon, onPick, columns = 4, className = "" }) {
@@ -132,10 +133,22 @@ export function openPicker(anchor, { label, choices, current, icon, onPick, colu
     "aria-pressed": String(c.value === current), dataset: { value: c.value },
     onclick: () => { closePicker(); anchor.focus({ preventScroll: true }); onPick(c.value); },
   }, icon(c.value)));
+  // Choices with a `group` get a heading before each group (spanning the grid).
+  /** @type {HTMLElement[]} */
+  const cells = [];
+  let group = /** @type {string|null} */ (null);
+  choices.forEach((c, i) => {
+    const g = /** @type {{group?: string}} */ (c).group;
+    if (g && g !== group) {
+      group = g;
+      cells.push(h("div", { class: "picker-heading", "aria-hidden": "true" }, g));
+    }
+    cells.push(buttons[i]);
+  });
   const pop = h("div", {
     class: "wb-float picker-pop " + className, role: "group", "aria-label": label,
     style: { position: "fixed", zIndex: "45", gridTemplateColumns: `repeat(${columns}, auto)` },
-  }, buttons);
+  }, cells);
   document.body.appendChild(pop);
   const r = anchor.getBoundingClientRect();
   const pw = pop.offsetWidth, ph = pop.offsetHeight;

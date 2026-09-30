@@ -76,7 +76,7 @@ export const CURVE_ARM_MAX = 480;
 /** Tolerance of the polyline stored in a curved route's `points`. */
 export const CURVE_FLATTEN_TOL = 0.5;
 /** Object types that elbow routes avoid. */
-export const OBSTACLE_TYPES = Object.freeze(new Set(["sticky", "rect", "ellipse", "text", "icon", "code"]));
+export const OBSTACLE_TYPES = Object.freeze(new Set(["sticky", "rect", "ellipse", "text", "icon", "code", "table", "diagram"]));
 /** Cost added per place an automatic route passes through one of its own end boxes. */
 const CROSS_PENALTY = 1e6;
 const SIDES4 = /** @type {const} */ (["right", "bottom", "left", "top"]);
@@ -605,8 +605,11 @@ const axisAligned = (n) => Math.abs(n.x) > 0.9999 || Math.abs(n.y) > 0.9999;
  * @param {{point: Point, normal: Point}} ea @param {{point: Point, normal: Point}} eb
  */
 function snapElbowEnds(points, a, b, ea, eb) {
-  const moveStart = ea !== a && axisAligned(a.normal) && points.length > 1;
-  const moveEnd = eb !== b && axisAligned(b.normal) && points.length > 1;
+  // Only along the stub's own line, so the route stays orthogonal.
+  const inLine = (/** @type {{point: Point, normal: Point}} */ x, /** @type {Point} */ p) =>
+    Math.abs(x.normal.x) > 0.9999 ? Math.abs(p.y - x.point.y) < 0.01 : Math.abs(p.x - x.point.x) < 0.01;
+  const moveStart = ea !== a && axisAligned(a.normal) && points.length > 1 && inLine(a, ea.point);
+  const moveEnd = eb !== b && axisAligned(b.normal) && points.length > 1 && inLine(b, eb.point);
   if (!moveStart && !moveEnd) return points;
   const out = points.slice();
   if (moveStart) out[0] = { ...ea.point };

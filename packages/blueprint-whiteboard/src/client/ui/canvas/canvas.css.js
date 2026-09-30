@@ -22,6 +22,7 @@ export const CANVAS_CSS = `
 .wb-canvas[data-tool="text"] { cursor: text; }
 .wb-canvas .wb-obj.wb-editing text { visibility: hidden; }
 .wb-canvas .wb-obj.wb-editing text.wb-code-head { visibility: visible; }
+.wb-canvas .wb-obj.wb-editing [data-type="table"] text { visibility: visible; }
 .wb-canvas .wb-editor.wb-editor-code { box-shadow: 0 0 0 1px var(--wb-accent, #2563eb); caret-color: currentColor; }
 .wb-canvas .wb-obj.wb-flash { animation: wb-flash 1.2s ease-out; }
 @keyframes wb-flash {

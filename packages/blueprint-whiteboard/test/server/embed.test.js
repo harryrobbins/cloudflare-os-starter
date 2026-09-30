@@ -57,3 +57,51 @@ describe("DrawingHost", () => {
     });
   });
 });
+
+describe("DoStorageRepository diagram renders", () => {
+  it("stores large renders in chunks, replaces and removes them, per prefix", async () => {
+    await runInDurableObject(fresh(), async (_instance, state) => {
+      const repo = new DoStorageRepository(state.storage, { prefix: "drawing:a:" });
+      const big = "<svg>" + "é".repeat(150_000) + "</svg>";
+      await repo.putRender("o_000000000001", { hash: "h1", status: "ok", svg: big, w: 10, h: 20 });
+      expect(await repo.getRender("o_000000000001")).toEqual({ hash: "h1", status: "ok", svg: big, w: 10, h: 20, length: big.length });
+      let keys = [...(await state.storage.list({ prefix: "drawing:a:render:" })).keys()];
+      expect(keys.length).toBe(1 + Math.ceil(big.length / 60_000));
+      await repo.putRender("o_000000000001", { hash: "h2", status: "error", error: "bad" });
+      expect(await repo.getRender("o_000000000001")).toMatchObject({ hash: "h2", status: "error", error: "bad" });
+      keys = [...(await state.storage.list({ prefix: "drawing:a:render:" })).keys()];
+      expect(keys).toEqual(["drawing:a:render:o_000000000001"]);
+      expect(await new DoStorageRepository(state.storage).getRender("o_000000000001")).toBeNull();
+      await repo.putRender("o_000000000001", null);
+      expect(await repo.getRender("o_000000000001")).toBeNull();
+      expect([...(await state.storage.list({ prefix: "drawing:a:render:" })).keys()]).toEqual([]);
+      // Board objects never pick up render keys.
+      const board = createWhiteboard(repo, { renderDiagram: async () => ({ data: new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" width="4" height="2"/>') }) });
+      const { created } = await board.addObjects({ objects: [{ type: "diagram", source: "a -> b" }] });
+      expect(await board.diagramRender(created[0].id)).toMatchObject({ status: "ok", w: 4, h: 2 });
+      const reopened = createWhiteboard(repo);
+      expect(Object.keys((await reopened.getBoard()).objects)).toEqual([created[0].id]);
+      expect(await reopened.diagramRender(created[0].id)).toMatchObject({ status: "ok" });
+    });
+  });
+});
+
+describe("DrawingHost diagram renders", () => {
+  it("passes its renderer to every drawing and exposes getDiagramRender", async () => {
+    await runInDurableObject(fresh(), async (_instance, state) => {
+      const calls = [];
+      const host = new DrawingHost(state.storage, {
+        renderDiagram: async (req) => { calls.push(req.source); return { data: '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4"/>' }; },
+      });
+      const { id } = await host.create({});
+      const { api } = await host.open(id);
+      const { created } = await api.addObjects({ objects: [{ type: "diagram", source: "x -> y" }] });
+      expect(await api.getDiagramRender(created[0].id)).toMatchObject({ status: "ok", w: 8, h: 4 });
+      expect(calls).toEqual(["x -> y"]);
+      const bare = new DrawingHost(state.storage);
+      const other = await bare.create({});
+      const made = await (await bare.open(other.id)).api.addObjects({ objects: [{ type: "diagram", source: "a" }] });
+      expect(await (await bare.open(other.id)).api.getDiagramRender(made.created[0].id)).toMatchObject({ status: "unavailable" });
+    });
+  });
+});

@@ -26,6 +26,9 @@
 import { TYPE_DEFAULTS, sortedObjects, newId } from "../../../shared/protocol.js";
 import { center, corners, boardBounds, unionRects, textWidth, textObjectHeight, outlineAnchor } from "../../../shared/geometry.js";
 import { isShape, shapeSize, shapeLabel, shapeOf } from "../../../shared/shapes.js";
+import { diagramHash, svgDataUrl, DIAGRAM_EXAMPLES } from "../../../shared/diagram.js";
+import { cellAt, cellsOf, insertRow } from "../../../shared/table.js";
+import { cleanText, LIMITS } from "../../../shared/protocol.js";
 import {
   cleanCamera, screenToWorld, worldToScreen, zoomAt, panBy, viewportOf, cameraTransform,
   fitRect, centerOn, revealRect, lerpCamera, easeOutCubic, gridSpacing, wheelPixels, wheelZoomFactor,
@@ -252,6 +255,68 @@ export function createCanvas(store, options = {}) {
     return ov && ov.mode === "replace" ? resolve(id) : undefined;
   }, (ids) => connectorsOf(spatial, ids));
   layer.routeEnv = routeEnv;
+  // Diagram renders by object id (src/shared/diagram.js), drawn through the route env.
+  /** @type {Map<string, {hash: string, status: string, href?: string, error?: string}>} */
+  const diagramImages = new Map();
+  /** @type {any} */ (routeEnv).images = diagramImages;
+  /** Fetches in flight, by id + hash. @type {Set<string>} */
+  const diagramFetches = new Set();
+  /** Asks answered "no such diagram" (not on the server yet), by id + hash. @type {Map<string, number>} */
+  const diagramRetries = new Map();
+
+  /**
+   * Asks the server for the render of each diagram that has none for its current source, and
+   * redraws it when the answer comes.
+   * @param {boolean} [force]  ask again even for a finished render (Re-render)
+   * @param {string[]} [only]
+   */
+  function ensureDiagramRenders(force = false, only) {
+    const all = objects();
+    for (const o of only ? only.map((id) => all[id]).filter(Boolean) : Object.values(all)) {
+      if (o.type !== "diagram") continue;
+      const hash = diagramHash(o);
+      const cur = diagramImages.get(o.id);
+      if (!force && cur && cur.hash === hash) continue;
+      const key = o.id + "#" + hash;
+      if (diagramFetches.has(key)) continue;
+      const id = o.id;
+      if (!o.text?.trim()) { diagramImages.set(id, { hash, status: "empty" }); redrawDiagram(id); continue; }
+      if (!store.getDiagramRender) { diagramImages.set(id, { hash, status: "unavailable" }); redrawDiagram(id); continue; }
+      diagramFetches.add(key);
+      if (!cur || cur.hash !== hash) { diagramImages.set(id, { hash, status: "pending" }); redrawDiagram(id); }
+      store.getDiagramRender(id).then((r) => {
+        if (destroyed) return;
+        if (!r) {
+          // The server does not have it yet (a create still on its way): ask again shortly, a
+          // few times, before saying the diagram cannot be drawn here.
+          const tries = (diagramRetries.get(key) ?? 0) + 1;
+          diagramRetries.set(key, tries);
+          if (tries <= 8) {
+            setTimeout(() => { if (!destroyed && diagramImages.get(id)?.hash === hash) { diagramImages.delete(id); ensureDiagramRenders(false, [id]); } }, 250 * tries);
+            diagramImages.set(id, { hash, status: "pending" });
+          } else diagramImages.set(id, { hash, status: "unavailable" });
+          return;
+        }
+        diagramRetries.delete(key);
+        diagramImages.set(id, { hash: r.hash, status: r.status, ...(r.error ? { error: r.error } : {}), ...(r.svg ? { href: svgDataUrl(r.svg) } : {}) });
+      }, (e) => {
+        if (!destroyed) diagramImages.set(id, { hash, status: "error", error: String(e?.message ?? e).slice(0, 200) });
+      }).finally(() => {
+        diagramFetches.delete(key);
+        if (destroyed) return;
+        redrawDiagram(id);
+        // The source changed while this render was made: ask for the new one.
+        const now = objects()[id];
+        if (now?.type === "diagram" && diagramHash(now) !== diagramImages.get(id)?.hash) ensureDiagramRenders(false, [id]);
+        emit({ kind: "diagram", id });
+      });
+    }
+  }
+
+  /** @param {string} id */
+  function redrawDiagram(id) {
+    if (layer.elements.has(id)) layer.patch([id], objects(), resolve, new Set());
+  }
 
   // Viewport culling. options.cull (test/benchmark extension): Culler options, e.g. {minObjects: 0}.
   const cullOptions = /** @type {any} */ (options).cull ?? {};
@@ -624,15 +689,40 @@ export function createCanvas(store, options = {}) {
     resolve,
     routeEnv,
     getCamera: () => camera,
-    onCommit(id, value) {
+    onCommit(id, value, cell) {
       const o = objects()[id];
       if (!o) return;
+      if (o.type === "table" && cell) {
+        const cells = cellsOf(o);
+        const text = cleanText(value, LIMITS.tableCell);
+        if (!cells[cell.r] || cells[cell.r][cell.c] === text) return;
+        store.updateObjects([{ id, patch: { cells: cells.map((row, r) => (r === cell.r ? row.map((t, c) => (c === cell.c ? text : t)) : row)) } }]);
+        return;
+      }
       const patch = textPatch(o, value);
       if (o.type === "text" && !(patch?.text ?? o.text).trim()) {
         store.deleteObjects([id]);
         return;
       }
       if (patch) store.updateObjects([{ id, patch }]);
+    },
+    onCellMove(id, cell, move) {
+      const o = objects()[id];
+      if (!o || o.type !== "table") return;
+      const cells = cellsOf(o);
+      const rows = cells.length, cols = cells[0].length;
+      let { r, c } = cell;
+      if (move === "next") { c++; if (c >= cols) { c = 0; r++; } }
+      else if (move === "prev") { c--; if (c < 0) { c = cols - 1; r = Math.max(0, r - 1); if (cell.r === 0) c = 0; } }
+      else r++;
+      if (r >= rows) {
+        // Past the last row: a new row, like a spreadsheet.
+        const grown = insertRow(o, rows);
+        if (!grown) { options.announce?.("The table has the most rows it can"); return; }
+        store.updateObjects([{ id, patch: grown }]);
+        options.announce?.("Row added");
+      }
+      editText(id, null, { r, c });
     },
     onCodePaste(id, text) {
       // Pasting into an empty code block: a fenced block gives its code and language; otherwise a
@@ -662,18 +752,22 @@ export function createCanvas(store, options = {}) {
     },
   });
 
-  /** @param {string} id */
-  function editText(id) {
+  /**
+   * @param {string} id @param {{x: number, y: number}|null} [at]  world point (a double click): tables edit the cell there
+   * @param {{r: number, c: number}|null} [cell]  tables: the cell to edit
+   */
+  function editText(id, at = null, cell = null) {
     if (!editor) return;
     const o = objects()[id];
     if (!o || !canEditText(o)) return;
     cancelGesture();
-    if (editor.isOpen && editor.id === id) return;
+    if (o.type === "table" && !cell && at) cell = cellAt(o, at);
+    if (editor.isOpen && editor.id === id && o.type !== "table") return;
     if (selection.length !== 1 || selection[0] !== id) setSelectionInternal([id]);
     if (!cameraReady) measure();
     layer.setEditing(id);
     if (!layer.elements.has(id)) updateCulling();
-    if (!editor.open(id)) {
+    if (!editor.open(id, cell)) {
       layer.setEditing(null);
       return;
     }
@@ -1267,6 +1361,7 @@ export function createCanvas(store, options = {}) {
       case "snapshot": {
         setBackground(state.board.background);
         rebuildAll();
+        ensureDiagramRenders();
         if (exportMode) updateExportViewBox();
         else if (cameraReady && !userMovedCamera && Object.keys(state.board.objects).length) {
           camera = initialCamera();
@@ -1295,6 +1390,7 @@ export function createCanvas(store, options = {}) {
         if (kept.length !== selection.length) setSelectionInternal(kept);
         else if (ids.some((id) => selection.includes(id)) || selection.some((id) => layer.connectorsOf([id]).size)) schedule("selection");
         if (editor?.isOpen) editor.sync();
+        if (ids.some((id) => state.board.objects[id]?.type === "diagram")) ensureDiagramRenders(false, ids);
         if (routeEdit && !hasRouteHandles(state.board.objects[routeEdit.id])) exitRouteEdit(true);
         else if (routeEdit && ids.includes(routeEdit.id)) schedule("overlay");
         presence?.invalidateObjects(touched);
@@ -1422,6 +1518,11 @@ export function createCanvas(store, options = {}) {
     getTool: () => tool,
     setTool: (next, locked = false) => setToolInternal(next, locked),
     getShape: () => shapeKind,
+    refreshDiagram(id) {
+      diagramImages.delete(id);
+      ensureDiagramRenders(true, [id]);
+    },
+    getDiagramRender: (id) => diagramImages.get(id) ?? null,
     setShape(id) {
       if (!isShape(id) || id === shapeKind) return;
       shapeKind = id;
@@ -1452,6 +1553,7 @@ export function createCanvas(store, options = {}) {
       if (!cameraReady) measure();
       const c = screenToWorld(camera, { x: size.w / 2, y: size.h / 2 });
       const shape = type === "rect" && isShape(opts.shape) ? opts.shape : "rect";
+      const syntax = opts.syntax === "mermaid" ? "mermaid" : "d2";
       const d = type === "rect" ? shapeSize(shape) : TYPE_DEFAULTS[type];
       // Nudge down-right while the spot is taken, so repeated adds do not stack exactly.
       let x = round2(c.x - d.w / 2), y = round2(c.y - d.h / 2);
@@ -1460,6 +1562,7 @@ export function createCanvas(store, options = {}) {
       for (let i = 0; i < 20 && taken(x, y); i++) { x += 20; y += 20; }
       /** @type {Partial<WhiteboardObject> & {type: ObjectType}} */
       const obj = { type, x, y, w: d.w, h: d.h };
+      if (type === "diagram") Object.assign(obj, { syntax, text: DIAGRAM_EXAMPLES[syntax] });
       const style = { ...toolStyle(type), ...(shape !== "rect" ? { shape } : {}) };
       if (Object.keys(style).length) obj.style = /** @type {Style} */ (style);
       if (type !== "frame") obj.frameId = frameAtPoint(objects(), center({ x, y, w: d.w, h: d.h }));
@@ -1508,7 +1611,7 @@ export function createCanvas(store, options = {}) {
     getTextEdit() {
       if (!editor?.isOpen || !editor.id) return null;
       const o = objects()[editor.id];
-      return o ? { id: o.id, type: o.type } : null;
+      return o ? { id: o.id, type: o.type, ...(editor.cell ? { cell: { ...editor.cell } } : {}) } : null;
     },
     finishTextEdit() {
       if (editor?.isOpen) editor.commit();
@@ -1686,6 +1789,8 @@ function describe(o) {
     return `${icon ? icon.label.toLowerCase() + (icon.kind === "stencil" ? " shape" : " icon") : "icon"}${label}`;
   }
   if (o.type === "rect" && shapeOf(o) !== "rect") return `${shapeLabel(/** @type {string} */ (shapeOf(o))).toLowerCase()}${label}`;
+  if (o.type === "table") return `table, ${o.cells?.length ?? 0} rows by ${o.cells?.[0]?.length ?? 0} columns`;
+  if (o.type === "diagram") return `${o.syntax === "mermaid" ? "Mermaid" : "D2"} diagram`;
   return `${names[o.type] ?? o.type}${label}`;
 }
 

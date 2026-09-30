@@ -25,8 +25,12 @@ export class Gadget extends DurableObject {
     // Events are handed to the hub inside the whiteboard's queue, right after each commit, so
     // deliveries start in revision order. Delivery itself is not awaited: a slow subscriber must
     // not hold up the next mutation. Hub deliveries never reject.
+    // Diagrams render through the MermaiD2 connector when it is connected to this board as
+    // MERMAID2 (optional: without it diagrams draw as placeholders; see src/shared/diagram.js).
+    const renderer = /** @type {any} */ (env)?.MERMAID2;
     this.#board = createWhiteboard(new DoStorageRepository(ctx.storage), {
       onEvent: (event) => { this.#hub.broadcast(event); },
+      renderDiagram: renderer ? (request) => renderer.render(request) : null,
     });
   }
 
@@ -59,6 +63,11 @@ export class Gadget extends DurableObject {
   /** @param {any} [args] {frame?} */
   exportSvg(args) {
     return this.#board.exportSvg(args);
+  }
+
+  /** A diagram's rendered SVG (cached, else rendered now), or its status. @param {string} id */
+  getDiagramRender(id) {
+    return this.#board.diagramRender(id);
   }
 
   // --- Core writes ---------------------------------------------------------------------------

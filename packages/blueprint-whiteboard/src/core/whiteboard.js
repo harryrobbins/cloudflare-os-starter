@@ -49,7 +49,8 @@ import { getIcon, getPack, iconDefaults, iconSummary, resolveIcon, searchIcons, 
 import { codeHeight } from "../shared/code/layout.js";
 import { detectLanguage, languageLabel, resolveLanguage } from "../shared/code/languages.js";
 import { createRouteEnv } from "../shared/connectors.js";
-import { isShape, SHAPE_IDS } from "../shared/shapes.js";
+import { isShape, SHAPE_IDS, shapeLabel } from "../shared/shapes.js";
+import { diagramHash, renderRequest, acceptSvg, svgSize, svgDataUrl, renderErrorMessage } from "../shared/diagram.js";
 
 /** @typedef {import("../shared/protocol.js").BoardMeta} BoardMeta */
 /** @typedef {import("../shared/protocol.js").BoardSnapshot} BoardSnapshot */
@@ -67,12 +68,12 @@ export const ANONYMOUS = "Anonymous";
 const RECORD_MAX_BYTES = 16 * 1024;
 const MIB = 1024 * 1024;
 /** Fields compared to decide whether an update changed an object (and inverted by undo). */
-const FIELDS = /** @type {const} */ (["x", "y", "w", "h", "rot", "z", "frameId", "text", "style", "points", "from", "to", "fromSide", "toSide", "routing", "packId", "iconId", "language", "theme", "lineNumbers", "wrap", "filename"]);
+const FIELDS = /** @type {const} */ (["x", "y", "w", "h", "rot", "z", "frameId", "text", "style", "points", "from", "to", "fromSide", "toSide", "routing", "packId", "iconId", "language", "theme", "lineNumbers", "wrap", "filename", "cells", "header", "syntax", "layout", "sketch"]);
 /**
  * Connector route edits (src/shared/connectors.js): additive fields that older connectors lack, so
  * a missing one reads as its default ([] and null) when compared and when undo restores it.
  */
-const ROUTE_DEFAULTS = /** @type {Record<string, unknown>} */ ({ segments: [], curve: null });
+const ROUTE_DEFAULTS = /** @type {Record<string, unknown>} */ ({ segments: [], curve: null, colWidths: null });
 /** Every field compared and inverted: FIELDS plus the route edits. */
 const ALL_FIELDS = [...FIELDS, ...Object.keys(ROUTE_DEFAULTS)];
 /** An update touching only these is a move: never refused for size, summarised as "Moved". */
@@ -81,9 +82,9 @@ const MOVE_FIELDS = new Set(["x", "y", "frameId"]);
 const FRIENDLY_FIELDS = ["id", "type", ...ALL_FIELDS];
 const NOUNS = /** @type {Record<string, string>} */ ({
   sticky: "sticky note", rect: "rectangle", ellipse: "ellipse", text: "text label", frame: "frame",
-  pen: "pen stroke", connector: "connector", icon: "icon", code: "code block",
+  pen: "pen stroke", connector: "connector", icon: "icon", code: "code block", table: "table", diagram: "diagram",
 });
-const FILL_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame"]);
+const FILL_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame", "table", "diagram"]);
 /** Default placement spacing for the convenience methods. */
 const PLACE_GAP = 40;
 const RIGHT_OF_CONTENT = 200;
@@ -106,6 +107,11 @@ const withArticle = (type) => {
  */
 const objectNoun = (o) => {
   if (o.type === "code" && o.language && o.language !== "plain") return `a ${languageLabel(o.language)} code block`;
+  if (o.type === "diagram") return o.syntax === "mermaid" ? "a Mermaid diagram" : "a D2 diagram";
+  if (o.type === "rect" && o.style?.shape && o.style.shape !== "rect") {
+    const noun = shapeLabel(o.style.shape).toLowerCase();
+    return (/^[aeiou]/.test(noun) ? "an " : "a ") + noun;
+  }
   const icon = o.type === "icon" ? getIcon(o.packId, o.iconId) : null;
   if (!icon) return withArticle(o.type);
   const noun = `${icon.label.charAt(0).toLowerCase()}${icon.label.slice(1)} ${icon.kind === "stencil" ? "shape" : "icon"}`;
@@ -153,7 +159,9 @@ function fieldEqual(field, a, b) {
     for (const k of keys) if (x[k] !== y[k]) return false;
     return true;
   }
-  if (Array.isArray(x) && Array.isArray(y)) return x.length === y.length && x.every((v, i) => v === y[i]);
+  if (Array.isArray(x) && Array.isArray(y)) {
+    return x.length === y.length && x.every((v, i) => v === y[i] || (Array.isArray(v) && Array.isArray(y[i]) && v.length === y[i].length && v.every((c, j) => c === y[i][j])));
+  }
   return false;
 }
 
@@ -368,12 +376,14 @@ function placeZ(w, g, z) {
 /**
  * @param {Repository} repo
  * @param {{now?: () => number, newId?: typeof protocolNewId,
- *   onEvent?: (event: BoardEvent) => void, limits?: Partial<typeof DEFAULT_LIMITS>}} [options]
+ *   onEvent?: (event: BoardEvent) => void, limits?: Partial<typeof DEFAULT_LIMITS>,
+ *   renderDiagram?: ((request: ReturnType<typeof renderRequest>) => Promise<{data: unknown}>)|null}} [options]
  *   onEvent is called inside the queue right after each successful commit, so events are emitted
  *   in revision order. It must not block; errors it throws are swallowed. `limits` overrides
- *   LIMITS (tests only).
+ *   LIMITS (tests only). renderDiagram is the MermaiD2 connector's render() (src/shared/diagram.js);
+ *   without it diagrams report "unavailable" and draw as placeholders.
  */
-export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, onEvent, limits } = {}) {
+export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, onEvent, limits, renderDiagram = null } = {}) {
   const L = limits ? { ...DEFAULT_LIMITS, ...limits } : DEFAULT_LIMITS;
 
   // --- Mutation queue ------------------------------------------------------------------------
@@ -393,6 +403,65 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
   function emit(event) {
     if (!event || !onEvent) return;
     try { onEvent(event); } catch { /* a broken listener must not fail a committed write */ }
+  }
+
+  // --- Diagram renders (src/shared/diagram.js) ------------------------------------------------
+  // Made on request (a client showing the diagram asks), outside the mutation queue, one at a
+  // time per diagram and source; kept by the repository beside the board (and in memory).
+  /** @type {Map<string, import("../shared/diagram.js").DiagramRender>} */
+  const renders = new Map();
+  /** @type {Map<string, Promise<import("../shared/diagram.js").DiagramRender>>} */
+  const rendering = new Map();
+
+  /** @param {string} id */
+  async function cachedRender(id) {
+    if (renders.has(id)) return renders.get(id) ?? null;
+    const r = repo.getRender ? await repo.getRender(id).catch(() => null) : null;
+    if (r) renders.set(id, r);
+    return r;
+  }
+
+  /** @param {string} id */
+  async function dropRender(id) {
+    renders.delete(id);
+    try { await repo.putRender?.(id, null); } catch { /* a stale cache entry is harmless */ }
+  }
+
+  /**
+   * The render of diagram `o` now (from the cache, else made by renderDiagram).
+   * @param {WhiteboardObject} o
+   * @returns {Promise<import("../shared/diagram.js").DiagramRender>}
+   */
+  async function renderOf(o) {
+    const hash = diagramHash(o);
+    const cached = await cachedRender(o.id);
+    if (cached && cached.hash === hash) return cached;
+    if (!renderDiagram) return { hash, status: "unavailable" };
+    const key = o.id + "#" + hash;
+    let job = rendering.get(key);
+    if (!job) {
+      job = (async () => {
+        /** @type {import("../shared/diagram.js").DiagramRender} */
+        let rec;
+        try {
+          const out = await renderDiagram(renderRequest(o));
+          const svg = acceptSvg(out?.data);
+          rec = svg ? { hash, status: "ok", svg, ...(svgSize(svg) ?? {}) } : { hash, status: "error", error: "The renderer did not return a usable SVG" };
+        } catch (e) {
+          rec = { hash, status: "error", error: renderErrorMessage(e) };
+        }
+        // Keep it only if the diagram still has this source.
+        const s = await load();
+        const now = s.objects.get(o.id);
+        if (now && now.type === "diagram" && diagramHash(now) === hash) {
+          renders.set(o.id, rec);
+          try { await repo.putRender?.(o.id, rec); } catch { /* kept in memory */ }
+        }
+        return rec;
+      })().finally(() => rendering.delete(key));
+      rendering.set(key, job);
+    }
+    return job;
   }
 
   // --- Cached state --------------------------------------------------------------------------
@@ -615,7 +684,7 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       if (!isObject(raw)) return void errors.push(opError(i, "invalid_op", "create needs an object"));
       if (!isId(raw.id)) return void errors.push(opError(i, "invalid_id", "object.id must look like o_1a2b3c4d5e6f"));
       if (!isObjectType(raw.type)) {
-        return void errors.push(opError(i, "invalid_op", "object.type must be sticky, rect, ellipse, text, frame, pen, connector, icon or code"));
+        return void errors.push(opError(i, "invalid_op", "object.type must be sticky, rect, ellipse, text, frame, pen, connector, icon, code, table or diagram"));
       }
       const id = /** @type {string} */ (raw.id);
       if (w.objects.has(id)) return void errors.push(opError(i, "exists", `Object ${id} already exists`));
@@ -880,6 +949,8 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       objects: w.objects, sizes: w.sizes, bytes: w.bytes, frames: w.frames, members: w.members, adj: w.adj,
       adjCopied: new Set(), top: w.top, bottom: w.bottom, meta, history, requests,
     };
+    // Deleted diagrams drop their cached render (an undo renders again). Best effort.
+    for (const o of restores) if (o.type === "diagram") void dropRender(o.id);
 
     /** @type {BoardEvent} */
     const event = structuredClone({
@@ -931,6 +1002,13 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       // An icon's colour is its line colour, except for stencils (diagram shapes), which fill like shapes.
       const fills = FILL_TYPES.has(type) || (type === "icon" && getPack(fields.packId ?? packId)?.kind === "stencil");
       out.style = { ...(isObject(fields.style) ? fields.style : {}), [fills ? "fill" : "stroke"]: hex };
+    }
+    // Tables by rows, diagrams by source and language: {type: "table", rows: [[...]]},
+    // {type: "diagram", source: "a -> b", language: "d2"}.
+    if (type === "table" && Array.isArray(fields.rows) && !Object.hasOwn(fields, "cells")) out.cells = fields.rows;
+    if (type === "diagram") {
+      if (typeof fields.source === "string" && !Object.hasOwn(fields, "text")) out.text = fields.source;
+      if ((fields.language === "d2" || fields.language === "mermaid") && !Object.hasOwn(fields, "syntax")) out.syntax = fields.language;
     }
     // Shapes and line patterns by name: {type: "rect", shape: "diamond"}, {dash: "dashed"}.
     if (type === "rect" && Object.hasOwn(fields, "shape") && fields.shape !== undefined) {
@@ -1546,7 +1624,29 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
         frameId = resolveFrame(s, a.frame);
         if (!frameId) throw new Error(`exportSvg: no frame ${String(a.frame).slice(0, 80)}`);
       }
-      return boardToSvg(snapshot(s), { frameId });
+      // Diagrams draw from their cached renders (an export never waits for the renderer).
+      /** @type {Map<string, {hash: string, status: string, href?: string, error?: string}>} */
+      const images = new Map();
+      for (const o of s.objects.values()) {
+        if (o.type !== "diagram") continue;
+        const r = await cachedRender(o.id);
+        if (r) images.set(o.id, { hash: r.hash, status: r.status, error: r.error, ...(r.svg ? { href: svgDataUrl(r.svg) } : {}) });
+      }
+      return boardToSvg(snapshot(s), { frameId, images });
     }),
+
+    /**
+     * A diagram's render for showing it: cached when its source has not changed, else made now
+     * by the renderer (when one is connected). Never changes the board.
+     * @param {unknown} id
+     * @returns {Promise<(import("../shared/diagram.js").DiagramRender & {id: string})|null>} null
+     *   when `id` is not a diagram
+     */
+    async diagramRender(id) {
+      if (typeof id !== "string") return null;
+      const o = await enqueue(async () => (await load()).objects.get(id));
+      if (!o || o.type !== "diagram") return null;
+      return { id, ...(await renderOf(o)) };
+    },
   };
 }

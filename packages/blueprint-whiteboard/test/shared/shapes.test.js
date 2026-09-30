@@ -37,8 +37,10 @@ describe("shape outlines", () => {
         for (const side of SIDES) {
           const a = localOutlineAnchor(id, w, h, side);
           expect(a).not.toBeNull();
-          // On the axis through the centre, within the box.
-          if (side === "left" || side === "right") expect(a.y).toBeCloseTo(h / 2);
+          // On the axis through the centre (a right triangle's hypotenuse sides excepted), within the box.
+          const offAxis = id === "rightTriangle" && (side === "top" || side === "right");
+          if (offAxis) void 0;
+          else if (side === "left" || side === "right") expect(a.y).toBeCloseTo(h / 2);
           else expect(a.x).toBeCloseTo(w / 2);
           expect(a.x).toBeGreaterThanOrEqual(-0.01); expect(a.x).toBeLessThanOrEqual(w + 0.01);
         }

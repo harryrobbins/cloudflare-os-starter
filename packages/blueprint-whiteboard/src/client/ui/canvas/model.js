@@ -32,9 +32,9 @@ export const HIT_TOLERANCE_PX = 6;
 /** Objects move by this much when duplicated. */
 export const DUPLICATE_OFFSET = 20;
 /** Types whose text can be edited inline (icons only when their icon has a text box; see canEditText). */
-export const TEXT_EDITABLE = Object.freeze(["sticky", "rect", "ellipse", "text", "frame", "connector", "icon", "code"]);
+export const TEXT_EDITABLE = Object.freeze(["sticky", "rect", "ellipse", "text", "frame", "connector", "icon", "code", "table", "diagram"]);
 /** Types that open the editor right after being created. */
-export const EDIT_ON_CREATE = Object.freeze(["sticky", "text", "code"]);
+export const EDIT_ON_CREATE = Object.freeze(["sticky", "text", "code", "table"]);
 
 /** @param {number} v */
 export const round2 = (v) => Math.round(v * 100) / 100 + 0;

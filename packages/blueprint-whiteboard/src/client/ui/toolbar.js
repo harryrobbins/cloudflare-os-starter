@@ -38,6 +38,9 @@ export const ADDABLE = /** @type {const} */ ([
   { type: "text", label: "Text" },
   { type: "frame", label: "Frame" },
   { type: "code", label: "Code block (K)" },
+  { type: "table", label: "Table" },
+  { type: "diagram", label: "Diagram (D2)" },
+  { type: "diagramMermaid", label: "Diagram (Mermaid)" },
 ]);
 
 export const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
@@ -91,9 +94,19 @@ export function createToolbar(app) {
     "aria-pressed": "false", onclick: () => app.toggleActivity(),
   }, icon("activity", 20));
 
+  // Insert buttons (not tools): each adds its object at the centre of the view.
+  const insertButtons = /** @type {const} */ ([
+    { type: "table", label: "Table", icon: "table" },
+    { type: "code", label: "Code block (K)", icon: "code" },
+    { type: "diagram", label: "Diagram (D2 or Mermaid)", icon: "diagram" },
+  ]).map((b) => h("button", {
+    type: "button", class: `btn icon-only insert-btn insert-${b.type}`, title: `Add a ${b.label.charAt(0).toLowerCase()}${b.label.slice(1)}`,
+    "aria-label": `Add ${b.label.replace(/ \(.*\)$/, "").toLowerCase()}`, onclick: () => { canvas.addAtCenter(b.type); },
+  }, icon(b.icon, 20)));
+
   const sep = h("div", { class: "wb-sep", role: "separator" });
   const el = h("div", { class: "wb-float wb-toolbar", role: "toolbar", "aria-label": "Tools", "aria-orientation": "vertical" },
-    [...toolButtons.values()], sep, addBtn, outlineBtn, activityBtn,
+    [...toolButtons.values()], ...insertButtons, sep, addBtn, outlineBtn, activityBtn,
   );
   const roving = rovingFocus(el);
 
@@ -101,7 +114,7 @@ export function createToolbar(app) {
   function layout() {
     const small = !!phone?.matches;
     const actions = [addBtn, outlineBtn, activityBtn];
-    const order = small ? [...actions, sep, ...toolButtons.values()] : [...toolButtons.values(), sep, ...actions];
+    const order = small ? [...actions, sep, ...toolButtons.values(), ...insertButtons] : [...toolButtons.values(), ...insertButtons, sep, ...actions];
     if (order.some((node, i) => el.children[i] !== node)) {
       const active = document.activeElement;
       el.replaceChildren(...order);
@@ -121,7 +134,7 @@ export function createToolbar(app) {
   function openShapes(anchor, onPick) {
     const current = canvas.getTool() === "ellipse" ? "ellipse" : canvas.getShape();
     openPicker(anchor, {
-      label: "Shapes", choices: SHAPE_CHOICES, current, icon: (v) => shapeIcon(v, 22), onPick, columns: 4, className: "shape-pop",
+      label: "Shapes", choices: SHAPE_CHOICES, current, icon: (v) => shapeIcon(v, 22), onPick, columns: 7, className: "shape-pop",
     });
   }
 
@@ -142,6 +155,7 @@ export function createToolbar(app) {
         className: "add-" + a.type,
         onSelect: () => {
           if (a.type === "shape") openShapes(addBtn, (v) => { canvas.addAtCenter(v === "ellipse" ? "ellipse" : "rect", { shape: v }); });
+          else if (a.type === "diagramMermaid") canvas.addAtCenter("diagram", { syntax: "mermaid" });
           else canvas.addAtCenter(a.type);
         },
       })),

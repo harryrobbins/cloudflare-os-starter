@@ -67,6 +67,8 @@ export function whiteboardMethods(board) {
     findIcons: (args) => board.findIcons(args),
     /** @param {any} [args] */
     exportSvg: (args) => board.exportSvg(args),
+    /** @param {string} id */
+    getDiagramRender: (id) => board.diagramRender(id),
     exportData: () => exportData(board),
     /** @param {any} args */
     importData: (args) => importData(board, args),
@@ -129,12 +131,15 @@ export class DrawingHost {
 
   /**
    * @param {any} storage DurableObjectStorage
-   * @param {{onChange?: (id: string) => void, limits?: Partial<typeof LIMITS>, defaultTitle?: string}} [options]
+   * @param {{onChange?: (id: string) => void, limits?: Partial<typeof LIMITS>, defaultTitle?: string,
+   *   renderDiagram?: ((request: any) => Promise<{data: unknown}>)|null}} [options]
    *   onChange: a drawing committed a change (the host refreshes its preview)
+   *   renderDiagram: the MermaiD2 connector's render(), for diagram objects (optional)
    *   defaultTitle: the title of a drawing created without one (else the whiteboard's own default)
    */
-  constructor(storage, { onChange, limits, defaultTitle } = {}) {
+  constructor(storage, { onChange, limits, defaultTitle, renderDiagram = null } = {}) {
     this.storage = storage;
+    this.renderDiagram = renderDiagram;
     this.onChange = onChange;
     this.defaultTitle = typeof defaultTitle === "string" && defaultTitle.trim() ? defaultTitle.trim() : null;
     this.limits = { ...LIMITS, ...limits };
@@ -252,6 +257,7 @@ export class DrawingHost {
         hub.broadcast(event);
         try { this.onChange?.(id); } catch { /* the host's listener never fails a commit */ }
       },
+      renderDiagram: this.renderDiagram,
     });
     entry = { board, hub, api: whiteboardMethods(board) };
     this.#open.set(id, entry);
