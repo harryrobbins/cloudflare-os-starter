@@ -270,8 +270,9 @@ Started 2026-09-30, alongside the real-SFU run on `feat/chat-video`. Out of scop
 decision: live captions and transcripts (cost and privacy through the LiteLLM proxy), VP9/AV1 SVC
 (needs real SFU data), end-to-end encryption.
 
-- [x] TURN over TCP and TLS on 443 guaranteed in the ICE list (`withFirewallFallbacks`); the live
-      `generate-ice-servers` answer already had both on 2026-09-30, and a test pins its shape
+- [x] TURN over TCP and TLS on 443 kept in a short ICE list (`selectIceUrls`: STUN plus one TURN
+      each over UDP 3478, TCP 3478, TLS 443; a warning is logged if 443 is missing); the live
+      `generate-ice-servers` answer had all three on 2026-09-30, and a test pins its shape
 - [x] Push-to-talk: Space held while muted, not while focus is on a field, button or menu item;
       released by key-up, window blur or a hidden tab; a mute toggle while held wins; announced
 - [x] Chosen audio-only (`setAudioOnly`, `audioOnlyChosen`): the phase 1 paused-video path for every

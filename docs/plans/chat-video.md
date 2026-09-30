@@ -401,6 +401,7 @@ correction, DSCP marking and native clients — disproportionate for a five-pers
   Chromium-only, so Safari needs a manual check.
 - **Corporate firewalls** that block UDP rely on TURN over TCP/TLS 443. Cloudflare's
   `generate-ice-servers` list includes `turns:turn.cloudflare.com:443?transport=tcp` and TURN over
-  TCP (checked 2026-09-30), and `withFirewallFallbacks` in `src/do/turn.ts` adds both to any
-  credentialed Cloudflare TURN entry that lacks them.
+  TCP (checked 2026-09-30); `selectIceUrls` in `src/do/turn.ts` keeps STUN plus one TURN each over
+  UDP 3478, TCP 3478 and TLS 443 from that list (fewer than five URLs, so Firefox does not warn), and
+  logs `chat.call.turn_warning` if TLS on 443 is ever missing rather than inventing the URL.
 - **One device per person per call** is a simplification (no "join from phone and laptop").

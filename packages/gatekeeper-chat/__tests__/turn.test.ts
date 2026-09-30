@@ -1,18 +1,12 @@
-// ICE servers handed to a participant (src/do/turn.ts): port-53 URLs dropped, and TURN over TCP and
-// TLS on 443 always present, so people behind a UDP-blocking or HTTPS-only firewall still connect.
+// ICE servers handed to a participant (src/do/turn.ts): port-53 URLs dropped, and the minted list cut
+// to STUN plus one TURN each over UDP 3478, TCP 3478 and TLS 443 -- short enough that Firefox does not
+// warn, and still reachable behind a UDP-blocking or HTTPS-only firewall.
 //
 // Fake credentials are built at runtime so no secret-shaped literal sits in the repository.
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { RealtimeConfig } from "../src/do/sfu.js";
-import {
-  STUN_ONLY,
-  TURN_TCP,
-  TURN_TLS_443,
-  iceServersFor,
-  normaliseIceServers,
-  withFirewallFallbacks,
-} from "../src/do/turn.js";
+import { STUN_ONLY, iceServersFor, normaliseIceServers, selectIceUrls } from "../src/do/turn.js";
 
 const USER = ["u", "ser"].join("");
 const CRED = ["cr", "ed"].join("");
@@ -48,31 +42,50 @@ function config(body: unknown, status = 201): RealtimeConfig {
   };
 }
 
+function turnWarnings(spy: { mock: { calls: unknown[][] } }): unknown[] {
+  return spy.mock.calls
+    .map((args) => String(args[0]))
+    .filter((line) => line.startsWith("{"))
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
+    .filter((line) => line["evt"] === "chat.call.turn_warning");
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("iceServersFor", () => {
-  it("keeps TCP and TLS-on-443 TURN from the live response and drops port 53", async () => {
+  it("keeps STUN and one TURN each over UDP 3478, TCP 3478 and TLS 443 from the live response", async () => {
+    const spy = vi.spyOn(console, "log");
     const servers = await iceServersFor(config(LIVE_SHAPE));
-    const all = servers.flatMap((server) => server.urls);
-    expect(all).toContain(TURN_TLS_443);
-    expect(all).toContain(TURN_TCP);
-    expect(all.some((url) => /:53(?:[?/]|$)/u.test(url))).toBe(false);
-    // No duplicates were added to a list that already had both.
-    expect(servers[1]!.urls).toHaveLength(6);
-    expect(servers[1]).toMatchObject({ username: USER, credential: CRED });
+    expect(servers).toEqual([
+      { urls: ["stun:stun.cloudflare.com:3478"] },
+      {
+        urls: [
+          "turn:turn.cloudflare.com:3478?transport=udp",
+          "turn:turn.cloudflare.com:3478?transport=tcp",
+          "turns:turn.cloudflare.com:443?transport=tcp",
+        ],
+        username: USER,
+        credential: CRED,
+      },
+    ]);
+    // Under five URLs in all, which is where Firefox starts to warn.
+    expect(servers.flatMap((server) => server.urls).length).toBeLessThan(5);
+    expect(turnWarnings(spy)).toEqual([]);
   });
 
-  it("adds the firewall fallbacks when the TURN entry offers UDP only", async () => {
+  it("never synthesises a URL, and warns when TLS on 443 is missing", async () => {
+    const spy = vi.spyOn(console, "log");
     const servers = await iceServersFor(
       config({
         iceServers: [{ urls: "turn:turn.cloudflare.com:3478?transport=udp", username: USER, credential: CRED }],
       }),
     );
     expect(servers).toEqual([
-      {
-        urls: ["turn:turn.cloudflare.com:3478?transport=udp", TURN_TCP, TURN_TLS_443],
-        username: USER,
-        credential: CRED,
-      },
+      { urls: ["turn:turn.cloudflare.com:3478?transport=udp"], username: USER, credential: CRED },
     ]);
+    expect(turnWarnings(spy)).toEqual([expect.objectContaining({ missing: "turns_443" })]);
   });
 
   it("falls back to STUN alone when minting fails", async () => {
@@ -80,15 +93,26 @@ describe("iceServersFor", () => {
   });
 });
 
-describe("withFirewallFallbacks", () => {
-  it("leaves STUN, uncredentialed and other hosts alone", () => {
+describe("selectIceUrls", () => {
+  it("reads default transports and takes each slot once across entries", () => {
     const input = normaliseIceServers({
       iceServers: [
         { urls: ["stun:stun.cloudflare.com:3478"] },
-        { urls: ["turn:turn.cloudflare.com:3478?transport=udp"] },
-        { urls: ["turn:turn.example.com:3478"], username: USER, credential: CRED },
+        { urls: ["turn:a.example.com:3478", "turns:a.example.com:443"], username: USER, credential: CRED },
+        { urls: ["turn:b.example.com:3478?transport=udp", "turn:b.example.com:3478?transport=tcp"], username: USER, credential: CRED },
       ],
     });
-    expect(withFirewallFallbacks(input)).toEqual(input);
+    expect(selectIceUrls(input)).toEqual([
+      { urls: ["stun:stun.cloudflare.com:3478"] },
+      { urls: ["turn:a.example.com:3478", "turns:a.example.com:443"], username: USER, credential: CRED },
+      { urls: ["turn:b.example.com:3478?transport=tcp"], username: USER, credential: CRED },
+    ]);
+  });
+
+  it("keeps an entry whole when none of its TURN URLs fills a slot", () => {
+    const input = normaliseIceServers({
+      iceServers: [{ urls: ["turn:turn.example.com:5000?transport=udp"], username: USER, credential: CRED }],
+    });
+    expect(selectIceUrls(input)).toEqual(input);
   });
 });

@@ -304,16 +304,12 @@ describe("joining", () => {
     expect(joined.call.participants).toEqual([
       expect.objectContaining({ id: joined.participantId, userId: "alice", sessionId: "sfu-1", tracks: [] }),
     ]);
-    // Port-53 URLs are gone; the rest are passed through as minted.
+    // Port-53 URLs are gone; the rest are chosen from what was minted.
     expect(joined.iceServers).toEqual([
       { urls: ["stun:stun.cloudflare.com:3478"] },
       {
-        // Port 53 dropped; TURN over TCP added (src/do/turn.ts, withFirewallFallbacks).
-        urls: [
-          "turn:turn.cloudflare.com:3478?transport=udp",
-          "turns:turn.cloudflare.com:443?transport=tcp",
-          "turn:turn.cloudflare.com:3478?transport=tcp",
-        ],
+        // Port 53 dropped; nothing synthesised (src/do/turn.ts, selectIceUrls).
+        urls: ["turn:turn.cloudflare.com:3478?transport=udp", "turns:turn.cloudflare.com:443?transport=tcp"],
         username: "minted-user",
         credential: "minted-credential",
       },

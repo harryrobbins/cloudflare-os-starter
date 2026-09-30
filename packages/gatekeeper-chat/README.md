@@ -547,9 +547,10 @@ default, and turned off automatically when the device cannot keep up). Opened on
 in the shell, chat in Chrome and Edge can also float the call over other tabs (Document
 Picture-in-Picture); the API refuses from inside the shell's iframe, so the button is hidden there.
 
-TURN credentials are minted per join. The list the Worker hands out always includes TURN over TCP and
-TLS on port 443 (`withFirewallFallbacks` in `src/do/turn.ts`), for networks that block UDP or allow
-only HTTPS.
+TURN credentials are minted per join. The Worker trims the minted list to STUN plus one TURN URL each
+over UDP 3478, TCP 3478 and TLS on port 443 (`selectIceUrls` in `src/do/turn.ts`), the last two for
+networks that block UDP or allow only HTTPS; a list without TLS on 443 is logged as
+`chat.call.turn_warning`.
 
 Checks outside `pnpm test:run`:
 

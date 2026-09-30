@@ -4,12 +4,14 @@
 // for them with a TTL of {@link CALL_TURN_TTL_SECONDS}, returned only in their own join or reconnect
 // response (docs/research/chat-video-sfu.md, "TURN").
 //
-// Two rules from the research note:
+// The rules, from the research note and the real SFU runs:
 //   * **Drop every port-53 URL.** Browsers block it, and a gather waits for its timeout.
-//   * **Keep the firewall fallbacks.** Networks that block UDP (and often every port but 443) can only
-//     reach TURN over TCP, ideally TLS on 443, which also passes proxies that only allow HTTPS-shaped
-//     traffic. Cloudflare's list includes both today; `withFirewallFallbacks` guarantees them for
-//     each credentialed TURN entry in case the list ever changes shape.
+//   * **A short list: STUN plus one TURN each over UDP 3478, TCP 3478 and TLS 443.** Networks that
+//     block UDP (and often every port but 443) can only reach TURN over TCP, ideally TLS on 443,
+//     which also passes proxies that only allow HTTPS-shaped traffic. Everything else Cloudflare
+//     offers (5349, UDP 443, TCP 80) adds gathering time, and five or more URLs make Firefox warn.
+//     The URLs are chosen from what the API returned -- never synthesised, since a URL is only useful
+//     with the credential minted for it -- and a list without TLS on 443 is logged as a warning.
 //   * **TURN is an improvement, not a requirement.** Without a TURN key, or when minting fails, the
 //     participant gets Cloudflare's public STUN server: most networks connect with it, and a join
 //     that fails outright because TURN was briefly down would be worse than one that might not
@@ -17,7 +19,7 @@
 
 import { CALL_TURN_TTL_SECONDS, type CallIceServer } from "../shared/protocol.js";
 import { logEvent } from "./logs.js";
-import type { RealtimeConfig } from "./sfu.js";
+import { realtimeFetch, type RealtimeConfig } from "./sfu.js";
 
 const TURN_BASE = "https://rtc.live.cloudflare.com/v1/turn/keys";
 const TURN_TIMEOUT_MS = 10_000;
@@ -28,27 +30,32 @@ export const STUN_ONLY: readonly CallIceServer[] = [{ urls: ["stun:stun.cloudfla
 export async function iceServersFor(config: RealtimeConfig): Promise<readonly CallIceServer[]> {
   if (config.turnKeyId === null || config.turnKeyApiToken === null) return STUN_ONLY;
   const started = Date.now();
-  try {
-    const response = await config.fetch(
-      `${TURN_BASE}/${encodeURIComponent(config.turnKeyId)}/credentials/generate-ice-servers`,
-      {
-        method: "POST",
-        headers: { authorization: `Bearer ${config.turnKeyApiToken}`, "content-type": "application/json" },
-        body: JSON.stringify({ ttl: CALL_TURN_TTL_SECONDS }),
-        signal: AbortSignal.timeout(TURN_TIMEOUT_MS),
-      },
-    );
-    if (!response.ok) {
-      logEvent("chat.call.turn", { outcome: `http_${response.status}`, ms: Date.now() - started });
-      return STUN_ONLY;
-    }
-    const servers = withFirewallFallbacks(normaliseIceServers(await response.json()));
-    logEvent("chat.call.turn", { outcome: servers.length > 0 ? "ok" : "empty", ms: Date.now() - started });
-    return servers.length > 0 ? servers : STUN_ONLY;
-  } catch {
-    logEvent("chat.call.turn", { outcome: "network", ms: Date.now() - started });
+  const sent = await realtimeFetch(
+    config,
+    `${TURN_BASE}/${encodeURIComponent(config.turnKeyId)}/credentials/generate-ice-servers`,
+    { method: "POST", token: config.turnKeyApiToken, body: { ttl: CALL_TURN_TTL_SECONDS }, timeoutMs: TURN_TIMEOUT_MS },
+  );
+  if (sent.response === null) {
+    logEvent("chat.call.turn", { outcome: sent.code, ms: Date.now() - started });
     return STUN_ONLY;
   }
+  if (!sent.response.ok) {
+    logEvent("chat.call.turn", { outcome: `http_${sent.response.status}`, ms: Date.now() - started });
+    return STUN_ONLY;
+  }
+  let body: unknown;
+  try {
+    body = await sent.response.json();
+  } catch {
+    body = null;
+  }
+  const servers = selectIceUrls(normaliseIceServers(body));
+  logEvent("chat.call.turn", { outcome: servers.length > 0 ? "ok" : "empty", ms: Date.now() - started });
+  if (servers.length === 0) return STUN_ONLY;
+  if (!servers.some((server) => server.urls.some((url) => slotOf(url) === "tls443"))) {
+    logEvent("chat.call.turn_warning", { missing: "turns_443" });
+  }
+  return servers;
 }
 
 /**
@@ -80,22 +87,41 @@ function usesPort53(url: string): boolean {
   return /:53(?:[?/]|$)/u.test(url);
 }
 
-/** TLS on 443 passes firewalls and proxies that allow only HTTPS; plain TCP passes those that block UDP. */
-export const TURN_TLS_443 = "turns:turn.cloudflare.com:443?transport=tcp";
-export const TURN_TCP = "turn:turn.cloudflare.com:3478?transport=tcp";
+/** The TURN URLs a participant is offered, at most one each. */
+type TurnSlot = "udp3478" | "tcp3478" | "tls443";
 
 /**
- * Every credentialed entry with a `turn:`/`turns:` URL on Cloudflare's TURN host also carries
- * {@link TURN_TLS_443} and {@link TURN_TCP}, appended when missing. Entries for other hosts, STUN
- * entries and entries without credentials are left alone: a URL is only useful with the credential
- * minted for that host.
+ * Which slot a `turn:`/`turns:` URL fills, or null. A `turn:` URL without `transport` is UDP and a
+ * `turns:` one is TCP (RFC 7065).
  */
-export function withFirewallFallbacks(servers: readonly CallIceServer[]): readonly CallIceServer[] {
-  return servers.map((server) => {
-    const credentialed = server.username !== undefined && server.credential !== undefined;
-    const onCloudflareTurn = server.urls.some((url) => /^turns?:turn\.cloudflare\.com[:?]/u.test(url));
-    if (!credentialed || !onCloudflareTurn) return server;
-    const missing = [TURN_TCP, TURN_TLS_443].filter((url) => !server.urls.includes(url));
-    return missing.length === 0 ? server : { ...server, urls: [...server.urls, ...missing] };
-  });
+function slotOf(url: string): TurnSlot | null {
+  const match = /^(turns?):[^:?]+:(\d+)(?:\?transport=(udp|tcp))?$/u.exec(url);
+  if (match === null) return null;
+  const [, scheme, port, transport] = match;
+  if (scheme === "turns") return port === "443" && (transport ?? "tcp") === "tcp" ? "tls443" : null;
+  if (port !== "3478") return null;
+  return (transport ?? "udp") === "udp" ? "udp3478" : "tcp3478";
+}
+
+/**
+ * Trims each entry's TURN URLs to the first of each {@link TurnSlot}, across the whole list. STUN
+ * URLs are kept. An entry whose TURN URLs fill no slot keeps them all -- an unfamiliar shape is
+ * better offered whole than dropped -- and an entry left with no URL is dropped.
+ */
+export function selectIceUrls(servers: readonly CallIceServer[]): readonly CallIceServer[] {
+  const taken = new Set<TurnSlot>();
+  const out: CallIceServer[] = [];
+  for (const server of servers) {
+    const turn = server.urls.filter((url) => /^turns?:/u.test(url));
+    const fillsSlot = turn.some((url) => slotOf(url) !== null);
+    const urls = server.urls.filter((url) => {
+      if (!/^turns?:/u.test(url) || !fillsSlot) return true;
+      const slot = slotOf(url);
+      if (slot === null || taken.has(slot)) return false;
+      taken.add(slot);
+      return true;
+    });
+    if (urls.length > 0) out.push({ ...server, urls });
+  }
+  return out;
 }

@@ -80,6 +80,33 @@ function nonEmpty(value: string | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+/**
+ * One authenticated JSON request to `rtc.live.cloudflare.com` (the SFU or the TURN key API), bounded
+ * by `timeoutMs`. A request that never got a response comes back as `timeout` or `network`, so both
+ * callers log the two the same way; a response of any status is the caller's to judge.
+ */
+export async function realtimeFetch(
+  config: Pick<RealtimeConfig, "fetch">,
+  url: string,
+  init: { readonly method: string; readonly token: string; readonly body?: unknown; readonly timeoutMs: number },
+): Promise<{ readonly response: Response } | { readonly response: null; readonly code: "timeout" | "network" }> {
+  try {
+    const response = await config.fetch(url, {
+      method: init.method,
+      headers: {
+        authorization: `Bearer ${init.token}`,
+        ...(init.body === undefined ? {} : { "content-type": "application/json" }),
+      },
+      ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+      signal: AbortSignal.timeout(init.timeoutMs),
+    });
+    return { response };
+  } catch (error) {
+    const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+    return { response: null, code: timedOut ? "timeout" : "network" };
+  }
+}
+
 /** A failed SFU operation. `code` is the SFU's `errorCode`, or `http_<status>` / `network` / `timeout`. */
 export class SfuError extends Error {
   constructor(
@@ -154,24 +181,17 @@ export function sfuClient(config: RealtimeConfig): SfuClient {
 
   async function once(attempt: Attempt): Promise<{ status: number; body: Json }> {
     const started = Date.now();
-    let response: Response;
-    try {
-      response = await config.fetch(`${base}${attempt.path}`, {
-        method: attempt.method,
-        headers: {
-          authorization: `Bearer ${config.sfuAppSecret}`,
-          ...(attempt.body === undefined ? {} : { "content-type": "application/json" }),
-        },
-        ...(attempt.body === undefined ? {} : { body: JSON.stringify(attempt.body) }),
-        signal: AbortSignal.timeout(SFU_TIMEOUT_MS),
-      });
-    } catch (error) {
-      const code = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")
-        ? "timeout"
-        : "network";
-      log(attempt, 0, code, started);
-      throw new SfuError(attempt.op, 0, code);
+    const sent = await realtimeFetch(config, `${base}${attempt.path}`, {
+      method: attempt.method,
+      token: config.sfuAppSecret,
+      body: attempt.body,
+      timeoutMs: SFU_TIMEOUT_MS,
+    });
+    if (sent.response === null) {
+      log(attempt, 0, sent.code, started);
+      throw new SfuError(attempt.op, 0, sent.code);
     }
+    const response = sent.response;
     let body: Json = {};
     try {
       const parsed: unknown = await response.json();
