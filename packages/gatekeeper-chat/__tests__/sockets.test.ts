@@ -166,6 +166,20 @@ describe("fan-out", () => {
     socket.close();
   });
 
+  it("delivers a dm created after a socket subscribed to that already-connected member", async () => {
+    const { alice, bob } = setup("subs-new-dm");
+    const socket = await bob.socket();
+    await socket.next("hello");
+    socket.send({ t: "sub", channels: [GENERAL_CHANNEL_ID] });
+    await tick(20);
+
+    const dm = await alice.send<ChannelResponse>("POST", apiPath("createChannel"), { kind: "dm", memberIds: ["bob"] });
+    await post(alice, dm.channel.id, "hello in a new dm");
+    const next = await socket.next("msg");
+    expect(next.message).toMatchObject({ channelId: dm.channel.id, body: "hello in a new dm" });
+    socket.close();
+  });
+
   it("broadcasts edits, deletes and reactions with their channel", async () => {
     const { alice, bob } = setup("fanout-mutations");
     const socket = await bob.socket();

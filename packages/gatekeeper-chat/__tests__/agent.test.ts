@@ -531,6 +531,7 @@ function testCtx(state: DurableObjectState, overrides: Partial<Ctx>): Ctx {
   const bus: Broadcaster = {
     toUsers() {},
     toChannel() {},
+    follow() {},
     toAll() {},
     badges() {},
     online: () => [],

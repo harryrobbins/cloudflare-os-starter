@@ -86,6 +86,7 @@ export function joinChannelRow(ctx: Ctx, channel: ChannelRow, userId: UserId): v
     ctx.now(),
     channel.last_seq,
   );
+  ctx.bus.follow([userId], channel.id);
   // Omni-search principals mirror membership for everything but a public channel, which is
   // `vis: "all"` and has none.
   if (channel.kind !== "public") queueSearchChannel(ctx, channel.id);

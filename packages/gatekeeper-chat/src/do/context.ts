@@ -22,6 +22,12 @@ export interface Broadcaster {
    * event when it subscribed to that channel or subscribed to nothing at all.
    */
   toChannel(channelId: ChannelId, event: ServerEvent, options?: { readonly exclude?: UserId }): void;
+  /**
+   * A new membership: adds the channel to each of these users' sockets that subscribed to a list,
+   * so a conversation created or joined after a socket subscribed reaches it through
+   * {@link toChannel} like any other. A socket that subscribed to nothing already receives it.
+   */
+  follow(userIds: Iterable<UserId>, channelId: ChannelId): void;
   /** One event to every live socket. Only presence uses it. */
   toAll(event: ServerEvent): void;
   /** Recomputes each user's {@link import("../shared/protocol.js").BadgeSummary} and pushes it. */

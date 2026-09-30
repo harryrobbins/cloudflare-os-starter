@@ -151,8 +151,11 @@ Bugs found and fixed (each with a test that fails without the fix):
    Chrome, so pullers on b or c received nothing (intermittent: 3 of 4 tracks moving). The placeholder
    is now the camera's 1280×720; all three layers keep sending.
 4. **A new DM never rang.** The ring went through the socket's `sub` filter, which lists only the
-   conversations the callee knew when it connected. The Worker now rings members' sockets directly,
-   and the store fetches the channel list (re-subscribing) when a ring names an unknown conversation.
+   conversations the callee knew when it connected. A new membership now joins the member's
+   subscribed sockets' lists on the server (`Broadcaster.follow`), so the ring (and every later
+   message) goes through the normal channel path; the store fetches the channel list when a ring names
+   an unknown conversation and rings once the membership is known. (Reworked after the real-SFU run;
+   needs a rerun.)
 5. **Focus lost when the call moved** (fork `31cb0002`). After Pop out the home composer's autofocus
    took the keyboard; closing the drawer mid-call left it on the body. Focus now follows the frame
    after a move, goes to the pill when the frame hides mid-call, and returns to the opener otherwise.

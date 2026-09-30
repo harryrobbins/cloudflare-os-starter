@@ -57,7 +57,7 @@ import {
   type UserId,
   formatCallDuration,
 } from "../shared/protocol.js";
-import { memberIdsOf, requireRead, requireWrite } from "./access.js";
+import { requireRead, requireWrite } from "./access.js";
 import { allow, firstRow, placeholders, refuse, type Ctx, type Outcome } from "./context.js";
 import { newCallId, newParticipantId } from "./ids.js";
 import { pruneCallStatsBudgets } from "./call-stats.js";
@@ -281,10 +281,9 @@ function broadcastCall(ctx: Ctx, callId: string): void {
  * The event that starts a call. In a `dm` or `group` it rings everybody but the starter, who gets
  * the same state without `ring`; a channel never rings.
  *
- * The ring goes to the members' sockets directly, not through `toChannel`: a socket's `sub` list is
- * the conversations it knew when it subscribed, so a dm created after the other person connected
- * (the usual way a first call starts) would never ring them. Their client refreshes its channel list
- * when a ring names a conversation it does not have.
+ * A dm created after the other person connected (the usual way a first call starts) still reaches
+ * them: creating the membership added it to their sockets' subscriptions (`Broadcaster.follow`),
+ * and their client fetches its channel list when an event names a conversation it does not have.
  */
 function broadcastStart(ctx: Ctx, call: CallRow, ring: boolean): void {
   const state = toCallState(ctx, call);
@@ -292,8 +291,7 @@ function broadcastStart(ctx: Ctx, call: CallRow, ring: boolean): void {
     ctx.bus.toChannel(call.channel_id, { t: "call", channel: call.channel_id, call: state });
     return;
   }
-  const others = memberIdsOf(ctx, call.channel_id).filter((userId) => userId !== call.started_by);
-  ctx.bus.toUsers(others, { t: "call", channel: call.channel_id, call: state, ring: true });
+  ctx.bus.toChannel(call.channel_id, { t: "call", channel: call.channel_id, call: state, ring: true }, { exclude: call.started_by });
   ctx.bus.toUsers([call.started_by], { t: "call", channel: call.channel_id, call: state });
 }
 

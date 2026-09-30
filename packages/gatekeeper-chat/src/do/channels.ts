@@ -182,6 +182,7 @@ export function createChannel(
   }
 
   logEvent("chat.channel.create", { kind: request.kind, user: hashId(user.id), channel: hashId(id) });
+  ctx.bus.follow(members, id);
   ctx.bus.badges(members);
   return channelResponse(ctx, id, user.id);
 }

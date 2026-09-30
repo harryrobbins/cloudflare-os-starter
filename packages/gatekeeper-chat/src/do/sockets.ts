@@ -11,7 +11,9 @@
 //
 // **Subscriptions are a filter, not a permission.** A socket that has subscribed receives the
 // channels it named; a socket that has subscribed to nothing receives every channel it is entitled
-// to. That keeps a naive client correct and lets a busy one narrow the traffic.
+// to. That keeps a naive client correct and lets a busy one narrow the traffic. A membership created
+// later (a new dm or group, a channel joined) is added to the list by `follow`, so the conversation
+// reaches sockets that could not have named it; the client learns the channel when it first sees it.
 //
 // **Presence expires lazily.** A user is online while one of their sockets sent a frame within
 // {@link PRESENCE_TTL_MS}; clients ping every {@link WS_HEARTBEAT_MS}. There is no presence alarm --
@@ -22,6 +24,7 @@
 
 import {
   MAX_CLIENT_FRAME_BYTES,
+  MAX_SUBSCRIPTIONS,
   PRESENCE_TTL_MS,
   PROTOCOL_VERSION,
   TYPING_THROTTLE_MS,
@@ -98,6 +101,17 @@ export function createBroadcaster(state: DurableObjectState, getCtx: () => Ctx):
         if (seen.has(userId)) continue;
         seen.add(userId);
         for (const ws of state.getWebSockets(userId)) send(ws, event);
+      }
+    },
+
+    follow(userIds, channelId) {
+      for (const userId of new Set(userIds)) {
+        for (const ws of state.getWebSockets(userId)) {
+          const attachment = readAttachment(ws);
+          if (attachment === null || attachment.channels.length === 0) continue;
+          if (attachment.channels.includes(channelId) || attachment.channels.length >= MAX_SUBSCRIPTIONS) continue;
+          writeAttachment(ws, { ...attachment, channels: [...attachment.channels, channelId] });
+        }
       }
     },
 

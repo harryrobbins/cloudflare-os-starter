@@ -1068,6 +1068,7 @@ export class ChatStore {
       if (response.calls !== undefined) this.#setCalls(callsByChannel(response.calls));
       this.#updateTitle();
       this.#subscribeAll();
+      this.#ringPending();
     } catch (cause) {
       this.#toast({ tone: "error", title: "Could not refresh channels", body: describe(cause) });
     }
@@ -1518,15 +1519,27 @@ export class ChatStore {
     if (this.#engineChannel() === channelId) this.#forwardRoom(call);
     if (call === null) return;
     // A ring for a conversation this client has not loaded yet -- somebody created the dm and called
-    // straight away. The server rings members' sockets directly; fetch the rail (which also
-    // re-subscribes) and ring once the membership is known, unless the call has moved on meanwhile.
+    // straight away. It rings once the channel list has the membership (see refreshChannels),
+    // unless the call has moved on meanwhile.
     if (ring === true && this.#state.memberships[channelId] === undefined) {
-      void this.refreshChannels().then(() => {
-        if (this.#state.calls[channelId]?.id === call.id) this.#ringIfWanted(channelId, call, ring);
-      });
+      this.#pendingRings.set(channelId, call.id);
+      this.#refreshIfUnknown([channelId]);
       return;
     }
     this.#ringIfWanted(channelId, call, ring);
+  }
+
+  /** Rings that named a conversation this client did not have yet: channel id to call id. */
+  readonly #pendingRings = new Map<ChannelId, string>();
+
+  /** After the channel list changed: ring the pending calls that are still running. */
+  #ringPending(): void {
+    for (const [channelId, callId] of this.#pendingRings) {
+      if (this.#state.memberships[channelId] === undefined) continue;
+      this.#pendingRings.delete(channelId);
+      const call = this.#state.calls[channelId];
+      if (call?.id === callId) this.#ringIfWanted(channelId, call, true);
+    }
   }
 
   #ringIfWanted(channelId: ChannelId, call: CallState, ring: boolean | undefined): void {
