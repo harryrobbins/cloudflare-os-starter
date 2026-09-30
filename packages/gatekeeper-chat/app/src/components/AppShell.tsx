@@ -16,6 +16,8 @@ import { NewChannelDialog, NewMessageDialog } from "./Dialogs.js";
 import { QuickSwitcher } from "./QuickSwitcher.js";
 import { ShortcutSheet } from "./ShortcutSheet.js";
 import { ConnectionBanner, LiveRegion, Toasts } from "./Toasts.js";
+import { MobileNav } from "./MobileNav.js";
+import { Modal } from "./Modal.js";
 import { Rail } from "./Rail.js";
 import { Button, EmptyState, Skeleton } from "./primitives.js";
 
@@ -104,7 +106,7 @@ export function AppShell(): ReactNode {
 
   return (
     <LayoutContext.Provider value={layout}>
-      <div className="flex h-full flex-col overflow-hidden bg-kumo-base">
+      <div className="chat-shell flex h-full flex-col overflow-hidden bg-kumo-base">
         <ConnectionBanner />
         <div className="flex min-h-0 flex-1">
           {!narrow && (
@@ -122,32 +124,16 @@ export function AppShell(): ReactNode {
           </main>
         </div>
 
+        {narrow && !compact && <MobileNav onConversations={layout.openRail} />}
         {narrow && railOpen && (
-          <div className="fixed inset-0 z-[1100] flex" role="dialog" aria-label="Conversations">
-            <div className="w-[min(19rem,85vw)] shadow-2xl">
-              <Rail
-                onNewChannel={() => {
-                  setRailOpen(false);
-                  layout.openNewChannel();
-                }}
-                onNewMessage={() => {
-                  setRailOpen(false);
-                  layout.openNewMessage();
-                }}
-                onSearch={() => {
-                  setRailOpen(false);
-                  setOverlay("switcher");
-                }}
-                onNavigate={() => setRailOpen(false)}
-              />
-            </div>
-            <button
-              type="button"
-              aria-label="Close the conversation list"
-              onClick={() => setRailOpen(false)}
-              className="flex-1 cursor-default bg-black/40"
+          <Modal title="Conversations" drawer onClose={() => setRailOpen(false)}>
+            <Rail
+              onNewChannel={() => { setRailOpen(false); layout.openNewChannel(); }}
+              onNewMessage={() => { setRailOpen(false); layout.openNewMessage(); }}
+              onSearch={() => { setRailOpen(false); setOverlay("switcher"); }}
+              onNavigate={() => setRailOpen(false)}
             />
-          </div>
+          </Modal>
         )}
 
         {overlay === "switcher" && (

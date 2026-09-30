@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 
 import "./styles.css";
+import { trackMobileViewport } from "./lib/mobile.js";
 
 import { createTransport } from "./api/transport.js";
 import { StoreProvider } from "./hooks/store.js";
@@ -17,6 +18,10 @@ async function main(): Promise<void> {
   const root = document.querySelector("#root");
   if (root === null) throw new Error("The app root is missing from index.html.");
 
+  trackMobileViewport();
+  if (!__CHAT_MOCK__ && window.self === window.top && "serviceWorker" in navigator) {
+    void navigator.serviceWorker.register("/gatekeeper/chat/sw.js", { scope: "/gatekeeper/chat/" }).catch(() => undefined);
+  }
   const { bridged, compact } = parseEmbedOptions();
   const transport = await createTransport();
   const store = new ChatStore({ transport, navigate: navigateToAppPath });
@@ -48,6 +53,7 @@ async function main(): Promise<void> {
   document.addEventListener("visibilitychange", () => {
     store.setVisible(document.visibilityState === "visible");
   });
+  window.addEventListener("pagehide", () => store.flushDrafts());
   window.addEventListener("focus", () => store.setFocused(true));
   window.addEventListener("blur", () => store.setFocused(false));
   window

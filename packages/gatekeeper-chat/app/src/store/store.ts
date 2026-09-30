@@ -188,7 +188,7 @@ export class ChatStore {
     this.#disposed = true;
     for (const timer of this.#timers) clearTimeout(timer);
     this.#timers.clear();
-    if (this.#draftFlush !== null) clearTimeout(this.#draftFlush);
+    this.flushDrafts();
     this.#socket.close();
   }
 
@@ -818,6 +818,7 @@ export class ChatStore {
   }
 
   setVisible(visible: boolean): void {
+    if (!visible) this.flushDrafts();
     if (this.#state.visible === visible) return;
     this.#patch({ visible });
     if (visible && this.#state.activeChannelId !== null) {
@@ -1186,6 +1187,13 @@ export class ChatStore {
       this.#patch({ directory: { loading: false, loaded: false } });
       this.#toast({ tone: "error", title: "Could not load the directory", body: describe(cause) });
     }
+  }
+
+  /** Persist pending text before pagehide or phone suspension stops the debounce timer. */
+  flushDrafts(): void {
+    if (this.#draftFlush !== null) clearTimeout(this.#draftFlush);
+    this.#draftFlush = null;
+    saveDrafts(this.#state.drafts);
   }
 
   // --- drafts and uploads ---------------------------------------------------

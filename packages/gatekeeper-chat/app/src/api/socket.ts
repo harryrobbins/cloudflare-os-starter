@@ -28,6 +28,7 @@ export function createWebSocketClient(url: string = socketUrl()): ChatSocket {
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let pingTimer: ReturnType<typeof setInterval> | null = null;
   let retryAt: number | null = null;
+  let hiddenAt: number | null = null;
   const eventListeners = new Set<(event: ServerEvent) => void>();
   const statusListeners = new Set<(status: SocketStatus) => void>();
   /** Frames sent while the socket was down; replayed on open so a `sub` is never lost. */
@@ -77,6 +78,7 @@ export function createWebSocketClient(url: string = socketUrl()): ChatSocket {
     socket = ws;
 
     ws.addEventListener("open", () => {
+      if (socket !== ws || !wanted) return;
       attempt = 0;
       retryAt = null;
       setStatus("open");
@@ -87,6 +89,7 @@ export function createWebSocketClient(url: string = socketUrl()): ChatSocket {
     });
 
     ws.addEventListener("message", (event) => {
+      if (socket !== ws || !wanted) return;
       if (typeof event.data !== "string") return;
       let parsed: unknown;
       try {
@@ -99,6 +102,7 @@ export function createWebSocketClient(url: string = socketUrl()): ChatSocket {
     });
 
     ws.addEventListener("close", () => {
+      if (socket !== ws) return;
       socket = null;
       clearTimers();
       if (!wanted) {
@@ -124,19 +128,46 @@ export function createWebSocketClient(url: string = socketUrl()): ChatSocket {
     }
   }
 
+  // A suspended phone can retain an OPEN socket whose TCP connection no longer exists.
+  // Replacing it triggers the existing hello/catch-up path; no writes are replayed here.
+  function resume(): void {
+    if (!wanted) return;
+    clearTimers();
+    const previous = socket;
+    socket = null;
+    previous?.close();
+    attempt = 0;
+    retryAt = null;
+    connect();
+  }
+  function onVisibility(): void {
+    if (document.visibilityState === "hidden") {
+      hiddenAt = Date.now();
+    } else {
+      if (hiddenAt !== null && Date.now() - hiddenAt > 15_000) resume();
+      hiddenAt = null;
+    }
+  }
+
   return {
     open(): void {
       if (wanted) return;
       wanted = true;
+      window.addEventListener("online", resume);
+      document.addEventListener("visibilitychange", onVisibility);
       attempt = 0;
       connect();
     },
     close(): void {
       wanted = false;
+      window.removeEventListener("online", resume);
+      document.removeEventListener("visibilitychange", onVisibility);
+      hiddenAt = null;
       clearTimers();
       pending = [];
-      socket?.close();
+      const previous = socket;
       socket = null;
+      previous?.close();
       setStatus("closed");
     },
     send,
