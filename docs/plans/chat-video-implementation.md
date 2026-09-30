@@ -121,8 +121,50 @@ file outside the repo, deleted afterwards):
   connections with `iceTransportPolicy: "relay"` and freshly minted credentials connected in 4.2 s
   over `relay/udp` (RTT 13 ms) and carried audio and video.
 - Firefox/WebKit: not run.
-- [ ] README section for calls; update chat.md "out of scope" note
-- [ ] Production mutation summary for Harry (SFU app + TURN key creation, secrets, release)
+- [x] README section for calls; update chat.md "out of scope" note (feat/chat-video-next, Stream H)
+- [x] Production mutation summary for Harry, drafted below; **not executed**
+
+### Production mutation summary (draft, for approval; nothing here has been run)
+
+Follow `.agents/skills/cloudflare-os-operator/SKILL.md` before any of it. Facts to re-verify on the
+day: account `e1376e48400a20e631b61bbf16f555f1`, route `cfos.surprisingly.ltd` on `cfos-router`, the
+root and `cloudflare-os` commits being released, and each Worker's last-known-good version id.
+
+1. **Realtime resources (Harry, dashboard).** The SFU app and TURN key created on 2026-09-30 are the
+   **dev** pair (their ids and credentials are in the main checkout's `.env.local` only). Production
+   gets its own: Realtime → SFU → create an app; Realtime → TURN → create a key. Keeping them apart
+   means a local test can never spend or break the production allowance, and a dev credential leak
+   is revoked without touching production.
+2. **Code.** Merge `feat/chat-video` (and `feat/chat-video-next`, if accepted) into `main`, with the
+   `cloudflare-os` gitlink on the pushed fork commit. The release carries chat Durable Object
+   migrations 5 (call tables) and 6 (`hand_at`), the chat app (including ~12.6 MB of optional effect
+   assets: MediaPipe's Wasm, the segmenter model, RNNoise), the Worker's CSP gaining
+   `'wasm-unsafe-eval'`, and the shell's persistent chat frame and "In a call" pill (fork).
+3. **`deployment.jsonc`.**
+   `"chat": { ..., "calls": { "enabled": true, "sfuAppId": "<prod SFU app id>", "turnKeyId": "<prod TURN key id>" } }`.
+   The ids are public; they become `REALTIME_SFU_APP_ID` and `REALTIME_TURN_KEY_ID`.
+4. **Two production secrets** on `cfos-chat` (the dev pair's two stay local), installed before the
+   release because the generated config lists them under `secrets.required`:
+   ```sh
+   CLOUDFLARE_ACCOUNT_ID=e1376e48400a20e631b61bbf16f555f1 pnpm exec wrangler secret put REALTIME_SFU_APP_SECRET --name cfos-chat
+   CLOUDFLARE_ACCOUNT_ID=e1376e48400a20e631b61bbf16f555f1 pnpm exec wrangler secret put REALTIME_TURN_KEY_API_TOKEN --name cfos-chat
+   ```
+5. **Validate, then release.** `pnpm check` on the clean merged `main` (its summary lists the Workers
+   the change touches), then, after approval, `pnpm release`. Live uploads stay serial in
+   `deployOrder()`, router last.
+6. **Verify signed in.** Two people (the second Access identity is still the gap `chat.md` notes)
+   start a call in a DM: ring, join, see and hear each other, share a screen, move sidebar ↔ full page,
+   leave; the history row reads "Call ended · N min · names". `wrangler tail cfos-chat` shows
+   `chat.call.*` lines and a `chat.call.stats` line a minute in, and nothing with SDP or an address.
+
+**Rollback limits.** The multi-Worker release is not atomic; on a failure, stop and record which
+Workers went live and their version ids. `"calls": { "enabled": false }` (or removing the block) and
+a redeploy turns every call route into 503 `unavailable` without touching chat. Migrations 5 and 6 are
+forward-only: a rolled-back Worker ignores the extra tables and column, so rolling code back is safe
+but the schema stays. Calls in progress drop on a chat deploy (clients rejoin automatically). Nothing
+is stored at Cloudflare Realtime; revoking the production app token or TURN key stops new calls at
+once. Realtime is billed on egress beyond its free allowance: check current pricing, and the stats log
+line gives per-call volume after the first week.
 
 ## Stream F: one persistent chat frame (phase 1b)
 
@@ -168,3 +210,38 @@ nothing stored; accepted up to 2 min after leave. UI: quality bars, one banner a
 unstable > CPU), paused tiles, mic silence warning, speaker test tone, headphones tip.
 Real-SFU/browser checks outstanding: RED negotiation, munged fmtp acceptance, Firefox `active=false` and
 missing `qualityLimitationReason`, Safari simulcast, `availableIncomingBitrate` availability.
+
+## Stream H: further improvements (feat/chat-video-next)
+
+Branch `feat/chat-video-next` in `/var/web/cfos-chat-video-next`, from `feat/chat-video` at 80d03a0.
+Started 2026-09-30, alongside the real-SFU run on `feat/chat-video`. Out of scope, left for a
+decision: live captions and transcripts (cost and privacy through the LiteLLM proxy), VP9/AV1 SVC
+(needs real SFU data), end-to-end encryption.
+
+- [x] TURN over TCP and TLS on 443 guaranteed in the ICE list (`withFirewallFallbacks`); the live
+      `generate-ice-servers` answer already had both on 2026-09-30, and a test pins its shape
+- [x] Push-to-talk: Space held while muted, not while focus is on a field, button or menu item;
+      released by key-up, window blur or a hidden tab; a mute toggle while held wins; announced
+- [x] Chosen audio-only (`setAudioOnly`, `audioOnlyChosen`): the phase 1 paused-video path for every
+      camera, own camera off and restored after; separate from the downlink's `audioOnly` banner
+- [x] Raise hand (`call-hand`, migration 6 `hand_at`, `CallParticipant.hand`) and quick reactions
+      (`call-react`, six emoji, 5 per 10 s per participant, never stored); tile badge with the queue
+      place, floating reactions, People list hands-first; both frames additive
+- [x] Noise suppression: RNNoise in an AudioWorklet, off by default, remembered, shed under CPU strain
+- [x] Background blur: MediaPipe selfie segmenter in a module worker over insertable streams (Chrome
+      and Edge), model bundled, off by default, remembered, shed first under CPU strain
+- [x] Document Picture-in-Picture: the call floats over other tabs when chat is opened on its own in
+      Chrome or Edge; hidden inside the shell's iframe (the API refuses there) and elsewhere
+- [x] Docs: package README "Video calls", root README row, `chat.md` out-of-scope note, customization
+      note on the CSP, the production mutation summary above
+
+Checked 2026-09-30: Worker 315 tests, app 517, both type-checks. `e2e/effects-check.mjs` in headless
+Chromium with fake devices, served under the app's CSP: RNNoise builds in ~40 ms and passes audio
+(peak 0.52 from 1.0); blur starts in 0.4-1.2 s and produces 5-8 fps at 640x360 on software GL with
+every hard edge softened (max neighbour step 120 → 6).
+
+Not verified in a real browser or call: push-to-talk, audio-only, hands and reactions against the
+real Worker and SFU; blur keeping a real person sharp, its frame rate on a real GPU, and its CPU cost;
+RNNoise's effect on real noise, and on Firefox (whose AudioContext may refuse a 48 kHz context on a
+44.1 kHz device); Document Picture-in-Picture (headless Chromium cannot open one); the CPU monitor
+actually shedding an effect on a struggling laptop.

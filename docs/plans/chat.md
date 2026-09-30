@@ -306,4 +306,9 @@ Why it is acceptable: it touches no backend, no shared types, and no gadget runt
 
 ## Out of scope for v1
 
-Voice and video, huddles, message scheduling, custom emoji, per-message permissions, guest accounts, email digests, federation, and Slack import.
+Huddles, message scheduling, custom emoji, per-message permissions, guest accounts, email digests, federation, and Slack import.
+
+Voice and video were out of scope for v1 and are now planned and built separately: calls of up to five
+people in any conversation, over Cloudflare Realtime's SFU. See [chat-video.md](chat-video.md) for the
+design and [chat-video-implementation.md](chat-video-implementation.md) for what is built, verified
+and still waiting on a production release.

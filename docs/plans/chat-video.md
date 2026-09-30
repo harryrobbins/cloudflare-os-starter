@@ -368,6 +368,11 @@ viewer a layer that suits them. Browser-side processing is for effects, not tran
 
 ### Quality phase 2 (separate plan when phase 1 is measured)
 
+Noise suppression and background blur are built on `feat/chat-video-next` (see
+[the implementation checklist, Stream H](chat-video-implementation.md#stream-h-further-improvements-featchat-video-next));
+SVC and captions remain open.
+
+
 - **ML noise suppression** toggle: RNNoise (or DTLN) as WASM in an `AudioWorklet`, ~10 ms added
   latency, low CPU; off by default because the browser's own suppression is decent.
 - **Background blur / replacement**: MediaPipe Image Segmenter (WebGL/WebGPU) on raw frames via
