@@ -69,7 +69,12 @@
     "ADMINS": "[]",
     "PUBLIC_BASE_URL": "https://example.invalid",
     // A number, not a string: wrangler passes structured vars through verbatim.
-    "MAX_UPLOAD_BYTES": 10485760
+    "MAX_UPLOAD_BYTES": 10485760,
+    // Video calls (docs/plans/chat-video.md). Empty means calls are off: every call route answers
+    // 503 `unavailable`. deploy.ts fills the ids from `chat.calls`; REALTIME_SFU_APP_SECRET and
+    // REALTIME_TURN_KEY_API_TOKEN are Worker secrets and never appear in this file.
+    "REALTIME_SFU_APP_ID": "",
+    "REALTIME_TURN_KEY_ID": ""
   },
 
   "observability": {

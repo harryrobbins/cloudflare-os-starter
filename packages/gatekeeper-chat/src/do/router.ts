@@ -21,13 +21,21 @@ import {
 } from "../shared/protocol.js";
 import { FILES_PREFIX, matchApiRoute, matchFilePath, WS_PATH, type ApiRouteName } from "../shared/routes.js";
 import {
+  parseAnnounceTracks,
+  parseCloseTracks,
   parseCreateChannel,
   parseEditMessage,
   parseEmoji,
+  parseJoinCall,
   parseListMessagesQuery,
   parseListThreadsQuery,
   parseMarkRead,
+  parseParticipantRequest,
+  parsePublishTracks,
+  parsePullTracks,
+  parseRenegotiate,
   parseSendMessage,
+  parseSetLayer,
   parseUpdateMembership,
   parseUpdateChannel,
   parseUpdateMe,
@@ -45,6 +53,19 @@ import {
   updateMembership,
 } from "./channels.js";
 import { retryAgentRequest } from "./agent.js";
+import {
+  announceTracks,
+  callFeature,
+  closeTracks,
+  getCall,
+  joinCall,
+  leaveCall,
+  publishTracks,
+  pullTracks,
+  reconnectCall,
+  renegotiateCall,
+  setLayer,
+} from "./calls.js";
 import type { Ctx, Outcome } from "./context.js";
 import { createUpload, serveFile } from "./files.js";
 import {
@@ -278,8 +299,11 @@ export async function route(
     case "unsubscribePush":
       return errorResponse("not_implemented", `${name} is not implemented yet.`);
 
-    // Placeholder until Stream A (docs/plans/chat-video-implementation.md) lands src/do/calls.ts.
+    // Calls (src/do/calls.ts). The kill switch is checked before the body is parsed, so a deployment
+    // without SFU credentials answers every call route with the same 503.
     case "getCall":
+      return respond(await getCall(ctx, user, params["channelId"]!));
+
     case "joinCall":
     case "publishTracks":
     case "announceTracks":
@@ -288,8 +312,69 @@ export async function route(
     case "closeTracks":
     case "setLayer":
     case "reconnectCall":
-    case "leaveCall":
-      return errorResponse("unavailable", "Calls are not available yet.");
+    case "leaveCall": {
+      if (!callFeature(ctx).enabled) return errorResponse("unavailable", "Calls are not available on this deployment.");
+      return callRoute(ctx, user, name, params, await readJson(request));
+    }
+  }
+}
+
+/** The call routes that take a body: validate, then hand to src/do/calls.ts. */
+async function callRoute(
+  ctx: Ctx,
+  user: UserRow,
+  name: ApiRouteName,
+  params: Readonly<Record<string, string>>,
+  body: unknown,
+): Promise<Response> {
+  const callId = params["callId"] ?? "";
+  switch (name) {
+    case "joinCall": {
+      const parsed = parseJoinCall(body);
+      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
+      return respond(await joinCall(ctx, user, params["channelId"]!));
+    }
+    case "publishTracks": {
+      const parsed = parsePublishTracks(body);
+      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
+      return respond(await publishTracks(ctx, user, callId, parsed.value));
+    }
+    case "announceTracks": {
+      const parsed = parseAnnounceTracks(body);
+      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
+      return respond(await announceTracks(ctx, user, callId, parsed.value));
+    }
+    case "pullTracks": {
+      const parsed = parsePullTracks(body);
+      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
+      return respond(await pullTracks(ctx, user, callId, parsed.value));
+    }
+    case "renegotiateCall": {
+      const parsed = parseRenegotiate(body);
+      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
+      return respond(await renegotiateCall(ctx, user, callId, parsed.value));
+    }
+    case "closeTracks": {
+      const parsed = parseCloseTracks(body);
+      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
+      return respond(await closeTracks(ctx, user, callId, parsed.value));
+    }
+    case "setLayer": {
+      const parsed = parseSetLayer(body);
+      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
+      return respond(await setLayer(ctx, user, callId, parsed.value));
+    }
+    case "reconnectCall":
+    case "leaveCall": {
+      const parsed = parseParticipantRequest(body);
+      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
+      const participantId = parsed.value.participantId;
+      return name === "reconnectCall"
+        ? respond(await reconnectCall(ctx, user, callId, participantId))
+        : respond(await leaveCall(ctx, user, callId, participantId));
+    }
+    default:
+      return errorResponse("not_found", "No such call route.");
   }
 }
 
@@ -306,6 +391,7 @@ function me(ctx: Ctx, user: UserRow, admin: boolean): MeResponse {
       maxAttachmentsPerMessage: MAX_ATTACHMENTS_PER_MESSAGE,
     },
     protocolVersion: PROTOCOL_VERSION,
+    calls: callFeature(ctx),
   };
 }
 

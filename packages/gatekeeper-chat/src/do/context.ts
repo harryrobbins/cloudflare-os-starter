@@ -8,6 +8,7 @@
 import type { ChatEnv } from "../env.js";
 import type { ChannelId, ErrorCode, ServerEvent, UserId } from "../shared/protocol.js";
 import type { AgentGateway } from "./agent.js";
+import type { RealtimeConfig } from "./sfu.js";
 
 /** Delivery to live sockets. Implemented by the Durable Object, which owns `ctx.getWebSockets`. */
 export interface Broadcaster {
@@ -55,6 +56,12 @@ export interface Ctx {
    * Optional so a hand-built test context need not provide it.
    */
   searchChanged?(): void;
+  /**
+   * Cloudflare Realtime (SFU and TURN) for video calls, or null/absent when this deployment has no
+   * SFU credentials -- the calls kill switch (src/do/calls.ts). Carries its own `fetch` so a test can
+   * put a fake SFU behind it. Optional so a hand-built test context need not provide it.
+   */
+  readonly realtime?: RealtimeConfig | null;
 }
 
 /** `?, ?, ?` for an `IN (...)` list. Bound parameters only; never interpolated values. */

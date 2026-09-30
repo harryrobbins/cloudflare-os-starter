@@ -15,7 +15,7 @@
 //
 // **Presence expires lazily.** A user is online while one of their sockets sent a frame within
 // {@link PRESENCE_TTL_MS}; clients ping every {@link WS_HEARTBEAT_MS}. There is no presence alarm --
-// the only alarm this object owns is the upload sweep -- so the set is recomputed whenever somebody
+// the object's one alarm serves uploads, outboxes and call expiry, not presence -- so the set is recomputed whenever somebody
 // asks for it or a connect or disconnect makes it worth broadcasting. A close event alone is not
 // enough to know somebody left (the plan says so), and a hibernating socket is still open, so the
 // heartbeat is the only honest signal.
@@ -32,6 +32,7 @@ import {
 } from "../shared/protocol.js";
 import { parseClientEvent, utf8Bytes } from "../shared/validate.js";
 import { recipientsOf, requireRead } from "./access.js";
+import { activeCallsFor, callBeat } from "./calls.js";
 import type { Broadcaster, Ctx } from "./context.js";
 import { newSessionId } from "./ids.js";
 import { typingAllowed } from "./limits.js";
@@ -190,6 +191,7 @@ export function acceptSocket(ctx: Ctx, state: DurableObjectState, user: UserRow)
     serverTime: now,
     protocolVersion: PROTOCOL_VERSION,
     lastSeq,
+    calls: activeCallsFor(ctx, user.id),
   });
   send(server, { t: "badge", ...badgeSummary(ctx, user.id) });
   broadcastPresence(ctx);
@@ -282,6 +284,14 @@ export function handleFrame(ctx: Ctx, ws: WebSocket, raw: string | ArrayBuffer):
       if (!typingAllowed(user.id, channelId, now, TYPING_THROTTLE_MS)) return;
       // Never persisted: a typing indicator is worth nothing a second after it was sent.
       ctx.bus.toChannel(channelId, { t: "typing", channel: channelId, user: user.id }, { exclude: user.id });
+      return;
+    }
+
+    case "call-beat": {
+      // An unknown or foreign participant is an `error` event, never a close: a tab that was
+      // replaced or expired may still send one beat before its `call-moved` arrives.
+      const result = callBeat(ctx, user, parsed.value);
+      if (!result.ok) send(ws, { t: "error", code: result.code, message: result.message });
       return;
     }
   }

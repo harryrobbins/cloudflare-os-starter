@@ -38,6 +38,7 @@ import {
 import { extractMentionIds } from "../shared/validate.js";
 import { memberIdsOf, requireRead, requireWrite, visibleChannelIds } from "./access.js";
 import { agentFieldsFor, forgetAgentRequest, recordAgentRequest } from "./agent.js";
+import { callFieldsFor } from "./calls.js";
 import { allow, firstRow, placeholders, refuse, scalar, type Ctx, type Outcome } from "./context.js";
 import {
   attachmentRowsForMessage,
@@ -82,6 +83,7 @@ export function hydrateMessages(ctx: Ctx, rows: readonly MessageRow[]): readonly
   const attachments = attachmentsFor(ctx, ids);
   const mentions = mentionsFor(ctx, ids);
   const agent = agentFieldsFor(ctx, ids);
+  const calls = callFieldsFor(ctx, ids);
   return rows.map((row) => ({
     id: row.id,
     channelId: row.channel_id,
@@ -100,6 +102,7 @@ export function hydrateMessages(ctx: Ctx, rows: readonly MessageRow[]): readonly
     mentions: mentions.get(row.id) ?? [],
     ...(row.client_id === null ? {} : { clientId: row.client_id }),
     ...agent.get(row.id),
+    ...calls.get(row.id),
   }));
 }
 
@@ -434,8 +437,19 @@ export async function sendMessage(
   return allow({ message, deduped: false, badges: badgeSummary(ctx, author.id) });
 }
 
-/** A system message ("Harry archived #old"). Same seq machinery, no client id, no rate limit. */
-export function postSystemMessage(ctx: Ctx, channelId: ChannelId, body: string): Message {
+/**
+ * A system message ("Harry archived #old"). Same seq machinery, no client id, no rate limit.
+ *
+ * `within` runs inside the same transaction, after the insert and before the `msg` fan-out, so a row
+ * that the message hydrates from (a call, src/do/calls.ts) exists by the time anybody sees it and
+ * rolls back with it if it throws.
+ */
+export function postSystemMessage(
+  ctx: Ctx,
+  channelId: ChannelId,
+  body: string,
+  within?: (messageId: MessageId) => void,
+): Message {
   const now = ctx.now();
   const id = newMessageId(now);
   ctx.storage.transactionSync(() => {
@@ -450,6 +464,7 @@ export function postSystemMessage(ctx: Ctx, channelId: ChannelId, body: string):
       body,
       now,
     );
+    within?.(id);
     queueSearchMessage(ctx, id);
   });
   const message = hydrateMessage(ctx, loadMessage(ctx, id)!);

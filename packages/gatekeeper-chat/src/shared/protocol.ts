@@ -876,12 +876,34 @@ export type AppToShellMessage =
    * mounted however the dock is toggled, and may show a live-call indicator; `href` is the
    * conversation's path under `/gatekeeper/chat`, for the indicator's link.
    */
-  | { readonly type: "chat:call"; readonly active: boolean; readonly href?: string };
+  | {
+      readonly type: "chat:call";
+      readonly active: boolean;
+      readonly href?: string;
+      /** Microphone published and unmuted, for the shell's floating pill. Re-sent on every change. */
+      readonly audio?: boolean;
+      /** Camera on. Re-sent on every change. */
+      readonly video?: boolean;
+    }
+  /**
+   * "Expand to full page" (`page`) or "Pop out to sidebar" (`dock`) from the call bar. The shell moves
+   * the one persistent frame (chat-video.md, "Shell: one persistent chat frame") and answers with
+   * `chat:layout`; the call is never rejoined.
+   */
+  | { readonly type: "chat:present"; readonly mode: "page" | "dock" };
 
 export type ShellToAppMessage =
   | { readonly type: "chat:open"; readonly href: string }
   | { readonly type: "chat:theme"; readonly mode: "light" | "dark"; readonly accent?: string }
-  | { readonly type: "chat:visible"; readonly visible: boolean };
+  | { readonly type: "chat:visible"; readonly visible: boolean }
+  /**
+   * Where the persistent frame is shown now. `page` is the full layout, `dock` the compact one, and
+   * `hidden` means neither is on screen (a call keeps running behind the shell's floating pill). The
+   * `compact` query parameter is only the initial value; this message wins from then on.
+   */
+  | { readonly type: "chat:layout"; readonly mode: "page" | "dock" | "hidden" }
+  /** A control on the shell's floating "In a call" pill. */
+  | { readonly type: "chat:call-control"; readonly action: "toggle-audio" | "toggle-video" | "leave" };
 
 // ---------------------------------------------------------------------------
 // Calls (docs/plans/chat-video.md): Cloudflare Realtime SFU, rooms kept in the Durable Object

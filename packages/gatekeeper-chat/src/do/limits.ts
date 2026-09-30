@@ -12,7 +12,7 @@ import { RATE_LIMITS } from "../shared/protocol.js";
 import { allow, firstRow, refuse, type Ctx, type Outcome } from "./context.js";
 import { hashId, logEvent } from "./logs.js";
 
-export type Bucket = "messages" | "uploads" | "search" | "agent";
+export type Bucket = "messages" | "uploads" | "search" | "agent" | "callJoins" | "callSignals";
 
 interface Budget {
   readonly limit: number;
@@ -24,6 +24,10 @@ const BUDGETS: Readonly<Record<Bucket, Budget>> = {
   uploads: { limit: RATE_LIMITS.uploadsPerHour, windowMs: 60 * 60 * 1000 },
   search: { limit: RATE_LIMITS.searchesPerMinute, windowMs: 60_000 },
   agent: { limit: RATE_LIMITS.agentRequestsPerHour, windowMs: 60 * 60 * 1000 },
+  // Join and reconnect each create an SFU session and mint TURN credentials; everything else a call
+  // does (publish, pull, renegotiate, layer, ...) is cheap signalling with a generous budget.
+  callJoins: { limit: RATE_LIMITS.callJoinsPerMinute, windowMs: 60_000 },
+  callSignals: { limit: RATE_LIMITS.callSignalsPerMinute, windowMs: 60_000 },
 };
 
 type WindowRow = { window_start: number; count: number };
