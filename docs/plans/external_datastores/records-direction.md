@@ -11,6 +11,11 @@ implementation evidence and outstanding gates. The alpha is deployed on the home
 https://records.surprisingly.ltd; [current status](records-status.md) separates delivered capabilities
 from target contracts below. No legacy production cutover is implied.
 
+**Proposed amendment (2026-09-26).** [Records as an immutable fact store](records-immutable-facts.md)
+proposes replacing the storage, write, sync and history model (the journal, revisions, idempotency
+table and snapshot limits) with immutable, content-addressed facts and derived projections. The
+product direction in this document is unchanged. Until the owner accepts it, the contract below remains in force.
+
 ## Decision
 
 Build a standards-based, module-driven app datastore using **ordinary Postgres + self-hosted PostgREST**, with
@@ -223,6 +228,8 @@ on every request. Multi-instance trust requires explicitly enrolled issuers and 
 email addresses. Agents use the same granted interfaces and approval rules.
 
 ## Write and sync target contract
+
+> Proposed replacement: [Records as an immutable fact store](records-immutable-facts.md), sections 3–7. It maps each rule below to a fact-based equivalent.
 
 The following is the target contract. Current implementation is narrower: single-record commands,
 sequence-plus-epoch cursors and bounded atomic snapshots. Batches, redaction/retention, webhook

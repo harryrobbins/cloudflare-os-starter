@@ -51,5 +51,10 @@ local machine/workload, not homeserver capacity or an enterprise SLA. See the
    first, approved commands later, with no owner credential or arbitrary SQL interface.
 3. Complete operational qualification before relying on the homeserver for business data.
 
+Proposed, not accepted: [Records as an immutable fact store](records-immutable-facts.md) would
+address the sync and write gaps in the table above: tombstones, multi-record transactions, large
+bootstrap and erasure. It follows the measurement protocol in
+[records-performance-ideas.md](../../research/records-performance-ideas.md).
+
 The Work Board, Records Explorer and connector are implemented and unit-tested (see their package READMEs), but not yet deployed or qualified on the real platform. Complete their shared connector
 work once, with both clients proving the same authority boundary.

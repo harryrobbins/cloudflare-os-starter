@@ -2,6 +2,8 @@
 
 > **Records direction superseded — 2026-09-25.** The current recommendation and delivery plan is [Records: shared application data](records-direction.md). This document is retained as historical research, implementation evidence or a separate gadget-HTTP proposal; it is not the specification for the new Records service. Existing deployment records remain historical facts, not instructions to deploy the new design.
 
+> **Immutability revisited — 2026-09-26.** [Records as an immutable fact store](records-immutable-facts.md) proposes immutable, content-addressed facts *inside* the strongly consistent Postgres service, based on Perry's *The Art of Immutable Architecture*. The Durable Object shards and the lake as source of truth described here remain not pursued. A cold R2 copy may return only as an analytics projection.
+
 Written 2026-09-24 against starter `main` `5f8c12c`. Status: **not pursued (2026-09-24).** The owner's
 verdict: an eventually consistent lake does not solve the actual problem, which is a strongly consistent
 source of truth; analytics can be fed from Postgres. The direction is the

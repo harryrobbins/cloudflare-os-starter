@@ -22,6 +22,9 @@ extensions are bounded JSON objects. Each mutation adds one immutable journal ro
 an outbox marker; a `work` datastore's first command also journals its default workflow states at
 ordinals 1-7 of the same commit. Change pages never split a commit. The generic
 `records_private.records` projection is still written but is internal: no read uses it. No module names or domain branches exist in the command dispatcher.
+A proposed replacement of the journal, revision and idempotency model with immutable,
+content-addressed facts is in
+[records-immutable-facts.md](../../../docs/plans/external_datastores/records-immutable-facts.md).
 
 Authorization takes shared locks on principal, membership and binding, in that order. Writers
 then lock their datastore counter before domain rows. Revocation updates take the corresponding

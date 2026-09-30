@@ -48,6 +48,9 @@ concern, and Neon is not a production requirement. Read
 current recommendation; earlier plans are historical. The new product site is `sites/records/`;
 the new service and website run at https://records.surprisingly.ltd on ms:~/containers/records.
 Read `docs/plans/external_datastores/records-status.md` for implemented APIs versus remaining gates.
+For storage, sync, history or performance work, also read the proposed
+`docs/plans/external_datastores/records-immutable-facts.md` (immutable, content-addressed facts after
+Perry). Its measurement protocol is in `docs/research/records-performance-ideas.md`.
 Preserve the archived earlier site for comparison.
 
 The product centre is a **standards-based datastore**: a complete pinned Schema.org vocabulary
