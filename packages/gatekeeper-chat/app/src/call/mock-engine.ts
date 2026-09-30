@@ -395,6 +395,13 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
       };
     },
 
+    async setAudioOnly(enabled: boolean): Promise<void> {
+      // The mock pulls nothing, so only the snapshot and the camera change.
+      if (enabled === (snapshot.audioOnlyChosen === true)) return;
+      set({ audioOnlyChosen: enabled });
+      if (enabled && snapshot.videoEnabled) await engine.setVideoEnabled(false);
+    },
+
     setTileSizes(next) {
       sizes = next;
       if (room !== null) syncRemotes();

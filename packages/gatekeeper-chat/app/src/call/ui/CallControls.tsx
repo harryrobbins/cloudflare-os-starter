@@ -17,6 +17,7 @@ import {
   PhoneDisconnect,
   Monitor,
   SidebarSimple,
+  SpeakerHigh,
   VideoCamera,
   VideoCameraSlash,
 } from "@phosphor-icons/react";
@@ -156,6 +157,7 @@ export function CallControls({ layout }: { layout: "page" | "dock" }): ReactNode
           {menu === "more" && (
             <div className="flex flex-col py-1">
               {screenItem}
+              <AudioOnlyItem disabled={!live} onDone={() => setMenu(null)} />
               {canPresent && (
                 <MenuItem
                   icon={<ArrowsOut size={15} />}
@@ -176,6 +178,9 @@ export function CallControls({ layout }: { layout: "page" | "dock" }): ReactNode
           {menu === "devices" && (
             <div className="w-[min(36rem,80vw)] p-3">
               <InCallDevices />
+              <div className="-mx-3 mt-3 -mb-3 border-t border-kumo-line py-1">
+                <AudioOnlyItem disabled={!live} onDone={() => setMenu(null)} />
+              </div>
             </div>
           )}
         </Popover>
@@ -189,6 +194,45 @@ function InCallDevices({ compact = false }: { compact?: boolean }): ReactNode {
   const choice = useChat((state) => state.callDevices);
   const lists = useDeviceLists(store.callEngine, null);
   return <DeviceSelects lists={lists} choice={choice} onChange={(patch) => void store.setCallDevices(patch)} compact={compact} />;
+}
+
+/**
+ * "Audio only": everyone's video paused and the camera off, until chosen again. A checkbox menu item,
+ * so its state is read out; the tiles show "Video paused" while it is on.
+ */
+function AudioOnlyItem({ disabled, onDone }: { disabled: boolean; onDone: () => void }): ReactNode {
+  const store = useStore();
+  const on = useChat((state) => state.call.audioOnlyChosen === true);
+  return (
+    <button
+      type="button"
+      role="menuitemcheckbox"
+      aria-checked={on}
+      disabled={disabled}
+      onClick={() => {
+        onDone();
+        void store.toggleCallAudioOnly();
+      }}
+      className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-[13px] text-kumo-default transition-colors hover:bg-kumo-tint disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <span className={on ? "text-kumo-brand" : "text-kumo-subtle"}>
+        <SpeakerHigh size={15} weight={on ? "fill" : "regular"} />
+      </span>
+      <span className="flex-1">
+        Audio only
+        <span className="block text-[11px] text-kumo-inactive">Pause everyone's video and your camera</span>
+      </span>
+      <span
+        aria-hidden="true"
+        className={[
+          "inline-flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors",
+          on ? "justify-end bg-kumo-brand" : "justify-start bg-kumo-line",
+        ].join(" ")}
+      >
+        <span className="h-3 w-3 rounded-full bg-white" />
+      </span>
+    </button>
+  );
 }
 
 function BarButton({

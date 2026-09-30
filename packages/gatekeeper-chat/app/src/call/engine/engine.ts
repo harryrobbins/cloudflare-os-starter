@@ -174,6 +174,7 @@ const IDLE_SNAPSHOT: CallSnapshot = Object.freeze({
   localQuality: "unknown",
   limitation: "none",
   audioOnly: false,
+  audioOnlyChosen: false,
 });
 
 const NO_DEVICES: DeviceChoice = { audioInputId: null, videoInputId: null, audioOutputId: null };
@@ -238,6 +239,10 @@ class Engine implements CallEngine {
   /** Participants whose tiles have been hidden for `hiddenPauseMs`: their camera is not pulled. */
   private readonly hiddenPaused = new Set<ParticipantId>();
   private readonly hiddenTimers = new Map<ParticipantId, { readonly since: number; readonly timer: unknown }>();
+  /** `setAudioOnly(true)`: survives a rebuild, ends with the call. */
+  private chosenAudioOnly = false;
+  /** Whether to turn the camera back on when chosen audio-only ends. */
+  private cameraBeforeAudioOnly = false;
   private telemetry: CallTelemetry | null = null;
   private telemetryTimer: unknown = null;
   /** When stats reports went out, for the per-minute cap. Survives calls: the cap is the server's. */
@@ -410,6 +415,8 @@ class Engine implements CallEngine {
 
   async setVideoEnabled(enabled: boolean): Promise<void> {
     if (!this.session) return;
+    // Turning the camera on during chosen audio-only is a choice too: leaving it must not repeat it.
+    if (enabled) this.cameraBeforeAudioOnly = false;
     const gen = this.gen;
     if (!enabled) {
       if (!this.videoOn) return;
@@ -1269,6 +1276,8 @@ class Engine implements CallEngine {
     for (const { timer } of this.hiddenTimers.values()) this.env.clearTimeout(timer);
     this.hiddenTimers.clear();
     this.hiddenPaused.clear();
+    this.chosenAudioOnly = false;
+    this.cameraBeforeAudioOnly = false;
     this.remoteQuality.clear();
     this.downlink = new DownlinkAdaptation();
     this.sendAdaptation = new SendAdaptation();
@@ -1442,7 +1451,26 @@ class Engine implements CallEngine {
   }
 
   private isVideoPaused(participantId: ParticipantId): boolean {
-    return this.downlink.mode === "audio-only" || this.hiddenPaused.has(participantId);
+    return this.chosenAudioOnly || this.downlink.mode === "audio-only" || this.hiddenPaused.has(participantId);
+  }
+
+  async setAudioOnly(enabled: boolean): Promise<void> {
+    if (!this.session || this.chosenAudioOnly === enabled) return;
+    this.chosenAudioOnly = enabled;
+    this.log("audio-only", { chosen: enabled });
+    this.set({ audioOnlyChosen: enabled });
+    // Entering closes every camera pull; leaving re-pulls them at the layers the tiles want.
+    this.refreshRemotes();
+    this.scheduleReconcile();
+    if (enabled) {
+      this.cameraBeforeAudioOnly = this.videoOn;
+      if (this.videoOn) await this.setVideoEnabled(false);
+      return;
+    }
+    this.requestLayers();
+    const restore = this.cameraBeforeAudioOnly;
+    this.cameraBeforeAudioOnly = false;
+    if (restore && !this.videoOn) await this.setVideoEnabled(true);
   }
 
   /**

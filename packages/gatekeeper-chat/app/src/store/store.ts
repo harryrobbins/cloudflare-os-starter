@@ -1736,6 +1736,19 @@ export class ChatStore {
     }
   }
 
+  /** Chosen audio-only: pause everyone's video and turn the camera off, to save bandwidth or focus. */
+  async toggleCallAudioOnly(): Promise<void> {
+    const engine = this.#callEngine;
+    if (engine === null || !isLivePhase(this.#state.call.phase)) return;
+    const next = this.#state.call.audioOnlyChosen !== true;
+    this.announce(next ? "Audio only: video is paused" : "Video is back on");
+    try {
+      await engine.setAudioOnly(next);
+    } catch (cause) {
+      this.#toast({ tone: "error", title: "Could not switch audio only", body: describe(cause) });
+    }
+  }
+
   async toggleCallScreen(): Promise<void> {
     const engine = this.#callEngine;
     if (engine === null || !isLivePhase(this.#state.call.phase)) return;

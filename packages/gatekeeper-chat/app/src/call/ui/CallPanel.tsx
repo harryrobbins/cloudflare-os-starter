@@ -47,7 +47,7 @@ export function remoteTiles(
         speaking: local.activeSpeaker === participant.id,
         quality: media?.quality,
         // Only a camera that is on can be paused; a camera that is off is just the avatar.
-        paused: participant.video && (media?.videoPaused === true || local.audioOnly === true),
+        paused: participant.video && (media?.videoPaused === true || local.audioOnly === true || local.audioOnlyChosen === true),
       };
     });
 }

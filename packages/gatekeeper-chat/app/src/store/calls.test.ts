@@ -606,6 +606,19 @@ describe("joining and leaving", () => {
     expect(store.state.callPushToTalk).toBe(false);
   });
 
+  it("toggles chosen audio-only through the engine and announces it", async () => {
+    const { store, engine } = await harness();
+    await store.toggleCallAudioOnly(); // not in a call: nothing
+    expect(engine.audioOnly).toEqual([]);
+    await store.joinCall("c1");
+    await store.toggleCallAudioOnly();
+    expect(store.state.call.audioOnlyChosen).toBe(true);
+    expect(store.state.announcement).toBe("Audio only: video is paused");
+    await store.toggleCallAudioOnly();
+    expect(engine.audioOnly).toEqual([true, false]);
+    expect(store.state.announcement).toBe("Video is back on");
+  });
+
   it("disposes the engine on unload without leaving", async () => {
     const { store, engine } = await harness();
     await store.joinCall("c1");

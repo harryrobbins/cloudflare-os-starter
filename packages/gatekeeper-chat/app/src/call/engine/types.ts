@@ -157,6 +157,12 @@ export interface CallSnapshot {
    * continues. The UI shows a banner; the engine restores video when it clears.
    */
   readonly audioOnly?: boolean;
+  /**
+   * True while this person has chosen audio-only (`setAudioOnly`): every remote camera is paused and
+   * their own camera is off. Separate from {@link audioOnly}, which the engine sets for a poor
+   * downlink, so the UI does not blame the connection for a choice.
+   */
+  readonly audioOnlyChosen?: boolean;
   /** How many simulcast layers we currently send for the camera (3 = all; fewer under CPU limits). */
   readonly sendLayers?: number;
 }
@@ -197,6 +203,13 @@ export interface CallEngine {
   /** Switches an input device live (`replaceTrack`, no renegotiation) or the output sink. */
   setDevices(devices: Partial<DeviceChoice>): Promise<void>;
   listDevices(): Promise<{ audioInputs: MediaDeviceInfo[]; videoInputs: MediaDeviceInfo[]; audioOutputs: MediaDeviceInfo[] }>;
+
+  /**
+   * Chosen audio-only: pauses every remote camera pull (screen shares and audio keep flowing) and
+   * turns the camera off, turning it back on when audio-only ends if it was on before. Resolves
+   * once the camera change is done.
+   */
+  setAudioOnly(enabled: boolean): Promise<void>;
 
   /** The UI reports tile sizes whenever layout changes; the engine debounces layer switches. */
   setTileSizes(sizes: Readonly<Record<ParticipantId, TileSize>>): void;

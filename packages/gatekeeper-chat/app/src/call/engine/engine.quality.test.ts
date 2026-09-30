@@ -478,6 +478,52 @@ const REPORT_KEYS = [
   "videoCodec",
 ];
 
+describe("chosen audio-only", () => {
+  it("closes camera pulls and the camera, keeps audio and screens, and restores both", async () => {
+    const { env, sig, engine } = await joinWith(callState([participant("p2", ["audio", "video"]), participant("p3", ["screen"])]));
+    engine.setTileSizes({ p2: "large", p3: "large" });
+    await settle(1_100);
+    const videoMid = midOf(env, engine.snapshot().remotes.p2!.video);
+    expect(engine.snapshot().videoEnabled).toBe(true);
+
+    await engine.setAudioOnly(true);
+    await settle();
+    expect(engine.snapshot()).toMatchObject({ audioOnlyChosen: true, audioOnly: false, videoEnabled: false });
+    expect((sig.calls("closeTracks").at(-1) as { mids: string[] }).mids).toEqual([videoMid]);
+    expect(engine.snapshot().remotes.p2).toMatchObject({ video: null, videoPaused: true });
+    expect(engine.snapshot().remotes.p2!.audio).not.toBeNull();
+    expect(engine.snapshot().remotes.p3!.screen).not.toBeNull();
+    // The camera sender keeps the SFU's track alive with the black placeholder.
+    expect(cameraSender(env).track?.kind).toBe("video");
+
+    const pulls = sig.calls("pullTracks").length;
+    await engine.setAudioOnly(false);
+    await settle();
+    expect(engine.snapshot()).toMatchObject({ audioOnlyChosen: false, videoEnabled: true });
+    expect((sig.calls("pullTracks")[pulls] as PullTracksRequest).tracks).toEqual([{ participantId: "p2", name: "p2-video", rid: "a" }]);
+    expect(engine.snapshot().remotes.p2).toMatchObject({ videoPaused: false });
+  });
+
+  it("leaves a camera that was off, off, and one turned on meanwhile, on", async () => {
+    const { engine } = await joinWith(callState([participant("p2", ["audio", "video"])]), {}, { video: false });
+    await engine.setAudioOnly(true);
+    await engine.setAudioOnly(false);
+    expect(engine.snapshot().videoEnabled).toBe(false);
+
+    await engine.setAudioOnly(true);
+    await engine.setVideoEnabled(true);
+    await engine.setAudioOnly(false);
+    expect(engine.snapshot().videoEnabled).toBe(true);
+  });
+
+  it("ends with the call", async () => {
+    const { engine } = await joinWith(callState([participant("p2", ["audio", "video"])]));
+    await engine.setAudioOnly(true);
+    await engine.leave();
+    expect(engine.snapshot().audioOnlyChosen).toBe(false);
+  });
+});
+
 describe("telemetry", () => {
   it("posts a summary every 60 s with codec names, relay flag and counters, and nothing identifying", async () => {
     const { env, sig, engine } = await joinWith(callState([participant("p2", ["audio", "video"])]));
