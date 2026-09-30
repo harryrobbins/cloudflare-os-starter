@@ -66,11 +66,18 @@ Owns the fork's `workshop-frontend/src/components/ChatDock.tsx` (+ tests, `chatD
 `ChatTrigger.tsx`), `packages/gatekeeper-chat/src/serve.ts` Permissions-Policy, `scripts/deploy.ts`,
 `deployment.jsonc` example/docs.
 
-- [ ] iframe `allow` attribute on the chat frame
-- [ ] `chat:call` handling: pin the frame while active; live-call indicator on the trigger
-- [ ] Permissions-Policy on chat HTML; confirm the shell does not deny the features
-- [ ] `chat.calls` deployment block, validation, vars and required secrets
-- [ ] Fork commit on a `feat/chat-video` branch in the submodule (not pushed; Harry pushes)
+- [x] iframe `allow` attribute on the chat frame
+- [x] `chat:call` handling: pin the frame while active; live-call indicator on the trigger
+- [x] Permissions-Policy on chat HTML; confirm the shell does not deny the features
+- [x] `chat.calls` deployment block, validation, vars and required secrets
+- [x] Fork commit on a `feat/chat-video` branch in the submodule (not pushed; Harry pushes)
+
+Complete 2026-09-30. Fork 8969529f (`feat/chat-video`, on 0bef2869): 19/19 dock/trigger tests; the
+shell sets no Permissions-Policy of its own (only a meta CSP with `frame-src 'self'`), so nothing there
+needed changing. Starter: `PERMISSIONS_POLICY` in `serve.ts`; `chat.calls {enabled, sfuAppId, turnKeyId?}`
+in `scripts/deploy.ts` (32-hex ids; `REALTIME_SFU_APP_SECRET` always, `REALTIME_TURN_KEY_API_TOKEN` with a
+TURN key, both `secrets.required`); 71/71 deploy tests; `docs/customization.md` "Video calls".
+While a call is active the dock only hides on close, and the `/chat` page's unmount request is refused.
 
 ## Stream E: integration and end to end
 

@@ -406,6 +406,7 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
 
   validateAiGateway(config);
   validateChat(config);
+  validateChatCalls(config);
   validateRecords(config);
   validateSearch(config);
   validateRecordsService(config);
@@ -650,6 +651,58 @@ function validateChat(config: DeploymentConfig): void {
   if (chat.agentAccess !== undefined && typeof chat.agentAccess !== "boolean") {
     throw new Error("chat.agentAccess must be a boolean when present.");
   }
+}
+
+/** A Realtime SFU app id or TURN key id: 32 hex characters, as the dashboard and API print them. */
+const realtimeIdPattern = /^[0-9a-f]{32}$/i;
+
+/**
+ * `chat.calls`. Checked whether or not chat itself is enabled, because calls switched on for a
+ * dormant chat block is a mistake worth saying out loud rather than a silent no-op.
+ */
+function validateChatCalls(config: DeploymentConfig): void {
+  const calls = config.chat?.calls;
+  if (calls === undefined) return;
+  if (calls === null || typeof calls !== "object" || Array.isArray(calls)) {
+    throw new Error('chat.calls must be an object when present. Use { "enabled": false } to turn it off.');
+  }
+  if (typeof calls.enabled !== "boolean") {
+    throw new Error("chat.calls.enabled must be a boolean.");
+  }
+  if (!calls.enabled) return;
+  if (!config.chat?.enabled) {
+    throw new Error(
+      "chat.calls.enabled is true while chat.enabled is false: there would be no chat Worker to " +
+      "hold the calls. Enable chat, or turn calls off.");
+  }
+  if (typeof calls.sfuAppId !== "string" || !realtimeIdPattern.test(calls.sfuAppId)) {
+    throw new Error(
+      "chat.calls.sfuAppId must be the Realtime SFU app id (32 hex characters) when calls are " +
+      "enabled. Create the app under Realtime in the dashboard; its secret is installed separately.");
+  }
+  if (calls.turnKeyId !== undefined &&
+      (typeof calls.turnKeyId !== "string" || !realtimeIdPattern.test(calls.turnKeyId))) {
+    throw new Error(
+      "chat.calls.turnKeyId must be the Realtime TURN key id (32 hex characters) when present. " +
+      "Leave it out to run calls without a TURN relay.");
+  }
+}
+
+/** Whether `chat.calls` is switched on for a deployed chat Worker. */
+function chatCallsEnabled(config: DeploymentConfig): boolean {
+  return (config.chat?.enabled ?? false) && config.chat?.calls?.enabled === true;
+}
+
+/**
+ * The secrets `chat.calls` makes the chat Worker require, in the order an operator installs them.
+ * Empty when calls are off.
+ */
+export function chatCallsSecrets(config: DeploymentConfig): string[] {
+  if (!chatCallsEnabled(config)) return [];
+  return [
+    "REALTIME_SFU_APP_SECRET",
+    ...(config.chat!.calls!.turnKeyId ? ["REALTIME_TURN_KEY_API_TOKEN"] : []),
+  ];
 }
 
 /**
@@ -1116,7 +1169,20 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
       PUBLIC_BASE_URL: origin,
       // A number, not a string: wrangler passes structured vars through verbatim, as it does ADMINS.
       MAX_UPLOAD_BYTES: config.chat.maxUploadBytes,
+      // Video calls. Always present, empty when `chat.calls` is off, so a deploy that turns calls off
+      // clears the ids rather than leaving the last ones in place; empty is what makes every call
+      // route answer 503 `unavailable`.
+      REALTIME_SFU_APP_ID: chatCallsEnabled(config) ? config.chat.calls!.sfuAppId! : "",
+      REALTIME_TURN_KEY_ID: chatCallsEnabled(config) ? config.chat.calls!.turnKeyId ?? "" : "",
     };
+    // The ids are public; their credentials are secrets. Listing them as required is what makes
+    // wrangler refuse to deploy a calls-enabled chat Worker that could not reach the SFU.
+    const callSecrets = chatCallsSecrets(config);
+    if (callSecrets.length) {
+      chat.secrets = {
+        required: [...new Set([...(chat.secrets?.required ?? []), ...callSecrets])],
+      };
+    }
     chat.r2_buckets = [
       { binding: "FILES", ...(config.chat.filesBucket
         ? { bucket_name: config.chat.filesBucket } : {}) },
@@ -1848,6 +1914,25 @@ function reportAiGateway(config: DeploymentConfig): void {
     `--name ${config.workers.workshop.name}\n`);
 }
 
+// Said once, up front, like the gateway token: the secrets calls need and how to install them.
+function reportChatCalls(config: DeploymentConfig): void {
+  const secrets = chatCallsSecrets(config);
+  if (!secrets.length) return;
+  if (!config.chat!.calls!.turnKeyId) {
+    console.warn(
+      "\nchat.calls has no turnKeyId: calls will run without a TURN relay, so anyone behind a " +
+      "strict NAT or corporate firewall will fail to connect media. Create a TURN key under " +
+      "Realtime and set chat.calls.turnKeyId.");
+  }
+  console.warn(
+    `\n${secrets.join(" and ")} ${secrets.length === 1 ? "is" : "are"} required by chat.calls. ` +
+    "Install before deploying:\n" +
+    secrets.map((secret) =>
+      `  CLOUDFLARE_ACCOUNT_ID=${config.accountId} pnpm exec wrangler secret put ${secret} ` +
+      `--name ${config.workers.chat!.name}`).join("\n") +
+    "\n");
+}
+
 async function main(): Promise<void> {
   const started = performance.now();
   const timings: Timing[] = [];
@@ -1894,6 +1979,7 @@ async function main(): Promise<void> {
       : {}),
   });
   reportAiGateway(config);
+  reportChatCalls(config);
   // Before anything is written or built, in --check and on a live deploy alike.
   await verifySearchResources(config);
 

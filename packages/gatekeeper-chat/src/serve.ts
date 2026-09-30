@@ -175,12 +175,22 @@ function socketOrigin(base: string): string | null {
   }
 }
 
+/**
+ * Calls (chat-video.md, "Shell integration"): the app asks for the camera, the microphone and screen
+ * sharing, and plays remote media. `self` covers this document and the shell that frames it (same
+ * origin); the shell's iframe `allow` attribute delegates the same features. Nothing cross-origin gets
+ * any of them.
+ */
+export const PERMISSIONS_POLICY =
+  "camera=(self), microphone=(self), display-capture=(self), autoplay=(self), fullscreen=(self)";
+
 function withShellHeaders(response: Response, env: ChatEnv, url: URL): Response {
   if (!(response.headers.get("content-type") ?? "").includes("text/html")) return response;
   const headers = new Headers(response.headers);
   headers.set("content-security-policy", contentSecurityPolicy(env, url.origin));
   headers.set("x-content-type-options", "nosniff");
   headers.set("referrer-policy", "same-origin");
+  headers.set("permissions-policy", PERMISSIONS_POLICY);
   return new Response(response.body, { status: response.status, headers });
 }
 

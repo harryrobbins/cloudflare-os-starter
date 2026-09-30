@@ -6,7 +6,7 @@ import test from "node:test";
 import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import { parse, type ParseError } from "jsonc-parser";
 import {
-  aiGatewayPlan, buildCommandBatches, buildCommands, deployOrder, deployTargets, formatBlueprintsPath,
+  aiGatewayPlan, buildCommandBatches, buildCommands, chatCallsSecrets, deployOrder, deployTargets, formatBlueprintsPath,
   generateConfigs, recordsQueues, runWithConcurrency, searchNames, validateConfig,
 } from "./deploy.ts";
 import type {
@@ -1086,7 +1086,11 @@ test("serves chat through the router and provisions its own storage", async () =
     CF_ACCESS_AUD: "access-audience",
     PUBLIC_BASE_URL: "https://os.example.com",
     MAX_UPLOAD_BYTES: 10485760,
+    // No `chat.calls`: the ids are present and empty, which is what keeps calls off.
+    REALTIME_SFU_APP_ID: "",
+    REALTIME_TURN_KEY_ID: "",
   });
+  assert.equal(chat.secrets, bases.chat!.secrets);
   // ADMINS in the structured form, not a joined string: the same value the Workshop receives.
   assert.deepEqual(chat.vars!.ADMINS, generated.workshop.vars!.ADMINS);
   assert.deepEqual(chat.r2_buckets, [
@@ -1109,6 +1113,50 @@ test("serves chat through the router and provisions its own storage", async () =
     (service) => service.binding === "GATEKEEPER_CHAT"), false);
 
   assert.ok(buildCommands(validConfig).some(({ args }) => args.includes("gatekeeper-chat")));
+});
+
+test("chat.calls: ids become vars, credentials become required secrets", async () => {
+  const bases = await baseConfigs();
+  const sfuAppId = "0123456789abcdef0123456789abcdef";
+  const turnKeyId = "fedcba9876543210fedcba9876543210";
+
+  const full = variant((c) => { c.chat.calls = { enabled: true, sfuAppId, turnKeyId }; });
+  const chat = generateConfigs(validateConfig(full), bases).chat!;
+  assert.equal(chat.vars!.REALTIME_SFU_APP_ID, sfuAppId);
+  assert.equal(chat.vars!.REALTIME_TURN_KEY_ID, turnKeyId);
+  // Required, so wrangler refuses the deploy until both have been installed with `secret put`.
+  assert.deepEqual(chat.secrets, {
+    required: ["REALTIME_SFU_APP_SECRET", "REALTIME_TURN_KEY_API_TOKEN"],
+  });
+  assert.deepEqual(chatCallsSecrets(full), ["REALTIME_SFU_APP_SECRET", "REALTIME_TURN_KEY_API_TOKEN"]);
+  // Nothing secret reaches the vars.
+  assert.equal(Object.keys(chat.vars!).some((key) => /SECRET|TOKEN/.test(key)), false);
+
+  // TURN is optional: the SFU secret alone is required, and the TURN id stays empty.
+  const sfuOnly = variant((c) => { c.chat.calls = { enabled: true, sfuAppId }; });
+  const sfuChat = generateConfigs(validateConfig(sfuOnly), bases).chat!;
+  assert.equal(sfuChat.vars!.REALTIME_TURN_KEY_ID, "");
+  assert.deepEqual(sfuChat.secrets, { required: ["REALTIME_SFU_APP_SECRET"] });
+
+  // Off keeps the ids empty and demands nothing, even with ids left in the block.
+  const off = variant((c) => { c.chat.calls = { enabled: false, sfuAppId, turnKeyId }; });
+  const offChat = generateConfigs(validateConfig(off), bases).chat!;
+  assert.equal(offChat.vars!.REALTIME_SFU_APP_ID, "");
+  assert.equal(offChat.vars!.REALTIME_TURN_KEY_ID, "");
+  assert.equal(offChat.secrets, bases.chat!.secrets);
+  assert.deepEqual(chatCallsSecrets(off), []);
+
+  for (const [mutate, message] of [
+    [(c: Record<string, any>) => { c.chat.calls = { enabled: true }; }, /sfuAppId/],
+    [(c: Record<string, any>) => { c.chat.calls = { enabled: true, sfuAppId: "not-an-id" }; }, /sfuAppId/],
+    [(c: Record<string, any>) => { c.chat.calls = { enabled: true, sfuAppId, turnKeyId: "short" }; }, /turnKeyId/],
+    [(c: Record<string, any>) => { c.chat.calls = { enabled: "yes" }; }, /calls.enabled must be a boolean/],
+    [(c: Record<string, any>) => { c.chat.calls = []; }, /chat.calls must be an object/],
+    [(c: Record<string, any>) => { c.chat = { enabled: false, calls: { enabled: true, sfuAppId } }; },
+      /calls.enabled is true while chat.enabled is false/],
+  ] as const) {
+    assert.throws(() => validateConfig(variant(mutate)), message);
+  }
 });
 
 test("binds chat to the Workshop as a vendor only under chat.agentAccess", async () => {

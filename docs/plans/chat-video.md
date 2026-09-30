@@ -225,7 +225,7 @@ credentials are minted per join with a TTL of a few hours and returned only to t
 - `ChatDock.tsx` `ChatFrame` iframe gains
   `allow="camera; microphone; display-capture; autoplay; fullscreen"`. Without it `getUserMedia`
   and `getDisplayMedia` reject inside the frame.
-- New bridge message `AppToShellMessage {type: "chat:call"; active: boolean; channelId?}`. While a
+- New bridge message `AppToShellMessage {type: "chat:call"; active: boolean; href?}`. While a
   call is active the shell keeps the dock frame mounted (no `UNMOUNT_GRACE_MS` teardown) and shows a
   live-call indicator on the Chat trigger; closing the dock only hides it. The `/chat` route mounts a
   separate frame, so opening `/chat` during a dock call shows the "in another window / Move here"

@@ -280,12 +280,40 @@ A deploy with chat enabled creates three things:
 | `chat.filesBucket` | `null` lets Wrangler provision the uploads bucket and remember it, like the other [storage](#storage) values. A name adopts an existing bucket, which is how uploads survive a Worker rename. |
 | `chat.maxUploadBytes` | Hard cap on one upload, deployed as the Worker's `MAX_UPLOAD_BYTES`. An upload arrives as a single Worker request body, so 100 MiB is the ceiling `pnpm check` allows. |
 | `chat.agentAccess` | Optional, default `false`. `true` also binds chat to the Workshop with the `GatekeeperVendor` entrypoint, so every workspace gets an ambient chat session for the agent: public channels to read and search, posting as an approval-gated action. Leave it off until that observer policy has been reviewed in `/admin`; the chat app itself does not need it. |
+| `chat.calls` | Optional; absent or `{ "enabled": false }` keeps video calls off. `{ "enabled": true, "sfuAppId": "<32 hex>", "turnKeyId": "<32 hex>" }` turns them on (see [Video calls](#video-calls)). |
 
 Identity is not configured here. Signing in through Access *is* membership: nobody is invited, approved or asked for a name, and display names come from the Access identity. The chat Worker verifies the `cf-access-jwt-assertion` itself — with the `CF_ACCESS_ISS` and `CF_ACCESS_AUD` from [`access`](#cloudflare-access), on every request and every WebSocket upgrade — rather than trusting the router, and `access.admins` are its administrators, the identities that can rename and archive any channel. The package's `wrangler.dev.jsonc` carries a development-only identity switch (`DEV_IDENTITIES`); `pnpm check` refuses a deploy whose base *or* generated config carries any `DEV_*` var or required secret, so that bypass cannot reach the Access-protected hostname.
 
 Retention and backup are policy, not defaults: the Durable Object keeps all history and the bucket keeps all uploads, and neither expires anything on its own. Decide how long messages, attachments and deleted content are kept, and rehearse a restore, before a team relies on chat. Schema changes go through the package's numbered migrations — never roll back by deleting the `ChatWorkspace` class or the bucket, which destroys the data instead.
 
 The chat **dock** — the drawer with the unread badge in the sidebar and in the fullscreen workspace editor's top bar, plus the `/chat` page inside the shell — is a fork commit in the submodule (`feat/chat-dock`: `workshop-frontend/src/components/ChatDock.tsx`, `ChatTrigger.tsx`, `chatDockBus.ts`, `routes/chat.tsx`). It embeds the same app in a same-origin iframe and talks to it over the `postMessage` bridge typed in `packages/gatekeeper-chat/src/shared/protocol.ts`. `Ctrl/Cmd+Shift+L` toggles the drawer, and the command palette (`Ctrl/Cmd+K`) carries a **Toggle chat** action for anybody who never learns the chord. `scripts/deploy.ts` builds the frontend with `VITE_CHAT_DOCK=true` when `chat.enabled`, and without it the dock, both triggers and the route drop out of the bundle. The flag is deliberately a build-time value tied to this deployment's wiring rather than a probe of `/gatekeeper/chat`: while the chat Worker is redeploying the dock shows an unavailable state with a retry, and the way in never disappears. Chat itself works with the dock absent — `https://<your public origin>/gatekeeper/chat/` is bookmarkable.
+
+#### Video calls
+
+Calls in chat carry their media over [Cloudflare Realtime](plans/chat-video.md): one **SFU app** and, recommended, one **TURN key**, both created under Realtime in the dashboard. Their ids are public and go in the block; their credentials are Worker secrets:
+
+```jsonc
+"chat": {
+  "enabled": true,
+  // ...
+  "calls": { "enabled": true, "sfuAppId": "<32 hex>", "turnKeyId": "<32 hex>" }
+}
+```
+
+| Key | Deployed as |
+| --- | --- |
+| `chat.calls.enabled` | Requires `chat.enabled`. Absent or `false` deploys empty `REALTIME_*` vars, and every call route answers 503 `unavailable`. |
+| `chat.calls.sfuAppId` | Required when enabled. The chat Worker's `REALTIME_SFU_APP_ID`; its secret is `REALTIME_SFU_APP_SECRET`. |
+| `chat.calls.turnKeyId` | Optional but recommended: without TURN, people behind a strict NAT or firewall cannot connect media, and `pnpm check` warns. The chat Worker's `REALTIME_TURN_KEY_ID`; its token is `REALTIME_TURN_KEY_API_TOKEN`. |
+
+With calls enabled the generated chat config lists the secrets under `secrets.required`, so Wrangler refuses to deploy until they are installed. `pnpm check` prints the commands:
+
+```sh
+CLOUDFLARE_ACCOUNT_ID=<accountId> pnpm exec wrangler secret put REALTIME_SFU_APP_SECRET --name <workers.chat.name>
+CLOUDFLARE_ACCOUNT_ID=<accountId> pnpm exec wrangler secret put REALTIME_TURN_KEY_API_TOKEN --name <workers.chat.name>
+```
+
+The dock's iframe delegates the camera, microphone and screen sharing to the app, which sends `Permissions-Policy: camera=(self), microphone=(self), display-capture=(self), ...` on its HTML. While the dock's frame is in a call, closing the dock only hides it and the Chat triggers show an **In a call** indicator that brings it back.
 
 To disable chat, set `"enabled": false`. The build, the deploy and both service bindings disappear, and `pnpm check` stops validating the rest of the block. The Worker, its Durable Object and its bucket are not deleted by disabling it, so re-enabling with the same names and bucket brings the history back.
 

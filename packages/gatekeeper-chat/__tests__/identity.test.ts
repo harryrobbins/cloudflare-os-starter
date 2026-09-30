@@ -221,11 +221,16 @@ describe("serveChat, with an already-verified identity", () => {
       expect(csp).toContain("script-src 'self'");
       expect(csp).toContain(`connect-src 'self' ${ORIGIN.replace(/^http/, "ws")}`);
       expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+      // Calls: media capture for this origin only, which the shell's same-origin frame shares.
+      expect(response.headers.get("permissions-policy")).toBe(
+        "camera=(self), microphone=(self), display-capture=(self), autoplay=(self), fullscreen=(self)",
+      );
       expect(await response.text()).not.toMatch(/<script(?![^>]*\bsrc=)/);
     }
     const asset = await serveChat(new Request(`${ORIGIN}${APP_BASE}theme-boot.js`), env, identity);
     expect(asset.status).toBe(200);
     expect(asset.headers.get("content-security-policy")).toBeNull();
+    expect(asset.headers.get("permissions-policy")).toBeNull();
     expect(contentSecurityPolicy({ PUBLIC_BASE_URL: "nonsense" }, "https://chat.example")).toContain(
       "connect-src 'self' wss://chat.example",
     );
