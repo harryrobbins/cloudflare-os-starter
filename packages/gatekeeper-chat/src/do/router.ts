@@ -22,6 +22,7 @@ import {
 import { FILES_PREFIX, matchApiRoute, matchFilePath, WS_PATH, type ApiRouteName } from "../shared/routes.js";
 import {
   parseAnnounceTracks,
+  parseCallStatsReport,
   parseCloseTracks,
   parseCreateChannel,
   parseEditMessage,
@@ -66,6 +67,7 @@ import {
   renegotiateCall,
   setLayer,
 } from "./calls.js";
+import { postCallStats } from "./call-stats.js";
 import type { Ctx, Outcome } from "./context.js";
 import { createUpload, serveFile } from "./files.js";
 import {
@@ -312,10 +314,7 @@ export async function route(
     case "closeTracks":
     case "setLayer":
     case "reconnectCall":
-    // Placeholder until quality phase 1 lands the stats route (chat-video-implementation.md, Stream G).
     case "postCallStats":
-      return errorResponse("unavailable", "Call stats are not accepted yet.");
-
     case "leaveCall": {
       if (!callFeature(ctx).enabled) return errorResponse("unavailable", "Calls are not available on this deployment.");
       return callRoute(ctx, user, name, params, await readJson(request));
@@ -367,6 +366,11 @@ async function callRoute(
       const parsed = parseSetLayer(body);
       if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
       return respond(await setLayer(ctx, user, callId, parsed.value));
+    }
+    case "postCallStats": {
+      const parsed = parseCallStatsReport(body);
+      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
+      return respond(postCallStats(ctx, user, callId, parsed.value));
     }
     case "reconnectCall":
     case "leaveCall": {

@@ -23,6 +23,7 @@ import {
   MENTION_TOKEN_SOURCE,
   type AnnounceTracksRequest,
   type CallSimulcastRid,
+  type CallStatsReport,
   type CallTrackKind,
   type ChannelKind,
   type CloseTracksRequest,
@@ -515,6 +516,114 @@ export function parseSetLayer(input: unknown): Result<SetLayerRequest> {
     trackParticipantId: trackParticipantId.value,
     name: name.value,
     rid: layer.value,
+  });
+}
+
+// --- call quality reports --------------------------------------------------
+//
+// `POST /calls/:callId/stats` is logged, never stored, so the only job here is that every field the
+// log line carries is a bounded number, a boolean or a short codec token. Fields outside the contract
+// are ignored like everywhere else -- and never reach the log, which is built from the parsed value.
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** A round trip or jitter longer than a minute is a broken measurement, not a slow network. */
+const MAX_CALL_DELAY_MS = 60_000;
+/** Frames in a day at 60 fps across a full grid, rounded up generously. */
+const MAX_CALL_FRAMES = 1_000_000_000;
+const MAX_CALL_RECONNECTS = 10_000;
+/** A codec name such as "opus", "red", "VP8" or "H264" -- never a full mime type or fmtp line. */
+const CODEC_PATTERN = /^[A-Za-z0-9._-]{1,32}$/;
+
+function boundedNumber(value: unknown, key: string, max: number, integer = false): Result<number> {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > max) {
+    return fail(`${key} must be a number from 0 to ${max}`);
+  }
+  if (integer && !Number.isInteger(value)) return fail(`${key} must be a whole number`);
+  return ok(value);
+}
+
+function nullableNumber(value: unknown, key: string, max: number): Result<number | null> {
+  return value === null ? ok(null) : boundedNumber(value, key, max);
+}
+
+function nested(source: Json, key: string): Result<Json> {
+  const raw = source[key];
+  return isRecord(raw) ? ok(raw) : fail(`${key} must be an object`);
+}
+
+function nullableCodec(source: Json, key: string): Result<string | null> {
+  const raw = source[key];
+  if (raw === null) return ok(null);
+  if (typeof raw !== "string" || !CODEC_PATTERN.test(raw)) return fail(`${key} must be a codec name or null`);
+  return ok(raw);
+}
+
+export function parseCallStatsReport(input: unknown): Result<CallStatsReport> {
+  if (!isRecord(input)) return fail("body must be an object");
+  const participantId = requiredId(input, "participantId");
+  if (!participantId.ok) return participantId;
+  const final = requiredBoolean(input, "final");
+  if (!final.ok) return final;
+  const intervalMs = boundedNumber(input["intervalMs"], "intervalMs", DAY_MS);
+  if (!intervalMs.ok) return intervalMs;
+  const durationMs = boundedNumber(input["durationMs"], "durationMs", DAY_MS);
+  if (!durationMs.ok) return durationMs;
+
+  const rtt = nested(input, "rttMs");
+  if (!rtt.ok) return rtt;
+  const rttAvg = nullableNumber(rtt.value["avg"], "rttMs.avg", MAX_CALL_DELAY_MS);
+  if (!rttAvg.ok) return rttAvg;
+  const rttMax = nullableNumber(rtt.value["max"], "rttMs.max", MAX_CALL_DELAY_MS);
+  if (!rttMax.ok) return rttMax;
+
+  const loss = nested(input, "lossPercent");
+  if (!loss.ok) return loss;
+  const lossSend = nullableNumber(loss.value["send"], "lossPercent.send", 100);
+  if (!lossSend.ok) return lossSend;
+  const lossReceive = nullableNumber(loss.value["receive"], "lossPercent.receive", 100);
+  if (!lossReceive.ok) return lossReceive;
+
+  const jitterMs = nullableNumber(input["jitterMs"], "jitterMs", MAX_CALL_DELAY_MS);
+  if (!jitterMs.ok) return jitterMs;
+  const framesDecoded = boundedNumber(input["framesDecoded"], "framesDecoded", MAX_CALL_FRAMES, true);
+  if (!framesDecoded.ok) return framesDecoded;
+  const framesDropped = boundedNumber(input["framesDropped"], "framesDropped", MAX_CALL_FRAMES, true);
+  if (!framesDropped.ok) return framesDropped;
+
+  const limited = nested(input, "limitedMs");
+  if (!limited.ok) return limited;
+  const limitedCpu = boundedNumber(limited.value["cpu"], "limitedMs.cpu", DAY_MS);
+  if (!limitedCpu.ok) return limitedCpu;
+  const limitedBandwidth = boundedNumber(limited.value["bandwidth"], "limitedMs.bandwidth", DAY_MS);
+  if (!limitedBandwidth.ok) return limitedBandwidth;
+
+  const audioOnlyMs = boundedNumber(input["audioOnlyMs"], "audioOnlyMs", DAY_MS);
+  if (!audioOnlyMs.ok) return audioOnlyMs;
+  const relayed = input["relayed"] === null ? ok(null) : requiredBoolean(input, "relayed");
+  if (!relayed.ok) return fail("relayed must be true, false or null");
+  const audioCodec = nullableCodec(input, "audioCodec");
+  if (!audioCodec.ok) return audioCodec;
+  const videoCodec = nullableCodec(input, "videoCodec");
+  if (!videoCodec.ok) return videoCodec;
+  const reconnects = boundedNumber(input["reconnects"], "reconnects", MAX_CALL_RECONNECTS, true);
+  if (!reconnects.ok) return reconnects;
+
+  return ok({
+    participantId: participantId.value,
+    final: final.value,
+    intervalMs: intervalMs.value,
+    durationMs: durationMs.value,
+    rttMs: { avg: rttAvg.value, max: rttMax.value },
+    lossPercent: { send: lossSend.value, receive: lossReceive.value },
+    jitterMs: jitterMs.value,
+    framesDecoded: framesDecoded.value,
+    framesDropped: framesDropped.value,
+    limitedMs: { cpu: limitedCpu.value, bandwidth: limitedBandwidth.value },
+    audioOnlyMs: audioOnlyMs.value,
+    relayed: relayed.value,
+    audioCodec: audioCodec.value,
+    videoCodec: videoCodec.value,
+    reconnects: reconnects.value,
   });
 }
 

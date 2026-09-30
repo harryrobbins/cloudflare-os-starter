@@ -8,11 +8,11 @@
 // Fixed windows, not a sliding log: the worst case is twice the budget across a window boundary,
 // which is the right trade for limits whose purpose is stopping a runaway client rather than metering.
 
-import { RATE_LIMITS } from "../shared/protocol.js";
+import { MAX_CALL_STATS_PER_MINUTE, RATE_LIMITS } from "../shared/protocol.js";
 import { allow, firstRow, refuse, type Ctx, type Outcome } from "./context.js";
 import { hashId, logEvent } from "./logs.js";
 
-export type Bucket = "messages" | "uploads" | "search" | "agent" | "callJoins" | "callSignals";
+export type Bucket = "messages" | "uploads" | "search" | "agent" | "callJoins" | "callSignals" | "callStats";
 
 interface Budget {
   readonly limit: number;
@@ -28,6 +28,9 @@ const BUDGETS: Readonly<Record<Bucket, Budget>> = {
   // does (publish, pull, renegotiate, layer, ...) is cheap signalling with a generous budget.
   callJoins: { limit: RATE_LIMITS.callJoinsPerMinute, windowMs: 60_000 },
   callSignals: { limit: RATE_LIMITS.callSignalsPerMinute, windowMs: 60_000 },
+  // Quality reports, per participant rather than per user (see `scope` on `consume`): one every 60 s
+  // plus the final one on leave, so the cap only bites a runaway client.
+  callStats: { limit: MAX_CALL_STATS_PER_MINUTE, windowMs: 60_000 },
 };
 
 type WindowRow = { window_start: number; count: number };
@@ -37,16 +40,22 @@ type WindowRow = { window_start: number; count: number };
  *
  * Returns a `rate_limited` refusal carrying `retryAfter` in seconds, which the HTTP layer turns into
  * a 429 with a `Retry-After` header and the socket layer into an `error` event.
+ *
+ * `scope` splits one budget into several windows for the same user -- `callStats` is charged per
+ * participant. It must be a restricted-character id (no colon); the row's bucket becomes
+ * `<bucket>:<scope>`. Scoped rows are one per scope ever used, so their owner prunes them
+ * ({@link pruneScoped}).
  */
-export function consume(ctx: Ctx, userId: string, bucket: Bucket): Outcome<void> {
+export function consume(ctx: Ctx, userId: string, bucket: Bucket, scope?: string): Outcome<void> {
   const { limit, windowMs } = BUDGETS[bucket];
   const now = ctx.now();
+  const key = scope === undefined ? bucket : `${bucket}:${scope}`;
 
   const current: WindowRow = firstRow<WindowRow>(
     ctx,
     `SELECT window_start, count FROM rate_limits WHERE user_id = ? AND bucket = ?`,
     userId,
-    bucket,
+    key,
   ) ?? { window_start: now, count: 0 };
 
   const fresh = now - current.window_start >= windowMs;
@@ -65,11 +74,17 @@ export function consume(ctx: Ctx, userId: string, bucket: Bucket): Outcome<void>
        window_start = excluded.window_start,
        count        = excluded.count`,
     userId,
-    bucket,
+    key,
     windowStart,
     count,
   );
   return allow(undefined);
+}
+
+/** Drops a scoped budget's windows that closed more than `graceMs` ago; they can never refuse again. */
+export function pruneScoped(ctx: Ctx, bucket: Bucket, graceMs = 0): void {
+  const cutoff = ctx.now() - BUDGETS[bucket].windowMs - graceMs;
+  ctx.sql.exec(`DELETE FROM rate_limits WHERE bucket LIKE ? AND window_start < ?`, `${bucket}:%`, cutoff);
 }
 
 /**

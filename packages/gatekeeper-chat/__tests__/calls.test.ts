@@ -269,6 +269,7 @@ describe("the kill switch", () => {
       ["POST", apiPath("setLayer", { callId: "cl_x" })],
       ["POST", apiPath("reconnectCall", { callId: "cl_x" })],
       ["POST", apiPath("leaveCall", { callId: "cl_x" })],
+      ["POST", apiPath("postCallStats", { callId: "cl_x" })],
     ];
     for (const [method, path] of routes) {
       expect(await alice.error(method, path, body), path).toEqual({ status: 503, code: "unavailable" });
