@@ -28,7 +28,7 @@ import {
   VideoCamera,
   VideoCameraSlash,
 } from "@phosphor-icons/react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { CALL_REACTIONS } from "../../contract.js";
 import type { EffectState } from "../engine/types.js";
@@ -515,14 +515,24 @@ function Popover({
   children: ReactNode;
 }): ReactNode {
   const ref = useRef<HTMLDivElement>(null);
+  // Opens upwards from the bar, so it gets the room above the bar and scrolls beyond that: in the
+  // sidebar the call sits high and a full menu would otherwise run off the top of the frame.
+  const [maxHeight, setMaxHeight] = useState<number | undefined>(undefined);
+  useLayoutEffect(() => {
+    const bar = ref.current?.parentElement;
+    if (bar) setMaxHeight(Math.max(160, bar.getBoundingClientRect().top - 16));
+  }, []);
   useEffect(() => {
-    ref.current?.querySelector<HTMLElement>("button, select")?.focus();
+    // A menu with nothing to focus (the People list) takes focus itself, so Escape still reaches it.
+    (ref.current?.querySelector<HTMLElement>("button, select") ?? ref.current)?.focus();
   }, []);
   return (
     <>
       <div className="fixed inset-0 z-20" aria-hidden="true" onClick={onClose} />
       <div
         ref={ref}
+        tabIndex={-1}
+        style={maxHeight === undefined ? undefined : { maxHeight }}
         role="menu"
         onKeyDown={(event) => {
           if (event.key === "Escape") {
@@ -531,7 +541,7 @@ function Popover({
           }
         }}
         className={[
-          "absolute bottom-full z-30 mb-2 max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-kumo-line bg-kumo-control shadow-xl",
+          "absolute bottom-full z-30 mb-2 max-w-[calc(100vw-1rem)] overflow-x-hidden overflow-y-auto rounded-xl border border-kumo-line bg-kumo-control shadow-xl",
           align === "right" ? "right-2 w-64" : "left-1/2 -translate-x-1/2",
         ].join(" ")}
       >

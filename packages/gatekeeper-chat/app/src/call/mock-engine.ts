@@ -12,6 +12,7 @@
 // pins the local state that raises each banner, for screenshots.
 
 import { CALL_HEARTBEAT_MS, type CallState, type ParticipantId } from "../contract.js";
+import { supportsBackgroundBlur, supportsNoiseSuppression } from "./effects/support.js";
 import type {
   CallEngine,
   ConnectionQuality,
@@ -278,6 +279,9 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
           videoEnabled: camera !== null,
           error: null,
           ...mockLocalQuality(force),
+          // The switches show where this browser could run the real effects; the mock only flips them.
+          noiseSuppression: supportsNoiseSuppression() ? (options.noiseSuppression === true ? "on" : "off") : "unsupported",
+          backgroundBlur: supportsBackgroundBlur() ? (options.backgroundBlur === true ? "on" : "off") : "unsupported",
         });
         syncRemotes();
         sendBeat();
