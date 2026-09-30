@@ -122,7 +122,11 @@ export interface ChatApi {
     request: import("../contract.js").LeaveCallRequest,
     options?: { readonly keepalive?: boolean },
   ): Promise<import("../contract.js").OkResponse>;
-  postCallStats(callId: string, report: import("../contract.js").CallStatsReport): Promise<import("../contract.js").OkResponse>;
+  postCallStats(
+    callId: string,
+    report: import("../contract.js").CallStatsReport,
+    options?: { readonly keepalive?: boolean },
+  ): Promise<import("../contract.js").OkResponse>;
 }
 
 export type SocketStatus = "idle" | "connecting" | "open" | "reconnecting" | "closed";

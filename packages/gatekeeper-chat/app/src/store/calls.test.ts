@@ -277,8 +277,6 @@ interface Harness {
   store: ChatStore;
   socket: FakeSocket;
   engine: FakeCallEngine;
-  /** `api.leaveCall` calls: [callId, request, options]. */
-  leaves: unknown[][];
 }
 
 const seeded = call("c1", [participant("p-alice", "alice")]);
@@ -286,7 +284,6 @@ const seeded = call("c1", [participant("p-alice", "alice")]);
 async function started(options: { calls?: CallState[]; embedded?: boolean; lateDm?: CallState } = {}): Promise<Harness> {
   const socket = new FakeSocket();
   let listed = 0;
-  const leaves: unknown[][] = [];
   const engine = createFakeCallEngine();
   const api = {
     me: async (): Promise<MeResponse> => ({
@@ -319,14 +316,10 @@ async function started(options: { calls?: CallState[]; embedded?: boolean; lateD
       channelLastSeq: 1,
     }),
     getUsers: async () => ({ users: [], cursor: null }),
-    leaveCall: async (callId: string, request: unknown, options?: unknown) => {
-      leaves.push([callId, request, options]);
-      return { ok: true };
-    },
   } as unknown as ChatApi;
   const store = new ChatStore({ transport: { api, socket }, navigate: () => undefined, callEngine: engine });
   await store.start({ embedded: options.embedded ?? false });
-  return { store, socket, engine, leaves };
+  return { store, socket, engine };
 }
 
 let current: Harness | null = null;
@@ -399,14 +392,14 @@ describe("the store's room state", () => {
     expect(engine.applied).toContainEqual(seeded);
   });
 
-  it("tells the server with a keepalive leave when the page goes away mid-call, and nothing otherwise", async () => {
-    const { store, engine, leaves } = await harness();
-    store.disposeCall();
-    expect(leaves).toEqual([]);
+  it("has the engine leave with keepalive when the page goes away", async () => {
+    const { store, engine } = await harness();
     await store.joinCall("c1");
-    engine.set({ callId: seeded.id, participantId: "p-me" });
     store.disposeCall();
-    expect(leaves).toEqual([[seeded.id, { participantId: "p-me" }, { keepalive: true }]]);
+    // The engine sends the final report and the leave (engine.quality.test.ts); a store with no
+    // session in its engine sends nothing.
+    expect(engine.leaveOptions.at(-1)).toEqual({ keepalive: true });
+    expect(engine.disposed).toBe(0);
   });
 
   it("passes call-moved to the engine", async () => {
@@ -581,7 +574,7 @@ describe("joining and leaving", () => {
     await store.joinCall("c1");
     // Muting is re-sent for the shell's pill; an unrelated snapshot change is not.
     store.toggleCallAudio();
-    engine.set({ localAudioLevel: 0.4 });
+    engine.set({ activeSpeaker: "p-someone" });
     await store.leaveCall();
     const href = callHref("c1");
     expect(changes).toEqual([
@@ -677,13 +670,6 @@ describe("joining and leaving", () => {
     expect(loadCallPrefs().start.noiseSuppression).toBeUndefined();
   });
 
-  it("disposes the engine on unload without leaving", async () => {
-    const { store, engine } = await harness();
-    await store.joinCall("c1");
-    store.disposeCall();
-    expect(engine.disposed).toBe(1);
-    expect(engine.left).toBe(0);
-  });
 });
 
 describe("raised hands and reactions", () => {

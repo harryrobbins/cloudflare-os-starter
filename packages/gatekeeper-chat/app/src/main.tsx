@@ -50,8 +50,8 @@ async function main(): Promise<void> {
     store.onPresent = (mode) => bridge.present(mode);
   }
 
-  // Unload drops the media without calling `leave`: the routes need Access-authenticated JSON, which
-  // an unload cannot send reliably, and the server expires a participant that stops beating.
+  // Unload leaves the call with keepalive requests, so the others do not see a frozen tile until the
+  // heartbeat expires (store.disposeCall).
   window.addEventListener("pagehide", () => store.disposeCall());
 
   // The three browser signals the read model depends on: is the document visible, is the window focused,

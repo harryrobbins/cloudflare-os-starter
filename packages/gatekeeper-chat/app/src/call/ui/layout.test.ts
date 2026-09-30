@@ -120,7 +120,6 @@ describe("remoteTiles", () => {
       video: null,
       screen: null,
       audio: null,
-      audioLevel: 0,
       videoRid: null,
       quality: "fair" as const,
     };

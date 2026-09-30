@@ -710,6 +710,26 @@ describe("telemetry", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it("on page unload starts the final report and the leave at once, both keepalive", async () => {
+    const { sig, engine } = await joinWith(callState([]));
+    const sent: [string, unknown][] = [];
+    sig.override("postCallStats", async (_callId, _report, options) => {
+      sent.push(["postCallStats", options]);
+      return { ok: true } as never;
+    });
+    sig.override("leaveCall", async (_callId, _request, options) => {
+      sent.push(["leaveCall", options]);
+      return { ok: true } as never;
+    });
+    // Not awaited: an unloading page gets no later turn.
+    void engine.leave({ keepalive: true });
+    expect(sent).toEqual([
+      ["postCallStats", { keepalive: true }],
+      ["leaveCall", { keepalive: true }],
+    ]);
+    expect(engine.snapshot().phase).toBe("idle");
+  });
+
   it("counts audio-only time", async () => {
     const { env, sig, engine } = await joinWith(callState([participant("p2", ["audio", "video"])]));
     const audio = receiver(env, engine.snapshot().remotes.p2!.audio);

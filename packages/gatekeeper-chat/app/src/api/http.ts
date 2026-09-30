@@ -227,8 +227,8 @@ export function createHttpApi(): ChatApi {
       request<ReconnectCallResponse>("POST", apiPath("reconnectCall", { callId }), body),
     leaveCall: (callId: string, body: LeaveCallRequest, options?: { readonly keepalive?: boolean }) =>
       request<OkResponse>("POST", apiPath("leaveCall", { callId }), body, undefined, options?.keepalive === true),
-    postCallStats: (callId: string, body: CallStatsReport) =>
-      request<OkResponse>("POST", apiPath("postCallStats", { callId }), body),
+    postCallStats: (callId: string, body: CallStatsReport, options?: { readonly keepalive?: boolean }) =>
+      request<OkResponse>("POST", apiPath("postCallStats", { callId }), body, undefined, options?.keepalive === true),
   };
 }
 

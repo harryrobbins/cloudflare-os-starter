@@ -31,7 +31,6 @@ export const IDLE_CALL: CallSnapshot = {
   audioEnabled: false,
   videoEnabled: false,
   screenEnabled: false,
-  localAudioLevel: 0,
   remotes: {},
   activeSpeaker: null,
   error: null,

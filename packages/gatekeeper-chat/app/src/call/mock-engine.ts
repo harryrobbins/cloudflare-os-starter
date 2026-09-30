@@ -82,7 +82,6 @@ const IDLE: CallSnapshot = {
   audioEnabled: false,
   videoEnabled: false,
   screenEnabled: false,
-  localAudioLevel: 0,
   remotes: {},
   activeSpeaker: null,
   error: null,
@@ -182,7 +181,6 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
     for (const participant of room.participants) {
       if (participant.id === snapshot.participantId) continue;
       index += 1;
-      const previous = snapshot.remotes[participant.id];
       remotes[participant.id] = {
         participantId: participant.id,
         userId: participant.userId,
@@ -190,7 +188,6 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
         // The screen share is the same pattern under another seed, so it is visibly a different feed.
         screen: participant.screen ? remoteVideoFor(`${participant.id}:screen`, `${participant.userId}:screen`) : null,
         audio: null,
-        audioLevel: previous?.audioLevel ?? 0,
         videoRid: ridFor(participant.id),
         quality: qualityFor(index),
         // As the real engine: audio-only mode, or a tile nobody can see, pauses the pull.
@@ -222,11 +219,7 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
     }
     const index = talkers.findIndex((participant) => participant.id === snapshot.activeSpeaker);
     const next = talkers[(index + 1) % talkers.length]!;
-    const remotes: Record<ParticipantId, RemoteMedia> = {};
-    for (const [id, remote] of Object.entries(snapshot.remotes)) {
-      remotes[id] = { ...remote, audioLevel: id === next.id ? 0.7 : 0.05 };
-    }
-    set({ activeSpeaker: next.id, remotes });
+    set({ activeSpeaker: next.id });
   }
 
   function stepQuality(): void {

@@ -114,6 +114,10 @@ export interface JoinOptions {
   readonly backgroundBlur?: boolean;
 }
 
+export interface LeaveOptions {
+  readonly keepalive?: boolean;
+}
+
 /** One remote participant's media, keyed by participant id in {@link CallSnapshot.remotes}. */
 export interface RemoteMedia {
   readonly participantId: ParticipantId;
@@ -124,8 +128,6 @@ export interface RemoteMedia {
   readonly screen: MediaStream | null;
   /** Their microphone. The UI plays it through an `<audio>` element (autoplay after the Join click). */
   readonly audio: MediaStream | null;
-  /** 0..1, smoothed, from inbound-rtp `audioLevel`. */
-  readonly audioLevel: number;
   /** The layer currently requested for their camera. */
   readonly videoRid: CallSimulcastRid | null;
   /**
@@ -159,8 +161,6 @@ export interface CallSnapshot {
   readonly audioEnabled: boolean;
   readonly videoEnabled: boolean;
   readonly screenEnabled: boolean;
-  /** Local microphone level 0..1 ("you are talking" / muted-while-talking hint). */
-  readonly localAudioLevel: number;
   readonly remotes: Readonly<Record<ParticipantId, RemoteMedia>>;
   /** Participant id of the loudest speaker over the last second, with hysteresis; null in silence. */
   readonly activeSpeaker: ParticipantId | null;
@@ -212,8 +212,11 @@ export interface CallEngine {
    * Must be called from a user gesture: it asks for media and it unlocks audio autoplay.
    */
   join(options: JoinOptions): Promise<void>;
-  /** Leaves and releases every device. Safe in any phase. */
-  leave(): Promise<void>;
+  /**
+   * Leaves and releases every device, sending the final stats report and the leave. Safe in any
+   * phase. `keepalive` (page unload) sends both at once as requests that outlive the page.
+   */
+  leave(options?: LeaveOptions): Promise<void>;
 
   /**
    * Feed every `call` event and channel-list/hello call state for the joined channel here. The
@@ -257,7 +260,7 @@ export interface CallEngine {
   /** The UI reports tile sizes whenever layout changes; the engine debounces layer switches. */
   setTileSizes(sizes: Readonly<Record<ParticipantId, TileSize>>): void;
 
-  /** Tears down without calling the server (page unload). */
+  /** Tears down without calling the server. Page unload uses `leave({ keepalive: true })`. */
   dispose(): void;
 }
 

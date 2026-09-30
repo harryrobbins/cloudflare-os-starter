@@ -3,7 +3,7 @@
 
 import type { CallState, ParticipantId } from "../../contract.js";
 import { IDLE_CALL } from "../../store/calls.js";
-import type { CallEngine, CallSnapshot, DeviceChoice, JoinOptions, TileSize } from "../engine/types.js";
+import type { CallEngine, CallSnapshot, DeviceChoice, JoinOptions, LeaveOptions, TileSize } from "../engine/types.js";
 
 export interface FakeCallEngine extends CallEngine {
   readonly joins: JoinOptions[];
@@ -17,6 +17,8 @@ export interface FakeCallEngine extends CallEngine {
   readonly effects: [string, boolean][];
   readonly devices: Partial<DeviceChoice>[];
   left: number;
+  /** The options of every `leave`, in order. */
+  readonly leaveOptions: (LeaveOptions | undefined)[];
   disposed: number;
   /** Replaces the snapshot and notifies, as the engine would after any change. */
   set(patch: Partial<CallSnapshot>): void;
@@ -39,6 +41,7 @@ export function createFakeCallEngine(): FakeCallEngine {
     effects: [],
     devices: [],
     left: 0,
+    leaveOptions: [],
     disposed: 0,
     failNextJoin: undefined,
     set(patch) {
@@ -67,8 +70,9 @@ export function createFakeCallEngine(): FakeCallEngine {
         videoEnabled: options.video,
       });
     },
-    async leave() {
+    async leave(options) {
       fake.left += 1;
+      fake.leaveOptions.push(options);
       snapshot = IDLE_CALL;
       for (const listener of listeners) listener();
     },

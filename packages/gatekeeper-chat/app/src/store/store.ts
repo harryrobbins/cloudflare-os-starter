@@ -1936,20 +1936,13 @@ export class ChatStore {
     if (this.#state.callFocus !== callFocus) this.#patch({ callFocus });
   }
 
-  /** Page unload: drop the media without calling the server, which expires the participant. */
   /**
-   * The page is going away (`pagehide`). The engine only tears down locally, so the server is told
-   * here, with a `keepalive` request that outlives the page: without it the others saw a frozen tile
+   * The page is going away (`pagehide`). The engine leaves with `keepalive` requests (the final
+   * stats report and the leave) that outlive the page: without them the others saw a frozen tile
    * for the 45 s heartbeat TTL after somebody closed the tab or navigated the shell elsewhere.
    */
   disposeCall(): void {
-    const engine = this.#callEngine;
-    if (!engine) return;
-    const { callId, participantId } = engine.snapshot();
-    engine.dispose();
-    if (callId !== null && participantId !== null) {
-      void this.#api.leaveCall(callId, { participantId }, { keepalive: true }).catch(() => undefined);
-    }
+    void this.#callEngine?.leave({ keepalive: true });
   }
 
   // --- theme, toasts, announcements ----------------------------------------

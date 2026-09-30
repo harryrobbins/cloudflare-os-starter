@@ -4,7 +4,7 @@
 import type { CallEnvironment } from "./types.js";
 import { bytesSent } from "./stats.js";
 
-type Clock = Pick<CallEnvironment, "setTimeout" | "clearTimeout">;
+type Clock = Pick<CallEnvironment, "setTimeout" | "clearTimeout" | "now">;
 
 /** Waits for ICE gathering to complete, or `capMs`, whichever is first. Never rejects. */
 export function waitForIceGathering(pc: RTCPeerConnection, clock: Clock, capMs: number): Promise<void> {
@@ -43,8 +43,9 @@ export function waitForConnected(pc: RTCPeerConnection, clock: Clock, capMs: num
 }
 
 /**
- * Polls each sender until its `outbound-rtp bytesSent > 0`, or `capMs`. Resolves the senders that
- * were confirmed; announcing only those keeps pullers from hitting `empty_track_error`.
+ * Polls the senders until each one's `outbound-rtp bytesSent > 0`, or `capMs` on the clock. Every
+ * poll reads the unconfirmed senders' stats together. Resolves the senders that were confirmed;
+ * announcing only those keeps pullers from hitting `empty_track_error`.
  */
 export async function waitForBytesSent(
   senders: readonly RTCRtpSender[],
@@ -54,18 +55,15 @@ export async function waitForBytesSent(
   isCurrent: () => boolean = () => true,
 ): Promise<Set<RTCRtpSender>> {
   const confirmed = new Set<RTCRtpSender>();
-  let waited = 0;
+  const started = clock.now();
   for (;;) {
-    for (const sender of senders) {
-      if (confirmed.has(sender)) continue;
-      try {
-        if ((await bytesSent(sender)) > 0) confirmed.add(sender);
-      } catch {
-        // A sender whose transceiver was stopped meanwhile: leave it unconfirmed.
-      }
-    }
-    if (confirmed.size === senders.length || waited >= capMs || !isCurrent()) return confirmed;
+    const pending = senders.filter((sender) => !confirmed.has(sender));
+    // A sender whose transceiver was stopped meanwhile rejects: leave it unconfirmed.
+    const sent = await Promise.all(pending.map((sender) => bytesSent(sender).catch(() => 0)));
+    pending.forEach((sender, index) => {
+      if (sent[index]! > 0) confirmed.add(sender);
+    });
+    if (confirmed.size === senders.length || clock.now() - started >= capMs || !isCurrent()) return confirmed;
     await new Promise<void>((resolve) => clock.setTimeout(resolve, pollMs));
-    waited += pollMs;
   }
 }

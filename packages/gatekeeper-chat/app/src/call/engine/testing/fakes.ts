@@ -133,33 +133,57 @@ export class FakeSender {
     if (copy.degradationPreference !== undefined) this.degradationPreference = copy.degradationPreference;
   }
 
+  /** Sender getStats() reads, so a test can assert the engine does not read per sender. */
+  getStatsCalls = 0;
+
   async getStats(): Promise<RTCStatsReport> {
+    this.getStatsCalls += 1;
+    return statsReport(this.statsEntries("", null));
+  }
+
+  /**
+   * The entries this sender contributes to a report: its own (ids unprefixed) or the connection's
+   * (ids prefixed, tagged with the transceiver's `mid`, as a browser's `pc.getStats()` does).
+   */
+  statsEntries(prefix: string, mid: string | null): Record<string, unknown>[] {
     const entries: Record<string, unknown>[] = [];
     const count = Math.max(1, this.encodings.length);
     const stats = this.stats;
+    const source = this.track ? { mediaSourceId: `${prefix}src` } : {};
     for (let index = 0; index < count; index += 1) {
       entries.push({
-        id: `out-${index}`,
+        id: `${prefix}out-${index}`,
         type: "outbound-rtp",
         kind: this.track?.kind ?? "video",
         bytesSent: index === 0 ? this.bytesSent : 0,
+        ...(mid !== null ? { mid } : {}),
+        ...source,
         ...(this.encodings[index]?.rid ? { rid: this.encodings[index]!.rid } : {}),
         ...(stats.qualityLimitationReason !== undefined ? { qualityLimitationReason: stats.qualityLimitationReason } : {}),
         ...(stats.qualityLimitationDurations !== undefined ? { qualityLimitationDurations: { ...stats.qualityLimitationDurations } } : {}),
-        ...(stats.mimeType !== undefined ? { codecId: "codec-out" } : {}),
+        ...(stats.mimeType !== undefined ? { codecId: `${prefix}codec-out` } : {}),
       });
     }
-    if (stats.mimeType !== undefined) entries.push({ id: "codec-out", type: "codec", mimeType: stats.mimeType, payloadType: 111 });
+    if (stats.mimeType !== undefined) entries.push({ id: `${prefix}codec-out`, type: "codec", mimeType: stats.mimeType, payloadType: 111 });
     if (stats.roundTripTime !== undefined || stats.fractionLost !== undefined) {
       entries.push({
-        id: "remote-in",
+        id: `${prefix}remote-in`,
         type: "remote-inbound-rtp",
+        localId: `${prefix}out-0`,
         ...(stats.roundTripTime !== undefined ? { roundTripTime: stats.roundTripTime } : {}),
         ...(stats.fractionLost !== undefined ? { fractionLost: stats.fractionLost } : {}),
       });
     }
-    if (this.track?.kind === "audio") entries.push({ id: "src", type: "media-source", kind: "audio", audioLevel: this.audioLevel });
-    return statsReport(entries);
+    if (this.track) {
+      entries.push({
+        id: `${prefix}src`,
+        type: "media-source",
+        kind: this.track.kind,
+        trackIdentifier: this.track.id,
+        ...(this.track.kind === "audio" ? { audioLevel: this.audioLevel } : {}),
+      });
+    }
+    return entries;
   }
 }
 
@@ -191,20 +215,36 @@ export class FakeReceiver {
     };
   }
 
+  /** Receiver getStats() reads, so a test can assert the engine does not read per receiver. */
+  getStatsCalls = 0;
+
   async getStats(): Promise<RTCStatsReport> {
+    this.getStatsCalls += 1;
+    return statsReport(this.statsEntries("", null));
+  }
+
+  /** As {@link FakeSender.statsEntries}: `inbound-rtp` (with `trackIdentifier`) and its codec. */
+  statsEntries(prefix: string, mid: string | null): Record<string, unknown>[] {
     const { mimeType, ...counters } = this.stats;
     const entries: Record<string, unknown>[] = [
       {
-        id: "in",
+        id: `${prefix}in`,
         type: "inbound-rtp",
         kind: this.track.kind,
+        trackIdentifier: this.track.id,
+        ...(mid !== null ? { mid } : {}),
         audioLevel: this.audioLevel,
         ...counters,
-        ...(mimeType !== undefined ? { codecId: "codec-in" } : {}),
+        ...(mimeType !== undefined ? { codecId: `${prefix}codec-in` } : {}),
       },
     ];
-    if (mimeType !== undefined) entries.push({ id: "codec-in", type: "codec", mimeType });
-    return statsReport(entries);
+    if (mimeType !== undefined) entries.push({ id: `${prefix}codec-in`, type: "codec", mimeType });
+    return entries;
+  }
+
+  /** The latest packet's level, as `RTCRtpReceiver.getSynchronizationSources()` reports it. */
+  getSynchronizationSources(): RTCRtpSynchronizationSource[] {
+    return [{ source: 1, timestamp: 0, rtpTimestamp: 0, audioLevel: this.audioLevel }];
   }
 }
 
@@ -358,11 +398,26 @@ export class FakePeerConnection extends EventTarget {
     this.restartIceCalls += 1;
   }
 
-  /** Connection-wide stats: transport, the selected pair and its local candidate (no addresses). */
+  /**
+   * Connection-wide stats, as a browser reports them: every sending transceiver's outbound entries,
+   * every receiving one's inbound entries (each tagged with its mid), and the transport with the
+   * selected pair and its local candidate.
+   */
   async getStats(): Promise<RTCStatsReport> {
+    const media = this.transceivers.flatMap((transceiver, index) => {
+      if (transceiver.stopped || transceiver.mid === null) return [];
+      const prefix = `t${index}-`;
+      return transceiver.direction === "recvonly"
+        ? transceiver.receiver.statsEntries(prefix, transceiver.mid)
+        : transceiver.sender.statsEntries(prefix, transceiver.mid);
+    });
+    return statsReport([...media, ...this.transportEntries()]);
+  }
+
+  private transportEntries(): Record<string, unknown>[] {
     const transport = this.transport;
-    if (!transport) return statsReport([]);
-    return statsReport([
+    if (!transport) return [];
+    return [
       { id: "T01", type: "transport", selectedCandidatePairId: "CP1" },
       {
         id: "CP1",
@@ -376,7 +431,7 @@ export class FakePeerConnection extends EventTarget {
       },
       { id: "L1", type: "local-candidate", candidateType: transport.relayed ? "relay" : "host", address: "192.0.2.10", port: 50000 },
       { id: "R1", type: "remote-candidate", candidateType: "host", address: "198.51.100.7", port: 3478 },
-    ]);
+    ];
   }
 
   close(): void {

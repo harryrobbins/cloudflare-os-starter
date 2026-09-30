@@ -16,15 +16,16 @@ export async function bytesSent(sender: StatsSource): Promise<number> {
   return total;
 }
 
-/** `inbound-rtp audioLevel` (0..1) of one receiver. */
-export async function inboundAudioLevel(receiver: StatsSource): Promise<number | null> {
-  const report = await receiver.getStats();
+/**
+ * A receiver's latest audio level (0..1) from its synchronization sources: synchronous and free,
+ * where `getStats()` would build a whole report. Null when no source has reported a level (nothing
+ * received for ten seconds, or no audio-level header extension).
+ */
+export function receiverAudioLevel(receiver: Pick<RTCRtpReceiver, "getSynchronizationSources">): number | null {
   let level: number | null = null;
-  each(report, (entry) => {
-    if (entry.type === "inbound-rtp" && entry.kind === "audio" && typeof entry.audioLevel === "number") {
-      level = entry.audioLevel;
-    }
-  });
+  for (const source of receiver.getSynchronizationSources()) {
+    if (typeof source.audioLevel === "number") level = Math.max(level ?? 0, source.audioLevel);
+  }
   return level;
 }
 
@@ -81,13 +82,19 @@ export interface OutboundSample {
 
 /** One sender's report: limitation, SFU-reported loss and RTT, codec. */
 export function readOutbound(report: RTCStatsReport): OutboundSample {
-  const byId = index(report);
-  let limitation: Limitation | null = null;
-  let limitedSeconds: { cpu: number; bandwidth: number } | null = null;
+  const entries: Entry[] = [];
+  each(report, (entry) => entries.push(entry));
+  return outboundOf(index(report), entries);
+}
+
+/** The outbound sample over one sender's `outbound-rtp` entries and their `remote-inbound-rtp`. */
+function outboundOf(byId: Map<string, Entry>, entries: readonly Entry[]): OutboundSample {
+  let limitation = null as Limitation | null;
+  let limitedSeconds = null as { cpu: number; bandwidth: number } | null;
   let rtt: number | null = null;
   let loss: number | null = null;
   let mimeType: string | null = null;
-  each(report, (entry) => {
+  for (const entry of entries) {
     if (entry.type === "outbound-rtp") {
       const reason = entry.qualityLimitationReason;
       if (typeof reason === "string") {
@@ -108,7 +115,7 @@ export function readOutbound(report: RTCStatsReport): OutboundSample {
       const fraction = num(entry.fractionLost);
       if (fraction !== null) loss = Math.max(loss ?? 0, fraction * 100);
     }
-  });
+  }
   return { limitation, limitedSeconds, rttMs: rtt, lossPercent: loss, mimeType };
 }
 
@@ -127,20 +134,23 @@ export function readInbound(report: RTCStatsReport): InboundSample | null {
   const byId = index(report);
   let sample: InboundSample | null = null;
   each(report, (entry) => {
-    if (sample !== null || entry.type !== "inbound-rtp") return;
-    const jitter = num(entry.jitter);
-    sample = {
-      // packetsLost can go negative with duplicates; clamp.
-      packetsLost: Math.max(0, num(entry.packetsLost) ?? 0),
-      packetsReceived: num(entry.packetsReceived) ?? 0,
-      jitterMs: jitter === null ? null : jitter * 1000,
-      framesPerSecond: num(entry.framesPerSecond),
-      framesDecoded: num(entry.framesDecoded) ?? 0,
-      framesDropped: num(entry.framesDropped) ?? 0,
-      mimeType: codecOf(byId, entry),
-    };
+    if (sample === null && entry.type === "inbound-rtp") sample = inboundOf(byId, entry);
   });
   return sample;
+}
+
+function inboundOf(byId: Map<string, Entry>, entry: Entry): InboundSample {
+  const jitter = num(entry.jitter);
+  return {
+    // packetsLost can go negative with duplicates; clamp.
+    packetsLost: Math.max(0, num(entry.packetsLost) ?? 0),
+    packetsReceived: num(entry.packetsReceived) ?? 0,
+    jitterMs: jitter === null ? null : jitter * 1000,
+    framesPerSecond: num(entry.framesPerSecond),
+    framesDecoded: num(entry.framesDecoded) ?? 0,
+    framesDropped: num(entry.framesDropped) ?? 0,
+    mimeType: codecOf(byId, entry),
+  };
 }
 
 export interface TransportSample {
@@ -154,7 +164,10 @@ export interface TransportSample {
 
 /** The whole connection's report: the selected candidate pair. */
 export function readTransport(report: RTCStatsReport): TransportSample {
-  const byId = index(report);
+  return transportOf(report, index(report));
+}
+
+function transportOf(report: RTCStatsReport, byId: Map<string, Entry>): TransportSample {
   let pair: Entry | undefined;
   each(report, (entry) => {
     if (entry.type === "transport" && typeof entry.selectedCandidatePairId === "string") {
@@ -175,4 +188,53 @@ export function readTransport(report: RTCStatsReport): TransportSample {
     rttMs: rtt === null ? null : rtt * 1000,
     relayed: typeof local?.candidateType === "string" ? local.candidateType === "relay" : null,
   };
+}
+
+/**
+ * Every sender, every receiver and the transport from one `RTCPeerConnection.getStats()`, instead of
+ * a report per sender and receiver. Senders and receivers are keyed by `mid` and by track id
+ * (`inbound-rtp.trackIdentifier`, or the `media-source` an `outbound-rtp` names), since not every
+ * browser reports `mid`; look them up with {@link sampleFor}.
+ */
+export interface ConnectionSample {
+  readonly transport: TransportSample;
+  readonly outbound: ReadonlyMap<string, OutboundSample>;
+  readonly inbound: ReadonlyMap<string, InboundSample>;
+}
+
+export function readConnection(report: RTCStatsReport): ConnectionSample {
+  const byId = index(report);
+  const outboundGroups = new Map<string, Entry[]>();
+  const keysOfOutbound = new Map<string, string[]>();
+  const inbound = new Map<string, InboundSample>();
+  const keysFor = (entry: Entry, trackId: unknown): string[] =>
+    [entry.mid, trackId].filter((key): key is string => typeof key === "string" && key.length > 0);
+  each(report, (entry) => {
+    if (entry.type === "outbound-rtp") {
+      const source = typeof entry.mediaSourceId === "string" ? byId.get(entry.mediaSourceId) : undefined;
+      const keys = keysFor(entry, source?.trackIdentifier);
+      if (typeof entry.id === "string") keysOfOutbound.set(entry.id, keys);
+      for (const key of keys) outboundGroups.set(key, [...(outboundGroups.get(key) ?? []), entry]);
+    } else if (entry.type === "inbound-rtp") {
+      const sample = inboundOf(byId, entry);
+      for (const key of keysFor(entry, entry.trackIdentifier)) if (!inbound.has(key)) inbound.set(key, sample);
+    }
+  });
+  // A remote-inbound-rtp belongs to the outbound-rtp it names.
+  each(report, (entry) => {
+    if (entry.type !== "remote-inbound-rtp" || typeof entry.localId !== "string") return;
+    for (const key of keysOfOutbound.get(entry.localId) ?? []) outboundGroups.get(key)?.push(entry);
+  });
+  const outbound = new Map<string, OutboundSample>();
+  for (const [key, entries] of outboundGroups) outbound.set(key, outboundOf(byId, entries));
+  return { transport: transportOf(report, byId), outbound, inbound };
+}
+
+/** The sample for a transceiver: by its mid, else by its track's id. */
+export function sampleFor<T>(
+  samples: ReadonlyMap<string, T>,
+  mid: string | null,
+  track: { readonly id: string } | null | undefined,
+): T | null {
+  return (mid !== null ? samples.get(mid) : undefined) ?? (track ? samples.get(track.id) : undefined) ?? null;
 }

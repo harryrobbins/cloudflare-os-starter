@@ -527,7 +527,6 @@ describe("active speaker", () => {
     p2.audioLevel = 0.8;
     await settle(600);
     expect(engine.snapshot().activeSpeaker).toBeNull();
-    expect(engine.snapshot().remotes.p2!.audioLevel).toBeGreaterThan(0.5);
     await settle(1_000);
     expect(engine.snapshot().activeSpeaker).toBe("p2");
 
@@ -543,18 +542,20 @@ describe("active speaker", () => {
     mic.audioLevel = 0;
     await settle(2_500);
     expect(engine.snapshot().activeSpeaker).toBeNull();
-    expect(engine.snapshot().remotes.p3!.audioLevel).toBe(0);
+    // Remote levels come from synchronization sources and quality from one pc.getStats(): no
+    // receiver is asked for a report of its own.
+    expect(p2.getStatsCalls + p3.getStatsCalls).toBe(0);
   });
 
-  it("reports the local level from media-source stats and does not re-emit for tiny changes", async () => {
+  it("makes the local speaker active from media-source stats, and never publishes raw levels", async () => {
     const { env, engine } = await joinWith(callState([]));
     const mic = env.pc.transceivers[0]!.sender;
     mic.audioLevel = 0.6;
     await settle(3_000);
-    expect(engine.snapshot().localAudioLevel).toBeGreaterThan(0.4);
+    expect(engine.snapshot().activeSpeaker).toBe(engine.snapshot().participantId);
     const listener = vi.fn();
     engine.subscribe(listener);
-    mic.audioLevel = 0.61;
+    mic.audioLevel = 0.3;
     await settle(1_000);
     expect(listener).toHaveBeenCalledTimes(0);
   });

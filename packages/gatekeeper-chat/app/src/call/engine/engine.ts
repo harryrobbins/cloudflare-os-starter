@@ -63,11 +63,10 @@ import { SerialQueue, Superseded } from "./queue.js";
 import { ensureOpusParams, redFirst } from "./sdp.js";
 import { SpeakerDetector } from "./speaker.js";
 import {
-  inboundAudioLevel,
   mediaSourceAudioLevel,
-  readInbound,
-  readOutbound,
-  readTransport,
+  readConnection,
+  receiverAudioLevel,
+  sampleFor,
   type InboundSample,
   type OutboundSample,
 } from "./stats.js";
@@ -81,6 +80,7 @@ import type {
   DeviceChoice,
   EffectState,
   JoinOptions,
+  LeaveOptions,
   QualityLimitation,
   RemoteMedia,
   TileSize,
@@ -108,9 +108,6 @@ export const ENGINE_TIMINGS = {
   hiddenPauseMs: 5_000,
   statsIntervalMs: CALL_STATS_INTERVAL_MS,
 } as const;
-
-/** Level changes smaller than this do not produce a new snapshot. */
-const LEVEL_EPSILON = 0.05;
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
@@ -168,7 +165,6 @@ const IDLE_SNAPSHOT: CallSnapshot = Object.freeze({
   audioEnabled: false,
   videoEnabled: false,
   screenEnabled: false,
-  localAudioLevel: 0,
   remotes: EMPTY_REMOTES,
   activeSpeaker: null,
   error: null,
@@ -233,7 +229,6 @@ class Engine implements CallEngine {
   private tileSizes: Readonly<Record<ParticipantId, TileSize>> = {};
   private readonly layers: LayerScheduler;
   private readonly speaker = new SpeakerDetector();
-  private readonly reportedLevels = new Map<ParticipantId, number>();
 
   private heartbeatTimer: unknown = null;
   private speakerTimer: unknown = null;
@@ -383,21 +378,25 @@ class Engine implements CallEngine {
     this.scheduleReconcile();
   }
 
-  async leave(): Promise<void> {
+  async leave(options: LeaveOptions = {}): Promise<void> {
     const session = this.session;
     const wasActive = this.snap.phase !== "idle";
-    // Built before teardown (which drops the accumulated stats), sent before leaveCall.
+    // Built before teardown (which drops the accumulated stats).
     const finalReport = session ? this.takeStatsReport(true) : null;
     this.teardown();
     if (wasActive) this.set({ ...IDLE_SNAPSHOT, audioOutputId: this.devices.audioOutputId });
-    if (session) {
-      if (finalReport) await this.postStats(session.callId, finalReport);
-      this.log("leave", { callId: session.callId });
-      try {
-        await this.api.leaveCall(session.callId, { participantId: session.participantId });
-      } catch (error) {
-        this.log("leave-failed", { error: describeError(error) });
-      }
+    if (!session) return;
+    this.log("leave", { callId: session.callId });
+    const keepalive = options.keepalive === true;
+    // Normally the final report goes first. When the page is going away both requests must start
+    // now, before any await, as keepalive requests that outlive it; the server accepts a report
+    // that trails the leave.
+    const report = finalReport ? this.postStats(session.callId, finalReport, keepalive) : null;
+    if (report && !keepalive) await report;
+    try {
+      await this.api.leaveCall(session.callId, { participantId: session.participantId }, keepalive ? { keepalive } : undefined);
+    } catch (error) {
+      this.log("leave-failed", { error: describeError(error) });
     }
   }
 
@@ -627,7 +626,6 @@ class Engine implements CallEngine {
         audio: this.remoteStream(participant, "audio"),
         video: this.remoteStream(participant, "video"),
         screen: this.remoteStream(participant, "screen"),
-        audioLevel: this.reportedLevels.get(participant.id) ?? 0,
         videoRid: this.pullFor(participant, "video")?.rid ?? null,
         quality: this.remoteQuality.get(participant.id) ?? "unknown",
         videoPaused: participant.tracks.some((track) => track.kind === "video") && this.isVideoPaused(participant.id),
@@ -972,7 +970,7 @@ class Engine implements CallEngine {
       const publication = added.find((candidate) => candidate.transceiver.mid === published.mid);
       if (publication) publication.name = published.name;
     }
-    for (const publication of added) await this.applySenderPreferences(publication);
+    await Promise.all(added.map((publication) => this.applySenderPreferences(publication)));
     this.assertCurrent(gen);
 
     const connected = await waitForConnected(pc, this.env, ENGINE_TIMINGS.connectCapMs);
@@ -1066,7 +1064,6 @@ class Engine implements CallEngine {
   private dropPull(pull: Pull): void {
     this.pulls.delete(pull.key);
     this.layers.forget(pull.key);
-    if (pull.kind === "audio") this.reportedLevels.delete(pull.participantId);
     const waiter = this.waiters.get(pull.mid);
     if (waiter) {
       this.waiters.delete(pull.mid);
@@ -1279,7 +1276,6 @@ class Engine implements CallEngine {
     }
     this.waiters.clear();
     this.arrivals.clear();
-    this.reportedLevels.clear();
     this.speaker.reset();
     this.remoteStreams.clear();
     for (const sleep of this.sleeps) {
@@ -1416,31 +1412,23 @@ class Engine implements CallEngine {
     const raw = new Map<string, number>();
     for (const pull of this.pulls.values()) {
       if (pull.kind !== "audio" || !pull.transceiver) continue;
-      raw.set(pull.participantId, (await inboundAudioLevel(pull.transceiver.receiver).catch(() => null)) ?? 0);
+      let level: number | null = null;
+      try {
+        level = receiverAudioLevel(pull.transceiver.receiver);
+      } catch {
+        level = null;
+      }
+      raw.set(pull.participantId, level ?? 0);
     }
     const micPublication = this.pubs.get("audio");
     const localLevel = micPublication
       ? ((await mediaSourceAudioLevel(micPublication.transceiver.sender).catch(() => null)) ?? 0)
       : 0;
     if (gen !== this.gen) return;
-    // A muted participant cannot be the active speaker, but still sees their own level.
+    // A muted participant cannot be the active speaker. Levels stay internal: only the speaker is published.
     if (this.audioOn) raw.set(session.participantId, localLevel);
-    const { levels, active } = this.speaker.update(this.env.now(), raw);
-
-    let remotesChanged = false;
-    for (const [participantId, level] of levels) {
-      if (participantId === session.participantId) continue;
-      if (levelMoved(this.reportedLevels.get(participantId) ?? 0, level)) {
-        this.reportedLevels.set(participantId, quantise(level));
-        remotesChanged = true;
-      }
-    }
-    if (remotesChanged) this.refreshRemotes();
-    const local = levels.get(session.participantId) ?? localLevel;
-    this.set({
-      activeSpeaker: active,
-      ...(levelMoved(this.snap.localAudioLevel, local) ? { localAudioLevel: quantise(local) } : {}),
-    });
+    const { active } = this.speaker.update(this.env.now(), raw);
+    this.set({ activeSpeaker: active });
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -1753,16 +1741,22 @@ class Engine implements CallEngine {
     if (!pc || !session || this.snap.phase !== "connected") return;
     const camera = this.pubs.get("video") ?? null;
     const mic = this.pubs.get("audio") ?? null;
-    const cameraOut = camera ? await readStats(camera.transceiver.sender, readOutbound) : null;
-    const micOut = mic ? await readStats(mic.transceiver.sender, readOutbound) : null;
+    // One report for the whole connection, split by mid / track id, rather than one per transceiver.
+    const stats = await readStats(pc, readConnection);
+    if (gen !== this.gen || pc !== this.pc) return;
+    const outboundOf = (publication: LocalPublication | null): OutboundSample | null =>
+      publication && stats
+        ? sampleFor(stats.outbound, publication.transceiver.mid, publication.transceiver.sender.track)
+        : null;
+    const cameraOut = outboundOf(camera);
+    const micOut = outboundOf(mic);
     const inbound: { pull: Pull; sample: InboundSample }[] = [];
-    for (const pull of [...this.pulls.values()]) {
-      if (!pull.transceiver) continue;
-      const sample = await readStats(pull.transceiver.receiver, readInbound);
+    for (const pull of this.pulls.values()) {
+      if (!pull.transceiver || !stats) continue;
+      const sample = sampleFor(stats.inbound, pull.transceiver.mid, pull.transceiver.receiver.track);
       if (sample) inbound.push({ pull, sample });
     }
-    const transport = await readStats(pc, readTransport);
-    if (gen !== this.gen || pc !== this.pc) return;
+    const transport = stats?.transport ?? null;
     const now = this.env.now();
     const elapsed = this.lastQualityAt === null ? ENGINE_TIMINGS.qualitySampleMs : Math.max(0, now - this.lastQualityAt);
     this.lastQualityAt = now;
@@ -1937,9 +1931,9 @@ class Engine implements CallEngine {
   }
 
   /** Best effort: a failed report is logged and forgotten. */
-  private async postStats(callId: string, report: CallStatsReport): Promise<void> {
+  private async postStats(callId: string, report: CallStatsReport, keepalive = false): Promise<void> {
     try {
-      await this.api.postCallStats(callId, report);
+      await this.api.postCallStats(callId, report, keepalive ? { keepalive } : undefined);
     } catch (error) {
       this.log("stats-failed", { error: describeError(error) });
     }
@@ -1996,21 +1990,10 @@ function sameRemote(a: RemoteMedia, b: RemoteMedia): boolean {
     a.audio === b.audio &&
     a.video === b.video &&
     a.screen === b.screen &&
-    a.audioLevel === b.audioLevel &&
     a.videoRid === b.videoRid &&
     a.quality === b.quality &&
     a.videoPaused === b.videoPaused
   );
-}
-
-/** A level change worth a new snapshot: past the epsilon, or settling to silence. */
-function levelMoved(previous: number, next: number): boolean {
-  if (Math.abs(next - previous) > LEVEL_EPSILON) return true;
-  return next < 0.01 && previous !== 0;
-}
-
-function quantise(level: number): number {
-  return level < 0.01 ? 0 : Math.round(level * 100) / 100;
 }
 
 function apiStatus(error: unknown): number | null {
