@@ -6,6 +6,7 @@ import {
   type AnnounceTracksRequest,
   type Attachment,
   type CallResponse,
+  type CallStatsReport,
   type CloseTracksRequest,
   type CloseTracksResponse,
   type JoinCallResponse,
@@ -224,6 +225,8 @@ export function createHttpApi(): ChatApi {
       request<ReconnectCallResponse>("POST", apiPath("reconnectCall", { callId }), body),
     leaveCall: (callId: string, body: LeaveCallRequest) =>
       request<OkResponse>("POST", apiPath("leaveCall", { callId }), body),
+    postCallStats: (callId: string, body: CallStatsReport) =>
+      request<OkResponse>("POST", apiPath("postCallStats", { callId }), body),
   };
 }
 

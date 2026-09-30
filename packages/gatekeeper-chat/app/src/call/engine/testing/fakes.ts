@@ -453,6 +453,7 @@ export class FakeSignalling {
       ),
       setLayer: handler("setLayer", async () => ({ ok: true }) as never),
       leaveCall: handler("leaveCall", async () => ({ ok: true }) as never),
+      postCallStats: handler("postCallStats", async () => ({ ok: true }) as never),
     };
   }
 

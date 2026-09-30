@@ -123,6 +123,11 @@ when the frame moves or hides, z-index against top-bar dropdowns, uninterrupted 
 
 ## Stream G: quality phase 1 (after A–C are merged)
 
+Contract (lead, 2026-09-30): `CallStatsReport` + `MAX_CALL_STATS_PER_MINUTE` and the `postCallStats`
+route in the shared protocol; `ConnectionQuality`, `QualityLimitation`, and optional
+`quality`/`videoPaused` on `RemoteMedia` and `localQuality`/`limitation`/`audioOnly`/`sendLayers` on
+`CallSnapshot` in the engine types. Three parallel agents: G1 engine, G2 Worker stats route, G3 UI.
+
 See [chat-video.md, "Quality phase 1"](chat-video.md#quality-phase-1-after-the-initial-call-work-lands-this-branch).
 
 - [ ] Capture constraints (AEC/NS/AGC, `voiceIsolation`, 720p30 cap)

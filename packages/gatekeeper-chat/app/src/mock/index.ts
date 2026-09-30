@@ -827,6 +827,10 @@ function createMockApi(workspace: MockWorkspace): ChatApi {
       return { call, participantId: mine.id, sessionId: mine.sessionId, iceServers: [] };
     },
 
+    async postCallStats() {
+      return { ok: true } as const;
+    },
+
     async leaveCall(callId, request) {
       await delay(60);
       let call: CallState;

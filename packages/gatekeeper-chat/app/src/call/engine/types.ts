@@ -28,6 +28,7 @@ export type CallSignalling = Pick<
   | "setLayer"
   | "reconnectCall"
   | "leaveCall"
+  | "postCallStats"
 >;
 
 /** Where `call-beat` frames go: the app's existing socket. */
@@ -92,7 +93,23 @@ export interface RemoteMedia {
   readonly audioLevel: number;
   /** The layer currently requested for their camera. */
   readonly videoRid: CallSimulcastRid | null;
+  /**
+   * How well their media reaches us (loss, jitter, frame rate of what we receive). Optional so
+   * hand-built snapshots need not set it; absent reads as `unknown`. Quality phase 1.
+   */
+  readonly quality?: ConnectionQuality;
+  /** True while their video pull is paused (tile hidden, or audio-only mode). */
+  readonly videoPaused?: boolean;
 }
+
+/** Coarse connection quality for tile indicators (chat-video.md, "Quality phase 1"). */
+export type ConnectionQuality = "good" | "fair" | "poor" | "unknown";
+
+/**
+ * Why the local encoder is holding back, from `outbound-rtp.qualityLimitationReason`, sustained.
+ * `cpu` and `bandwidth` make the engine shed simulcast layers.
+ */
+export type QualityLimitation = "none" | "cpu" | "bandwidth";
 
 export interface CallSnapshot {
   readonly phase: CallPhase;
@@ -119,6 +136,17 @@ export interface CallSnapshot {
    * the system default. Optional so hand-built snapshots (mock engine) need not set it.
    */
   readonly audioOutputId?: string | null;
+  /** Our own uplink quality (RTT, remote-reported loss, qualityLimitation). Quality phase 1. */
+  readonly localQuality?: ConnectionQuality;
+  /** Sustained encoder limitation, for the "your connection is unstable" / CPU banner. */
+  readonly limitation?: QualityLimitation;
+  /**
+   * True while the engine has paused every remote video because our downlink cannot carry it; audio
+   * continues. The UI shows a banner; the engine restores video when it clears.
+   */
+  readonly audioOnly?: boolean;
+  /** How many simulcast layers we currently send for the camera (3 = all; fewer under CPU limits). */
+  readonly sendLayers?: number;
 }
 
 /**

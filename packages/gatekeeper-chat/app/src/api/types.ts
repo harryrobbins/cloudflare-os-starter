@@ -117,6 +117,7 @@ export interface ChatApi {
   setLayer(callId: string, request: import("../contract.js").SetLayerRequest): Promise<import("../contract.js").OkResponse>;
   reconnectCall(callId: string, request: import("../contract.js").ReconnectCallRequest): Promise<import("../contract.js").ReconnectCallResponse>;
   leaveCall(callId: string, request: import("../contract.js").LeaveCallRequest): Promise<import("../contract.js").OkResponse>;
+  postCallStats(callId: string, report: import("../contract.js").CallStatsReport): Promise<import("../contract.js").OkResponse>;
 }
 
 export type SocketStatus = "idle" | "connecting" | "open" | "reconnecting" | "closed";

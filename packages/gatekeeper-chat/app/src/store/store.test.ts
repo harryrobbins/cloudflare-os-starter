@@ -247,6 +247,7 @@ function harness(): Harness {
     setLayer: unavailable,
     reconnectCall: unavailable,
     leaveCall: unavailable,
+    postCallStats: unavailable,
   };
 
   state.api = api;

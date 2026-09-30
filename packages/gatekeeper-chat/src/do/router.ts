@@ -312,6 +312,10 @@ export async function route(
     case "closeTracks":
     case "setLayer":
     case "reconnectCall":
+    // Placeholder until quality phase 1 lands the stats route (chat-video-implementation.md, Stream G).
+    case "postCallStats":
+      return errorResponse("unavailable", "Call stats are not accepted yet.");
+
     case "leaveCall": {
       if (!callFeature(ctx).enabled) return errorResponse("unavailable", "Calls are not available on this deployment.");
       return callRoute(ctx, user, name, params, await readJson(request));

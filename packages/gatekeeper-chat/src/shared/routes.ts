@@ -98,6 +98,8 @@ export const API_ROUTES = {
   setLayer: { method: "POST", path: "/calls/:callId/layer" },
   reconnectCall: { method: "POST", path: "/calls/:callId/reconnect" },
   leaveCall: { method: "POST", path: "/calls/:callId/leave" },
+  /** Quality phase 1: a participant's call-quality summary (`CallStatsReport`). */
+  postCallStats: { method: "POST", path: "/calls/:callId/stats" },
 } as const satisfies Record<string, RouteDef>;
 
 export type ApiRouteName = keyof typeof API_ROUTES;

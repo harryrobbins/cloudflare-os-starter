@@ -1104,3 +1104,38 @@ export type ReconnectCallResponse = JoinCallResponse;
 export interface LeaveCallRequest {
   readonly participantId: ParticipantId;
 }
+
+/**
+ * `POST /api/calls/:callId/stats` -- a participant's call-quality summary, sent every 60 s and on
+ * leave (chat-video.md, "Quality phase 1"). Aggregates only: no SDP, no candidate addresses, no
+ * device labels. The Worker logs it (redacted) and keeps nothing else. Answers `OkResponse`.
+ */
+export interface CallStatsReport {
+  readonly participantId: ParticipantId;
+  /** True for the last report of this participant (sent on leave). */
+  readonly final: boolean;
+  /** Milliseconds covered by this report (since the previous one, or since joining). */
+  readonly intervalMs: number;
+  /** Milliseconds since joining. */
+  readonly durationMs: number;
+  readonly rttMs: { readonly avg: number | null; readonly max: number | null };
+  /** Percent of packets lost, 0..100. `send` is what the SFU reports about our uplink. */
+  readonly lossPercent: { readonly send: number | null; readonly receive: number | null };
+  readonly jitterMs: number | null;
+  readonly framesDecoded: number;
+  readonly framesDropped: number;
+  /** Milliseconds the camera encoder spent limited, from `qualityLimitationDurations`. */
+  readonly limitedMs: { readonly cpu: number; readonly bandwidth: number };
+  /** Milliseconds spent in audio-only mode. */
+  readonly audioOnlyMs: number;
+  /** The selected candidate pair goes through TURN. */
+  readonly relayed: boolean | null;
+  /** e.g. "opus", "red", "VP8", "H264". Codec names only. */
+  readonly audioCodec: string | null;
+  readonly videoCodec: string | null;
+  /** How many times the connection was rebuilt. */
+  readonly reconnects: number;
+}
+
+/** Stats reports per participant per minute the Worker accepts; more are dropped with 429. */
+export const MAX_CALL_STATS_PER_MINUTE = 4;
