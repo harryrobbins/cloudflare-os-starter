@@ -15,10 +15,10 @@
 // a presence transform on the connector, so collaborators see a ghost; release commits ONE update
 // (one undo step). Escape or a lost pointer restores the committed route.
 
-import { anchor } from "../../../shared/geometry.js";
+import { anchor, outlineAnchor } from "../../../shared/geometry.js";
 import {
   routeHandles, moveElbowSegment, curveFromHandle, curveCubic, elbowPorts, segmentChain, axisNormal,
-  hasRouteEdits,
+  hasRouteEdits, endAnchor,
 } from "../../../shared/connectors.js";
 import { cubicPoint } from "../../../shared/bezier.js";
 import { snapMove } from "../../model/alignment.js";
@@ -96,7 +96,8 @@ export function routeHandleRadius(pointerType) {
 }
 
 /**
- * The side of `o` whose anchor (the middle of the side) is within `radius` world units of `p`,
+ * The side of `o` whose anchor (the middle of the side, or where a shaped outline crosses the line
+ * to it: outlineAnchor) is within `radius` world units of `p`,
  * or null (the side then stays automatic).
  * @param {{x: number, y: number, w: number, h: number, rot?: number}} o @param {{x: number, y: number}} p @param {number} radius
  * @returns {"top"|"right"|"bottom"|"left"|null}
@@ -104,7 +105,7 @@ export function routeHandleRadius(pointerType) {
 export function sideNear(o, p, radius) {
   let best = null, bestD = Infinity;
   for (const side of /** @type {const} */ (["top", "right", "bottom", "left"])) {
-    const a = anchor(o, side).point;
+    const a = outlineAnchor(o, side);
     const d = Math.hypot(a.x - p.x, a.y - p.y);
     if (d <= radius && d < bestD) { best = side; bestD = d; }
   }
@@ -120,7 +121,7 @@ export function sideNear(o, p, radius) {
  */
 export function editForHandle(conn, from, to, route, hd, p) {
   if (hd.kind === "curve" && route.cubic) {
-    const a = anchor(from, route.fromSide), b = anchor(to, route.toSide);
+    const a = endAnchor(from, route.fromSide), b = endAnchor(to, route.toSide);
     // Back on the default curve's midpoint (within half a unit): no edit.
     const plain = cubicPoint(curveCubic(a, b, null), 0.5);
     if (Math.hypot(plain.x - p.x, plain.y - p.y) < 0.5) return { curve: null };

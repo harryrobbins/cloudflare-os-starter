@@ -6,10 +6,12 @@
 // store call followed by clearing that presence and flushing it. cancel() restores everything.
 
 import {
-  center, strokePathD, normalizeStroke, connectorRoute, anchor, facingSide, rotatedBounds, unionRects,
+  center, strokePathD, normalizeStroke, connectorRoute, outlineAnchor, facingSide, rotatedBounds, unionRects,
+  pointInObjectBox,
 } from "../../../shared/geometry.js";
 import { simplifyStroke } from "../../../shared/simplify.js";
-import { LIMITS, TYPE_DEFAULTS } from "../../../shared/protocol.js";
+import { LIMITS, TYPE_DEFAULTS, newId } from "../../../shared/protocol.js";
+import { shapeOutline, cmdsToPath, shapeSize } from "../../../shared/shapes.js";
 import { panBy, clampZoom, screenToWorld } from "./camera.js";
 import {
   expandMoveIds, moveUpdates, objectsInRect, rectFromPoints, frameAtPoint, withFrameMembership,
@@ -78,6 +80,7 @@ import { routePathD } from "../../../shared/connectors.js";
  * @property {(message: string) => void} [announce]
  * @property {import("../../../shared/connectors.js").RouteEnv} [routeEnv]  obstacles for elbow routes
  * @property {Map<string, import("./route-edit.js").RouteEditFields>} [routeOverrides]  route edits in progress
+ * @property {() => string} [shape]  the shape the rectangle tool draws (src/shared/shapes.js)
  */
 /** @typedef {import("../../model/alignment.js").Guide} Guide */
 /** @typedef {import("../../model/alignment.js").SnapOptions} SnapOptions */
@@ -418,16 +421,19 @@ export function marqueeGesture(ctx, p) {
 }
 
 /**
- * Sticky, rect, ellipse, text or frame: click for the default size, drag for a box.
+ * Sticky, rect (in the current shape), ellipse, text or frame: click for the default size, drag
+ * for a box.
  * @param {GestureContext} ctx @param {PointerSample} p @param {ObjectType} type
  * @returns {Gesture}
  */
 export function createGesture(ctx, p, type) {
   let started = false;
   let last = p;
+  const shape = type === "rect" ? ctx.shape?.() ?? "rect" : null;
+  const size = shape ? shapeSize(shape) : TYPE_DEFAULTS[type];
   /** @type {SVGElement|null} */
-  let shape = null;
-  const clear = () => { shape?.remove(); shape = null; };
+  let preview = null;
+  const clear = () => { preview?.remove(); preview = null; };
   return {
     kind: "creating",
     move(q) {
@@ -438,26 +444,20 @@ export function createGesture(ctx, p, type) {
     },
     frame() {
       if (!started) return;
-      const b = creationBox(type, p, last, 0, last.shift);
-      if (!shape) {
-        shape = svgEl(type === "ellipse" ? "ellipse" : "rect", { class: "wb-preview-shape" });
-        ctx.preview.appendChild(shape);
+      const b = creationBox(type, p, last, 0, last.shift, size);
+      if (!preview) {
+        preview = previewShape(type, shape);
+        ctx.preview.appendChild(preview);
       }
-      if (type === "ellipse") {
-        shape.setAttribute("cx", String(b.x + b.w / 2)); shape.setAttribute("cy", String(b.y + b.h / 2));
-        shape.setAttribute("rx", String(b.w / 2)); shape.setAttribute("ry", String(b.h / 2));
-      } else {
-        shape.setAttribute("x", String(b.x)); shape.setAttribute("y", String(b.y));
-        shape.setAttribute("width", String(b.w)); shape.setAttribute("height", String(b.h));
-      }
+      placePreview(preview, type, shape, b);
     },
     up(q) {
       clear();
       const zoom = ctx.camera().zoom;
-      const b = started ? creationBox(type, p, q, 4 / zoom, q.shift) : creationBox(type, p, p, Infinity);
+      const b = started ? creationBox(type, p, q, 4 / zoom, q.shift, size) : creationBox(type, p, p, Infinity, false, size);
       /** @type {Partial<WhiteboardObject> & {type: ObjectType}} */
       const obj = { type, x: b.x, y: b.y, w: b.w, h: b.h };
-      const style = ctx.toolStyle(type);
+      const style = { ...ctx.toolStyle(type), ...(shape && shape !== "rect" ? { shape } : {}) };
       if (Object.keys(style).length) obj.style = /** @type {Style} */ (style);
       if (type !== "frame") obj.frameId = frameAtPoint(ctx.objects(), center(b));
       const [id] = ctx.store.createObjects([obj]);
@@ -466,6 +466,57 @@ export function createGesture(ctx, p, type) {
     cancel: clear,
   };
 }
+
+/**
+ * A preview element for creating `type` (a rectangle in `shape`).
+ * @param {string} type @param {string|null} shape
+ */
+function previewShape(type, shape) {
+  return svgEl(type === "ellipse" ? "ellipse" : shape && shape !== "rect" ? "path" : "rect", { class: "wb-preview-shape" });
+}
+
+/**
+ * Places a preview element from previewShape over box `b`.
+ * @param {SVGElement} el @param {string} type @param {string|null} shape @param {Rect} b
+ */
+function placePreview(el, type, shape, b) {
+  if (type === "ellipse") {
+    el.setAttribute("cx", String(b.x + b.w / 2)); el.setAttribute("cy", String(b.y + b.h / 2));
+    el.setAttribute("rx", String(b.w / 2)); el.setAttribute("ry", String(b.h / 2));
+  } else if (shape && shape !== "rect") {
+    el.setAttribute("d", cmdsToPath(shapeOutline(shape, b.w, b.h).cmds, b.x, b.y));
+  } else {
+    el.setAttribute("x", String(b.x)); el.setAttribute("y", String(b.y));
+    el.setAttribute("width", String(b.w)); el.setAttribute("height", String(b.h));
+  }
+}
+
+/** Object types a connector dragged to empty canvas copies; anything else gets a rectangle. */
+const COPYABLE = new Set(["sticky", "rect", "ellipse", "icon"]);
+
+/**
+ * The object a connector dropped on empty canvas creates: a copy of the source's type, size and
+ * style (no text), centred on `at`; a default rectangle for sources that do not copy well (text,
+ * frames, code, drawings).
+ * @param {WhiteboardObject} source @param {{x: number, y: number}} at
+ * @returns {Partial<WhiteboardObject> & {type: ObjectType}}
+ */
+export function connectedCopy(source, at) {
+  if (!COPYABLE.has(source.type)) {
+    const d = TYPE_DEFAULTS.rect;
+    return { type: "rect", x: round2(at.x - d.w / 2), y: round2(at.y - d.h / 2), w: d.w, h: d.h };
+  }
+  /** @type {Partial<WhiteboardObject> & {type: ObjectType}} */
+  const obj = {
+    type: source.type, x: round2(at.x - source.w / 2), y: round2(at.y - source.h / 2), w: source.w, h: source.h,
+    style: { ...source.style },
+  };
+  if (source.type === "icon") { obj.packId = source.packId; obj.iconId = source.iconId; }
+  return obj;
+}
+
+/** Screen pixels a connector must be dropped beyond its source to create a connected copy. */
+export const CREATE_ON_EMPTY_PX = 24;
 
 /**
  * Free-hand pen stroke.
@@ -524,7 +575,9 @@ export function penGesture(ctx, p) {
 }
 
 /**
- * Drag from one object to another to connect them.
+ * Drag from one object to another to connect them. Dropping on empty canvas, clearly away from the
+ * source, creates a copy of the source there (see connectedCopy; a ghost shows where) and connects
+ * to it, in one request, so one undo removes both.
  * @param {GestureContext} ctx @param {PointerSample} p @param {WhiteboardObject} from
  * @param {{side?: "top"|"right"|"bottom"|"left", onTap?: () => void}} [options]
  * @returns {Gesture}
@@ -534,12 +587,27 @@ export function connectGesture(ctx, p, from, options = {}) {
   const dots = /** @type {SVGGElement} */ (svgEl("g", { class: "wb-side-dots" }));
   ctx.preview.appendChild(line);
   ctx.preview.appendChild(dots);
+  /** @type {SVGElement|null} */
+  let ghost = null;
+  let ghostKind = "";
   let last = p;
   // Starting on a side's anchor pins that side (see sideNear); elsewhere it stays automatic.
   const fromSide = options.side ?? pinnedSideAt(ctx, from, p);
   /** @param {PointerSample} q */
   const targetAt = (q) => objectAt(ctx, q, (o) => o.type !== "connector" && o.id !== from.id);
-  const clear = () => { line.remove(); dots.remove(); ctx.setOverlay({ hoverId: null }); };
+  /** Where a copy would go when dropping at q (null: too close to the source to be meant). @param {PointerSample} q */
+  const copyAt = (q) => {
+    const f = ctx.resolve(from.id);
+    if (!f || !beyondThreshold(p, q)) return null;
+    const zoom = ctx.camera().zoom;
+    const b = rotatedBounds(f);
+    const m = CREATE_ON_EMPTY_PX / zoom;
+    if (q.x > b.x - m && q.x < b.x + b.w + m && q.y > b.y - m && q.y < b.y + b.h + m) return null;
+    if (pointInObjectBox(f, q)) return null;
+    return connectedCopy(f, q);
+  };
+  const clearGhost = () => { ghost?.remove(); ghost = null; };
+  const clear = () => { line.remove(); dots.remove(); clearGhost(); ctx.setOverlay({ hoverId: null }); };
   return {
     kind: "connecting",
     move(q) { last = q; ctx.schedule("gesture"); },
@@ -550,28 +618,60 @@ export function connectGesture(ctx, p, from, options = {}) {
       ctx.setOverlay({ hoverId: target?.id ?? null });
       const toSide = target ? pinnedSideAt(ctx, target, last) : null;
       sideDots(ctx, dots, target ?? null, toSide);
+      const copy = target ? null : copyAt(last);
+      if (copy && copy.w !== undefined && copy.h !== undefined) {
+        const box = /** @type {Rect} */ ({ x: copy.x, y: copy.y, w: copy.w, h: copy.h });
+        const shape = copy.type === "rect" ? copy.style?.shape ?? "rect" : null;
+        const kind = copy.type === "ellipse" ? "ellipse" : "rect";
+        if (!ghost || ghostKind !== `${kind}:${shape}`) {
+          clearGhost();
+          ghost = previewShape(kind, shape);
+          ghostKind = `${kind}:${shape}`;
+          ghost.classList.add("wb-preview-ghost");
+          ctx.preview.appendChild(ghost);
+        }
+        placePreview(ghost, kind, shape, box);
+        const ghostObj = /** @type {any} */ ({ ...copy, rot: 0, style: copy.style ?? {} });
+        line.setAttribute("d", routePathD(connectorRoute({ fromSide: fromSide ?? "auto", toSide: "auto" }, f, ghostObj, ctx.routeEnv)));
+        return;
+      }
+      clearGhost();
       if (target) {
         line.setAttribute("d", routePathD(connectorRoute({ fromSide: fromSide ?? "auto", toSide: toSide ?? "auto" }, f, target, ctx.routeEnv)));
       } else {
-        const pts = [anchor(f, fromSide ?? facingSide(f, last)).point, { x: last.x, y: last.y }];
+        const pts = [outlineAnchor(f, fromSide ?? facingSide(f, last)), { x: last.x, y: last.y }];
         line.setAttribute("d", pts.map((pt, i) => `${i ? "L" : "M"}${round2(pt.x)} ${round2(pt.y)}`).join(""));
       }
     },
     up(q) {
       const target = targetAt(q);
       const toSide = target ? pinnedSideAt(ctx, target, q) : null;
+      const copy = target ? null : copyAt(q);
       clear();
       if (!ctx.objects()[from.id]) return;
       if (options.onTap && Math.hypot(q.sx - p.sx, q.sy - p.sy) < 5) { options.onTap(); return; }
-      if (!target) return;
+      if (!target && !copy) return;
+      /** @type {Array<Partial<WhiteboardObject> & {type: ObjectType}>} */
+      const create = [];
+      let toId = target?.id;
+      if (copy) {
+        toId = newId("object");
+        create.push({ ...copy, id: toId, ...(copy.type !== "frame" ? { frameId: frameAtPoint(ctx.objects(), q) } : {}) });
+      }
       /** @type {Partial<WhiteboardObject> & {type: ObjectType}} */
-      const obj = { type: "connector", from: from.id, to: target.id };
+      const obj = { type: "connector", from: from.id, to: toId };
       if (fromSide) obj.fromSide = fromSide;
       if (toSide) obj.toSide = toSide;
       const style = ctx.toolStyle("connector");
       if (Object.keys(style).length) obj.style = /** @type {Style} */ (style);
-      const [id] = ctx.store.createObjects([obj]);
-      ctx.finishCreate(id, "connector");
+      create.push(obj);
+      const ids = ctx.store.createObjects(create);
+      if (copy) {
+        if (ids[0] === toId) {
+          ctx.finishCreate(toId, /** @type {ObjectType} */ (copy.type));
+          ctx.announce?.("Added a connected copy");
+        }
+      } else ctx.finishCreate(ids[0], "connector");
     },
     cancel: clear,
   };
@@ -634,7 +734,7 @@ export function endpointGesture(ctx, p, connId, end) {
         const route = end === "from" ? connectorRoute(c, target, other, ctx.routeEnv) : connectorRoute(c, other, target, ctx.routeEnv);
         line.setAttribute("d", routePathD(route));
       } else {
-        const fixed = anchor(other, facingSide(other, last)).point;
+        const fixed = outlineAnchor(other, facingSide(other, last));
         const pts = end === "from" ? [{ x: last.x, y: last.y }, fixed] : [fixed, { x: last.x, y: last.y }];
         line.setAttribute("d", pts.map((pt, i) => `${i ? "L" : "M"}${round2(pt.x)} ${round2(pt.y)}`).join(""));
       }
@@ -685,7 +785,7 @@ function sideDots(ctx, group, target, pinned) {
   const g = ctx.resolve(target.id) ?? target;
   const r = 4 / ctx.camera().zoom;
   for (const side of /** @type {const} */ (["top", "right", "bottom", "left"])) {
-    const a = anchor(g, side).point;
+    const a = outlineAnchor(g, side);
     group.appendChild(svgEl("circle", {
       class: "wb-side-dot" + (side === pinned ? " wb-side-dot-active" : ""), "data-side": side,
       cx: round2(a.x), cy: round2(a.y), r: round2(side === pinned ? r * 1.6 : r),

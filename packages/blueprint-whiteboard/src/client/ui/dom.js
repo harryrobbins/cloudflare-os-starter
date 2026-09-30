@@ -94,6 +94,7 @@ const ICON_PATHS = {
   routeReset: "M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5M9 15l6-6",
   arrowStart: "M19 12H5M10 7l-5 5 5 5",
   arrowEnd: "M5 12h14M14 7l5 5-5 5",
+  swap: "M4 8h14l-3-3M20 16H6l3 3",
   rotateCw: "M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5",
   rotateCcw: "M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5",
 };

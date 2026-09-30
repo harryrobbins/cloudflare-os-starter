@@ -10,6 +10,7 @@
 //                       cascaded to, endpoints first
 
 import { deepEqual } from "./equal.js";
+import { STYLE_FALLBACKS } from "../../shared/protocol.js";
 
 /** @typedef {import("../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("../../shared/protocol.js").ObjectPatch} ObjectPatch */
@@ -41,7 +42,9 @@ export function effectivePatch(obj, patch) {
     if (key === "style") {
       /** @type {Record<string, any>} */
       const style = {};
-      for (const [k, v] of Object.entries(value)) if (!deepEqual(obj.style?.[/** @type {keyof typeof obj.style} */ (k)], v)) style[k] = v;
+      for (const [k, v] of Object.entries(value)) {
+        if (!deepEqual(obj.style?.[/** @type {keyof typeof obj.style} */ (k)] ?? /** @type {any} */ (STYLE_FALLBACKS)[k], v)) style[k] = v;
+      }
       if (Object.keys(style).length) out.style = style;
       continue;
     }
@@ -64,7 +67,8 @@ export function previousValues(obj, patch) {
     if (key === "style") {
       /** @type {Record<string, any>} */
       const style = {};
-      for (const k of Object.keys(/** @type {any} */ (patch).style)) style[k] = /** @type {any} */ (obj.style)[k];
+      // Style keys older objects lack read as their fallbacks, so undo restores them.
+      for (const k of Object.keys(/** @type {any} */ (patch).style)) style[k] = /** @type {any} */ (obj.style)[k] ?? /** @type {any} */ (STYLE_FALLBACKS)[k];
       out.style = style;
     } else {
       // Fields older objects lack read as their defaults, so undo restores "no edits".

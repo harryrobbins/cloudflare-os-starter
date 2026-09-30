@@ -377,10 +377,11 @@ export function buildDuplicates(objects, ids, newId, offset = DUPLICATE_OFFSET) 
  * gives the type's default size centred on the start point.
  * @param {ObjectType} type @param {Point} start @param {Point} end @param {number} minDrag
  * @param {boolean} [square]  shift held: keep the default aspect ratio
+ * @param {{w: number, h: number}} [size]  the default size (a shape's own, see shapeSize)
  * @returns {Rect}
  */
-export function creationBox(type, start, end, minDrag, square = false) {
-  const d = TYPE_DEFAULTS[type];
+export function creationBox(type, start, end, minDrag, square = false, size = TYPE_DEFAULTS[type]) {
+  const d = { ...TYPE_DEFAULTS[type], w: size.w, h: size.h };
   let r = rectFromPoints(start, end);
   if (r.w < minDrag && r.h < minDrag) {
     return { x: round2(start.x - d.w / 2), y: round2(start.y - d.h / 2), w: d.w, h: d.h };

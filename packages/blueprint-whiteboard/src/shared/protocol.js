@@ -11,6 +11,7 @@
 import { isValidOrderKey } from "./order.js";
 import { resolveLanguage } from "./code/languages.js";
 import { truncateText } from "./graphemes.js";
+import { isShape } from "./shapes.js";
 
 // ---------------------------------------------------------------------------------------------
 // Data model
@@ -33,8 +34,19 @@ import { truncateText } from "./graphemes.js";
  * @property {string} textColor    "#rrggbb"
  * @property {number} fontSize     LIMITS.fontSizeMin..LIMITS.fontSizeMax, world units
  * @property {"left"|"center"|"right"} align
- * @property {"none"|"arrow"} arrowStart  connectors only; "none" elsewhere
- * @property {"none"|"arrow"} arrowEnd    connectors only; "none" elsewhere
+ * @property {Arrowhead} arrowStart  connectors only; "none" elsewhere
+ * @property {Arrowhead} arrowEnd    connectors only; "none" elsewhere
+ * @property {string} [shape]  rect only: the outline, an id from src/shared/shapes.js SHAPES
+ *   ("rect", "diamond", "cylinder", ...). Absent on other types and on older rectangles (reads as "rect").
+ * @property {"solid"|"dashed"|"dotted"} [dash]  DASH_TYPES only: the line pattern. Absent on other
+ *   types and on older objects (reads as "solid").
+ */
+
+/**
+ * Connector end markers: a filled arrow, an open (line) arrow, a hollow triangle (UML
+ * inheritance), filled and hollow diamonds (composition, aggregation), a dot, a bar and a crow's
+ * foot (entity-relationship "many").
+ * @typedef {"none"|"arrow"|"open"|"triangle"|"diamond"|"diamondOpen"|"circle"|"bar"|"crow"} Arrowhead
  */
 
 /**
@@ -412,6 +424,12 @@ export const OBJECT_TYPES = /** @type {const} */ (["sticky", "rect", "ellipse", 
 /** Types that rotate; every other type has rot 0. */
 export const ROTATABLE = /** @type {const} */ (["sticky", "rect", "ellipse", "text", "icon"]);
 export const SIDES = /** @type {const} */ (["auto", "top", "right", "bottom", "left"]);
+/** Connector end markers (see Arrowhead). */
+export const ARROWHEADS = /** @type {const} */ (["none", "arrow", "open", "triangle", "diamond", "diamondOpen", "circle", "bar", "crow"]);
+/** Line patterns (style.dash). */
+export const DASHES = /** @type {const} */ (["solid", "dashed", "dotted"]);
+/** Types whose outline or line takes style.dash. */
+export const DASH_TYPES = Object.freeze(new Set(["rect", "ellipse", "frame", "pen", "connector"]));
 export const BACKGROUNDS = /** @type {const} */ (["dots", "grid", "plain"]);
 
 /**
@@ -449,12 +467,12 @@ export const INK = Object.freeze(["#1f2937", "#6b7280", "#dc2626", "#ea580c", "#
  */
 export const TYPE_DEFAULTS = Object.freeze({
   sticky: { w: 200, h: 200, text: "", style: style({ fill: COLORS.yellow, stroke: "none", strokeWidth: 0, fontSize: 20, align: "center" }) },
-  rect: { w: 200, h: 120, text: "", style: style({ fill: "#ffffff", stroke: "#1f2937", strokeWidth: 2, fontSize: 18, align: "center" }) },
-  ellipse: { w: 200, h: 120, text: "", style: style({ fill: "#ffffff", stroke: "#1f2937", strokeWidth: 2, fontSize: 18, align: "center" }) },
+  rect: { w: 200, h: 120, text: "", style: style({ fill: "#ffffff", stroke: "#1f2937", strokeWidth: 2, fontSize: 18, align: "center", shape: "rect", dash: "solid" }) },
+  ellipse: { w: 200, h: 120, text: "", style: style({ fill: "#ffffff", stroke: "#1f2937", strokeWidth: 2, fontSize: 18, align: "center", dash: "solid" }) },
   text: { w: 240, h: 40, text: "", style: style({ fill: "none", stroke: "none", strokeWidth: 0, fontSize: 24, align: "left" }) },
-  frame: { w: 800, h: 600, text: "Frame", style: style({ fill: "#ffffff", stroke: "#9ca3af", strokeWidth: 1, fontSize: 16, align: "left" }) },
-  pen: { w: 1, h: 1, text: "", style: style({ fill: "none", stroke: "#1f2937", strokeWidth: 4, fontSize: 16, align: "left" }) },
-  connector: { w: 1, h: 1, text: "", routing: "straight", style: style({ fill: "none", stroke: "#1f2937", strokeWidth: 2, fontSize: 14, align: "center", arrowEnd: "arrow" }) },
+  frame: { w: 800, h: 600, text: "Frame", style: style({ fill: "#ffffff", stroke: "#9ca3af", strokeWidth: 1, fontSize: 16, align: "left", dash: "solid" }) },
+  pen: { w: 1, h: 1, text: "", style: style({ fill: "none", stroke: "#1f2937", strokeWidth: 4, fontSize: 16, align: "left", dash: "solid" }) },
+  connector: { w: 1, h: 1, text: "", routing: "straight", style: style({ fill: "none", stroke: "#1f2937", strokeWidth: 2, fontSize: 14, align: "center", arrowEnd: "arrow", dash: "solid" }) },
   // A glyph's defaults; the board applies each icon's own size and style (registry iconDefaults).
   icon: { w: 96, h: 96, text: "", style: style({ fill: "none", stroke: "#1f2937", strokeWidth: 2, fontSize: 18, align: "center" }) },
   // Colours come from the code theme (src/shared/code/theme.js); only fontSize is used.
@@ -625,6 +643,28 @@ export function isAcceptableOrderKey(value) {
   return isOrderKey(value) && value.length <= LIMITS.orderKeyAccept && value[0] >= "B" && value[0] <= "y";
 }
 
+/** @param {unknown} v @returns {v is Arrowhead} */
+export function isArrowhead(v) {
+  return typeof v === "string" && /** @type {readonly string[]} */ (ARROWHEADS).includes(v);
+}
+
+/**
+ * Style keys added after launch, with the value an object that lacks them reads as. Undo and
+ * conflict rebase use these, so changing one on an older object can be undone.
+ */
+export const STYLE_FALLBACKS = Object.freeze({ shape: "rect", dash: "solid" });
+
+/**
+ * `style` with the STYLE_FALLBACKS its type takes filled in where missing.
+ * @param {ObjectType} type @param {Partial<Style>} style @returns {Partial<Style>}
+ */
+export function withStyleFallbacks(type, style) {
+  const out = { ...style };
+  if (type === "rect" && out.shape === undefined) out.shape = STYLE_FALLBACKS.shape;
+  if (DASH_TYPES.has(type) && out.dash === undefined) out.dash = /** @type {Style["dash"]} */ (STYLE_FALLBACKS.dash);
+  return out;
+}
+
 /** @param {unknown} v @returns {v is ObjectType} */
 export function isObjectType(v) {
   return typeof v === "string" && /** @type {readonly string[]} */ (OBJECT_TYPES).includes(v);
@@ -632,7 +672,7 @@ export function isObjectType(v) {
 
 /**
  * Cleans a partial style. Unknown keys and invalid values are dropped; arrow keys only survive for
- * connectors.
+ * connectors, `shape` for rectangles and `dash` for DASH_TYPES.
  * @param {unknown} raw
  * @param {ObjectType} type
  * @returns {Partial<Style>}
@@ -654,8 +694,12 @@ export function cleanStylePatch(raw, type) {
   if (fontSize !== null) out.fontSize = fontSize;
   if (s.align === "left" || s.align === "center" || s.align === "right") out.align = s.align;
   if (type === "connector") {
-    if (s.arrowStart === "none" || s.arrowStart === "arrow") out.arrowStart = s.arrowStart;
-    if (s.arrowEnd === "none" || s.arrowEnd === "arrow") out.arrowEnd = s.arrowEnd;
+    if (isArrowhead(s.arrowStart)) out.arrowStart = s.arrowStart;
+    if (isArrowhead(s.arrowEnd)) out.arrowEnd = s.arrowEnd;
+  }
+  if (type === "rect" && isShape(s.shape)) out.shape = s.shape;
+  if (DASH_TYPES.has(type) && typeof s.dash === "string" && /** @type {readonly string[]} */ (DASHES).includes(s.dash)) {
+    out.dash = /** @type {Style["dash"]} */ (s.dash);
   }
   return out;
 }

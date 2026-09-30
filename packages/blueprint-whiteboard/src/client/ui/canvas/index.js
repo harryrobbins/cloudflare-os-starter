@@ -24,7 +24,8 @@
 // menu beside rather than on top of.
 
 import { TYPE_DEFAULTS, sortedObjects, newId } from "../../../shared/protocol.js";
-import { center, corners, boardBounds, unionRects, textWidth, textObjectHeight } from "../../../shared/geometry.js";
+import { center, corners, boardBounds, unionRects, textWidth, textObjectHeight, outlineAnchor } from "../../../shared/geometry.js";
+import { isShape, shapeSize, shapeLabel, shapeOf } from "../../../shared/shapes.js";
 import {
   cleanCamera, screenToWorld, worldToScreen, zoomAt, panBy, viewportOf, cameraTransform,
   fitRect, centerOn, revealRect, lerpCamera, easeOutCubic, gridSpacing, wheelPixels, wheelZoomFactor,
@@ -158,6 +159,10 @@ export function createCanvas(store, options = {}) {
   /** @type {Tool} */
   let tool = "select";
   let toolLocked = false;
+  /** The outline the rectangle tool draws (src/shared/shapes.js). */
+  let shapeKind = "rect";
+  /** With the connector tool: the object under the mouse, whose connection points show. @type {string|null} */
+  let connectHoverId = null;
   /** @type {string[]} */
   let selection = [];
   /** @type {string|null} */
@@ -520,6 +525,15 @@ export function createCanvas(store, options = {}) {
         children.push(svgEl("rect", { class: "wb-group-box", x: r1(a.x - 4), y: r1(a.y - 4), width: r1(b.x - a.x + 8), height: r1(b.y - a.y + 8) }));
       }
     }
+    if (connectHoverId && tool === "connector" && !gesture) {
+      const o = resolve(connectHoverId);
+      if (o) {
+        for (const side of /** @type {const} */ (["top", "right", "bottom", "left"])) {
+          const a = worldToScreen(camera, outlineAnchor(o, side));
+          children.push(svgEl("circle", { class: "wb-side-dot wb-connect-point", "data-side": side, cx: r1(a.x), cy: r1(a.y), r: 4 }));
+        }
+      }
+    }
     if (overlay.marquee) {
       const m = overlay.marquee;
       const a = worldToScreen(camera, m), b = worldToScreen(camera, { x: m.x + m.w, y: m.y + m.h });
@@ -552,6 +566,11 @@ export function createCanvas(store, options = {}) {
   }
 
   function updateHoverCursor() {
+    // The connector tool shows where lines attach on the object under the mouse.
+    const connectHover = tool === "connector" && hoverPoint && !gesture && !spaceDown
+      ? hitAt(screenToWorld(camera, { x: hoverPoint.sx, y: hoverPoint.sy }), (o) => o.type !== "connector")?.id ?? null
+      : null;
+    if (connectHover !== connectHoverId) { connectHoverId = connectHover; schedule("overlay"); }
     if (!hoverPoint || gesture || tool !== "select" || spaceDown) {
       if (element.style.cursor) element.style.cursor = "";
       return;
@@ -715,6 +734,7 @@ export function createCanvas(store, options = {}) {
     if (gesture) cancelGesture();
     tool = next;
     toolLocked = !!locked;
+    if (connectHoverId) { connectHoverId = null; schedule("overlay"); }
     element.dataset.tool = tool;
     if (changed) emit({ kind: "tool", tool, locked: toolLocked });
   }
@@ -735,6 +755,7 @@ export function createCanvas(store, options = {}) {
       if ("hoverId" in patch && patch.hoverId !== overlay.hoverId) { overlay.hoverId = patch.hoverId ?? null; schedule("selection"); schedule("cull"); }
     },
     toolStyle, finishCreate, editText,
+    shape: () => shapeKind,
     contextMenu: dispatchContextMenu,
     registerClick(id, p) {
       const prev = lastClick;
@@ -1400,6 +1421,12 @@ export function createCanvas(store, options = {}) {
     element,
     getTool: () => tool,
     setTool: (next, locked = false) => setToolInternal(next, locked),
+    getShape: () => shapeKind,
+    setShape(id) {
+      if (!isShape(id) || id === shapeKind) return;
+      shapeKind = id;
+      emit({ kind: "tool", tool, locked: toolLocked });
+    },
     getCamera: () => ({ ...camera }),
     setCamera(cam, animate = false) {
       if (!cameraReady) measure();
@@ -1420,11 +1447,12 @@ export function createCanvas(store, options = {}) {
     getViewport: () => viewportOf(camera, size.w || 1, size.h || 1),
     getSelection: () => [...selection],
     setSelection: (ids) => setSelectionInternal(Array.isArray(ids) ? ids : []),
-    addAtCenter(type) {
+    addAtCenter(type, opts = {}) {
       if (!Object.hasOwn(TYPE_DEFAULTS, type) || type === "pen" || type === "connector") return null;
       if (!cameraReady) measure();
       const c = screenToWorld(camera, { x: size.w / 2, y: size.h / 2 });
-      const d = TYPE_DEFAULTS[type];
+      const shape = type === "rect" && isShape(opts.shape) ? opts.shape : "rect";
+      const d = type === "rect" ? shapeSize(shape) : TYPE_DEFAULTS[type];
       // Nudge down-right while the spot is taken, so repeated adds do not stack exactly.
       let x = round2(c.x - d.w / 2), y = round2(c.y - d.h / 2);
       const taken = (/** @type {number} */ px, /** @type {number} */ py) =>
@@ -1432,7 +1460,7 @@ export function createCanvas(store, options = {}) {
       for (let i = 0; i < 20 && taken(x, y); i++) { x += 20; y += 20; }
       /** @type {Partial<WhiteboardObject> & {type: ObjectType}} */
       const obj = { type, x, y, w: d.w, h: d.h };
-      const style = toolStyle(type);
+      const style = { ...toolStyle(type), ...(shape !== "rect" ? { shape } : {}) };
       if (Object.keys(style).length) obj.style = /** @type {Style} */ (style);
       if (type !== "frame") obj.frameId = frameAtPoint(objects(), center({ x, y, w: d.w, h: d.h }));
       const [id] = store.createObjects([obj]);
@@ -1657,6 +1685,7 @@ function describe(o) {
     const icon = getIcon(o.packId, o.iconId);
     return `${icon ? icon.label.toLowerCase() + (icon.kind === "stencil" ? " shape" : " icon") : "icon"}${label}`;
   }
+  if (o.type === "rect" && shapeOf(o) !== "rect") return `${shapeLabel(/** @type {string} */ (shapeOf(o))).toLowerCase()}${label}`;
   return `${names[o.type] ?? o.type}${label}`;
 }
 

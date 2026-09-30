@@ -40,7 +40,7 @@ import {
   BACKGROUNDS, COLORS, DEFAULT_TITLE, LIMITS as DEFAULT_LIMITS, SCHEMA_VERSION, TYPE_DEFAULTS,
   cleanColor, cleanCoord, cleanLine, cleanName, cleanNumber, cleanObjectPatch, cleanSize, compareObjects,
   isAcceptableOrderKey, isId, isObject, isObjectType, isRequestId, newId as protocolNewId, normalizeNewObject,
-  storedBytes,
+  storedBytes, withStyleFallbacks, isArrowhead, DASHES, DASH_TYPES,
 } from "../shared/protocol.js";
 import { isValidOrderKey, keyBetween } from "../shared/order.js";
 import { boardToSvg } from "../shared/render.js";
@@ -49,6 +49,7 @@ import { getIcon, getPack, iconDefaults, iconSummary, resolveIcon, searchIcons, 
 import { codeHeight } from "../shared/code/layout.js";
 import { detectLanguage, languageLabel, resolveLanguage } from "../shared/code/languages.js";
 import { createRouteEnv } from "../shared/connectors.js";
+import { isShape, SHAPE_IDS } from "../shared/shapes.js";
 
 /** @typedef {import("../shared/protocol.js").BoardMeta} BoardMeta */
 /** @typedef {import("../shared/protocol.js").BoardSnapshot} BoardSnapshot */
@@ -797,7 +798,9 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
         for (const f of ALL_FIELDS) {
           if (fieldEqual(f, before, after)) continue;
           const was = /** @type {any} */ (before)[f];
-          patch[f] = was === undefined && Object.hasOwn(ROUTE_DEFAULTS, f) ? ROUTE_DEFAULTS[f] : was;
+          patch[f] = was === undefined && Object.hasOwn(ROUTE_DEFAULTS, f) ? ROUTE_DEFAULTS[f]
+            // Style keys older objects lack read as their fallbacks, so undo restores them.
+            : f === "style" ? withStyleFallbacks(before.type, was) : was;
         }
         if (Object.keys(patch).length) inverseUpdates.push({ op: "update", id, patch });
       }
@@ -928,6 +931,17 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       // An icon's colour is its line colour, except for stencils (diagram shapes), which fill like shapes.
       const fills = FILL_TYPES.has(type) || (type === "icon" && getPack(fields.packId ?? packId)?.kind === "stencil");
       out.style = { ...(isObject(fields.style) ? fields.style : {}), [fills ? "fill" : "stroke"]: hex };
+    }
+    // Shapes and line patterns by name: {type: "rect", shape: "diamond"}, {dash: "dashed"}.
+    if (type === "rect" && Object.hasOwn(fields, "shape") && fields.shape !== undefined) {
+      if (!isShape(fields.shape)) {
+        errors.push(opError(index, "invalid_op", `Unknown shape ${String(fields.shape).slice(0, 40)}; use ${SHAPE_IDS.join(", ")}`));
+        return null;
+      }
+      out.style = { ...(out.style ?? (isObject(fields.style) ? fields.style : {})), shape: fields.shape };
+    }
+    if (DASH_TYPES.has(type) && typeof fields.dash === "string" && /** @type {readonly string[]} */ (DASHES).includes(fields.dash)) {
+      out.style = { ...(out.style ?? (isObject(fields.style) ? fields.style : {})), dash: fields.dash };
     }
     if (Object.hasOwn(fields, "frame") && fields.frame !== undefined) {
       if (fields.frame === null) out.frameId = null;
@@ -1135,7 +1149,9 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       const indexOf = [];
       input.forEach((/** @type {any} */ item, /** @type {number} */ i) => {
         if (!isObject(item)) return void errors.push(opError(i, "invalid_op", "Each object must be an object"));
-        const object = friendly(s, item.type, item, i, errors);
+        // A shape name as the type ("diamond", "cylinder") is a rectangle in that shape.
+        const it = item.type !== "rect" && isShape(item.type) ? { ...item, type: "rect", shape: item.type } : item;
+        const object = friendly(s, it.type, it, i, errors);
         if (!object) return;
         if (object.id === undefined) object.id = newId("object");
         objectOps.push({ op: "create", object });
@@ -1360,7 +1376,8 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
 
     /**
      * @param {any} args {from, to, label?, routing?: "straight"|"elbow"|"curved", fromSide?, toSide?,
-     *   arrow?: "end"|"both"|"none", color?, by?, senderId?}
+     *   arrow?: "end"|"both"|"none", startMarker?, endMarker? (an Arrowhead; overrides `arrow` at that
+     *   end), dash?: "solid"|"dashed"|"dotted", color?, by?, senderId?}
      * @returns {Promise<{connector: WhiteboardObject|null, errors: OpError[], event: BoardEvent|null}>}
      */
     connect: (args) => enqueue(async () => {
@@ -1377,7 +1394,12 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
         routing: a.routing === "elbow" || a.routing === "curved" ? a.routing : "straight",
         ...(typeof a.fromSide === "string" ? { fromSide: a.fromSide } : {}),
         ...(typeof a.toSide === "string" ? { toSide: a.toSide } : {}),
-        style: { ...(fields.style ?? {}), arrowStart: arrow === "both" ? "arrow" : "none", arrowEnd: arrow === "none" ? "none" : "arrow" },
+        style: {
+          ...(fields.style ?? {}),
+          arrowStart: isArrowhead(a.startMarker) ? a.startMarker : arrow === "both" ? "arrow" : "none",
+          arrowEnd: isArrowhead(a.endMarker) ? a.endMarker : arrow === "none" ? "none" : "arrow",
+          ...(typeof a.dash === "string" && /** @type {readonly string[]} */ (DASHES).includes(a.dash) ? { dash: a.dash } : {}),
+        },
       };
       const { result, event } = await applyMapped(a, [{ op: "create", object }], [0], errors);
       return { connector: result.upserts.find((o) => o.id === id) ?? null, errors: result.errors, event };

@@ -1,6 +1,7 @@
 // @ts-check
 // Tool palette (select, hand, the creation tools), the keyboard-reachable "Add" menu that creates
-// objects at the view centre without dragging, and undo/redo.
+// objects at the view centre without dragging, and undo/redo. The Shapes tool draws rectangles in
+// the shape picked from its popover (./shape-picker.js), or ellipses; R and O pick it directly.
 //
 // Keyboard: one Tab stop, arrow keys move between the buttons. On phones the bar runs along the
 // bottom and Add, Objects and Activity come first (in DOM order too, so focus order matches), so
@@ -8,6 +9,7 @@
 
 import { h, icon, rovingFocus } from "./dom.js";
 import { openMenu } from "./dialogs.js";
+import { openPicker, shapeIcon, shapeChoiceLabel, SHAPE_CHOICES } from "./shape-picker.js";
 
 /** @typedef {import("./app.js").App} App */
 /** @typedef {import("./ui-contract.js").Tool} Tool */
@@ -20,8 +22,7 @@ export const TOOLS = [
   { tool: "select", label: "Select", key: "V", icon: "select" },
   { tool: "hand", label: "Hand (pan)", key: "H", icon: "hand" },
   { tool: "sticky", label: "Sticky note", key: "N", icon: "sticky" },
-  { tool: "rect", label: "Rectangle", key: "R", icon: "rect" },
-  { tool: "ellipse", label: "Ellipse", key: "O", icon: "ellipse" },
+  { tool: "rect", label: "Shapes", key: "R", icon: "rect" },
   { tool: "text", label: "Text", key: "T", icon: "text" },
   { tool: "frame", label: "Frame", key: "F", icon: "frame" },
   { tool: "connector", label: "Connector", key: "C", icon: "connector" },
@@ -33,6 +34,7 @@ export const ADDABLE = /** @type {const} */ ([
   { type: "sticky", label: "Sticky note" },
   { type: "rect", label: "Rectangle" },
   { type: "ellipse", label: "Ellipse" },
+  { type: "shape", label: "Shape…" },
   { type: "text", label: "Text" },
   { type: "frame", label: "Frame" },
   { type: "code", label: "Code block (K)" },
@@ -56,12 +58,18 @@ export function createToolbar(app) {
     }, icon(t.icon, 20));
     btn.addEventListener("click", () => {
       lockedTool = null;
-      canvas.setTool(t.tool, false);
+      if (t.tool === "rect") {
+        // The Shapes tool: keep drawing the last shape, and offer the others.
+        const current = canvas.getTool() === "ellipse" ? "ellipse" : canvas.getShape();
+        canvas.setTool(current === "ellipse" ? "ellipse" : "rect", false);
+        openShapes(btn, (v) => { pickShape(v); });
+      } else canvas.setTool(t.tool, false);
       render();
     });
     btn.addEventListener("dblclick", () => {
-      lockedTool = t.tool;
-      canvas.setTool(t.tool, true);
+      const tool = t.tool === "rect" && canvas.getTool() === "ellipse" ? "ellipse" : t.tool;
+      lockedTool = tool;
+      canvas.setTool(tool, true);
       render();
     });
     toolButtons.set(t.tool, btn);
@@ -106,13 +114,36 @@ export function createToolbar(app) {
   layout();
   phone?.addEventListener?.("change", layout, { signal: app.signal });
 
+  /**
+   * The shape grid, beside `anchor`.
+   * @param {HTMLElement} anchor @param {(value: string) => void} onPick
+   */
+  function openShapes(anchor, onPick) {
+    const current = canvas.getTool() === "ellipse" ? "ellipse" : canvas.getShape();
+    openPicker(anchor, {
+      label: "Shapes", choices: SHAPE_CHOICES, current, icon: (v) => shapeIcon(v, 22), onPick, columns: 4, className: "shape-pop",
+    });
+  }
+
+  /** The Shapes tool draws `value` from now on. @param {string} value */
+  function pickShape(value) {
+    const locked = lockedTool === "rect" || lockedTool === "ellipse";
+    if (value !== "ellipse") canvas.setShape(value);
+    canvas.setTool(value === "ellipse" ? "ellipse" : "rect", locked);
+    app.announce?.(`${shapeChoiceLabel(value)} tool: drag on the board, or click for the default size`);
+    render();
+  }
+
   /** @param {HTMLElement} anchor */
   function openAddMenu(anchor) {
     openMenu(anchor, [
       ...ADDABLE.map((a) => ({
         label: a.label,
         className: "add-" + a.type,
-        onSelect: () => { canvas.addAtCenter(a.type); },
+        onSelect: () => {
+          if (a.type === "shape") openShapes(addBtn, (v) => { canvas.addAtCenter(v === "ellipse" ? "ellipse" : "rect", { shape: v }); });
+          else canvas.addAtCenter(a.type);
+        },
       })),
       { label: "Icons and shapes… (I)", className: "add-icon", onSelect: () => app.toggleIconPicker?.() },
       { label: `Emoji and symbols… (${MOD}.)`, className: "add-emoji", onSelect: () => app.openEmojiPicker?.() },
@@ -136,10 +167,19 @@ export function createToolbar(app) {
     const current = canvas.getTool();
     if (event && event.tool === current && typeof event.locked === "boolean") lockedTool = event.locked ? current : null;
     if (lockedTool && lockedTool !== current) lockedTool = null;
+    const shapeBtn = toolButtons.get("rect");
+    if (shapeBtn) {
+      const shown = current === "ellipse" ? "ellipse" : canvas.getShape();
+      if (shapeBtn.dataset.shape !== shown) {
+        shapeBtn.dataset.shape = shown;
+        shapeBtn.replaceChildren(shapeIcon(shown, 20));
+        shapeBtn.setAttribute("aria-label", `Shapes: ${shapeChoiceLabel(shown)}`);
+      }
+    }
     for (const [tool, btn] of toolButtons) {
-      const on = tool === current;
+      const on = tool === current || (tool === "rect" && current === "ellipse");
       btn.setAttribute("aria-pressed", String(on));
-      if (on && lockedTool === tool) btn.dataset.locked = "true";
+      if (on && (lockedTool === tool || (tool === "rect" && lockedTool === current))) btn.dataset.locked = "true";
       else delete btn.dataset.locked;
     }
     const state = store.getState();
@@ -148,7 +188,7 @@ export function createToolbar(app) {
     redoBtn.setAttribute("aria-disabled", String(!state.canRedo));
     outlineBtn.setAttribute("aria-pressed", String(app.outlineOpen));
     activityBtn.setAttribute("aria-pressed", String(app.activityOpen));
-    roving.refresh(toolButtons.get(current) ?? null);
+    roving.refresh(toolButtons.get(current === "ellipse" ? "rect" : current) ?? null);
   }
 
   return { el, history, render, openAddMenu: () => openAddMenu(addBtn) };

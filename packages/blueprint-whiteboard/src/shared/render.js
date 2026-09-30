@@ -10,6 +10,7 @@ import { codeLayout, fitColumns, CODE_FONT_FAMILY, CODE_CHAR_EM } from "./code/l
 import { codeTheme } from "./code/theme.js";
 import { truncateText } from "./graphemes.js";
 import { routePathD, routeEndDirections, routeMidpoint, createRouteEnv } from "./connectors.js";
+import { shapeOf, shapeOutline, cmdsToPath } from "./shapes.js";
 
 /** @typedef {import("./protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("./protocol.js").BoardSnapshot} BoardSnapshot */
@@ -68,6 +69,19 @@ export function textNode(o) {
 }
 
 /**
+ * Stroke pattern attributes for style.dash ("solid" or absent: none), scaled by the line width.
+ * Dots are zero-length dashes with round caps.
+ * @param {string|undefined} dash @param {number} width
+ * @returns {Record<string, string>}
+ */
+export function dashAttrs(dash, width) {
+  const w = Math.max(0.5, width || 0);
+  if (dash === "dashed") return { "stroke-dasharray": `${fmt(Math.max(6, w * 4))} ${fmt(Math.max(4, w * 3))}` };
+  if (dash === "dotted") return { "stroke-dasharray": `0 ${fmt(Math.max(4, w * 2.5))}`, "stroke-linecap": "round" };
+  return {};
+}
+
+/**
  * The shape (without text) of a non-connector object.
  * @param {WhiteboardObject} o
  * @returns {VNode[]}
@@ -78,24 +92,34 @@ function shapeNodes(o) {
     fill: s.fill, stroke: s.stroke === "none" || !s.strokeWidth ? "none" : s.stroke,
     "stroke-width": s.stroke === "none" || !s.strokeWidth ? null : s.strokeWidth,
   };
+  const dash = paint.stroke === "none" ? {} : dashAttrs(s.dash, s.strokeWidth);
   switch (o.type) {
     case "sticky":
       return [
         h("rect", { x: o.x + 2, y: o.y + 4, width: o.w, height: o.h, rx: 6, fill: "#000000", "fill-opacity": "0.12" }),
         h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, rx: 6, ...paint }),
       ];
-    case "rect":
-      return [h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, rx: 4, ...paint })];
+    case "rect": {
+      const shape = shapeOf(o) ?? "rect";
+      if (shape === "rect") return [h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, rx: 4, ...paint, ...dash })];
+      const g = shapeOutline(shape, o.w, o.h);
+      const nodes = [h("path", { d: cmdsToPath(g.cmds, o.x, o.y, fmt), ...paint, ...dash, "stroke-linejoin": "round" })];
+      if (g.detail && paint.stroke !== "none") {
+        nodes.push(h("path", { d: cmdsToPath(g.detail, o.x, o.y, fmt), fill: "none", stroke: paint.stroke, "stroke-width": paint["stroke-width"], ...dash }));
+      }
+      return nodes;
+    }
     case "ellipse":
-      return [h("ellipse", { cx: o.x + o.w / 2, cy: o.y + o.h / 2, rx: o.w / 2, ry: o.h / 2, ...paint })];
+      return [h("ellipse", { cx: o.x + o.w / 2, cy: o.y + o.h / 2, rx: o.w / 2, ry: o.h / 2, ...paint, ...dash })];
     case "text":
       return s.fill === "none" ? [] : [h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, fill: s.fill })];
     case "frame":
-      return [h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, rx: 2, ...paint })];
+      return [h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, rx: 2, ...paint, ...dash })];
     case "pen":
       return [h("path", {
         d: strokePathD(penWorldPoints(o)), fill: "none", stroke: s.stroke === "none" ? "#1f2937" : s.stroke,
         "stroke-width": Math.max(0.5, s.strokeWidth), "stroke-linecap": "round", "stroke-linejoin": "round",
+        ...dashAttrs(s.dash, Math.max(0.5, s.strokeWidth)),
       })];
     case "icon":
       return iconNodes(o);
@@ -222,17 +246,87 @@ function codeNodes(o) {
 }
 
 /**
- * An arrowhead at `tip`, pointing away from `from`.
- * @param {{x: number, y: number}} from @param {{x: number, y: number}} tip @param {number} width @param {string} color
+ * The marker drawn at a connector end (style.arrowStart / arrowEnd; see Arrowhead in protocol.js),
+ * and how far the line is cut back so it does not show through a hollow marker.
+ * @param {string} kind @param {{x: number, y: number}} tip
+ * @param {{x: number, y: number}} dir  unit direction of travel into the tip
+ * @param {number} width @param {string} color
+ * @returns {{nodes: VNode[], inset: number}}
  */
-function arrowHead(from, tip, width, color) {
+export function arrowMarker(kind, tip, dir, width, color) {
+  const ux = dir.x, uy = dir.y, px = -uy, py = ux;
+  /** @param {number} back @param {number} side */
+  const at = (back, side) => [tip.x - ux * back + px * side, tip.y - uy * back + py * side];
+  /** @param {number[][]} list */
+  const pts = (list) => list.map(([x, y]) => `${fmt(x)},${fmt(y)}`).join(" ");
+  const line = { fill: "none", stroke: color, "stroke-width": width, "stroke-linecap": "round", "stroke-linejoin": "round" };
   const len = Math.max(8, width * 4), half = Math.max(4, width * 2);
-  const dx = tip.x - from.x, dy = tip.y - from.y;
-  const d = Math.hypot(dx, dy) || 1;
-  const ux = dx / d, uy = dy / d;
-  const bx = tip.x - ux * len, by = tip.y - uy * len;
-  const pts = [[tip.x, tip.y], [bx - uy * half, by + ux * half], [bx + uy * half, by - ux * half]];
-  return h("polygon", { points: pts.map(([x, y]) => `${fmt(x)},${fmt(y)}`).join(" "), fill: color });
+  switch (kind) {
+    case "arrow":
+      return { nodes: [h("polygon", { points: pts([[tip.x, tip.y], at(len, half), at(len, -half)]), fill: color })], inset: 0 };
+    case "open":
+      return { nodes: [h("polyline", { points: pts([at(len, -half * 1.2), [tip.x, tip.y], at(len, half * 1.2)]), ...line })], inset: 0 };
+    case "triangle": {
+      const l = len * 1.3, hw = half * 1.5;
+      return { nodes: [h("polygon", { points: pts([[tip.x, tip.y], at(l, -hw), at(l, hw)]), ...line, fill: "#ffffff" })], inset: l };
+    }
+    case "diamond": case "diamondOpen": {
+      const l = Math.max(14, width * 7), hw = Math.max(5, width * 2.5);
+      return {
+        nodes: [h("polygon", { points: pts([[tip.x, tip.y], at(l / 2, -hw), at(l, 0), at(l / 2, hw)]), ...line, fill: kind === "diamond" ? color : "#ffffff" })],
+        inset: l,
+      };
+    }
+    case "circle": {
+      const r = Math.max(4, width * 2);
+      const [cx, cy] = at(r, 0);
+      return { nodes: [h("circle", { cx, cy, r, fill: color })], inset: r };
+    }
+    case "bar": {
+      const b = Math.max(6, width * 3);
+      return { nodes: [h("polyline", { points: pts([at(b, -b), at(b, b)]), ...line })], inset: 0 };
+    }
+    case "crow": {
+      const l = Math.max(12, width * 5), hw = Math.max(7, width * 3.5);
+      return { nodes: [h("polyline", { points: pts([at(0, -hw), at(l, 0), at(0, hw)]), ...line }), h("polyline", { points: pts([at(0, 0), at(l, 0)]), ...line })], inset: 0 };
+    }
+    default:
+      return { nodes: [], inset: 0 };
+  }
+}
+
+/**
+ * A route with its ends cut back by `start` and `end` world units (never past its middle), for
+ * drawing the line under hollow markers.
+ * @param {import("./connectors.js").Route} route @param {number} start @param {number} end
+ * @param {{start: {x: number, y: number}, end: {x: number, y: number}}} dirs
+ * @returns {import("./connectors.js").Route}
+ */
+function trimRoute(route, start, end, dirs) {
+  if (!start && !end) return route;
+  if (route.cubic) {
+    const [p0, c1, c2, p3] = route.cubic;
+    const chord = Math.hypot(p3.x - p0.x, p3.y - p0.y) / 2;
+    const s = Math.min(start, chord), e = Math.min(end, chord);
+    const sx = dirs.start.x * s, sy = dirs.start.y * s, ex = dirs.end.x * e, ey = dirs.end.y * e;
+    return {
+      ...route,
+      cubic: [{ x: p0.x + sx, y: p0.y + sy }, { x: c1.x + sx, y: c1.y + sy }, { x: c2.x - ex, y: c2.y - ey }, { x: p3.x - ex, y: p3.y - ey }],
+    };
+  }
+  const points = route.points.slice();
+  const n = points.length;
+  if (n < 2) return route;
+  /** @param {number} i @param {number} j @param {number} by */
+  const cut = (i, j, by) => {
+    const a = points[i], b = points[j];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    const k = Math.min(by, n === 2 ? d / 2 : d) / (d || 1);
+    points[i] = { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
+  };
+  if (start) cut(0, 1, start);
+  if (end) cut(n - 1, n - 2, end);
+  return { ...route, points };
 }
 
 /**
@@ -256,14 +350,17 @@ function connectorNode(o, resolve, env) {
   const d = routePathD(route);
   const dirs = routeEndDirections(route);
   const tipEnd = points[points.length - 1], tipStart = points[0];
+  const ends = points.length >= 2;
+  const endMark = ends ? arrowMarker(s.arrowEnd, tipEnd, dirs.end, width, color) : { nodes: [], inset: 0 };
+  const startMark = ends ? arrowMarker(s.arrowStart, tipStart, { x: -dirs.start.x, y: -dirs.start.y }, width, color) : { nodes: [], inset: 0 };
+  const drawn = startMark.inset || endMark.inset ? routePathD(trimRoute(route, startMark.inset, endMark.inset, dirs)) : d;
   /** @type {VNode[]} */
   const children = [
     // A wide transparent path makes thin connectors easy to hit.
     h("path", { d, fill: "none", stroke: "transparent", "stroke-width": Math.max(12, width + 10), "data-hit": "1" }),
-    h("path", { d, fill: "none", stroke: color, "stroke-width": width, "stroke-linejoin": "round" }),
+    h("path", { d: drawn, fill: "none", stroke: color, "stroke-width": width, "stroke-linejoin": "round", ...dashAttrs(s.dash, width) }),
+    ...endMark.nodes, ...startMark.nodes,
   ];
-  if (s.arrowEnd === "arrow" && points.length >= 2) children.push(arrowHead({ x: tipEnd.x - dirs.end.x, y: tipEnd.y - dirs.end.y }, tipEnd, width, color));
-  if (s.arrowStart === "arrow" && points.length >= 2) children.push(arrowHead({ x: tipStart.x + dirs.start.x, y: tipStart.y + dirs.start.y }, tipStart, width, color));
   if (o.text) {
     const mid = routeMidpoint(route);
     const fontSize = s.fontSize;

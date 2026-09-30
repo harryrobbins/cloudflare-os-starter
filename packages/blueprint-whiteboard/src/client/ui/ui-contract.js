@@ -47,6 +47,8 @@
  * @property {HTMLElement} element                  the canvas container the shell places in its layout
  * @property {() => Tool} getTool
  * @property {(tool: Tool, locked?: boolean) => void} setTool
+ * @property {() => string} getShape  the outline the rectangle tool draws (src/shared/shapes.js SHAPES)
+ * @property {(shape: string) => void} setShape  picks it (unknown ids are ignored); emits a "tool" event
  * @property {() => Camera} getCamera
  * @property {(camera: Camera, animate?: boolean) => void} setCamera   clamps zoom to ZOOM_MIN..ZOOM_MAX
  * @property {(factor: number) => void} zoomBy       about the view centre
@@ -54,7 +56,7 @@
  * @property {() => {x: number, y: number, w: number, h: number}} getViewport  world rect currently visible
  * @property {() => string[]} getSelection
  * @property {(ids: string[]) => void} setSelection  unknown ids are dropped
- * @property {(type: ObjectType) => string|null}  addAtCenter
+ * @property {(type: ObjectType, opts?: {shape?: string}) => string|null}  addAtCenter
  *   Keyboard and button path for creating: adds a default-sized object of `type` at the view centre
  *   (not "pen" or "connector"), selects it, starts text editing for sticky/text, returns its id.
  * @property {(ref: string|{packId?: string, iconId: string}, at?: {clientX: number, clientY: number}) => string|null} addIcon
