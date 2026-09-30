@@ -92,6 +92,11 @@ export interface TileModel {
    * instead of a frozen last frame.
    */
   readonly paused?: boolean;
+  /** Their hand is up; `handOrder` is its place in the queue (1 = first raised). */
+  readonly hand?: boolean;
+  readonly handOrder?: number;
+  /** Reactions floating over this tile right now, oldest first. */
+  readonly reactions?: readonly { readonly id: number; readonly emoji: string }[];
 }
 
 export function CallTile({
@@ -154,6 +159,30 @@ export function CallTile({
           )}
         </div>
       )}
+      {tile.hand === true && (
+        <span
+          data-testid="hand-raised"
+          role="img"
+          aria-label={`Hand raised${tile.handOrder === undefined ? "" : `, ${ordinal(tile.handOrder)}`}`}
+          title="Hand raised"
+          className={[
+            "absolute top-2 left-2 inline-flex items-center gap-0.5 rounded-md bg-amber-400 px-1.5 py-0.5 font-semibold text-black shadow",
+            compact ? "text-[11px]" : "text-[13px]",
+          ].join(" ")}
+        >
+          <span aria-hidden="true">✋</span>
+          {tile.handOrder !== undefined && <span aria-hidden="true">{tile.handOrder}</span>}
+        </span>
+      )}
+      {(tile.reactions?.length ?? 0) > 0 && (
+        <span aria-hidden="true" className="pointer-events-none absolute right-2 bottom-8 flex flex-col-reverse items-end gap-1">
+          {tile.reactions!.map((reaction) => (
+            <span key={reaction.id} data-testid="tile-reaction" className={`chat-reaction-float ${compact ? "text-xl" : "text-3xl"}`}>
+              {reaction.emoji}
+            </span>
+          ))}
+        </span>
+      )}
       <span
         className={[
           "absolute bottom-2 left-2 inline-flex max-w-[calc(100%-1rem)] items-center gap-1 rounded-md bg-black/55 px-1.5 py-0.5 text-white",
@@ -183,4 +212,9 @@ export function ReconnectingOverlay(): ReactNode {
       </span>
     </div>
   );
+}
+
+/** "first", "second", ... for the hand queue; beyond five (the call's size) plain numbers. */
+function ordinal(n: number): string {
+  return ["first", "second", "third", "fourth", "fifth"][n - 1] ?? `number ${n}`;
 }

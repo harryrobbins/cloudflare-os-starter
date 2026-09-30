@@ -1,4 +1,5 @@
-// The call bar: mic, camera, screen share, devices, Chat, Focus, the page/sidebar move, Leave.
+// The call bar: mic, camera, screen share, raise hand, reactions, people, devices, Chat, Focus, the
+// page/sidebar move, Leave.
 //
 // In the sidebar (and on a phone) the bar keeps the three things you reach for without looking --
 // mic, camera, leave -- plus Chat, and folds the rest into an overflow menu. "Pop out to sidebar" and
@@ -12,7 +13,10 @@ import {
   CornersOut,
   DotsThree,
   GearSix,
+  HandPalm,
   Microphone,
+  Smiley,
+  Users,
   MicrophoneSlash,
   PhoneDisconnect,
   Monitor,
@@ -23,9 +27,11 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { CALL_REACTIONS } from "../../contract.js";
 import { useChat, useStore } from "../../hooks/store.js";
+
 import { DeviceSelects, useDeviceLists } from "./DeviceSelects.js";
-import { canShareScreen } from "./layout.js";
+import { canShareScreen, handQueue } from "./layout.js";
 
 export function CallControls({ layout }: { layout: "page" | "dock" }): ReactNode {
   const store = useStore();
@@ -34,7 +40,15 @@ export function CallControls({ layout }: { layout: "page" | "dock" }): ReactNode
   const chatOpen = useChat((state) => state.callUi.chatOpen);
   const focus = useChat((state) => state.callFocus);
   const embedded = useChat((state) => state.embedded);
-  const [menu, setMenu] = useState<"devices" | "more" | null>(null);
+  const [menu, setMenu] = useState<"devices" | "more" | "react" | "people" | null>(null);
+  const handUp = useChat((state) => {
+    const local = state.call;
+    if (local.channelId === null || local.participantId === null) return false;
+    return state.calls[local.channelId]?.participants.some((entry) => entry.id === local.participantId && entry.hand !== undefined) ?? false;
+  });
+  const peopleCount = useChat((state) =>
+    state.call.channelId === null ? 0 : (state.calls[state.call.channelId]?.participants.length ?? 0),
+  );
   const live = call.phase === "connected" || call.phase === "reconnecting";
   const dock = layout === "dock";
   const screenShare = canShareScreen();
@@ -126,6 +140,22 @@ export function CallControls({ layout }: { layout: "page" | "dock" }): ReactNode
         </BarButton>
       )}
       {!dock && (
+        <BarButton label={handUp ? "Lower your hand" : "Raise your hand"} pressed={handUp} disabled={!live} onClick={() => store.toggleCallHand()}>
+          <HandPalm size={18} weight={handUp ? "fill" : "regular"} />
+        </BarButton>
+      )}
+      {!dock && (
+        <BarButton label="Send a reaction" pressed={menu === "react"} disabled={!live} onClick={() => setMenu(menu === "react" ? null : "react")}>
+          <Smiley size={18} />
+        </BarButton>
+      )}
+      {!dock && (
+        <BarButton label={`People in the call (${peopleCount})`} pressed={menu === "people"} onClick={() => setMenu(menu === "people" ? null : "people")}>
+          <Users size={18} />
+          <span className="text-[12px] font-medium tabular-nums">{peopleCount}</span>
+        </BarButton>
+      )}
+      {!dock && (
         <BarButton label="Camera, microphone and speakers" pressed={menu === "devices"} onClick={() => setMenu(menu === "devices" ? null : "devices")}>
           <GearSix size={18} />
         </BarButton>
@@ -156,6 +186,16 @@ export function CallControls({ layout }: { layout: "page" | "dock" }): ReactNode
         <Popover onClose={() => setMenu(null)} align={dock ? "right" : "center"}>
           {menu === "more" && (
             <div className="flex flex-col py-1">
+              <ReactionRow disabled={!live} onDone={() => setMenu(null)} />
+              <MenuItem
+                icon={<HandPalm size={15} weight={handUp ? "fill" : "regular"} />}
+                label={handUp ? "Lower your hand" : "Raise your hand"}
+                disabled={!live}
+                onClick={() => {
+                  setMenu(null);
+                  store.toggleCallHand();
+                }}
+              />
               {screenItem}
               <AudioOnlyItem disabled={!live} onDone={() => setMenu(null)} />
               {canPresent && (
@@ -169,10 +209,21 @@ export function CallControls({ layout }: { layout: "page" | "dock" }): ReactNode
                 />
               )}
               <div className="my-1 h-px bg-kumo-line" />
+              <p className="px-3 pt-1 pb-1 text-[11px] font-semibold tracking-wide text-kumo-inactive uppercase">
+                People ({peopleCount})
+              </p>
+              <ParticipantList />
+              <div className="my-1 h-px bg-kumo-line" />
               <p className="px-3 pt-1 pb-2 text-[11px] font-semibold tracking-wide text-kumo-inactive uppercase">Devices</p>
               <div className="px-3 pb-2">
                 <InCallDevices compact />
               </div>
+            </div>
+          )}
+          {menu === "react" && <ReactionRow disabled={!live} onDone={() => setMenu(null)} />}
+          {menu === "people" && (
+            <div className="w-64 py-1">
+              <ParticipantList />
             </div>
           )}
           {menu === "devices" && (
@@ -194,6 +245,67 @@ function InCallDevices({ compact = false }: { compact?: boolean }): ReactNode {
   const choice = useChat((state) => state.callDevices);
   const lists = useDeviceLists(store.callEngine, null);
   return <DeviceSelects lists={lists} choice={choice} onChange={(patch) => void store.setCallDevices(patch)} compact={compact} />;
+}
+
+/** The quick reactions, one button each; picking one sends it and closes the menu. */
+function ReactionRow({ disabled, onDone }: { disabled: boolean; onDone: () => void }): ReactNode {
+  const store = useStore();
+  return (
+    <div role="group" aria-label="Reactions" className="flex items-center justify-center gap-0.5 px-2 py-1.5">
+      {CALL_REACTIONS.map((emoji) => (
+        <button
+          key={emoji}
+          type="button"
+          role="menuitem"
+          disabled={disabled}
+          aria-label={`React ${emoji}`}
+          title={`React ${emoji}`}
+          onClick={() => {
+            onDone();
+            store.sendCallReaction(emoji);
+          }}
+          className="press inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-[20px] transition-colors hover:bg-kumo-tint disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {emoji}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Who is in the call: raised hands first, in the order they went up, then everyone in join order. */
+export function ParticipantList(): ReactNode {
+  const local = useChat((state) => state.call);
+  const room = useChat((state) => (local.channelId === null ? undefined : state.calls[local.channelId]));
+  const users = useChat((state) => state.users);
+  const hands = handQueue(room);
+  const people = (room?.participants ?? []).toSorted(
+    (a, b) => (hands.get(a.id) ?? Number.POSITIVE_INFINITY) - (hands.get(b.id) ?? Number.POSITIVE_INFINITY),
+  );
+  if (people.length === 0) return <p className="px-3 py-1.5 text-[12px] text-kumo-subtle">Nobody yet.</p>;
+  return (
+    <ul aria-label="People in the call" className="flex flex-col">
+      {people.map((participant) => {
+        const order = hands.get(participant.id);
+        const name = users[participant.userId]?.name ?? "Someone";
+        const you = participant.id === local.participantId;
+        return (
+          <li key={participant.id} data-testid="call-person" className="flex items-center gap-2 px-3 py-1 text-[13px] text-kumo-default">
+            <span className="min-w-0 flex-1 truncate">
+              {name}
+              {you && <span className="text-kumo-subtle"> (you)</span>}
+            </span>
+            {order !== undefined && (
+              <span role="img" aria-label={`Hand raised, ${order} in line`} title="Hand raised" className="text-[13px]">
+                ✋<span aria-hidden="true" className="ml-0.5 text-[11px] text-kumo-subtle tabular-nums">{order}</span>
+              </span>
+            )}
+            {!participant.audio && <MicrophoneSlash size={13} weight="bold" aria-label="Microphone off" className="text-kumo-danger" />}
+          </li>
+        );
+      })}
+    </ul>
+  );
 }
 
 /**

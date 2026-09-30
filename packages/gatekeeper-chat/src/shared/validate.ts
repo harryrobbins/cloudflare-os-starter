@@ -7,6 +7,7 @@
 
 import {
   AGENT_USER_ID,
+  CALL_REACTIONS,
   CALL_SIMULCAST_RIDS,
   DEFAULT_PAGE_LIMIT,
   MAX_CALL_TRACKS_PER_REQUEST,
@@ -22,6 +23,7 @@ import {
   MAX_TOPIC_LENGTH,
   MENTION_TOKEN_SOURCE,
   type AnnounceTracksRequest,
+  type CallReaction,
   type CallSimulcastRid,
   type CallStatsReport,
   type CallTrackKind,
@@ -782,6 +784,26 @@ export function parseClientEvent(raw: string | ArrayBuffer): Result<ClientEvent>
         video: video.value,
         screen: screen.value,
       });
+    }
+    case "call-hand": {
+      const call = requiredId(parsed, "call");
+      if (!call.ok) return call;
+      const participant = requiredId(parsed, "participant");
+      if (!participant.ok) return participant;
+      const raised = requiredBoolean(parsed, "raised");
+      if (!raised.ok) return raised;
+      return ok({ t: "call-hand", call: call.value, participant: participant.value, raised: raised.value });
+    }
+    case "call-react": {
+      const call = requiredId(parsed, "call");
+      if (!call.ok) return call;
+      const participant = requiredId(parsed, "participant");
+      if (!participant.ok) return participant;
+      const emoji = parsed["emoji"];
+      if (typeof emoji !== "string" || !(CALL_REACTIONS as readonly string[]).includes(emoji)) {
+        return fail("emoji must be one of the call reactions");
+      }
+      return ok({ t: "call-react", call: call.value, participant: participant.value, emoji: emoji as CallReaction });
     }
     default:
       return fail(`unknown event type ${JSON.stringify(parsed["t"])}`);

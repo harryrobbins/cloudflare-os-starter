@@ -16,6 +16,7 @@ import type {
   ServerEvent,
   User,
 } from "../contract.js";
+import { CALL_REACTION_BURST } from "../contract.js";
 import { ApiError, type ChatApi, type ChatSocket, type SocketStatus } from "../api/types.js";
 import { createFakeCallEngine, type FakeCallEngine } from "../call/ui/fake-engine.js";
 import { conversationKey } from "./drafts.js";
@@ -39,6 +40,7 @@ import {
   shouldHintHeadphones,
   shouldRing,
 } from "./calls.js";
+import { CALL_REACTION_SHOW_MS } from "./state.js";
 import { ChatStore, RING_TIMEOUT_MS } from "./store.js";
 
 const ENABLED = { enabled: true, maxParticipants: 5 };
@@ -625,6 +627,63 @@ describe("joining and leaving", () => {
     store.disposeCall();
     expect(engine.disposed).toBe(1);
     expect(engine.left).toBe(0);
+  });
+});
+
+describe("raised hands and reactions", () => {
+  async function inCall(): Promise<Harness & { room: (patch?: Partial<CallParticipant>, alicePatch?: Partial<CallParticipant>) => CallState }> {
+    const h = await harness();
+    await h.store.joinCall("c1");
+    const room = (mine: Partial<CallParticipant> = {}, theirs: Partial<CallParticipant> = {}): CallState =>
+      call("c1", [participant("p-alice", "alice", theirs), participant("p-me", me.id, mine)], { id: "call-1" });
+    h.socket.emit({ t: "call", channel: "c1", call: room() });
+    return { ...h, room };
+  }
+
+  it("raises and lowers this person's hand over the socket, once per change", async () => {
+    const { store, socket, room } = await inCall();
+    store.toggleCallHand();
+    expect(socket.sent.at(-1)).toEqual({ t: "call-hand", call: "call-1", participant: "p-me", raised: true });
+    expect(store.state.announcement).toBe("You raised your hand");
+    socket.emit({ t: "call", channel: "c1", call: room({ hand: 5 }) });
+    const sent = socket.sent.length;
+    store.setCallHand(true); // already up
+    expect(socket.sent).toHaveLength(sent);
+    store.toggleCallHand();
+    expect(socket.sent.at(-1)).toMatchObject({ t: "call-hand", raised: false });
+  });
+
+  it("announces somebody else raising their hand, once", async () => {
+    const { store, socket, room } = await inCall();
+    store.announce("");
+    socket.emit({ t: "call", channel: "c1", call: room({}, { hand: 7 }) });
+    expect(store.state.announcement).toBe("Alice Chen raised their hand");
+    store.announce("");
+    socket.emit({ t: "call", channel: "c1", call: room({ audio: false }, { hand: 7 }) });
+    expect(store.state.announcement).toBe("");
+  });
+
+  it("shows reactions for this call for a few seconds, and keeps inside the burst", async () => {
+    vi.useFakeTimers();
+    const { store, socket } = await inCall();
+    socket.emit({ t: "call-react", channel: "c1", call: "call-1", participant: "p-alice", emoji: "🎉" });
+    socket.emit({ t: "call-react", channel: "c9", call: "call-other", participant: "p-x", emoji: "👍" });
+    expect(store.state.callReactions).toEqual([{ id: expect.any(Number), participantId: "p-alice", emoji: "🎉" }]);
+    expect(store.state.announcement).toBe("Alice Chen reacted 🎉");
+    vi.advanceTimersByTime(CALL_REACTION_SHOW_MS + 10);
+    expect(store.state.callReactions).toEqual([]);
+
+    const before = socket.sent.length;
+    for (let i = 0; i < CALL_REACTION_BURST + 2; i += 1) store.sendCallReaction("👍");
+    expect(socket.sent.slice(before)).toHaveLength(CALL_REACTION_BURST);
+    expect(socket.sent.at(-1)).toEqual({ t: "call-react", call: "call-1", participant: "p-me", emoji: "👍" });
+  });
+
+  it("clears reactions when the call ends", async () => {
+    const { store, socket } = await inCall();
+    socket.emit({ t: "call-react", channel: "c1", call: "call-1", participant: "p-alice", emoji: "👏" });
+    await store.leaveCall();
+    expect(store.state.callReactions).toEqual([]);
   });
 });
 

@@ -30,6 +30,8 @@
 
 import {
   CALL_PARTICIPANT_TTL_MS,
+  CALL_REACTION_BURST,
+  CALL_REACTION_WINDOW_MS,
   MAX_CALL_PARTICIPANTS,
   type AnnounceTracksRequest,
   type CallFeature,
@@ -58,7 +60,7 @@ import {
 import { requireRead, requireWrite } from "./access.js";
 import { allow, firstRow, placeholders, refuse, type Ctx, type Outcome } from "./context.js";
 import { newMessageId } from "./ids.js";
-import { consume } from "./limits.js";
+import { consume, reactionAllowed } from "./limits.js";
 import { hashId, logDenial, logEvent } from "./logs.js";
 import { hydrateMessages, loadMessage, postSystemMessage } from "./messages.js";
 import type { UserRow } from "./rows.js";
@@ -97,6 +99,8 @@ export type ParticipantRow = {
   video: number;
   screen: number;
   tracks: string;
+  /** Migration 6. When the hand went up; null while it is down. */
+  hand_at: number | null;
 };
 
 /** One published track as stored in `call_participants.tracks`. */
@@ -156,6 +160,7 @@ function toParticipant(row: ParticipantRow): CallParticipant {
     audio: row.audio === 1,
     video: row.video === 1,
     screen: row.screen === 1,
+    ...(row.hand_at === null || row.hand_at === undefined ? {} : { hand: row.hand_at }),
     tracks: readTracks(row)
       .filter((track) => track.announced)
       .map((track) => ({ name: track.name, kind: track.kind, simulcast: track.simulcast })),
@@ -942,5 +947,63 @@ export function callBeat(ctx: Ctx, user: UserRow, beat: Extract<ClientEvent, { t
   );
   if (changed) broadcastCall(ctx, row.call_id);
   sweepInBackground(ctx);
+  return allow(undefined);
+}
+
+/** The participant a hand or reaction frame names, if the caller owns it and it is still in the call. */
+function ownLiveParticipant(
+  ctx: Ctx,
+  user: UserRow,
+  event: { readonly call: string; readonly participant: string },
+  what: string,
+): Outcome<ParticipantRow> {
+  const row = loadParticipant(ctx, event.participant);
+  if (row === null || row.call_id !== event.call || row.user_id !== user.id) {
+    logDenial(what, { call: hashId(event.call), user: hashId(user.id) });
+    return refuse("forbidden", "That participant is not yours.");
+  }
+  if (row.left_at !== null) return refuse("not_found", "You are no longer in this call.");
+  return allow(row);
+}
+
+/**
+ * `{t:"call-hand"}`: raise or lower the hand. Only a change writes, broadcasts and costs a signal from
+ * the same budget as mute changes; raising a raised hand keeps its place in the queue.
+ */
+export function callHand(ctx: Ctx, user: UserRow, event: Extract<ClientEvent, { t: "call-hand" }>): Outcome<void> {
+  if (realtimeOf(ctx) === null) return unavailable();
+  const participant = ownLiveParticipant(ctx, user, event, "call_hand");
+  if (!participant.ok) return participant;
+  const row = participant.value;
+  if ((row.hand_at !== null) === event.raised) return allow(undefined);
+  const budget = consume(ctx, user.id, "callSignals");
+  if (!budget.ok) return budget;
+  ctx.sql.exec(`UPDATE call_participants SET hand_at = ? WHERE id = ?`, event.raised ? ctx.now() : null, row.id);
+  logEvent("chat.call.hand", { call: hashId(row.call_id), raised: event.raised });
+  broadcastCall(ctx, row.call_id);
+  return allow(undefined);
+}
+
+/**
+ * `{t:"call-react"}`: fan a reaction out to the conversation, the sender included (their other
+ * windows, and their own overlay comes from the same event as everybody else's). Nothing is stored.
+ */
+export function callReact(ctx: Ctx, user: UserRow, event: Extract<ClientEvent, { t: "call-react" }>): Outcome<void> {
+  if (realtimeOf(ctx) === null) return unavailable();
+  const participant = ownLiveParticipant(ctx, user, event, "call_react");
+  if (!participant.ok) return participant;
+  const row = participant.value;
+  if (!reactionAllowed(row.id, ctx.now(), CALL_REACTION_BURST, CALL_REACTION_WINDOW_MS)) {
+    return refuse("rate_limited", "Slow down: too many reactions.", Math.ceil(CALL_REACTION_WINDOW_MS / 1000));
+  }
+  const call = loadCall(ctx, row.call_id);
+  if (call === null || call.ended_at !== null) return refuse("not_found", "That call has ended.");
+  ctx.bus.toChannel(call.channel_id, {
+    t: "call-react",
+    channel: call.channel_id,
+    call: call.id,
+    participant: row.id,
+    emoji: event.emoji,
+  });
   return allow(undefined);
 }

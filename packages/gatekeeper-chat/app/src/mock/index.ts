@@ -1240,9 +1240,37 @@ function createMockSocket(workspace: MockWorkspace): ChatSocket {
           ...call,
           participants: call.participants.map((entry) =>
             entry.id === mine.id
-              ? { ...participant(mine.id, ME, mine.joinedAt, event), sessionId: mine.sessionId }
+              ? {
+                  ...participant(mine.id, ME, mine.joinedAt, event),
+                  sessionId: mine.sessionId,
+                  ...(mine.hand === undefined ? {} : { hand: mine.hand }),
+                }
               : entry,
           ),
+        });
+      }
+      // Raised hands and reactions, as the DO does them (minus the rate limit).
+      if (event.t === "call-hand" || event.t === "call-react") {
+        let call: CallState;
+        try {
+          call = workspace.callById(event.call);
+        } catch {
+          return;
+        }
+        const mine = call.participants.find((entry) => entry.id === event.participant);
+        if (mine === undefined || mine.userId !== ME) return;
+        if (event.t === "call-react") {
+          workspace.emit({ t: "call-react", channel: call.channelId, call: call.id, participant: mine.id, emoji: event.emoji });
+          return;
+        }
+        if ((mine.hand !== undefined) === event.raised) return;
+        workspace.setCall({
+          ...call,
+          participants: call.participants.map((entry) => {
+            if (entry.id !== mine.id) return entry;
+            const { hand: _previous, ...rest } = entry;
+            return event.raised ? { ...rest, hand: Date.now() } : rest;
+          }),
         });
       }
     },

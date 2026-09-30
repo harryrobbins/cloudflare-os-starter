@@ -720,7 +720,18 @@ export type ClientEvent =
       readonly audio: boolean;
       readonly video: boolean;
       readonly screen: boolean;
-    };
+    }
+  /**
+   * Raise or lower this participant's hand. Broadcast as a `call` event when it changes; the hand is
+   * {@link CallParticipant.hand}. Same ownership rule as `call-beat`.
+   */
+  | { readonly t: "call-hand"; readonly call: CallId; readonly participant: ParticipantId; readonly raised: boolean }
+  /**
+   * A quick reaction in the call: one of {@link CALL_REACTIONS}, fanned out as `call-react` and never
+   * stored. At most {@link CALL_REACTION_BURST} per {@link CALL_REACTION_WINDOW_MS} per participant;
+   * the rest are dropped with an `error` event.
+   */
+  | { readonly t: "call-react"; readonly call: CallId; readonly participant: ParticipantId; readonly emoji: CallReaction };
 
 /**
  * Server to client.
@@ -807,6 +818,14 @@ export type ServerEvent =
    * This participant no longer exists: the same person joined from another tab or frame, or the
    * server expired it. The receiving client tears its call down without calling `leave`.
    */
+  /** Somebody in the conversation's call reacted (`call-react`). Ephemeral: never stored or replayed. */
+  | {
+      readonly t: "call-react";
+      readonly channel: ChannelId;
+      readonly call: CallId;
+      readonly participant: ParticipantId;
+      readonly emoji: CallReaction;
+    }
   | {
       readonly t: "call-moved";
       readonly call: CallId;
@@ -927,6 +946,12 @@ export const CALL_SIMULCAST_RIDS = ["a", "b", "c"] as const;
 export type CallSimulcastRid = (typeof CALL_SIMULCAST_RIDS)[number];
 /** Tracks per `publish`/`pull`/`close-tracks` request. The SFU allows 64. */
 export const MAX_CALL_TRACKS_PER_REQUEST = 32;
+/** The quick reactions a call offers. A closed set, so the server can validate and the UI can lay it out. */
+export const CALL_REACTIONS = ["👍", "👏", "😂", "🎉", "❤️", "😮"] as const;
+export type CallReaction = (typeof CALL_REACTIONS)[number];
+/** Reactions one participant may send per {@link CALL_REACTION_WINDOW_MS}. */
+export const CALL_REACTION_BURST = 5;
+export const CALL_REACTION_WINDOW_MS = 10_000;
 /** Upper bound for one SDP blob we forward. Real offers for a 5-way call are ~10-30 KiB. */
 export const MAX_SDP_BYTES = 128 * 1024;
 
@@ -954,6 +979,8 @@ export interface CallParticipant {
   readonly video: boolean;
   /** Sharing their screen. */
   readonly screen: boolean;
+  /** When they raised their hand (`call-hand`); absent while it is down. Oldest first is the queue. */
+  readonly hand?: Timestamp;
   readonly tracks: readonly CallTrack[];
 }
 

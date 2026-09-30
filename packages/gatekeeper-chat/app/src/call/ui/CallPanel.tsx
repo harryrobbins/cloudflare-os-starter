@@ -20,19 +20,37 @@ import type { CallState, User } from "../../contract.js";
 import { useChat, useStore } from "../../hooks/store.js";
 import { Button, Spinner } from "../../components/primitives.js";
 import type { CallPane, CallFailure } from "../../store/calls.js";
+import type { CallReactionShown } from "../../store/state.js";
 import type { CallSnapshot, TileSize } from "../engine/types.js";
 import { CallControls } from "./CallControls.js";
 import { CallQualityNotices } from "./CallQuality.js";
 import { CallTile, ReconnectingOverlay, type TileModel } from "./CallTile.js";
-import { gridRows, isFramed, mediaHelp } from "./layout.js";
+import { gridRows, handQueue, isFramed, mediaHelp } from "./layout.js";
+
+/** What a tile needs from the room besides media: the hand and the reactions over it. */
+function extras(
+  participantId: string | null,
+  hands: ReadonlyMap<string, number>,
+  reactions: readonly CallReactionShown[],
+): Pick<TileModel, "hand" | "handOrder" | "reactions"> {
+  if (participantId === null) return {};
+  const order = hands.get(participantId);
+  const mine = reactions.filter((reaction) => reaction.participantId === participantId);
+  return {
+    ...(order === undefined ? {} : { hand: true, handOrder: order }),
+    ...(mine.length === 0 ? {} : { reactions: mine }),
+  };
+}
 
 /** The remote participants' tiles, in join order, merged from the room and the engine's media. */
 export function remoteTiles(
   room: CallState | undefined,
   local: CallSnapshot,
   users: Readonly<Record<string, User>>,
+  reactions: readonly CallReactionShown[] = [],
 ): TileModel[] {
   if (room === undefined) return [];
+  const hands = handQueue(room);
   return room.participants
     .filter((participant) => participant.id !== local.participantId)
     .map((participant) => {
@@ -48,6 +66,7 @@ export function remoteTiles(
         quality: media?.quality,
         // Only a camera that is on can be paused; a camera that is off is just the avatar.
         paused: participant.video && (media?.videoPaused === true || local.audioOnly === true || local.audioOnlyChosen === true),
+        ...extras(participant.id, hands, reactions),
       };
     });
 }
@@ -138,10 +157,11 @@ export function CallPanel({
   const me = useChat((state) => state.me);
   const hidden = useChat((state) => state.shellLayout === "hidden" || !state.visible);
   const embedded = useChat((state) => state.embedded);
+  const reactions = useChat((state) => state.callReactions);
   const onSize = useTileSizeReporting(hidden);
   const dock = layout === "dock";
 
-  const remotes = useMemo(() => remoteTiles(room, local, users), [room, local, users]);
+  const remotes = useMemo(() => remoteTiles(room, local, users, reactions), [room, local, users, reactions]);
   const stage = useMemo(
     () => screenTile(room, local, users, me?.name ?? "You", me?.id ?? "self"),
     [room, local, users, me],
@@ -156,6 +176,7 @@ export function CallPanel({
     speaking: false,
     self: true,
     quality: local.localQuality,
+    ...extras(local.participantId, handQueue(room), reactions),
   };
 
   let body: ReactNode;

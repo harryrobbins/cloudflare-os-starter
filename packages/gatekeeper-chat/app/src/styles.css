@@ -401,6 +401,32 @@ pre {
   animation: chat-drop 0.18s var(--ease-out-strong) both;
 }
 
+/* A call reaction: rises from the tile's corner and fades, over the store's 4 s display time. */
+@keyframes chat-reaction-float {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.6);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1.1);
+  }
+  20% {
+    transform: translateY(0) scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: translateY(-24px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-36px);
+  }
+}
+.chat-reaction-float {
+  animation: chat-reaction-float 4s var(--ease-out-strong) both;
+}
+
 /* A reaction landing. A short overshoot on the pill itself -- enough to catch the eye in a busy
    channel, short enough that a burst of reactions does not turn the row into a slot machine. */
 @keyframes chat-pop {
@@ -484,6 +510,7 @@ pre {
   .chat-rise,
   .chat-drop,
   .chat-pop,
+  .chat-reaction-float,
   .chat-spin,
   .chat-typing-dot,
   .chat-live-dot,
