@@ -4,6 +4,8 @@
 import type {
   Attachment,
   BadgeSummary,
+  CallFeature,
+  CallState,
   Channel,
   ChannelId,
   Membership,
@@ -18,6 +20,15 @@ import type {
 import type { SocketStatus } from "../api/types.js";
 import type { Draft } from "./drafts.js";
 import type { LocalMessage } from "./merge.js";
+import type { CallSnapshot, DeviceChoice } from "../call/engine/types.js";
+import {
+  CALLS_DISABLED,
+  DEFAULT_DEVICES,
+  IDLE_CALL,
+  NO_CALL_UI,
+  type CallRing,
+  type CallUi,
+} from "./calls.js";
 
 export type ThemeMode = "light" | "dark";
 
@@ -163,6 +174,28 @@ export interface ChatState {
   /** The conversation the UI currently shows, so notifications know what is on screen. */
   readonly activeChannelId: ChannelId | null;
   readonly activeRootId: MessageId | null;
+
+  // --- calls (docs/plans/chat-video.md) ---
+  /** `/api/me`'s `calls`. Disabled hides every call control. */
+  readonly callFeature: CallFeature;
+  /** Active calls by conversation: the room, from `call` events, `hello` and the channel list. */
+  readonly calls: Readonly<Record<ChannelId, CallState>>;
+  /** This frame's own call, as the engine reports it. */
+  readonly call: CallSnapshot;
+  readonly callUi: CallUi;
+  /** Incoming calls not yet answered or dismissed. */
+  readonly rings: readonly CallRing[];
+  /** Remembered per browser; null ids mean the system default. */
+  readonly callDevices: DeviceChoice;
+  /** Whether the next join starts with the microphone and the camera on. */
+  readonly callStart: { readonly audio: boolean; readonly video: boolean };
+  /**
+   * Where the shell has put this frame (`chat:layout`): its full `/chat` page, the dock, or out of
+   * sight behind the floating call pill. Null when no shell has said, standalone included.
+   */
+  readonly shellLayout: "page" | "dock" | "hidden" | null;
+  /** Full-page "Focus": the rail is hidden so the call takes the whole width. */
+  readonly callFocus: boolean;
 }
 
 export const INITIAL_STATE: ChatState = {
@@ -201,4 +234,13 @@ export const INITIAL_STATE: ChatState = {
   focused: true,
   activeChannelId: null,
   activeRootId: null,
+  callFeature: CALLS_DISABLED,
+  calls: {},
+  call: IDLE_CALL,
+  callUi: NO_CALL_UI,
+  rings: [],
+  callDevices: DEFAULT_DEVICES,
+  callStart: { audio: true, video: true },
+  shellLayout: null,
+  callFocus: false,
 };

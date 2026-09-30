@@ -31,6 +31,10 @@ import { ChannelStartCard, FirstRunCard } from "./ChannelStartCard.js";
 import { Composer } from "./Composer.js";
 import { MessageList } from "./MessageList.js";
 import { AppBadge, Button, EmptyState, IconButton, PresenceDot } from "./primitives.js";
+import { callPaneFor } from "../store/calls.js";
+import { CallButton } from "../call/ui/CallButton.js";
+import { CallNotice, CallPanel } from "../call/ui/CallPanel.js";
+import { CallPrejoin } from "../call/ui/CallPrejoin.js";
 
 /** A shared empty map, so the memoised rows are not re-rendered by a new reference every paint. */
 const NO_MARKERS: ReadonlyMap<string, never[]> = new Map();
@@ -62,7 +66,10 @@ export function ConversationView({
   const online = useChat((state) => state.online);
   const readCursors = useChat((state) => state.readCursors[channelId]);
   const hasDisplayName = useChat((state) => state.prefs.displayName !== null);
+  const localCall = useChat((state) => state.call);
+  const callUi = useChat((state) => state.callUi);
   const layout = useLayout();
+  const pane = callPaneFor(channelId, localCall, callUi);
 
   const label = channel === undefined ? "" : channelLabel(channel, users, meId);
 
@@ -175,6 +182,97 @@ export function ConversationView({
   // A question waiting on the Agent reads like somebody typing: it is the same "an answer is coming".
   if (agentWorking(topLevel)) typingNames.unshift("The Agent");
 
+  // The message list, typing line and composer: the whole column normally, and beside or under the
+  // call while one is on screen here.
+  const messageColumn = (
+    <>
+      <MessageList
+        key={channelId}
+        messages={topLevel}
+        meId={meId}
+        firstUnreadSeq={unreadFrom}
+        loading={conversation.loading}
+        loadingOlder={conversation.loadingOlder}
+        hasMoreBefore={conversation.hasMoreBefore}
+        focusMessageId={focusMessageId ?? conversation.focusMessageId}
+        canThread
+        startCard={
+          firstRun ? (
+            firstRunCard
+          ) : (
+            <ChannelStartCard
+              channel={channel}
+              label={label}
+              users={users}
+              isMember={membership !== undefined}
+              onJoin={() => void store.joinChannel(channelId)}
+            />
+          )
+        }
+        emptyState={
+          firstRun ? (
+            firstRunCard
+          ) : (
+            <EmptyState
+              icon={isDirect(channel) ? <Users size={20} /> : <Hash size={20} />}
+              title={`This is the start of ${label}`}
+              body={
+                channel.purpose ??
+                "Say something to get the conversation going. Messages here are visible to every member."
+              }
+            />
+          )
+        }
+        onLoadOlder={() => void store.loadOlder(channelId)}
+        onAtBottomChange={(atBottom) => store.setAtBottom(channelId, null, atBottom)}
+        onOpenThread={onOpenThread}
+        onCopyLink={onCopyLink}
+        onMarkUnread={(message) => void store.markUnreadFrom(channelId, message.seq)}
+        onMentionClick={onMentionClick}
+        onRetry={(clientId) => void store.retrySend(channelId, conversationKey(channelId), clientId)}
+        onDiscard={(clientId) => store.discardSend(conversationKey(channelId), clientId)}
+        onFocusHandled={() => store.clearFocusMessage(channelId)}
+        seenBy={seenBy}
+      />
+
+      <div
+        aria-live="polite"
+        className="h-5 shrink-0 truncate px-5 text-[11px] text-kumo-subtle"
+      >
+        {typingNames.length > 0 && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex gap-0.5" aria-hidden="true">
+              {[0, 1, 2].map((dot) => (
+                <span
+                  key={dot}
+                  className="chat-typing-dot inline-block h-1 w-1 rounded-full bg-kumo-subtle"
+                  style={{ animationDelay: `${dot * 0.15}s` }}
+                />
+              ))}
+            </span>
+            {typingNames.length === 1
+              ? typingNames[0] === "The Agent"
+                ? "The Agent is working…"
+                : `${typingNames[0]} is typing…`
+              : `${typingNames.slice(0, 2).join(" and ")} are typing…`}
+          </span>
+        )}
+      </div>
+
+      {channel.archived ? (
+        <div className="mx-4 mb-4 rounded-xl border border-kumo-line bg-kumo-elevated px-4 py-3 text-[12px] text-kumo-subtle">
+          This channel is archived. You can read it, but not post.
+        </div>
+      ) : (
+        <Composer
+          channelId={channelId}
+          conversationKey={conversationKey(channelId)}
+          placeholder={`Message ${label}`}
+        />
+      )}
+    </>
+  );
+
   return (
     <div className="flex h-full min-w-0 flex-col bg-kumo-base">
       <Header
@@ -198,93 +296,33 @@ export function ConversationView({
             }
           />
         </div>
-      ) : (
-        <>
-          <MessageList
-            key={channelId}
-            messages={topLevel}
-            meId={meId}
-            firstUnreadSeq={unreadFrom}
-            loading={conversation.loading}
-            loadingOlder={conversation.loadingOlder}
-            hasMoreBefore={conversation.hasMoreBefore}
-            focusMessageId={focusMessageId ?? conversation.focusMessageId}
-            canThread
-            startCard={
-              firstRun ? (
-                firstRunCard
-              ) : (
-                <ChannelStartCard
-                  channel={channel}
-                  label={label}
-                  users={users}
-                  isMember={membership !== undefined}
-                  onJoin={() => void store.joinChannel(channelId)}
-                />
-              )
-            }
-            emptyState={
-              firstRun ? (
-                firstRunCard
-              ) : (
-                <EmptyState
-                  icon={isDirect(channel) ? <Users size={20} /> : <Hash size={20} />}
-                  title={`This is the start of ${label}`}
-                  body={
-                    channel.purpose ??
-                    "Say something to get the conversation going. Messages here are visible to every member."
-                  }
-                />
-              )
-            }
-            onLoadOlder={() => void store.loadOlder(channelId)}
-            onAtBottomChange={(atBottom) => store.setAtBottom(channelId, null, atBottom)}
-            onOpenThread={onOpenThread}
-            onCopyLink={onCopyLink}
-            onMarkUnread={(message) => void store.markUnreadFrom(channelId, message.seq)}
-            onMentionClick={onMentionClick}
-            onRetry={(clientId) => void store.retrySend(channelId, conversationKey(channelId), clientId)}
-            onDiscard={(clientId) => store.discardSend(conversationKey(channelId), clientId)}
-            onFocusHandled={() => store.clearFocusMessage(channelId)}
-            seenBy={seenBy}
+      ) : pane === "prejoin" ? (
+        <CallPrejoin channelId={channelId} label={label} />
+      ) : pane === "moved" || pane === "failed" ? (
+        <CallNotice pane={pane} channelId={channelId} failure={callUi.failure} engineError={localCall.error} />
+      ) : pane !== "none" && layout.narrow ? (
+        // The sidebar: the call stacked over the conversation.
+        <div className="flex min-h-0 flex-1 flex-col">
+          <CallPanel
+            channelId={channelId}
+            label={label}
+            layout="dock"
+            className={callUi.chatOpen ? "h-[min(58%,460px)] shrink-0 border-b border-kumo-line" : "flex-1"}
           />
-
-          <div
-            aria-live="polite"
-            className="h-5 shrink-0 truncate px-5 text-[11px] text-kumo-subtle"
-          >
-            {typingNames.length > 0 && (
-              <span className="inline-flex items-center gap-1.5">
-                <span className="inline-flex gap-0.5" aria-hidden="true">
-                  {[0, 1, 2].map((dot) => (
-                    <span
-                      key={dot}
-                      className="chat-typing-dot inline-block h-1 w-1 rounded-full bg-kumo-subtle"
-                      style={{ animationDelay: `${dot * 0.15}s` }}
-                    />
-                  ))}
-                </span>
-                {typingNames.length === 1
-                  ? typingNames[0] === "The Agent"
-                    ? "The Agent is working…"
-                    : `${typingNames[0]} is typing…`
-                  : `${typingNames.slice(0, 2).join(" and ")} are typing…`}
-              </span>
-            )}
-          </div>
-
-          {channel.archived ? (
-            <div className="mx-4 mb-4 rounded-xl border border-kumo-line bg-kumo-elevated px-4 py-3 text-[12px] text-kumo-subtle">
-              This channel is archived. You can read it, but not post.
-            </div>
-          ) : (
-            <Composer
-              channelId={channelId}
-              conversationKey={conversationKey(channelId)}
-              placeholder={`Message ${label}`}
-            />
+          {callUi.chatOpen && <div className="flex min-h-0 flex-1 flex-col">{messageColumn}</div>}
+        </div>
+      ) : pane !== "none" ? (
+        // The full page: the call is the content area, the conversation a column beside it.
+        <div className="flex min-h-0 flex-1">
+          <CallPanel channelId={channelId} label={label} layout="page" className="flex-1" />
+          {callUi.chatOpen && (
+            <aside aria-label={`Messages in ${label}`} className="flex w-[min(380px,40%)] shrink-0 flex-col border-l border-kumo-line">
+              {messageColumn}
+            </aside>
           )}
-        </>
+        </div>
+      ) : (
+        messageColumn
       )}
 
       {/* Presence of the other person in a DM, announced quietly under the header. The Agent has
@@ -372,6 +410,7 @@ function Header({
       )}
 
       <div className="ml-auto flex shrink-0 items-center gap-1">
+        <CallButton channelId={channelId} />
         {!isDirect(channel) && (
           <button
             type="button"

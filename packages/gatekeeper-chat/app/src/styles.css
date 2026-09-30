@@ -442,6 +442,35 @@ pre {
   animation: chat-typing 1.2s ease-in-out infinite;
 }
 
+/* Calls: a slow pulse on the "live" dot, and the ring around a caller's avatar on an incoming call.
+   Opacity and scale only, so nothing reflows. */
+@keyframes chat-live {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.chat-live-dot {
+  animation: chat-live 1.6s ease-in-out infinite;
+}
+
+@keyframes chat-ring {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+.chat-ring {
+  animation: chat-ring 1.4s var(--ease-out-strong) infinite;
+}
+
 .press {
   transition: transform 140ms var(--ease-out-strong);
 }
@@ -457,6 +486,8 @@ pre {
   .chat-pop,
   .chat-spin,
   .chat-typing-dot,
+  .chat-live-dot,
+  .chat-ring,
   .press,
   .press:active {
     animation: none;

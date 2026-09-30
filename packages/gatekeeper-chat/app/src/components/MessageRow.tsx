@@ -42,6 +42,7 @@ import { useChat, useStore } from "../hooks/store.js";
 import { describeSeen, type SeenReader } from "../lib/seen.js";
 import type { LocalMessage } from "../store/merge.js";
 import { AgentReplyFooter, AgentRequestStatus } from "./AgentStatus.js";
+import { CallMessage } from "../call/ui/CallMessage.js";
 import { Attachments } from "./Attachments.js";
 import { EmojiPicker } from "./EmojiPicker.js";
 import { Markdown } from "./Markdown.js";
@@ -114,6 +115,11 @@ export const MessageRow = memo(function MessageRow({
     if (!focused) return;
     rowRef.current?.scrollIntoView({ block: "center", behavior: "auto" });
   }, [focused]);
+
+  // A call's message: "X started a call" with Join while it runs, its summary once it has ended.
+  if (system && message.call !== undefined) {
+    return <CallMessage message={message} summary={message.call} />;
+  }
 
   // A system message is a one-line note, not a conversation turn.
   if (system) {

@@ -7,10 +7,19 @@
 
 import type { AppToShellMessage, ShellToAppMessage } from "../contract.js";
 
+export type ShellLayout = Extract<ShellToAppMessage, { type: "chat:layout" }>["mode"];
+export type CallControlAction = Extract<ShellToAppMessage, { type: "chat:call-control" }>["action"];
+/** What `chat:call` carries, less its type. */
+export type BridgeCallState = Omit<Extract<AppToShellMessage, { type: "chat:call" }>, "type">;
+
 export interface BridgeHandlers {
   readonly onOpen: (href: string) => void;
   readonly onTheme: (mode: "light" | "dark", accent?: string) => void;
   readonly onVisible: (visible: boolean) => void;
+  /** The shell moved this frame: the full `/chat` page, the dock, or out of sight. */
+  readonly onLayout?: (mode: ShellLayout) => void;
+  /** A button on the shell's floating "In a call" pill. */
+  readonly onCallControl?: (action: CallControlAction) => void;
 }
 
 export interface Bridge {
@@ -18,6 +27,13 @@ export interface Bridge {
   badge(unread: number, mentions: number): void;
   notify(title: string, body: string, href: string): void;
   expand(href: string): void;
+  /**
+   * `chat:call`: this frame joined or left a call (so the shell keeps it mounted meanwhile), or its
+   * microphone or camera changed (for the shell's floating pill).
+   */
+  call(state: BridgeCallState): void;
+  /** `chat:present`: "Expand to full page" or "Pop out to sidebar" from the call bar. */
+  present(mode: "page" | "dock"): void;
   dispose(): void;
 }
 
@@ -52,6 +68,8 @@ export function createBridge(handlers: BridgeHandlers, embedded: boolean): Bridg
       badge: () => undefined,
       notify: () => undefined,
       expand: () => undefined,
+      call: () => undefined,
+      present: () => undefined,
       dispose: () => undefined,
     };
   }
@@ -80,6 +98,16 @@ export function createBridge(handlers: BridgeHandlers, embedded: boolean): Bridg
       case "chat:visible":
         handlers.onVisible(message.visible === true);
         return;
+      case "chat:layout":
+        if (message.mode === "page" || message.mode === "dock" || message.mode === "hidden") {
+          handlers.onLayout?.(message.mode);
+        }
+        return;
+      case "chat:call-control":
+        if (message.action === "toggle-audio" || message.action === "toggle-video" || message.action === "leave") {
+          handlers.onCallControl?.(message.action);
+        }
+        return;
     }
   }
 
@@ -90,6 +118,8 @@ export function createBridge(handlers: BridgeHandlers, embedded: boolean): Bridg
     badge: (unread, mentions) => post({ type: "chat:badge", unread, mentions }),
     notify: (title, body, href) => post({ type: "chat:notify", title, body, href }),
     expand: (href) => post({ type: "chat:expand", href }),
+    call: (state) => post({ type: "chat:call", ...state }),
+    present: (mode) => post({ type: "chat:present", mode }),
     dispose: () => window.removeEventListener("message", onMessage),
   };
 }

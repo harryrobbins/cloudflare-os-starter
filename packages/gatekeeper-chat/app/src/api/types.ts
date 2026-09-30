@@ -156,4 +156,10 @@ export interface MockControls {
   setConnected(connected: boolean): void;
   /** Makes the next N writes fail, to exercise the failed/retry path. */
   failNextWrites(count: number, code?: ErrorCode): void;
+  /** Somebody else starts a call here; in a dm or group it rings this client. */
+  ringFrom(channelId: ChannelId, userId: UserId): void;
+  /** Fills a conversation's call to the cap with other people, so the "full" state can be seen. */
+  fillCall(channelId: ChannelId): void;
+  /** Ends a conversation's call as if everybody left. */
+  endCall(channelId: ChannelId): void;
 }

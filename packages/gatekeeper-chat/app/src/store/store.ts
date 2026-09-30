@@ -11,6 +11,7 @@ import {
   permalink,
   utf8Bytes,
   type Attachment,
+  type CallState,
   type Channel,
   type ChannelId,
   type ChannelKind,
@@ -26,6 +27,21 @@ import {
   type UserId,
 } from "../contract.js";
 import { ApiError, type ChatApi, type ChatSocket, type SocketStatus, type Transport } from "../api/types.js";
+import type { CallEngine, CallSnapshot, DeviceChoice } from "../call/engine/types.js";
+import {
+  CALLS_DISABLED,
+  NO_CALL_UI,
+  applyCallEvent,
+  callHref,
+  callsByChannel,
+  classifyCallFailure,
+  isLivePhase,
+  loadCallPrefs,
+  pruneRings,
+  saveCallPrefs,
+  shouldRing,
+  type CallUi,
+} from "./calls.js";
 import { channelLabel } from "../lib/labels.js";
 import { recordEmojiUse } from "../lib/reactions.js";
 import { toPlainText } from "../lib/markdown.js";
@@ -81,11 +97,18 @@ const FAILED_USER_RETRY_MS = 30_000;
 const TYPING_TTL_MS = 6000;
 /** How long a toast lives. Errors are sticky; everything else clears itself. */
 const TOAST_TIMEOUT_MS = 6000;
+/** An unanswered incoming call stops ringing after this long, as a phone does. */
+export const RING_TIMEOUT_MS = 30_000;
 
 export interface StoreDeps {
   readonly transport: Transport;
   /** Injected so tests can drive it; the app passes the router's navigate. */
   readonly navigate?: (href: string) => void;
+  /**
+   * The media half of calls (`app/src/call/index.ts` builds it). Absent in most tests and whenever
+   * the browser cannot do WebRTC; the room state is still kept, so the rail and history work.
+   */
+  readonly callEngine?: CallEngine | null;
 }
 
 export class ChatStore {
@@ -106,6 +129,7 @@ export class ChatStore {
     this.#socket = deps.transport.socket;
     if (deps.navigate !== undefined) this.#navigate = deps.navigate;
     this.mock = deps.transport.mock;
+    this.#callEngine = deps.callEngine ?? null;
   }
 
   /** Present only under `VITE_CHAT_MOCK=1`; the dev tools panel uses it. */
@@ -161,6 +185,14 @@ export class ChatStore {
     this.#socket.onStatus((status) => this.#onSocketStatus(status));
     this.#socket.onEvent((event) => this.#onSocketEvent(event));
 
+    const callPrefs = loadCallPrefs();
+    this.#patch({ callDevices: callPrefs.devices, callStart: callPrefs.start });
+    const engine = this.#callEngine;
+    if (engine !== null) {
+      this.#onCallSnapshot(engine.snapshot());
+      this.#unsubscribeCall = engine.subscribe(() => this.#onCallSnapshot(engine.snapshot()));
+    }
+
     try {
       const [me, channels] = await Promise.all([this.#api.me(), this.#api.listChannels()]);
       this.#patch({
@@ -174,7 +206,9 @@ export class ChatStore {
         channels: byId(channels.channels),
         memberships: byChannel(channels.memberships),
         users: { ...byId(channels.users), [me.user.id]: me.user },
+        callFeature: me.calls ?? CALLS_DISABLED,
       });
+      if (channels.calls !== undefined) this.#setCalls(callsByChannel(channels.calls));
       this.#updateTitle();
       this.#socket.open();
       this.#subscribeAll();
@@ -189,6 +223,8 @@ export class ChatStore {
     for (const timer of this.#timers) clearTimeout(timer);
     this.#timers.clear();
     if (this.#draftFlush !== null) clearTimeout(this.#draftFlush);
+    this.#unsubscribeCall?.();
+    this.#unsubscribeCall = null;
     this.#socket.close();
   }
 
@@ -208,6 +244,9 @@ export class ChatStore {
     switch (event.t) {
       case "hello": {
         this.#patch({ users: { ...this.#state.users, [event.user.id]: event.user }, me: event.user });
+        // `calls` is the whole set on a (re)connect: a call that ended while the socket was down is
+        // simply absent, which is how this frame learns about it.
+        if (event.calls !== undefined) this.#setCalls(callsByChannel(event.calls));
         this.#retryMissingUsers();
         void this.#catchUp(event.lastSeq);
         this.#subscribeAll();
@@ -300,6 +339,12 @@ export class ChatStore {
         this.#refreshIfUnknown([...Object.keys(event.unread), ...Object.keys(event.mentions)]);
         return;
       }
+      case "call":
+        this.#onCallEvent(event.channel, event.call, event.ring);
+        return;
+      case "call-moved":
+        this.#callEngine?.handleMoved(event.call, event.participant);
+        return;
       case "error":
         // A frame the server refused. Surfaced quietly: it is a client bug, not the user's problem.
         this.#toast({ tone: "error", title: "The chat server rejected a request", body: event.message });
@@ -1011,6 +1056,7 @@ export class ChatStore {
         users: { ...this.#state.users, ...byId(response.users) },
         badges: response.badges,
       });
+      if (response.calls !== undefined) this.#setCalls(callsByChannel(response.calls));
       this.#updateTitle();
       this.#subscribeAll();
     } catch (cause) {
@@ -1299,6 +1345,9 @@ export class ChatStore {
     const me = state.me;
     if (me === null) return;
     if (this.#notified.has(message.id)) return;
+    // A call's own message is announced by the ring (dm, group) or the Join pill (channel), not as
+    // a message: "Cara started a call" as a toast under "Cara is calling" says it twice.
+    if (message.call !== undefined) return;
     if (!shouldNotify(message, me.id, state.memberships[message.channelId])) return;
 
     const onScreen =
@@ -1386,6 +1435,347 @@ export class ChatStore {
   disableNotifications(): void {
     this.#patch({ notificationsOptIn: false });
     writeSetting(NOTIFY_OPT_IN_KEY, null);
+  }
+
+
+  // --- calls ----------------------------------------------------------------
+  //
+  // The store keeps the room (`calls`, from the server) and the pane's own state (`callUi`), and
+  // mirrors the engine's snapshot into `call`. It forwards every room update for the joined
+  // conversation into the engine and `call-moved` into `handleMoved`; the engine does the media.
+
+  #callEngine: CallEngine | null;
+  #unsubscribeCall: (() => void) | null = null;
+  /** The conversation a join is in flight for, before the engine's snapshot names it. */
+  #joiningChannel: ChannelId | null = null;
+  /** Why the call is about to go idle, when it was not this person's Leave. */
+  #idleReason: string | null = null;
+  /** What was last told to the shell, so `chat:call` is sent on a change and not on every frame. */
+  #bridgedCall: string | null = null;
+
+  /** The engine, for the handful of calls that are pure media (device lists, tile sizes). */
+  get callEngine(): CallEngine | null {
+    return this.#callEngine;
+  }
+
+  /**
+   * Set by the embed bridge: `chat:call`, so the shell keeps this frame mounted during a call and its
+   * floating pill shows the right mute state. Called on a change only, never twice with the same.
+   */
+  onCallChange: ((call: { active: boolean; href?: string; audio?: boolean; video?: boolean }) => void) | null = null;
+
+  #setCalls(calls: Readonly<Record<ChannelId, CallState>>): void {
+    this.#noticeUsers(Object.values(calls).flatMap((call) => call.participants.map((p) => p.userId)));
+    this.#patch({ calls, rings: pruneRings(this.#state.rings, calls) });
+    const joined = this.#engineChannel();
+    if (joined !== null) this.#forwardRoom(calls[joined] ?? null);
+  }
+
+  /**
+   * Hands the joined conversation's room to the engine -- or, when that call is over, leaves.
+   *
+   * `applyCallState(null)` only closes the engine's pulls; it does not end the local call, so a call
+   * that ended (or was replaced by a newer one) under a connected frame is left here. While a join
+   * is still in flight the room can lag behind it (a channel list fetched a moment earlier), so only
+   * a connected call is ever torn down this way.
+   */
+  #forwardRoom(room: CallState | null): void {
+    const engine = this.#callEngine;
+    if (engine === null) return;
+    const local = this.#state.call;
+    const connected = local.phase === "connected" || local.phase === "reconnecting";
+    if (connected && (room === null || room.id !== local.callId)) {
+      this.#joiningChannel = null;
+      this.#patch({ callUi: NO_CALL_UI, callFocus: false });
+      this.#idleReason = "The call ended";
+      void engine.leave().catch(() => undefined);
+      return;
+    }
+    if (room !== null) engine.applyCallState(room);
+  }
+
+  /** The conversation this frame's engine is in (or joining), if any. */
+  #engineChannel(): ChannelId | null {
+    const local = this.#state.call;
+    if (local.channelId !== null && isLivePhase(local.phase)) return local.channelId;
+    return this.#joiningChannel;
+  }
+
+  #onCallEvent(channelId: ChannelId, call: CallState | null, ring: boolean | undefined): void {
+    if (call !== null) this.#noticeUsers(call.participants.map((participant) => participant.userId));
+    const calls = applyCallEvent(this.#state.calls, channelId, call);
+    this.#patch({ calls, rings: pruneRings(this.#state.rings, calls) });
+    if (this.#engineChannel() === channelId) this.#forwardRoom(call);
+    const me = this.#state.me;
+    if (
+      call !== null &&
+      shouldRing({
+        ring,
+        call,
+        meId: me?.id,
+        membership: this.#state.memberships[channelId],
+        localCallId: this.#state.call.callId,
+      }) &&
+      !this.#state.rings.some((existing) => existing.callId === call.id)
+    ) {
+      this.#ring(call);
+    }
+  }
+
+  #ring(call: CallState): void {
+    const state = this.#state;
+    this.#patch({
+      rings: [...state.rings, { callId: call.id, channelId: call.channelId, startedBy: call.startedBy, at: Date.now() }],
+    });
+    this.#later(() => this.dismissRing(call.id), RING_TIMEOUT_MS);
+
+    const caller = state.users[call.startedBy]?.name ?? "Someone";
+    const channel = state.channels[call.channelId];
+    // A dm is named after the caller already; a group or channel says where.
+    const where =
+      channel === undefined || channel.kind === "dm" ? "" : ` in ${channelLabel(channel, state.users, state.me?.id)}`;
+    const title = `${caller} is calling`;
+    const body = `Video call${where}`;
+    this.#patch({ announcement: `${title}${where}` });
+    // The in-app card is always raised; the shell's toast (embedded) or a browser notification
+    // (standalone) only when this frame is out of sight -- a closed dock or a hidden tab.
+    const hidden = state.embedded
+      ? !state.visible
+      : typeof document !== "undefined" && document.visibilityState === "hidden";
+    if (hidden) this.#systemNotify(title, body, callHref(call.channelId));
+  }
+
+  dismissRing(callId: string): void {
+    const rings = this.#state.rings.filter((ring) => ring.callId !== callId);
+    if (rings.length !== this.#state.rings.length) this.#patch({ rings });
+  }
+
+  #onCallSnapshot(snapshot: CallSnapshot): void {
+    const previous = this.#state.call;
+    if (snapshot === previous) return;
+    this.#patch({ call: snapshot });
+    if (snapshot.channelId !== null && isLivePhase(snapshot.phase)) this.#joiningChannel = null;
+
+    // Answering a ring in this frame (or joining the call it rang for) silences it.
+    if (snapshot.callId !== null && this.#state.rings.some((ring) => ring.callId === snapshot.callId)) {
+      this.dismissRing(snapshot.callId);
+    }
+
+    if (previous.phase !== snapshot.phase) this.#announceCallPhase(previous, snapshot);
+    if (!isLivePhase(snapshot.phase) && this.#state.callFocus) this.#patch({ callFocus: false });
+
+    const live = snapshot.channelId !== null && isLivePhase(snapshot.phase);
+    const bridged = live
+      ? { active: true, href: callHref(snapshot.channelId!), audio: snapshot.audioEnabled, video: snapshot.videoEnabled }
+      : { active: false };
+    const key = JSON.stringify(bridged);
+    // The first idle snapshot is not news: the shell assumes no call until told otherwise.
+    if (key !== (this.#bridgedCall ?? JSON.stringify({ active: false }))) {
+      this.#bridgedCall = key;
+      this.onCallChange?.(bridged);
+    }
+  }
+
+  #announceCallPhase(previous: CallSnapshot, next: CallSnapshot): void {
+    switch (next.phase) {
+      case "connected":
+        this.announce(previous.phase === "reconnecting" ? "Reconnected to the call" : "You joined the call");
+        return;
+      case "reconnecting":
+        this.announce("Connection lost. Reconnecting to the call…");
+        return;
+      case "moved":
+        this.announce("You joined this call in another window");
+        return;
+      case "failed":
+        this.announce(`The call failed${next.error === null ? "" : `: ${next.error}`}`);
+        return;
+      case "idle":
+        if (isLivePhase(previous.phase)) this.announce(this.#idleReason ?? "You left the call");
+        this.#idleReason = null;
+        return;
+      case "joining":
+        return;
+    }
+  }
+
+  #setCallUi(patch: Partial<CallUi>): void {
+    this.#patch({ callUi: { ...this.#state.callUi, ...patch } });
+  }
+
+  /** Shows the pre-join pane (preview, device pickers) in a conversation. */
+  openCallPrejoin(channelId: ChannelId): void {
+    this.#setCallUi({ channelId, prejoin: true, failure: null, chatOpen: false });
+  }
+
+  /** Cancel on pre-join, or Close on a failed or moved call. */
+  closeCallPane(): void {
+    const local = this.#state.call;
+    this.#patch({ callUi: NO_CALL_UI });
+    // A terminal engine state is cleared too, so the next Join starts from idle.
+    if (local.phase === "failed" || local.phase === "moved") void this.#callEngine?.leave();
+  }
+
+  setCallChatOpen(chatOpen: boolean): void {
+    if (this.#state.callUi.chatOpen !== chatOpen) this.#setCallUi({ chatOpen });
+  }
+
+  setCallStart(start: { audio?: boolean; video?: boolean }): void {
+    const callStart = { ...this.#state.callStart, ...start };
+    this.#patch({ callStart });
+    saveCallPrefs({ devices: this.#state.callDevices, start: callStart });
+  }
+
+  /** Remembers a device choice and, during a call, switches to it live. */
+  async setCallDevices(devices: Partial<DeviceChoice>): Promise<void> {
+    const callDevices = { ...this.#state.callDevices, ...devices };
+    this.#patch({ callDevices });
+    saveCallPrefs({ devices: callDevices, start: this.#state.callStart });
+    if (this.#callEngine !== null && isLivePhase(this.#state.call.phase)) {
+      try {
+        await this.#callEngine.setDevices(devices);
+      } catch (cause) {
+        this.#toast({ tone: "error", title: "Could not switch the device", body: describe(cause) });
+      }
+    }
+  }
+
+  /**
+   * Joins the conversation's call, starting it when none runs. Must run from a click: the engine
+   * asks for the camera and microphone, and the click is what unlocks audio playback.
+   */
+  async joinCall(channelId: ChannelId): Promise<void> {
+    const engine = this.#callEngine;
+    if (engine === null) {
+      this.#setCallUi({
+        channelId,
+        prejoin: false,
+        failure: { kind: "unavailable", message: "This browser cannot make calls." },
+      });
+      return;
+    }
+    const local = this.#state.call;
+    // One call per frame: joining another conversation's call leaves the current one first.
+    if (local.channelId !== null && local.channelId !== channelId && isLivePhase(local.phase)) {
+      await engine.leave();
+    }
+    this.#joiningChannel = channelId;
+    this.#patch({ callUi: { channelId, prejoin: false, chatOpen: this.#state.compact, failure: null } });
+    try {
+      await engine.join({
+        channelId,
+        audio: this.#state.callStart.audio,
+        video: this.#state.callStart.video,
+        devices: this.#state.callDevices,
+      });
+      // A `call` event can beat the join's own answer; hand the engine the latest room either way.
+      const room = this.#state.calls[channelId];
+      if (room !== undefined) engine.applyCallState(room);
+    } catch (cause) {
+      this.#joiningChannel = null;
+      // Leaving (or starting another join) while this one was in flight cancels it: not an error.
+      if (cause instanceof Error && /cancelled/iu.test(cause.message) && !(cause instanceof ApiError)) return;
+      const failure = classifyCallFailure(cause, this.#state.callFeature.maxParticipants);
+      if (this.#state.callUi.channelId === channelId) this.#setCallUi({ failure });
+      this.announce(failure.message);
+    }
+  }
+
+  async leaveCall(): Promise<void> {
+    this.#joiningChannel = null;
+    this.#patch({ callUi: NO_CALL_UI, callFocus: false });
+    try {
+      await this.#callEngine?.leave();
+    } catch (cause) {
+      // Leaving is best effort: the server expires a participant that stops beating anyway.
+      this.#toast({ tone: "error", title: "Could not leave the call cleanly", body: describe(cause) });
+    }
+  }
+
+  toggleCallAudio(): void {
+    const engine = this.#callEngine;
+    if (engine === null || !isLivePhase(this.#state.call.phase)) return;
+    const next = !this.#state.call.audioEnabled;
+    engine.setAudioEnabled(next);
+    this.announce(next ? "Microphone on" : "Microphone off");
+  }
+
+  async toggleCallVideo(): Promise<void> {
+    const engine = this.#callEngine;
+    if (engine === null || !isLivePhase(this.#state.call.phase)) return;
+    const next = !this.#state.call.videoEnabled;
+    this.announce(next ? "Camera on" : "Camera off");
+    try {
+      await engine.setVideoEnabled(next);
+    } catch (cause) {
+      this.#toast({ tone: "error", title: next ? "Could not start the camera" : "Could not stop the camera", body: describe(cause) });
+    }
+  }
+
+  async toggleCallScreen(): Promise<void> {
+    const engine = this.#callEngine;
+    if (engine === null || !isLivePhase(this.#state.call.phase)) return;
+    const next = !this.#state.call.screenEnabled;
+    try {
+      const done = await engine.setScreenEnabled(next);
+      if (done) this.announce(next ? "You are sharing your screen" : "Screen sharing stopped");
+    } catch (cause) {
+      this.#toast({ tone: "error", title: "Could not share the screen", body: describe(cause) });
+    }
+  }
+
+  /**
+   * `chat:layout`: the shell moved this one frame between its `/chat` page and the dock (or hid it).
+   * Only the layout changes -- the engine, and so the call, is untouched. `hidden` keeps the last
+   * layout and only takes the tiles off screen, so the engine drops to its smallest layers while the
+   * audio keeps playing.
+   */
+  setLayout(mode: "page" | "dock" | "hidden"): void {
+    if (this.#state.shellLayout === mode) return;
+    const patch: { -readonly [K in keyof ChatState]?: ChatState[K] } = { shellLayout: mode };
+    if (mode !== "hidden") {
+      patch.compact = mode === "dock";
+      // The dock shows the conversation under the call; the full page starts with the call alone.
+      if (isLivePhase(this.#state.call.phase)) patch.callUi = { ...this.#state.callUi, chatOpen: mode === "dock" };
+      if (mode === "dock") patch.callFocus = false;
+    }
+    this.#patch(patch);
+    if (typeof document !== "undefined" && mode !== "hidden") {
+      if (mode === "dock") document.documentElement.dataset.compact = "1";
+      else delete document.documentElement.dataset.compact;
+    }
+  }
+
+  /** A button on the shell's floating call pill. */
+  callControl(action: "toggle-audio" | "toggle-video" | "leave"): void {
+    switch (action) {
+      case "toggle-audio":
+        this.toggleCallAudio();
+        return;
+      case "toggle-video":
+        void this.toggleCallVideo();
+        return;
+      case "leave":
+        void this.leaveCall();
+        return;
+    }
+  }
+
+  /** "Expand to full page" / "Pop out to sidebar": the shell moves the frame; nothing rejoins. */
+  presentCall(mode: "page" | "dock"): void {
+    this.onPresent?.(mode);
+  }
+
+  /** Set by the embed bridge (`chat:present`). Null standalone, which hides the two buttons. */
+  onPresent: ((mode: "page" | "dock") => void) | null = null;
+
+  setCallFocus(callFocus: boolean): void {
+    if (this.#state.callFocus !== callFocus) this.#patch({ callFocus });
+  }
+
+  /** Page unload: drop the media without calling the server, which expires the participant. */
+  disposeCall(): void {
+    this.#callEngine?.dispose();
   }
 
   // --- theme, toasts, announcements ----------------------------------------
@@ -1555,6 +1945,7 @@ function userIdsOf(messages: readonly Message[]): UserId[] {
     for (const mention of message.mentions) if (mention.kind === "user") ids.push(mention.userId);
     for (const reaction of message.reactions) ids.push(...reaction.userIds);
     if (message.agentRequest !== undefined) ids.push(message.agentRequest.requesterId);
+    if (message.call !== undefined) ids.push(...message.call.participantIds);
   }
   return ids;
 }

@@ -38,6 +38,19 @@ membership and a live socket to every client, so it becomes the call's room.
   list stays one click away (a "Chat" toggle on the call bar), so people can paste links during the
   call. Controls: mic, camera, screen share, device settings, leave. Keyboard: `Ctrl/Cmd+D` mic,
   `Ctrl/Cmd+E` camera, both announced to screen readers.
+- **Full page or sidebar, without dropping the call.** A call can be shown two ways, and moving
+  between them is seamless (no rejoin, no media blip):
+  - **Full page** — `/chat` with the call as the whole content area ("Focus" hides the rail; the
+    message list is a toggleable side column). For meetings where the call is the point.
+  - **Sidebar** — the shell's chat dock, in compact layout: a stacked grid (active speaker large,
+    others as a strip) with controls, and the conversation below it. For working alongside the call:
+    a whiteboard, a Board, a notebook or any other shell page stays fully usable to the left, and the
+    call follows you as you navigate the shell.
+  - Buttons on the call bar: "Pop out to sidebar" on the full page, "Expand to full page" in the
+    sidebar. Closing the sidebar during a call hides it and leaves a floating "In a call" pill (mute,
+    expand, leave) on the shell, so the call keeps going audibly. See
+    [One persistent chat frame](#shell-one-persistent-chat-frame).
+  - Later: a Document Picture-in-Picture window (Chrome/Edge) for calling next to a different tab.
 - **History.** Starting a call posts a system message, "Harry started a call", with a Join button
   while it runs; when the call ends the same message is edited to "Call ended · 23 min · Harry,
   Alice, Bob". It is a normal message: it threads, searches and permalinks.
@@ -233,6 +246,35 @@ credentials are minted per join with a TTL of a few hours and returned only to t
 - The chat HTML gets `Permissions-Policy: camera=(self), microphone=(self), display-capture=(self)`.
   The shell's own responses must not deny those features to the frame (verified in the fork stream).
 
+### Shell: one persistent chat frame
+
+Today the dock and the `/chat` route each mount their own iframe, so moving a call between them
+would mean a second app instance and a rejoin ("Move here"). An iframe also reloads when it is moved
+in the DOM, so it cannot simply be re-parented. Instead (fork change, phase 1b):
+
+- The shell mounts **one** `PersistentChatFrame` at the shell root, `position: fixed`, and never
+  unmounts it while a call is active (or during the existing 60 s grace period otherwise).
+- The dock drawer and the `/chat` route render **slots**: empty elements that register themselves
+  with `chatDockBus`. The frame is positioned over the active slot's rectangle (ResizeObserver +
+  scroll/resize listeners, rAF-throttled). Precedence: the `/chat` page slot, else the open dock's
+  slot, else hidden (`visibility: hidden`, 0×0 — not `display: none`, and never removed while in a
+  call), in which case the shell shows the floating "In a call" pill.
+- The shell tells the app its layout with a new `ShellToAppMessage`
+  `{type: "chat:layout"; mode: "page" | "dock" | "hidden"}`; the app switches between full and compact
+  layouts at runtime (the `compact` query parameter stays as the initial value). `chat:open` keeps
+  navigating inside the one app instance.
+- The app asks for a move with `AppToShellMessage` `{type: "chat:present"; mode: "page" | "dock"}`
+  ("Expand to full page" / "Pop out to sidebar"): the shell navigates to `/chat/...` or opens the
+  dock and navigates back, respectively. For the sidebar case it returns to the page the user came
+  from (remembered by the shell when the full page opened), so "pop out" lands you back on the
+  whiteboard.
+- The floating pill has mute and leave, sent to the app as `ShellToAppMessage`
+  `{type: "chat:call-control"; action: "toggle-audio" | "toggle-video" | "leave"}`, and "expand".
+- Focus and keyboard: when the frame is over a slot, focus moves into it as a normal iframe would;
+  `Esc` in the dock still closes (hides) it.
+
+The two-frame "Move here" state remains for a second browser tab.
+
 ### Configuration and deployment
 
 - New Cloudflare resources: one **Realtime SFU app** (app id + secret) and one **TURN key** (key id +
@@ -277,6 +319,71 @@ first; then these run in parallel with disjoint file ownership:
 | C. Call UI + store | `app/src/call/ui/*`, store/state changes, header/rail/message hooks, mock engine | contract, B's interface |
 | D. Shell + deploy | fork `ChatDock.tsx` patch, `scripts/deploy.ts` + `deployment.jsonc` calls block, Permissions-Policy | contract |
 | E. Integration + e2e | `e2e/call-check.mjs`, local-platform run, docs | A–D |
+| F. Persistent frame (1b) | fork `PersistentChatFrame`, slots, pill, `chat:layout`/`chat:present`/`chat:call-control` | D |
+| G. Quality phase 1 | engine capture/codec/adaptation/telemetry, `stats` route, indicators | A–C merged |
+
+## Quality roadmap
+
+Researched 2026-09-30 (conversation with Harry; detail in
+[../research/chat-video-sfu.md](../research/chat-video-sfu.md) where it touches the SFU). Most of the
+quality people feel in Teams, Meet or Zoom comes from network resilience and adaptation, not ML
+effects. What the big platforms do, for reference: proprietary audio codecs (Microsoft SILK → Satin)
+with ML packet-loss concealment and audio redundancy; ML noise suppression, echo cancellation and
+voice isolation; SVC or simulcast with aggressive bandwidth estimation and audio-only fallback;
+background blur/replacement, low-light correction, auto-framing and NPU super-resolution; media
+relays, enterprise media bypass and DSCP marking; pre-call tests, in-call network warnings and an
+admin call-quality dashboard; captions, transcripts and recording.
+
+No transcoding is needed anywhere: the SFU forwards encoded media, and simulcast (or SVC) gives each
+viewer a layer that suits them. Browser-side processing is for effects, not transcoding.
+
+### Quality phase 1 (after the initial call work lands; this branch)
+
+- **Capture constraints**: `echoCancellation`, `noiseSuppression`, `autoGainControl` explicitly on;
+  `voiceIsolation` where supported (feature-detected via `getSupportedConstraints`); camera
+  `1280×720@30` ideal, never more.
+- **Resilient audio**: Opus with in-band FEC and DTX (SDP `useinbandfec=1; usedtx=1`, set by
+  munging the fmtp line or via `setCodecPreferences`); prefer `audio/red` (RED redundancy, as Meet
+  uses) where the browser offers it and the SFU negotiates it — verify on the real SFU and fall back
+  silently; Opus mono ~32 kbps, `priority/networkPriority: "high"`.
+- **Degradation preferences**: camera `maintain-framerate`; screen share `maintain-resolution`,
+  `contentHint: "detail"` (or `"motion"` when the user picks "optimise for video"), max 15 fps text /
+  30 fps motion.
+- **CPU and bandwidth adaptation**: read `outbound-rtp.qualityLimitationReason` every 2 s; sustained
+  `cpu` disables the top simulcast layer (then the middle), sustained `none` re-enables with
+  hysteresis; sustained receive loss or low available bandwidth drops remote tiles to `c`, then
+  pauses remote video (audio-only mode) with a banner, restoring when it clears.
+- **Pause what is not seen**: tiles reported `hidden` (chat pane open, sidebar hidden, tab hidden via
+  `visibilitychange`) close their video pulls after 5 s and re-pull on show, instead of only dropping
+  to layer `c`. Audio is never paused.
+- **Connection quality indicator** per tile and for yourself (good / fair / poor from loss, jitter,
+  RTT, `framesPerSecond`), with a tooltip; a "Your connection is unstable" banner.
+- **Call quality telemetry**: on leave (and every 60 s), a small summary per participant — duration,
+  average/peak RTT, loss, jitter, framesDecoded/Dropped, qualityLimitation durations, relay (TURN) or
+  direct, codec — POSTed to a new `POST /calls/:callId/stats` route and logged by the Worker with the
+  existing redacted logger (no SDP, no IPs). Enough to diagnose "Alice's calls are always bad".
+- **Pre-join checks**: mic level meter and "we can't hear you" when silent for 5 s; speaker test
+  tone; a headphones hint when the output device is built-in speakers and more than one person is in
+  the call.
+
+### Quality phase 2 (separate plan when phase 1 is measured)
+
+- **ML noise suppression** toggle: RNNoise (or DTLN) as WASM in an `AudioWorklet`, ~10 ms added
+  latency, low CPU; off by default because the browser's own suppression is decent.
+- **Background blur / replacement**: MediaPipe Image Segmenter (WebGL/WebGPU) on raw frames via
+  `MediaStreamTrackProcessor`/`Generator` in a worker (Chrome/Edge), canvas fallback elsewhere;
+  auto-disabled by the phase 1 CPU monitor. Note macOS Portrait / Windows Studio Effects give users
+  OS-level blur for free.
+- **SVC and codecs**: evaluate VP9/AV1 `scalabilityMode` (L1T3, L3T3) against simulcast on the real
+  SFU (per-viewer SVC layer selection is **UNCONFIRMED**), and hardware H.264 for battery on Macs and
+  phones.
+- **Live captions / transcript** via a speech-to-text model through the LiteLLM proxy — a product
+  feature with cost and privacy implications; needs its own decision.
+
+### Not planned
+
+Custom codecs, ML packet-loss concealment beyond Opus's own, NPU super-resolution, low-light
+correction, DSCP marking and native clients — disproportionate for a five-person internal tool.
 
 ## Risks and open questions
 

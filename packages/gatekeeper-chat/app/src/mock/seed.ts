@@ -9,6 +9,8 @@ import {
   AGENT_USER_NAME,
   GENERAL_CHANNEL_ID,
   type Attachment,
+  type CallParticipant,
+  type CallState,
   type Channel,
   type ChannelId,
   type Membership,
@@ -46,6 +48,8 @@ export interface Seed {
    * `public` and `private`, because a channel can hold the whole deployment.
    */
   readonly readCursors: Map<ChannelId, ReadCursor[]>;
+  /** Active calls, one per conversation at most: #design has one running when the app opens. */
+  readonly calls: CallState[];
 }
 
 function user(id: UserId, name: string, email: string, online: boolean, now: number): User {
@@ -226,6 +230,8 @@ export function buildSeed(): Seed {
       { by: "u-eve", body: "Rail spacing: 8px between sections, 2px between rows. Anything tighter and the unread dot collides with the name.", at: now - 130 * MINUTE },
       { by: "u-cara", body: `${userToken(ME)} does that work with the badge at 3 digits?`, at: now - 125 * MINUTE, mentionsMe: true },
       { by: "u-eve", body: "We cap at 9+, so three digits never happens.", at: now - 120 * MINUTE },
+      // The call that is running when the app opens: its system message, then the room below.
+      { by: "u-eve", body: "Eve Novak started a call", at: now - 6 * MINUTE, kind: "system" },
     ]),
   );
 
@@ -284,6 +290,8 @@ export function buildSeed(): Seed {
     ...conversation("d-alice", [
       { by: "u-alice", body: "Did you get a chance to look at the draft?", at: now - 180 * MINUTE },
       { by: ME, body: "Halfway through. The second section needs an example.", at: now - 176 * MINUTE },
+      // A call that has ended, as its message reads afterwards.
+      { by: "u-alice", body: "Alice Chen started a call", at: now - 170 * MINUTE, kind: "system" },
       { by: "u-alice", body: "I'll add one.", at: now - 30 * MINUTE },
       { by: "u-alice", body: "Added — have a look when you can 🙏", at: now - 26 * MINUTE },
     ]),
@@ -337,7 +345,57 @@ export function buildSeed(): Seed {
     ],
   ]);
 
-  return { users, channels: withSeq, memberships, messages, attachments, following, readCursors };
+  // --- calls --------------------------------------------------------------
+  const designCallMessage = "m-c-design-5";
+  const designCall: CallState = {
+    id: "call-design",
+    channelId: "c-design",
+    startedBy: "u-eve",
+    startedAt: now - 6 * MINUTE,
+    messageId: designCallMessage,
+    participants: [
+      participant("p-eve", "u-eve", now - 6 * MINUTE, { audio: true, video: true }),
+      // Camera off: the tile shows her monogram.
+      participant("p-alice", "u-alice", now - 5 * MINUTE, { audio: true, video: false }),
+      // Muted: the tile shows the muted-mic glyph.
+      participant("p-bob", "u-bob", now - 3 * MINUTE, { audio: false, video: true }),
+    ],
+  };
+  patchMessage(designCallMessage, {
+    call: {
+      id: designCall.id,
+      state: "active",
+      startedAt: designCall.startedAt,
+      endedAt: null,
+      participantIds: designCall.participants.map((entry) => entry.userId),
+    },
+  });
+  patchMessage("m-d-alice-2", {
+    body: "Call ended",
+    call: {
+      id: "call-d-alice-earlier",
+      state: "ended",
+      startedAt: now - 170 * MINUTE,
+      endedAt: now - 147 * MINUTE,
+      participantIds: ["u-alice", ME],
+    },
+  });
+
+  return {
+    users,
+    channels: withSeq,
+    memberships,
+    messages,
+    attachments,
+    following,
+    readCursors,
+    calls: [designCall],
+  };
+
+  function patchMessage(id: string, patch: Partial<Message>): void {
+    const index = messages.findIndex((entry) => entry.id === id);
+    if (index !== -1) messages[index] = { ...messages[index]!, ...patch };
+  }
 
   // --- local helpers --------------------------------------------------------
 
@@ -363,6 +421,33 @@ export function buildSeed(): Seed {
       mentions: entry.mentionsMe === true ? [{ kind: "user", userId: ME }] : [],
     }));
   }
+}
+
+/** A live participant with announced tracks for whatever they have on. */
+export function participant(
+  id: string,
+  userId: UserId,
+  joinedAt: number,
+  flags: { audio?: boolean; video?: boolean; screen?: boolean } = {},
+): CallParticipant {
+  const audio = flags.audio ?? true;
+  const video = flags.video ?? true;
+  const screen = flags.screen ?? false;
+  return {
+    id,
+    userId,
+    sessionId: `mock-sfu-${id}`,
+    joinedAt,
+    audio,
+    video,
+    screen,
+    // Published and announced even while muted or camera-off: muting never stops a sender.
+    tracks: [
+      { name: `${id}-audio`, kind: "audio", simulcast: false },
+      { name: `${id}-video`, kind: "video", simulcast: true },
+      ...(screen ? [{ name: `${id}-screen`, kind: "screen" as const, simulcast: false }] : []),
+    ],
+  };
 }
 
 function decorate(

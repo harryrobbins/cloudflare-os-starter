@@ -13,11 +13,14 @@ import {
   AGENT_CONTEXT_MESSAGES,
   AGENT_USER_ID,
   DEFAULT_PAGE_LIMIT,
+  MAX_CALL_PARTICIPANTS,
   MAX_PAGE_LIMIT,
   PROTOCOL_VERSION,
   type AgentRequest,
   type Attachment,
   type BadgeSummary,
+  type CallParticipant,
+  type CallState,
   type Channel,
   type ChannelId,
   type ChannelListResponse,
@@ -61,7 +64,7 @@ import { ApiError, type ChatApi, type ChatSocket, type MockControls, type Socket
 import { setFileUrlResolver } from "../lib/files.js";
 import { mentionsAgent } from "../contract.js";
 import { mentionsUser, parseMentions } from "../lib/mentions.js";
-import { buildSeed, ME, placeholderImage, type Seed } from "./seed.js";
+import { buildSeed, ME, participant, placeholderImage, type Seed } from "./seed.js";
 
 /** Round-trip delay, so loading states are visible instead of theoretical. */
 const LATENCY_MS = 140;
@@ -202,6 +205,116 @@ class MockWorkspace {
       this.seed.following.add(message.rootId);
     }
   }
+
+  // --- calls: the same rules as src/do/calls.ts, minus the SFU ------------------------------------
+
+  /** Active calls by conversation, from the seed. */
+  readonly calls = new Map<ChannelId, CallState>(this.seed.calls.map((call) => [call.channelId, call]));
+  /** People the fake sent into a call because this client started or joined it; they leave with it. */
+  readonly companions = new Map<string, Set<string>>();
+
+  activeCalls(): CallState[] {
+    return [...this.calls.values()];
+  }
+
+  callById(callId: string): CallState {
+    for (const call of this.calls.values()) if (call.id === callId) return call;
+    throw new ApiError("not_found", "No such call.", 404);
+  }
+
+  setCall(call: CallState, ring = false): void {
+    this.calls.set(call.channelId, call);
+    this.syncCallMessage(call, "active");
+    this.emit({ t: "call", channel: call.channelId, call, ...(ring ? { ring: true } : {}) });
+  }
+
+  /** Starts a call: the system message first, then the room, as the Worker does. */
+  startCall(channelId: ChannelId, by: UserId): CallState {
+    const startedBy = this.seed.users.find((user) => user.id === by);
+    const now = Date.now();
+    const id = `call-${Math.random().toString(36).slice(2, 9)}`;
+    const message: Message = {
+      id: `m-${Math.random().toString(36).slice(2, 10)}`,
+      channelId,
+      seq: this.nextSeq(channelId),
+      rootId: null,
+      authorId: by,
+      body: `${startedBy?.name ?? "Someone"} started a call`,
+      kind: "system",
+      createdAt: now,
+      editedAt: null,
+      deletedAt: null,
+      replyCount: 0,
+      lastReplyAt: null,
+      reactions: [],
+      attachments: [],
+      mentions: [],
+      call: { id, state: "active", startedAt: now, endedAt: null, participantIds: [] },
+    };
+    this.commit(message);
+    this.emit({ t: "msg", message });
+    const call: CallState = { id, channelId, startedBy: by, startedAt: now, messageId: message.id, participants: [] };
+    this.calls.set(channelId, call);
+    return call;
+  }
+
+  addParticipant(call: CallState, entry: CallParticipant, ring = false): CallState {
+    const next: CallState = {
+      ...call,
+      participants: [...call.participants.filter((existing) => existing.userId !== entry.userId), entry],
+    };
+    this.setCall(next, ring);
+    return next;
+  }
+
+  removeParticipant(call: CallState, participantId: string): void {
+    const participants = call.participants.filter((existing) => existing.id !== participantId);
+    if (participants.length === call.participants.length) return;
+    if (participants.length === 0) {
+      this.endCall(call);
+      return;
+    }
+    this.setCall({ ...call, participants });
+  }
+
+  /** The last person left: the message is edited to its summary and the room is gone. */
+  endCall(call: CallState): void {
+    this.calls.delete(call.channelId);
+    this.companions.delete(call.id);
+    this.syncCallMessage(call, "ended");
+    this.emit({ t: "call", channel: call.channelId, call: null });
+  }
+
+  syncCallMessage(call: CallState, state: "active" | "ended"): void {
+    const index = this.seed.messages.findIndex((message) => message.id === call.messageId);
+    if (index === -1) return;
+    const message = this.seed.messages[index]!;
+    const seen = new Set(message.call?.participantIds ?? []);
+    const participantIds = [...(message.call?.participantIds ?? [])];
+    for (const entry of call.participants) {
+      if (!seen.has(entry.userId)) {
+        seen.add(entry.userId);
+        participantIds.push(entry.userId);
+      }
+    }
+    const summary = {
+      id: call.id,
+      state,
+      startedAt: call.startedAt,
+      endedAt: state === "ended" ? Date.now() : null,
+      participantIds,
+    };
+    const unchanged =
+      message.call?.state === state && message.call.participantIds.length === participantIds.length;
+    if (unchanged) return;
+    const edited: Message = {
+      ...message,
+      call: summary,
+      ...(state === "ended" ? { body: "Call ended" } : {}),
+    };
+    this.seed.messages[index] = edited;
+    this.emit({ t: "edit", message: edited });
+  }
 }
 
 function createMockApi(workspace: MockWorkspace): ChatApi {
@@ -221,6 +334,7 @@ function createMockApi(workspace: MockWorkspace): ChatApi {
         badges: workspace.badges(),
         limits: { maxBodyBytes: 8192, maxUploadBytes: 10 * 1024 * 1024, maxAttachmentsPerMessage: 10 },
         protocolVersion: PROTOCOL_VERSION,
+        calls: { enabled: true, maxParticipants: MAX_CALL_PARTICIPANTS },
       };
     },
 
@@ -246,6 +360,7 @@ function createMockApi(workspace: MockWorkspace): ChatApi {
         memberships: workspace.seed.memberships,
         users: workspace.seed.users,
         badges: workspace.badges(),
+        calls: workspace.activeCalls(),
       };
     },
 
@@ -640,22 +755,127 @@ function createMockApi(workspace: MockWorkspace): ChatApi {
       return { user };
     },
 
-    // Calls: placeholders until Stream C's mock engine (docs/plans/chat-video-implementation.md).
-    getCall: async () => ({ call: null }),
-    joinCall: callsUnavailable,
-    publishTracks: callsUnavailable,
-    announceTracks: callsUnavailable,
-    pullTracks: callsUnavailable,
-    renegotiateCall: callsUnavailable,
-    closeTracks: callsUnavailable,
-    setLayer: callsUnavailable,
-    reconnectCall: callsUnavailable,
-    leaveCall: callsUnavailable,
+    // Calls. The room is real (join, leave, the cap, replacement, the system message); the media
+    // routes only answer in the right shape, because the mock engine (app/src/call/mock-engine.ts)
+    // never negotiates.
+    async getCall(channelId) {
+      await delay(40);
+      workspace.membership(channelId);
+      return { call: workspace.calls.get(channelId) ?? null };
+    },
+
+    async joinCall(channelId) {
+      await delay();
+      workspace.guardWrite();
+      workspace.membership(channelId);
+      const channel = workspace.channel(channelId);
+      let call = workspace.calls.get(channelId);
+      const starting = call === undefined;
+      if (call === undefined) call = workspace.startCall(channelId, ME);
+      const others = call.participants.filter((entry) => entry.userId !== ME);
+      if (others.length >= MAX_CALL_PARTICIPANTS) {
+        throw new ApiError("conflict", `This call is full (${MAX_CALL_PARTICIPANTS}).`, 409);
+      }
+      // Joining again from another tab replaces the older participant, which is told so.
+      const older = call.participants.find((entry) => entry.userId === ME);
+      if (older !== undefined) {
+        workspace.emit({ t: "call-moved", call: call.id, participant: older.id, reason: "replaced" });
+      }
+      const mine = participant(`p-${Math.random().toString(36).slice(2, 9)}`, ME, Date.now(), {
+        audio: false,
+        video: false,
+      });
+      call = workspace.addParticipant(call, { ...mine, tracks: [] });
+      if (starting) answerCall(workspace, call.id, channel);
+      return { call, participantId: mine.id, sessionId: mine.sessionId, iceServers: [] };
+    },
+
+    async publishTracks(_callId, request) {
+      await delay(60);
+      return {
+        answer: { type: "answer", sdp: "" },
+        tracks: request.tracks.map((track) => ({
+          mid: track.mid,
+          name: `${request.participantId}-${track.kind}`,
+          kind: track.kind,
+        })),
+      };
+    },
+
+    async announceTracks(callId) {
+      await delay(40);
+      return { call: workspace.callById(callId) };
+    },
+
+    async pullTracks(_callId, request) {
+      await delay(60);
+      return {
+        requiresImmediateRenegotiation: false,
+        tracks: request.tracks.map((track) => ({ participantId: track.participantId, name: track.name, mid: null })),
+      };
+    },
+
+    renegotiateCall: async () => ({ ok: true }),
+    closeTracks: async () => ({}),
+    setLayer: async () => ({ ok: true }),
+
+    async reconnectCall(callId, request) {
+      await delay();
+      const call = workspace.callById(callId);
+      const mine = call.participants.find((entry) => entry.id === request.participantId && entry.userId === ME);
+      if (mine === undefined) throw new ApiError("not_found", "That participant has left the call.", 404);
+      return { call, participantId: mine.id, sessionId: mine.sessionId, iceServers: [] };
+    },
+
+    async leaveCall(callId, request) {
+      await delay(60);
+      let call: CallState;
+      try {
+        call = workspace.callById(callId);
+      } catch {
+        // Leaving twice is not an error.
+        return { ok: true };
+      }
+      workspace.removeParticipant(call, request.participantId);
+      // The people the fake brought in leave shortly after you, so the call ends and its message
+      // turns into the summary -- the lifecycle a real two-person call has.
+      const companions = workspace.companions.get(callId);
+      if (companions !== undefined && !call.participants.some((entry) => entry.userId === ME && entry.id !== request.participantId)) {
+        setTimeout(() => {
+          for (const companionId of companions) {
+            const current = workspace.calls.get(call.channelId);
+            if (current?.id === callId) workspace.removeParticipant(current, companionId);
+          }
+        }, 900);
+      }
+      return { ok: true };
+    },
   };
 }
 
-async function callsUnavailable(): Promise<never> {
-  throw new ApiError("unavailable", "Calls are not available in the mock yet.", 503);
+/**
+ * Somebody answers a call this client started: the other member of a dm, the others in a group,
+ * or a couple of the people online in a channel. Staggered, so the grid visibly grows.
+ */
+function answerCall(workspace: MockWorkspace, callId: string, channel: Channel): void {
+  const candidates = (channel.memberIds ?? workspace.online).filter(
+    (id) => id !== ME && id !== AGENT_USER_ID,
+  );
+  const answering = candidates.slice(0, channel.kind === "dm" ? 1 : 2);
+  const companions = new Set<string>();
+  workspace.companions.set(callId, companions);
+  answering.forEach((userId, index) => {
+    setTimeout(() => {
+      const call = workspace.calls.get(channel.id);
+      if (call?.id !== callId) return;
+      const entry = participant(`p-${userId}-${Math.random().toString(36).slice(2, 6)}`, userId, Date.now(), {
+        audio: true,
+        video: index % 2 === 0,
+      });
+      companions.add(entry.id);
+      workspace.addParticipant(call, entry);
+    }, 1400 + index * 1200);
+  });
 }
 
 const pendingAttachments = new Map<string, Attachment>();
@@ -979,6 +1199,7 @@ function createMockSocket(workspace: MockWorkspace): ChatSocket {
           serverTime: Date.now(),
           protocolVersion: PROTOCOL_VERSION,
           lastSeq,
+          calls: workspace.activeCalls(),
         });
         workspace.emit({ t: "presence", online: workspace.online });
         presenceTimer = setInterval(
@@ -996,6 +1217,29 @@ function createMockSocket(workspace: MockWorkspace): ChatSocket {
       // `read` is mirrored back the way the real server would, so multi-tab behaviour is visible.
       if (event.t === "read") {
         workspace.emit({ t: "read", channel: event.channel, seq: event.seq });
+      }
+      // The call heartbeat: flags are recorded and broadcast only when one changed, as the DO does.
+      if (event.t === "call-beat") {
+        let call: CallState;
+        try {
+          call = workspace.callById(event.call);
+        } catch {
+          return;
+        }
+        const mine = call.participants.find((entry) => entry.id === event.participant);
+        if (mine === undefined || mine.userId !== ME) {
+          workspace.emit({ t: "error", code: "forbidden", message: "That is not your participant." });
+          return;
+        }
+        if (mine.audio === event.audio && mine.video === event.video && mine.screen === event.screen) return;
+        workspace.setCall({
+          ...call,
+          participants: call.participants.map((entry) =>
+            entry.id === mine.id
+              ? { ...participant(mine.id, ME, mine.joinedAt, event), sessionId: mine.sessionId }
+              : entry,
+          ),
+        });
       }
     },
     status: () => status,
@@ -1060,6 +1304,29 @@ export function createMockTransport(): Transport {
     failNextWrites(count, code): void {
       workspace.failWrites = count;
       if (code !== undefined) workspace.failCode = code;
+    },
+    ringFrom(channelId, userId): void {
+      // A call somebody else starts: rings in a dm or group, as the server does.
+      const channel = workspace.channel(channelId);
+      const call = workspace.startCall(channelId, userId);
+      workspace.addParticipant(
+        call,
+        participant(`p-${userId}-${Math.random().toString(36).slice(2, 6)}`, userId, Date.now()),
+        channel.kind === "dm" || channel.kind === "group",
+      );
+    },
+    fillCall(channelId): void {
+      let call = workspace.calls.get(channelId) ?? workspace.startCall(channelId, "u-alice");
+      const people = workspace.seed.users.filter((user) => user.id !== ME && user.kind !== "agent");
+      for (const person of people) {
+        if (call.participants.filter((entry) => entry.userId !== ME).length >= MAX_CALL_PARTICIPANTS) break;
+        if (call.participants.some((entry) => entry.userId === person.id)) continue;
+        call = workspace.addParticipant(call, participant(`p-${person.id}`, person.id, Date.now()));
+      }
+    },
+    endCall(channelId): void {
+      const call = workspace.calls.get(channelId);
+      if (call !== undefined) workspace.endCall(call);
     },
   };
 

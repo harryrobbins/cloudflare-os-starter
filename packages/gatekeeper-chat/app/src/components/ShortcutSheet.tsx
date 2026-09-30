@@ -55,6 +55,13 @@ export function shortcutGroups(mod: string = modifier()): readonly ShortcutGroup
         { keys: ["/"], what: "Run a command, at the start of a message" },
       ],
     },
+    {
+      label: "In a call",
+      shortcuts: [
+        { keys: [mod, "D"], what: "Turn the microphone on or off" },
+        { keys: [mod, "E"], what: "Turn the camera on or off" },
+      ],
+    },
   ];
 }
 
