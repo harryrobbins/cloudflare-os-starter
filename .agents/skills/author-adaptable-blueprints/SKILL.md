@@ -1,6 +1,6 @@
 ---
 name: author-adaptable-blueprints
-description: Create, convert or rebuild a Cloudflare OS blueprint (packages/blueprint-*, formats/*.gadget) so the in-Workshop agent can both use it (call named operations such as addObject or connectObjects) and adapt it (add a button, action, field or style) through small readable entry points instead of a bundled or minified client. Use when authoring a blueprint, changing its build, published files, RPC surface or README; not for ordinary content edits to one gadget.
+description: Create, convert or rebuild a Cloudflare OS blueprint (packages/blueprint-*, formats/*.gadget) so the in-Workshop agent can both use it (call its documented domain operations) and adapt it (change its display or functionality) through small readable entry points instead of a bundled or minified client. Use when authoring a blueprint, changing its build, published files, RPC surface or README; not for ordinary content edits to one gadget.
 ---
 
 # Author adaptable blueprints
@@ -8,14 +8,17 @@ description: Create, convert or rebuild a Cloudflare OS blueprint (packages/blue
 Every gadget made from a blueprint is an editable copy, worked on by the Workshop agent. That
 agent's `readFile` returns whole files with no line ranges or search, and `editFile` needs an
 exact unique match. A 900 KB `client.js`, minified or not, is therefore effectively uneditable.
-It also cannot guess a whiteboard's operations from 300 KB of bundled server code.
+It also cannot infer a gadget's operations from hundreds of KB of bundled server code.
 
 Design every blueprint for the two jobs the agent is asked to do:
 
-| Job | Example | Where the agent goes |
-| --- | --- | --- |
-| **Use** it: put content in, read it out | "add three stickies and link them" | `describeBinding` → `describeGadget()` → RPC from `executeCode` |
-| **Adapt** it: change what it shows or can do | "add a +12.5% button", "a Done column colour" | README "Adapting this gadget" → `client.js` adapt block, `server.js` |
+| Job | Where the agent goes |
+| --- | --- |
+| **Use** it: read or change its content | `describeBinding` → `describeGadget()` → RPC from `executeCode` |
+| **Adapt** it: change what it shows or can do | README "Adapting this gadget" → `client.js` adapt block, `server.js` |
+
+Which operations and extension points make sense is each blueprint's own design decision; this
+skill fixes only where they live and how they are described.
 
 ## Published shape
 
@@ -39,9 +42,9 @@ and minify choice on the library:
 import * as esbuild from "esbuild";
 import { buildClientEntry, buildServerEntry } from "../../../scripts/gadget-entry.mjs";
 await buildServerEntry({ esbuild, entry: join(pkg, "src/server/index.js"), outDir,
-  banner: "// Whiteboard gadget server: the RPC surface. Source: packages/blueprint-whiteboard/src/server/index.js." });
+  banner: "// <Name> gadget server: the RPC surface. Source: packages/blueprint-<name>/src/server/index.js." });
 await buildClientEntry({ esbuild, entry: join(pkg, "src/client/main.js"), outDir,
-  banner: "// Whiteboard gadget client: the main view. Adapt it in the block below. Source: packages/blueprint-whiteboard/src/client/main.js.",
+  banner: "// <Name> gadget client: the main view. Adapt it in the block below. Source: packages/blueprint-<name>/src/client/main.js.",
   library: { minify: false } });
 ```
 
@@ -57,23 +60,23 @@ Give the server's `Gadget` class a synchronous, side-effect-free `describeGadget
 
 ```js
 {
-  gadget: "whiteboard", contract: 1,
+  gadget: "<format id>", contract: 1,
   summary: "One sentence: what it holds and how to call it.",
   operations: [{
-    name: "connectObjects",
-    description: "Draw a connector between two objects. Reads current versions itself.",
-    input: { type: "object", required: ["from", "to"], properties: { from: { type: "string" }, to: { type: "string" }, label: { type: "string" } } },
-    example: "await env.Whiteboard.connectObjects({ from: a.id, to: b.id, label: 'depends on' })",
-    returns: "{ id } of the new connector",
+    name: "<method on class Gadget>",
+    description: "What it does, and whether it reads current revisions itself.",
+    input: { /* JSON Schema of its argument */ },
+    example: "await env.<Binding>.<method>({ … })",
+    returns: "<shape of the result>",
   }],
   adapt: { client: "client.js: `adapt` block (settings, styles, actions, onReady)", server: "server.js: add methods to class Gadget", readme: "README.md#adapting-this-gadget" },
 }
 ```
 
-- List the **convenience** operations an agent should reach for first. These are domain verbs
-  (`addStickies`, `connectObjects`, `moveCard`, `addRow`) that read current revisions
-  themselves, validate the whole input before writing, and return ids. Name low-level escape
-  hatches such as `applyOperation` last.
+- List the **convenience** operations an agent should reach for first. These are the
+  blueprint's own domain verbs that read current revisions themselves, validate the whole input
+  before writing, and return ids. List low-level escape hatches (raw operation or patch
+  methods) last. Add a thin, validated verb only where the obvious job has none.
 - Every `example` must be real, runnable code whose argument satisfies `input`. A test calls
   each example's operation with that input against the real service or DO.
 - Keep it bounded, around 20 operations and a few KB. The platform truncates at 24 000 characters.
@@ -91,7 +94,6 @@ const adapt = {
   // <blueprint settings: title, default colours, labels, limits, templates …>
   styles: "",   // extra CSS, applied after the built-in styles
   actions: [    // extra commands: { id, label, title?, run(app) } shown in <where>
-    // { id: "tax", label: "+12.5%", run: (app) => app.setValue(app.value * 1.125) },
   ],
   onReady(app) {},  // called once, after the view is mounted, with the app handle
 };
@@ -105,8 +107,7 @@ const adapt = {
   keys; report a bad action in the console, don't crash) and put actions somewhere visible and
   keyboard-reachable: a toolbar, the board menu or a command list.
 - `app` is a small documented handle, not the internals. It holds the same domain verbs the
-  server offers, where they make sense client-side (`app.addStickies(…)`, `app.selection()`),
-  plus `app.toast(text)` or similar. Document its methods in README.
+  server offers, where they make sense client-side, plus a way to show a short message. Document its methods in README.
 - Test each core extension point with a fixture: one extra action appears and runs, extra
   styles apply, and `onReady` fires once.
 - Put the view's composition that people adapt (layout, which panels, labels) in the entry or
@@ -120,7 +121,7 @@ Add this section after the user guide in `src/README.md`, which ships as the gad
 1. The file map (the table above, in one line each) and "never edit `*.lib.js`".
 2. **Use**: point to `describeGadget()` and list the operation names.
 3. **Adapt**: every `adapt` field, the `app` handle's methods, and where actions appear.
-4. Two worked examples: one operation call and one adaptation such as a new action button.
+4. Two worked examples in this blueprint's own terms: one operation call and one adaptation.
 5. That edits to a gadget copy are not carried back to `packages/blueprint-*`.
 
 ## Checks before release
@@ -130,6 +131,7 @@ Add this section after the user guide in `src/README.md`, which ships as the gad
 - `dist/client.js` and `dist/server.js` start with the banner and the adapt block, contain
   no `import` from a relative path, and are unminified.
 - `pack:gadget` bumps the format revision, and `pack-gadget.mjs --check` passes.
-- Smoke test in the Workshop: "Add two stickies and connect them" should reach for
-  `describeBinding` and call operations without editing code. "Add a button that …" should
-  edit only the adapt block of `client.js`.
+- Smoke test in the Workshop with one request of each kind, phrased in the blueprint's own
+  terms. A content request should use `describeBinding` and call operations without editing
+  code. A request to change behaviour or display should edit the adapt block of `client.js`,
+  or `server.js`, never a `.lib.js` file.
