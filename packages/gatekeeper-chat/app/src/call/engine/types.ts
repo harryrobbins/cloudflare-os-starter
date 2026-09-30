@@ -47,6 +47,17 @@ export interface CallEnvironment {
   now(): number;
   setTimeout(fn: () => void, ms: number): unknown;
   clearTimeout(handle: unknown): void;
+  /**
+   * `navigator.mediaDevices.getSupportedConstraints()` (feature-detects `voiceIsolation`). Optional:
+   * absent, the engine reads `navigator` itself. Quality phase 1.
+   */
+  supportedConstraints?(): MediaTrackSupportedConstraints;
+  /** `RTCRtpSender.getCapabilities(kind)`, null where unsupported. Optional: absent, no codec preferences (no RED). */
+  senderCapabilities?(kind: "audio" | "video"): RTCRtpCapabilities | null;
+  /** `document.visibilityState === "hidden"`. Optional: absent reads as visible. */
+  isDocumentHidden?(): boolean;
+  /** `document` `visibilitychange`; returns an unsubscribe. Optional. */
+  onVisibilityChange?(listener: () => void): () => void;
 }
 
 export type CallPhase =
@@ -107,7 +118,8 @@ export type ConnectionQuality = "good" | "fair" | "poor" | "unknown";
 
 /**
  * Why the local encoder is holding back, from `outbound-rtp.qualityLimitationReason`, sustained.
- * `cpu` and `bandwidth` make the engine shed simulcast layers.
+ * Sustained `cpu` makes the engine shed simulcast layers; `bandwidth` is reported only, because the
+ * browser's own bandwidth estimation already drops layers.
  */
 export type QualityLimitation = "none" | "cpu" | "bandwidth";
 

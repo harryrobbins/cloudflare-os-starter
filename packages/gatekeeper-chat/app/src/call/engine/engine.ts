@@ -14,11 +14,13 @@
 
 import {
   CALL_HEARTBEAT_MS,
+  MAX_CALL_STATS_PER_MINUTE,
   MAX_CALL_TRACKS_PER_REQUEST,
   type CallIceServer,
   type CallParticipant,
   type CallSimulcastRid,
   type CallState,
+  type CallStatsReport,
   type CallTrack,
   type CallTrackKind,
   type ParticipantId,
@@ -31,23 +33,54 @@ import {
   AUDIO_ENCODINGS,
   CAMERA_SIMULCAST_ENCODINGS,
   CAMERA_SINGLE_ENCODING,
+  DEGRADATION_PREFERENCE,
   DISPLAY_MEDIA_OPTIONS,
+  LOWEST_RID,
   SCREEN_ENCODINGS,
+  SCREEN_MAX_FRAMERATE,
   audioConstraints,
+  detectSupportedConstraints,
   ridForTile,
   videoConstraints,
 } from "./media.js";
 import { waitForBytesSent, waitForConnected, waitForIceGathering } from "./peer.js";
+import {
+  DownlinkAdaptation,
+  LossWindow,
+  QUALITY_SAMPLE_MS,
+  SendAdaptation,
+  activeLayers,
+  classifyReceive,
+  classifyUplink,
+  downlinkVerdict,
+  expectedFramerate,
+  stepSendEncodings,
+  worstQuality,
+  type DownlinkMode,
+  type SendAction,
+} from "./quality.js";
 import { SerialQueue, Superseded } from "./queue.js";
+import { ensureOpusParams, redFirst } from "./sdp.js";
 import { SpeakerDetector } from "./speaker.js";
-import { inboundAudioLevel, mediaSourceAudioLevel } from "./stats.js";
+import {
+  inboundAudioLevel,
+  mediaSourceAudioLevel,
+  readInbound,
+  readOutbound,
+  readTransport,
+  type InboundSample,
+  type OutboundSample,
+} from "./stats.js";
+import { CALL_STATS_INTERVAL_MS, CallTelemetry } from "./telemetry.js";
 import type {
   CallEngine,
   CallEngineDeps,
   CallSnapshot,
+  ConnectionQuality,
   CreateCallEngine,
   DeviceChoice,
   JoinOptions,
+  QualityLimitation,
   RemoteMedia,
   TileSize,
 } from "./types.js";
@@ -67,6 +100,11 @@ export const ENGINE_TIMINGS = {
   reconnectMaxDelayMs: 8_000,
   /** A rebuild this soon after the last one continues its backoff and budget instead of starting fresh. */
   recoveryStableMs: 15_000,
+  /** Quality phase 1: stats sampling for quality, CPU and downlink adaptation. */
+  qualitySampleMs: QUALITY_SAMPLE_MS,
+  /** A participant whose tile stays hidden (or the whole tab) this long has its video pull closed. */
+  hiddenPauseMs: 5_000,
+  statsIntervalMs: CALL_STATS_INTERVAL_MS,
 } as const;
 
 /** Level changes smaller than this do not produce a new snapshot. */
@@ -100,6 +138,8 @@ interface Pull {
   rid: CallSimulcastRid | null;
   track: MediaStreamTrack | null;
   transceiver: RTCRtpTransceiver | null;
+  /** Cumulative inbound counters at the previous quality sample, and the loss window. */
+  readonly counters: { lost: number; received: number; decoded: number; dropped: number; readonly window: LossWindow };
 }
 
 interface Arrival {
@@ -131,6 +171,9 @@ const IDLE_SNAPSHOT: CallSnapshot = Object.freeze({
   activeSpeaker: null,
   error: null,
   audioOutputId: null,
+  localQuality: "unknown",
+  limitation: "none",
+  audioOnly: false,
 });
 
 const NO_DEVICES: DeviceChoice = { audioInputId: null, videoInputId: null, audioOutputId: null };
@@ -182,6 +225,23 @@ class Engine implements CallEngine {
   private recovery: { recoveredAt: number; startedAt: number; delay: number } | null = null;
   private readonly sleeps = new Set<{ timer: unknown; resolve: () => void }>();
   private unsubscribeDevices: (() => void) | null = null;
+  private unsubscribeVisibility: (() => void) | null = null;
+
+  // Quality phase 1
+  private qualityTimer: unknown = null;
+  private lastQualityAt: number | null = null;
+  private sendAdaptation = new SendAdaptation();
+  /** Cumulative `qualityLimitationDurations` (s) of the current camera publication. */
+  private limitedSeconds: { cpu: number; bandwidth: number } | null = null;
+  private downlink = new DownlinkAdaptation();
+  private readonly remoteQuality = new Map<ParticipantId, ConnectionQuality>();
+  /** Participants whose tiles have been hidden for `hiddenPauseMs`: their camera is not pulled. */
+  private readonly hiddenPaused = new Set<ParticipantId>();
+  private readonly hiddenTimers = new Map<ParticipantId, { readonly since: number; readonly timer: unknown }>();
+  private telemetry: CallTelemetry | null = null;
+  private telemetryTimer: unknown = null;
+  /** When stats reports went out, for the per-minute cap. Survives calls: the cap is the server's. */
+  private statsSentAt: number[] = [];
 
   constructor(deps: CallEngineDeps) {
     this.api = deps.api;
@@ -260,6 +320,7 @@ class Engine implements CallEngine {
     this.set({ callId: session.callId, participantId: session.participantId });
     this.startHeartbeat();
     this.unsubscribeDevices = this.env.onDeviceChange(() => void this.recoverEndedInputs());
+    this.unsubscribeVisibility = this.env.onVisibilityChange?.(() => this.refreshVisibility()) ?? null;
 
     try {
       this.pc = this.createPeerConnection(joined.iceServers, gen);
@@ -276,17 +337,24 @@ class Engine implements CallEngine {
       throw error;
     }
     this.log("connected", { callId: session.callId });
+    this.telemetry = new CallTelemetry(this.env.now());
+    this.startTelemetry();
+    this.refreshVisibility();
     this.refreshRemotes();
     this.startSpeakerLoop(gen);
+    this.startQualityLoop(gen);
     this.scheduleReconcile();
   }
 
   async leave(): Promise<void> {
     const session = this.session;
     const wasActive = this.snap.phase !== "idle";
+    // Built before teardown (which drops the accumulated stats), sent before leaveCall.
+    const finalReport = session ? this.takeStatsReport(true) : null;
     this.teardown();
     if (wasActive) this.set({ ...IDLE_SNAPSHOT, audioOutputId: this.devices.audioOutputId });
     if (session) {
+      if (finalReport) await this.postStats(session.callId, finalReport);
       this.log("leave", { callId: session.callId });
       try {
         await this.api.leaveCall(session.callId, { participantId: session.participantId });
@@ -306,6 +374,7 @@ class Engine implements CallEngine {
     if (!session) return;
     if (state && state.id !== session.callId) return;
     this.latest = state;
+    this.refreshVisibility();
     this.refreshRemotes();
     this.scheduleReconcile();
   }
@@ -460,11 +529,8 @@ class Engine implements CallEngine {
 
   setTileSizes(sizes: Readonly<Record<ParticipantId, TileSize>>): void {
     this.tileSizes = { ...sizes };
-    for (const pull of this.pulls.values()) {
-      if (pull.kind === "video" && pull.simulcast && pull.track) {
-        this.layers.want(pull.key, ridForTile(this.tileSizes[pull.participantId]));
-      }
-    }
+    this.requestLayers();
+    this.refreshVisibility();
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -515,6 +581,8 @@ class Engine implements CallEngine {
         screen: this.remoteStream(participant, "screen"),
         audioLevel: this.reportedLevels.get(participant.id) ?? 0,
         videoRid: this.pullFor(participant, "video")?.rid ?? null,
+        quality: this.remoteQuality.get(participant.id) ?? "unknown",
+        videoPaused: participant.tracks.some((track) => track.kind === "video") && this.isVideoPaused(participant.id),
       };
       const old = previous[participant.id];
       if (old && sameRemote(old, entry)) {
@@ -566,7 +634,7 @@ class Engine implements CallEngine {
       // One prompt for both where the browser allows it.
       try {
         const stream = await this.env.getUserMedia({
-          audio: audioConstraints(this.devices.audioInputId),
+          audio: audioConstraints(this.devices.audioInputId, this.supportedConstraints()),
           video: videoConstraints(this.devices.videoInputId),
         });
         const audio = stream.getAudioTracks()[0] ?? null;
@@ -596,7 +664,7 @@ class Engine implements CallEngine {
 
   private async acquireTrack(kind: "audio" | "video", deviceId: string | null): Promise<MediaStreamTrack> {
     const constraints: MediaStreamConstraints =
-      kind === "audio" ? { audio: audioConstraints(deviceId) } : { video: videoConstraints(deviceId) };
+      kind === "audio" ? { audio: audioConstraints(deviceId, this.supportedConstraints()) } : { video: videoConstraints(deviceId) };
     const stream = await this.env.getUserMedia(constraints);
     const track = kind === "audio" ? stream.getAudioTracks()[0] : stream.getVideoTracks()[0];
     for (const other of stream.getTracks()) if (other !== track) other.stop();
@@ -815,6 +883,7 @@ class Engine implements CallEngine {
       direction: "sendonly",
       sendEncodings: encodings.map((encoding) => ({ ...encoding })),
     });
+    if (item.kind === "audio") this.preferRed(transceiver);
     return { kind: item.kind, transceiver, simulcast: false, name: null };
   }
 
@@ -827,7 +896,7 @@ class Engine implements CallEngine {
     if (added.length === 0) return;
     for (const publication of added) this.pubs.set(publication.kind, publication);
 
-    const offer = await pc.createOffer();
+    const offer = withOpusResilience(await pc.createOffer());
     await pc.setLocalDescription(offer);
     await waitForIceGathering(pc, this.env, ENGINE_TIMINGS.iceGatheringCapMs);
     this.assertCurrent(gen);
@@ -843,11 +912,13 @@ class Engine implements CallEngine {
       tracks,
     });
     this.assertCurrent(gen);
-    await pc.setRemoteDescription(response.answer);
+    await pc.setRemoteDescription(withOpusResilience(response.answer));
     for (const published of response.tracks) {
       const publication = added.find((candidate) => candidate.transceiver.mid === published.mid);
       if (publication) publication.name = published.name;
     }
+    for (const publication of added) await this.applySenderPreferences(publication);
+    this.assertCurrent(gen);
 
     const connected = await waitForConnected(pc, this.env, ENGINE_TIMINGS.connectCapMs);
     this.assertCurrent(gen);
@@ -913,7 +984,11 @@ class Engine implements CallEngine {
     if (state && state.id === session.callId) {
       for (const participant of state.participants) {
         if (participant.id === session.participantId) continue;
-        for (const track of participant.tracks) wanted.set(`${participant.sessionId}/${track.name}`, { participant, track });
+        for (const track of participant.tracks) {
+          // A paused camera (hidden tile, audio-only) is not wanted: its pull closes, audio stays.
+          if (track.kind === "video" && this.isVideoPaused(participant.id)) continue;
+          wanted.set(`${participant.sessionId}/${track.name}`, { participant, track });
+        }
       }
     }
 
@@ -954,7 +1029,7 @@ class Engine implements CallEngine {
     const requested = batch.map(([, { participant, track }]) => ({
       participantId: participant.id,
       name: track.name,
-      ...(track.kind === "video" && track.simulcast ? { rid: ridForTile(this.tileSizes[participant.id]) } : {}),
+      ...(track.kind === "video" && track.simulcast ? { rid: this.wantedRid(participant.id) } : {}),
     }));
     this.log("pull", { count: requested.length });
     const response = await this.api.pullTracks(session.callId, { participantId: session.participantId, tracks: requested });
@@ -979,6 +1054,7 @@ class Engine implements CallEngine {
         rid: rid ?? null,
         track: null,
         transceiver: null,
+        counters: { lost: 0, received: 0, decoded: 0, dropped: 0, window: new LossWindow() },
       };
       this.pulls.set(pull.key, pull);
       // Registered before the offer is applied: `track` fires during setRemoteDescription.
@@ -986,8 +1062,8 @@ class Engine implements CallEngine {
     }
 
     if (response.requiresImmediateRenegotiation && response.offer) {
-      await pc.setRemoteDescription(response.offer);
-      const answer = await pc.createAnswer();
+      await pc.setRemoteDescription(withOpusResilience(response.offer));
+      const answer = withOpusResilience(await pc.createAnswer());
       await pc.setLocalDescription(answer);
       this.assertCurrent(gen);
       await this.api.renegotiateCall(session.callId, {
@@ -1009,7 +1085,7 @@ class Engine implements CallEngine {
     }
     pull.track = arrival.track;
     pull.transceiver = arrival.transceiver;
-    if (pull.simulcast) this.layers.want(pull.key, ridForTile(this.tileSizes[pull.participantId]));
+    if (pull.simulcast) this.layers.want(pull.key, this.wantedRid(pull.participantId));
     this.refreshRemotes();
   }
 
@@ -1038,7 +1114,7 @@ class Engine implements CallEngine {
           // Already stopped.
         }
       }
-      const offer = await pc.createOffer();
+      const offer = withOpusResilience(await pc.createOffer());
       await pc.setLocalDescription(offer);
       this.assertCurrent(gen);
       const response = await this.api.closeTracks(session.callId, {
@@ -1047,7 +1123,7 @@ class Engine implements CallEngine {
         offer: toDescription(pc.localDescription ?? offer),
       });
       this.assertCurrent(gen);
-      if (response.answer) await pc.setRemoteDescription(response.answer);
+      if (response.answer) await pc.setRemoteDescription(withOpusResilience(response.answer));
     }
   }
 
@@ -1079,6 +1155,7 @@ class Engine implements CallEngine {
     const session = this.session;
     if (!session || this.snap.phase !== "connected") return;
     this.log("rebuild", { reason });
+    this.telemetry?.countReconnect();
     this.resetConnection();
     const gen = this.gen;
     this.set({ phase: "reconnecting" });
@@ -1100,6 +1177,7 @@ class Engine implements CallEngine {
         this.recovery = { recoveredAt: this.env.now(), startedAt: started, delay };
         this.log("reconnected", { callId: session.callId });
         this.startSpeakerLoop(gen);
+        this.startQualityLoop(gen);
         this.scheduleReconcile();
         return;
       } catch (error) {
@@ -1135,6 +1213,7 @@ class Engine implements CallEngine {
     this.reconcileQueued = false;
     this.clearDisconnectTimer();
     this.stopSpeakerLoop();
+    this.stopQualityLoop();
     this.layers.clear();
     this.closePeerConnection();
     this.pubs.clear();
@@ -1183,6 +1262,17 @@ class Engine implements CallEngine {
     this.stopHeartbeat();
     this.unsubscribeDevices?.();
     this.unsubscribeDevices = null;
+    this.unsubscribeVisibility?.();
+    this.unsubscribeVisibility = null;
+    this.stopTelemetry();
+    this.telemetry = null;
+    for (const { timer } of this.hiddenTimers.values()) this.env.clearTimeout(timer);
+    this.hiddenTimers.clear();
+    this.hiddenPaused.clear();
+    this.remoteQuality.clear();
+    this.downlink = new DownlinkAdaptation();
+    this.sendAdaptation = new SendAdaptation();
+    this.limitedSeconds = null;
     for (const track of [this.mic, this.camera, this.screen, this.black]) track?.stop();
     this.mic = null;
     this.camera = null;
@@ -1291,6 +1381,349 @@ class Engine implements CallEngine {
     });
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // Quality phase 1: capture, sender preferences, adaptation, pausing and telemetry
+
+  private supportedConstraints(): MediaTrackSupportedConstraints {
+    try {
+      return this.env.supportedConstraints?.() ?? detectSupportedConstraints();
+    } catch {
+      return {};
+    }
+  }
+
+  /** RED first, then Opus, on the mic transceiver before the offer. The SFU may still answer Opus only. */
+  private preferRed(transceiver: RTCRtpTransceiver): void {
+    let codecs: RTCRtpCodec[] | null = null;
+    try {
+      codecs = redFirst(this.env.senderCapabilities?.("audio")?.codecs ?? []);
+    } catch {
+      codecs = null;
+    }
+    if (!codecs || typeof transceiver.setCodecPreferences !== "function") return;
+    try {
+      transceiver.setCodecPreferences(codecs);
+      this.log("audio-red-preferred");
+    } catch (error) {
+      this.log("codec-preferences-failed", { error: errorName(error) });
+    }
+  }
+
+  /** Degradation preference (and the screen's frame cap) once the transceiver is negotiated. */
+  private async applySenderPreferences(publication: LocalPublication): Promise<void> {
+    if (publication.kind === "audio") return;
+    const sender = publication.transceiver.sender;
+    try {
+      const params = sender.getParameters() as RTCRtpSendParameters & { degradationPreference?: string };
+      params.degradationPreference = DEGRADATION_PREFERENCE[publication.kind];
+      if (publication.kind === "screen") for (const encoding of params.encodings ?? []) encoding.maxFramerate = SCREEN_MAX_FRAMERATE;
+      await sender.setParameters(params);
+    } catch (error) {
+      // Older browsers reject degradationPreference; the defaults are acceptable.
+      this.log("sender-preferences-failed", { kind: publication.kind, error: errorName(error) });
+    }
+    if (publication.kind === "video") {
+      // A fresh camera publication sends every layer again.
+      this.sendAdaptation = new SendAdaptation();
+      this.limitedSeconds = null;
+      this.set({ sendLayers: activeLayers(sender.getParameters().encodings ?? [], publication.simulcast) });
+    }
+  }
+
+  /** The layer a remote camera should be pulled at: by tile size, or `c` while the downlink is poor. */
+  private wantedRid(participantId: ParticipantId): CallSimulcastRid {
+    return this.downlink.mode === "normal" ? ridForTile(this.tileSizes[participantId]) : LOWEST_RID;
+  }
+
+  private requestLayers(): void {
+    for (const pull of this.pulls.values()) {
+      if (pull.kind === "video" && pull.simulcast && pull.track) this.layers.want(pull.key, this.wantedRid(pull.participantId));
+    }
+  }
+
+  private isVideoPaused(participantId: ParticipantId): boolean {
+    return this.downlink.mode === "audio-only" || this.hiddenPaused.has(participantId);
+  }
+
+  /**
+   * Starts the pause timer for every remote whose tile is `hidden` (or when the whole document is),
+   * and resumes, at once, every paused remote that is visible again.
+   */
+  private refreshVisibility(): void {
+    const session = this.session;
+    if (!session) return;
+    let documentHidden = false;
+    try {
+      documentHidden = this.env.isDocumentHidden?.() ?? false;
+    } catch {
+      documentHidden = false;
+    }
+    const present = new Set<ParticipantId>();
+    let resumed = false;
+    for (const participant of this.latest?.participants ?? []) {
+      if (participant.id === session.participantId) continue;
+      present.add(participant.id);
+      const hidden = documentHidden || this.tileSizes[participant.id] === "hidden";
+      if (hidden) {
+        if (this.hiddenPaused.has(participant.id) || this.hiddenTimers.has(participant.id)) continue;
+        const timer = this.env.setTimeout(() => this.pauseHidden(), ENGINE_TIMINGS.hiddenPauseMs);
+        this.hiddenTimers.set(participant.id, { since: this.env.now(), timer });
+      } else {
+        this.clearHiddenTimer(participant.id);
+        if (this.hiddenPaused.delete(participant.id)) resumed = true;
+      }
+    }
+    for (const id of [...this.hiddenTimers.keys()]) if (!present.has(id)) this.clearHiddenTimer(id);
+    for (const id of [...this.hiddenPaused]) if (!present.has(id)) this.hiddenPaused.delete(id);
+    if (resumed) {
+      this.log("video-resumed", { reason: "shown" });
+      this.refreshRemotes();
+      this.scheduleReconcile();
+    }
+  }
+
+  /** Pauses every remote hidden for long enough, in one reconcile (a hidden tab pauses them all). */
+  private pauseHidden(): void {
+    if (!this.session) return;
+    const now = this.env.now();
+    let count = 0;
+    for (const [id, { since }] of [...this.hiddenTimers]) {
+      if (now - since < ENGINE_TIMINGS.hiddenPauseMs) continue;
+      this.clearHiddenTimer(id);
+      this.hiddenPaused.add(id);
+      count += 1;
+    }
+    if (count === 0) return;
+    this.log("video-paused", { reason: "hidden", count });
+    this.refreshRemotes();
+    this.scheduleReconcile();
+  }
+
+  private clearHiddenTimer(participantId: ParticipantId): void {
+    const entry = this.hiddenTimers.get(participantId);
+    if (entry === undefined) return;
+    this.env.clearTimeout(entry.timer);
+    this.hiddenTimers.delete(participantId);
+  }
+
+  private startQualityLoop(gen: number): void {
+    this.stopQualityLoop();
+    const tick = async (): Promise<void> => {
+      this.qualityTimer = null;
+      try {
+        await this.sampleQuality(gen);
+      } catch (error) {
+        this.log("quality-failed", { error: errorName(error) });
+      }
+      if (gen === this.gen && this.qualityTimer === null) {
+        this.qualityTimer = this.env.setTimeout(() => void tick(), ENGINE_TIMINGS.qualitySampleMs);
+      }
+    };
+    this.qualityTimer = this.env.setTimeout(() => void tick(), ENGINE_TIMINGS.qualitySampleMs);
+  }
+
+  private stopQualityLoop(): void {
+    if (this.qualityTimer !== null) this.env.clearTimeout(this.qualityTimer);
+    this.qualityTimer = null;
+    this.lastQualityAt = null;
+  }
+
+  /** One stats round: send-side CPU adaptation, per-remote quality, downlink mode, telemetry. */
+  private async sampleQuality(gen: number): Promise<void> {
+    const pc = this.pc;
+    const session = this.session;
+    if (!pc || !session || this.snap.phase !== "connected") return;
+    const camera = this.pubs.get("video") ?? null;
+    const mic = this.pubs.get("audio") ?? null;
+    const cameraOut = camera ? await readStats(camera.transceiver.sender, readOutbound) : null;
+    const micOut = mic ? await readStats(mic.transceiver.sender, readOutbound) : null;
+    const inbound: { pull: Pull; sample: InboundSample }[] = [];
+    for (const pull of [...this.pulls.values()]) {
+      if (!pull.transceiver) continue;
+      const sample = await readStats(pull.transceiver.receiver, readInbound);
+      if (sample) inbound.push({ pull, sample });
+    }
+    const transport = await readStats(pc, readTransport);
+    if (gen !== this.gen || pc !== this.pc) return;
+    const now = this.env.now();
+    const elapsed = this.lastQualityAt === null ? ENGINE_TIMINGS.qualitySampleMs : Math.max(0, now - this.lastQualityAt);
+    this.lastQualityAt = now;
+
+    // Send side: CPU sheds simulcast layers (or resolution), none restores them.
+    let limitation: QualityLimitation = this.snap.limitation ?? "none";
+    let sendLayers = this.snap.sendLayers;
+    const reason = cameraOut?.limitation ?? null;
+    if (camera && reason !== null) {
+      const action = this.sendAdaptation.sample(now, reason);
+      limitation = this.sendAdaptation.limitation;
+      if (action) {
+        const layers = await this.stepSendLayers(camera, action);
+        if (gen !== this.gen) return;
+        if (layers !== null) sendLayers = layers;
+      }
+    }
+
+    // Receive side: per-remote quality, and the aggregate downlink.
+    const perParticipant = new Map<ParticipantId, ConnectionQuality[]>();
+    let lost = 0;
+    let received = 0;
+    let decoded = 0;
+    let dropped = 0;
+    let jitter: number | null = null;
+    let inboundAudioMime: string | null = null;
+    let inboundVideoMime: string | null = null;
+    for (const { pull, sample } of inbound) {
+      const counters = pull.counters;
+      lost += Math.max(0, sample.packetsLost - counters.lost);
+      received += Math.max(0, sample.packetsReceived - counters.received);
+      decoded += Math.max(0, sample.framesDecoded - counters.decoded);
+      dropped += Math.max(0, sample.framesDropped - counters.dropped);
+      counters.lost = sample.packetsLost;
+      counters.received = sample.packetsReceived;
+      counters.decoded = sample.framesDecoded;
+      counters.dropped = sample.framesDropped;
+      if (sample.jitterMs !== null) jitter = Math.max(jitter ?? 0, sample.jitterMs);
+      if (pull.kind === "audio") inboundAudioMime ??= sample.mimeType;
+      else inboundVideoMime ??= sample.mimeType;
+      const quality = classifyReceive({
+        lossPercent: counters.window.push(sample.packetsLost, sample.packetsReceived),
+        jitterMs: sample.jitterMs,
+        framesPerSecond: sample.framesPerSecond,
+        // Frame rate only means something for a live camera (not the 1 fps placeholder, not a screen).
+        expectedFps: pull.kind === "video" && this.cameraOn(pull.participantId) ? expectedFramerate(pull.rid) : null,
+      });
+      const list = perParticipant.get(pull.participantId) ?? [];
+      list.push(quality);
+      perParticipant.set(pull.participantId, list);
+    }
+    let remotesChanged = false;
+    for (const participant of this.latest?.participants ?? []) {
+      if (participant.id === session.participantId) continue;
+      const quality = worstQuality(perParticipant.get(participant.id) ?? []);
+      if ((this.remoteQuality.get(participant.id) ?? "unknown") !== quality) remotesChanged = true;
+      this.remoteQuality.set(participant.id, quality);
+    }
+    const aggregateLoss = lost + received > 0 ? (lost * 100) / (lost + received) : null;
+    const before = this.downlink.mode;
+    const after = this.downlink.sample(now, downlinkVerdict(aggregateLoss, transport?.availableIncomingBitrate ?? null));
+    if (after !== before) {
+      this.onDownlinkMode(before, after, now);
+      remotesChanged = true;
+    }
+
+    // Our uplink.
+    const rttMs = cameraOut?.rttMs ?? micOut?.rttMs ?? transport?.rttMs ?? null;
+    const sendLoss = maxOf(cameraOut?.lossPercent ?? null, micOut?.lossPercent ?? null);
+    const localQuality = classifyUplink({ rttMs, lossPercent: sendLoss, limitation });
+
+    this.telemetry?.record({
+      rttMs,
+      sendLossPercent: sendLoss,
+      receivedPackets: received,
+      lostPackets: lost,
+      jitterMs: jitter,
+      framesDecoded: decoded,
+      framesDropped: dropped,
+      limitedMs: this.limitedDelta(cameraOut, reason, elapsed),
+      relayed: transport?.relayed ?? null,
+      audioMimeType: micOut?.mimeType ?? inboundAudioMime,
+      videoMimeType: cameraOut?.mimeType ?? inboundVideoMime,
+    });
+
+    if (remotesChanged) this.refreshRemotes();
+    this.set({ localQuality, limitation, sendLayers, audioOnly: this.downlink.mode === "audio-only" });
+  }
+
+  private cameraOn(participantId: ParticipantId): boolean {
+    return this.latest?.participants.find((participant) => participant.id === participantId)?.video === true;
+  }
+
+  /** Milliseconds the camera spent CPU/bandwidth-limited since the last sample. */
+  private limitedDelta(
+    out: OutboundSample | null,
+    reason: QualityLimitation | null,
+    elapsed: number,
+  ): { cpu: number; bandwidth: number } {
+    if (out?.limitedSeconds) {
+      const previous = this.limitedSeconds ?? { cpu: 0, bandwidth: 0 };
+      const current = out.limitedSeconds;
+      this.limitedSeconds = { ...current };
+      // Counters restart with a new publication: count the new value then.
+      const delta = (now: number, then: number): number => (now >= then ? now - then : now) * 1000;
+      return { cpu: delta(current.cpu, previous.cpu), bandwidth: delta(current.bandwidth, previous.bandwidth) };
+    }
+    return { cpu: reason === "cpu" ? elapsed : 0, bandwidth: reason === "bandwidth" ? elapsed : 0 };
+  }
+
+  /** One shed/restore step on the camera's encodings; the new layer count, or null if unchanged. */
+  private async stepSendLayers(publication: LocalPublication, action: SendAction): Promise<number | null> {
+    const sender = publication.transceiver.sender;
+    try {
+      const params = sender.getParameters();
+      const encodings = params.encodings ?? [];
+      if (!stepSendEncodings(encodings, publication.simulcast, action)) return null;
+      await sender.setParameters(params);
+      const layers = activeLayers(encodings, publication.simulcast);
+      this.log("send-layers", {
+        action,
+        layers,
+        ...(publication.simulcast ? {} : { scale: encodings[0]?.scaleResolutionDownBy ?? 1 }),
+      });
+      return layers;
+    } catch (error) {
+      this.log("send-layers-failed", { action, error: errorName(error) });
+      return null;
+    }
+  }
+
+  private onDownlinkMode(before: DownlinkMode, after: DownlinkMode, now: number): void {
+    this.log("downlink", { mode: after });
+    this.telemetry?.setAudioOnly(after === "audio-only", now);
+    // Entering audio-only closes camera pulls; leaving it re-pulls them (at c: the mode steps to low).
+    if ((before === "audio-only") !== (after === "audio-only")) this.scheduleReconcile();
+    this.requestLayers();
+  }
+
+  private startTelemetry(): void {
+    this.stopTelemetry();
+    const tick = (): void => {
+      this.telemetryTimer = this.env.setTimeout(tick, ENGINE_TIMINGS.statsIntervalMs);
+      const session = this.session;
+      const report = this.takeStatsReport(false);
+      if (session && report) void this.postStats(session.callId, report);
+    };
+    this.telemetryTimer = this.env.setTimeout(tick, ENGINE_TIMINGS.statsIntervalMs);
+  }
+
+  private stopTelemetry(): void {
+    if (this.telemetryTimer !== null) this.env.clearTimeout(this.telemetryTimer);
+    this.telemetryTimer = null;
+  }
+
+  /** The report for the interval so far, or null when there is none or the per-minute cap is reached. */
+  private takeStatsReport(final: boolean): CallStatsReport | null {
+    const session = this.session;
+    const telemetry = this.telemetry;
+    if (!session || !telemetry) return null;
+    const now = this.env.now();
+    this.statsSentAt = this.statsSentAt.filter((at) => now - at < 60_000);
+    if (this.statsSentAt.length >= MAX_CALL_STATS_PER_MINUTE) {
+      this.log("stats-capped", { final });
+      return null;
+    }
+    this.statsSentAt.push(now);
+    return telemetry.report(session.participantId, now, final);
+  }
+
+  /** Best effort: a failed report is logged and forgotten. */
+  private async postStats(callId: string, report: CallStatsReport): Promise<void> {
+    try {
+      await this.api.postCallStats(callId, report);
+    } catch (error) {
+      this.log("stats-failed", { error: describeError(error) });
+    }
+  }
+
   private log(event: string, fields?: Readonly<Record<string, unknown>>): void {
     try {
       this.logSink?.(`call.${event}`, fields);
@@ -1303,8 +1736,28 @@ class Engine implements CallEngine {
 // -----------------------------------------------------------------------------------------------
 // Helpers
 
+/** One `getStats()` read; null when the object is gone or the browser refuses. */
+async function readStats<T>(source: { getStats(): Promise<RTCStatsReport> }, parse: (report: RTCStatsReport) => T): Promise<T | null> {
+  try {
+    return parse(await source.getStats());
+  } catch {
+    return null;
+  }
+}
+
+function maxOf(a: number | null, b: number | null): number | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return Math.max(a, b);
+}
+
 function nextDelay(delay: number): number {
   return delay === 0 ? ENGINE_TIMINGS.reconnectFirstDelayMs : Math.min(delay * 2, ENGINE_TIMINGS.reconnectMaxDelayMs);
+}
+
+/** Every description the engine sets gets Opus FEC + DTX (see sdp.ts for why remote ones too). */
+function withOpusResilience<T extends RTCSessionDescriptionInit>(description: T): T {
+  return description.sdp ? { ...description, sdp: ensureOpusParams(description.sdp) } : description;
 }
 
 function toDescription(description: RTCSessionDescriptionInit | RTCSessionDescription): SessionDescription {
@@ -1323,7 +1776,9 @@ function sameRemote(a: RemoteMedia, b: RemoteMedia): boolean {
     a.video === b.video &&
     a.screen === b.screen &&
     a.audioLevel === b.audioLevel &&
-    a.videoRid === b.videoRid
+    a.videoRid === b.videoRid &&
+    a.quality === b.quality &&
+    a.videoPaused === b.videoPaused
   );
 }
 

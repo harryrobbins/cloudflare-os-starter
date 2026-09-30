@@ -1,6 +1,7 @@
 // The real browser behind `CallEnvironment`: WebRTC, media devices, a black placeholder track and
 // window timers. Everything the engine touches in the browser goes through here so tests can fake it.
 
+import { detectSupportedConstraints } from "./media.js";
 import type { CallEnvironment } from "./types.js";
 
 /** Small on purpose: the SFU forwards it at 1 fps while the camera is off. */
@@ -32,6 +33,20 @@ export function createBrowserCallEnvironment(): CallEnvironment {
     now: () => Date.now(),
     setTimeout: (fn, ms) => window.setTimeout(fn, ms),
     clearTimeout: (handle) => window.clearTimeout(handle as number),
+    supportedConstraints: () => detectSupportedConstraints(),
+    senderCapabilities(kind) {
+      try {
+        return typeof RTCRtpSender === "undefined" ? null : (RTCRtpSender.getCapabilities?.(kind) ?? null);
+      } catch {
+        return null;
+      }
+    },
+    isDocumentHidden: () => typeof document !== "undefined" && document.visibilityState === "hidden",
+    onVisibilityChange(listener) {
+      if (typeof document === "undefined") return () => undefined;
+      document.addEventListener("visibilitychange", listener);
+      return () => document.removeEventListener("visibilitychange", listener);
+    },
   };
 }
 

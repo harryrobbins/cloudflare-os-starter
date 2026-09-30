@@ -84,14 +84,31 @@ function statsReport(entries: readonly Record<string, unknown>[]): RTCStatsRepor
   return new Map(entries.map((entry, index) => [String(entry.id ?? index), entry])) as unknown as RTCStatsReport;
 }
 
+/** What a fake sender's `getStats()` reports beyond bytesSent/audioLevel. Unset fields are omitted. */
+export interface FakeOutboundStats {
+  qualityLimitationReason?: "none" | "cpu" | "bandwidth" | "other";
+  /** Seconds, cumulative. */
+  qualityLimitationDurations?: { none?: number; cpu?: number; bandwidth?: number; other?: number };
+  /** remote-inbound-rtp, seconds. */
+  roundTripTime?: number;
+  /** remote-inbound-rtp, 0..1. */
+  fractionLost?: number;
+  mimeType?: string;
+}
+
 export class FakeSender {
   readonly replaced: (FakeTrack | null)[] = [];
+  readonly setParametersCalls: RTCRtpSendParameters[] = [];
   bytesSent = 0;
   audioLevel = 0;
+  stats: FakeOutboundStats = {};
+  degradationPreference: string | undefined;
+  /** Make setParameters reject (older browsers, unsupported fields). */
+  rejectSetParameters = false;
 
   constructor(
     public track: FakeTrack | null,
-    private readonly encodings: RTCRtpEncodingParameters[],
+    readonly encodings: RTCRtpEncodingParameters[],
   ) {}
 
   async replaceTrack(track: FakeTrack | null): Promise<void> {
@@ -99,27 +116,95 @@ export class FakeSender {
     this.track = track;
   }
 
+  /** A copy, like the browser's: changes only apply through setParameters. */
   getParameters(): RTCRtpSendParameters {
-    return { encodings: this.encodings } as RTCRtpSendParameters;
+    return {
+      transactionId: "t",
+      encodings: this.encodings.map((encoding) => ({ ...encoding })),
+      ...(this.degradationPreference !== undefined ? { degradationPreference: this.degradationPreference } : {}),
+    } as unknown as RTCRtpSendParameters;
+  }
+
+  async setParameters(params: RTCRtpSendParameters): Promise<void> {
+    const copy = JSON.parse(JSON.stringify(params)) as RTCRtpSendParameters & { degradationPreference?: string };
+    this.setParametersCalls.push(copy);
+    if (this.rejectSetParameters) throw new DOMException("unsupported", "InvalidModificationError");
+    this.encodings.splice(0, this.encodings.length, ...copy.encodings.map((encoding) => ({ ...encoding })));
+    if (copy.degradationPreference !== undefined) this.degradationPreference = copy.degradationPreference;
   }
 
   async getStats(): Promise<RTCStatsReport> {
     const entries: Record<string, unknown>[] = [];
     const count = Math.max(1, this.encodings.length);
+    const stats = this.stats;
     for (let index = 0; index < count; index += 1) {
-      entries.push({ id: `out-${index}`, type: "outbound-rtp", bytesSent: index === 0 ? this.bytesSent : 0 });
+      entries.push({
+        id: `out-${index}`,
+        type: "outbound-rtp",
+        kind: this.track?.kind ?? "video",
+        bytesSent: index === 0 ? this.bytesSent : 0,
+        ...(this.encodings[index]?.rid ? { rid: this.encodings[index]!.rid } : {}),
+        ...(stats.qualityLimitationReason !== undefined ? { qualityLimitationReason: stats.qualityLimitationReason } : {}),
+        ...(stats.qualityLimitationDurations !== undefined ? { qualityLimitationDurations: { ...stats.qualityLimitationDurations } } : {}),
+        ...(stats.mimeType !== undefined ? { codecId: "codec-out" } : {}),
+      });
+    }
+    if (stats.mimeType !== undefined) entries.push({ id: "codec-out", type: "codec", mimeType: stats.mimeType, payloadType: 111 });
+    if (stats.roundTripTime !== undefined || stats.fractionLost !== undefined) {
+      entries.push({
+        id: "remote-in",
+        type: "remote-inbound-rtp",
+        ...(stats.roundTripTime !== undefined ? { roundTripTime: stats.roundTripTime } : {}),
+        ...(stats.fractionLost !== undefined ? { fractionLost: stats.fractionLost } : {}),
+      });
     }
     if (this.track?.kind === "audio") entries.push({ id: "src", type: "media-source", kind: "audio", audioLevel: this.audioLevel });
     return statsReport(entries);
   }
 }
 
+/** Cumulative inbound-rtp counters a fake receiver reports. Unset fields are omitted. */
+export interface FakeInboundStats {
+  packetsLost?: number;
+  packetsReceived?: number;
+  /** Seconds. */
+  jitter?: number;
+  framesPerSecond?: number;
+  framesDecoded?: number;
+  framesDropped?: number;
+  mimeType?: string;
+}
+
 export class FakeReceiver {
   audioLevel = 0;
+  stats: FakeInboundStats = {};
   constructor(readonly track: FakeTrack) {}
 
+  /** Advances the cumulative counters: `packets` more arrived of which `lostPercent` were lost. */
+  flow(packets: number, lostPercent = 0, extra: Partial<FakeInboundStats> = {}): void {
+    const lost = Math.round((packets * lostPercent) / 100);
+    this.stats = {
+      ...this.stats,
+      ...extra,
+      packetsLost: (this.stats.packetsLost ?? 0) + lost,
+      packetsReceived: (this.stats.packetsReceived ?? 0) + packets - lost,
+    };
+  }
+
   async getStats(): Promise<RTCStatsReport> {
-    return statsReport([{ id: "in", type: "inbound-rtp", kind: this.track.kind, audioLevel: this.audioLevel }]);
+    const { mimeType, ...counters } = this.stats;
+    const entries: Record<string, unknown>[] = [
+      {
+        id: "in",
+        type: "inbound-rtp",
+        kind: this.track.kind,
+        audioLevel: this.audioLevel,
+        ...counters,
+        ...(mimeType !== undefined ? { codecId: "codec-in" } : {}),
+      },
+    ];
+    if (mimeType !== undefined) entries.push({ id: "codec-in", type: "codec", mimeType });
+    return statsReport(entries);
   }
 }
 
@@ -127,6 +212,7 @@ export class FakeTransceiver {
   mid: string | null = null;
   stopped = false;
   currentDirection: RTCRtpTransceiverDirection | null = null;
+  codecPreferences: RTCRtpCodec[] | null = null;
 
   constructor(
     public direction: RTCRtpTransceiverDirection,
@@ -139,6 +225,10 @@ export class FakeTransceiver {
     this.stopped = true;
     this.direction = "stopped";
   }
+
+  setCodecPreferences(codecs: RTCRtpCodec[]): void {
+    this.codecPreferences = [...codecs];
+  }
 }
 
 export interface FakePeerOptions {
@@ -150,6 +240,10 @@ export interface FakePeerOptions {
   bytesSentWhenConnected?: number;
   /** Fire `track` events for SFU-offered mids. Default true. */
   fireOntrack?: boolean;
+  /** SDP createOffer returns instead of the `client-offer-N` placeholder. */
+  offerSdp?: string;
+  /** Every sender's setParameters rejects. */
+  rejectSetParameters?: boolean;
 }
 
 export class FakePeerConnection extends EventTarget {
@@ -163,6 +257,8 @@ export class FakePeerConnection extends EventTarget {
   localDescription: RTCSessionDescriptionInit | null = null;
   restartIceCalls = 0;
   closed = false;
+  /** The selected candidate pair `getStats()` reports. Null: no pair yet. */
+  transport: { relayed: boolean; availableIncomingBitrate?: number; currentRoundTripTime?: number } | null = { relayed: false };
   private nextMid = 0;
   private offerCount = 0;
 
@@ -185,6 +281,7 @@ export class FakePeerConnection extends EventTarget {
       new FakeReceiver(new FakeTrack(track?.kind ?? "audio", "receiver")),
       init,
     );
+    transceiver.sender.rejectSetParameters = this.options.rejectSetParameters ?? false;
     this.transceivers.push(transceiver);
     return transceiver;
   }
@@ -200,7 +297,7 @@ export class FakePeerConnection extends EventTarget {
   async createOffer(): Promise<RTCSessionDescriptionInit> {
     this.offerCount += 1;
     this.offersCreated.push(this.transceivers.length);
-    return { type: "offer", sdp: `client-offer-${this.offerCount}` };
+    return { type: "offer", sdp: this.options.offerSdp ?? `client-offer-${this.offerCount}` };
   }
 
   async createAnswer(): Promise<RTCSessionDescriptionInit> {
@@ -261,6 +358,27 @@ export class FakePeerConnection extends EventTarget {
     this.restartIceCalls += 1;
   }
 
+  /** Connection-wide stats: transport, the selected pair and its local candidate (no addresses). */
+  async getStats(): Promise<RTCStatsReport> {
+    const transport = this.transport;
+    if (!transport) return statsReport([]);
+    return statsReport([
+      { id: "T01", type: "transport", selectedCandidatePairId: "CP1" },
+      {
+        id: "CP1",
+        type: "candidate-pair",
+        state: "succeeded",
+        nominated: true,
+        localCandidateId: "L1",
+        remoteCandidateId: "R1",
+        ...(transport.availableIncomingBitrate !== undefined ? { availableIncomingBitrate: transport.availableIncomingBitrate } : {}),
+        ...(transport.currentRoundTripTime !== undefined ? { currentRoundTripTime: transport.currentRoundTripTime } : {}),
+      },
+      { id: "L1", type: "local-candidate", candidateType: transport.relayed ? "relay" : "host", address: "192.0.2.10", port: 50000 },
+      { id: "R1", type: "remote-candidate", candidateType: "host", address: "198.51.100.7", port: 3478 },
+    ]);
+  }
+
   close(): void {
     this.closed = true;
     this.signalingState = "closed";
@@ -274,6 +392,10 @@ export interface FakeEnvOptions {
   /** getDisplayMedia rejects with this DOMException name. */
   displayError?: string;
   peer?: FakePeerOptions;
+  /** What `getSupportedConstraints()` reports. Default: no voiceIsolation. */
+  supported?: MediaTrackSupportedConstraints;
+  /** What `RTCRtpSender.getCapabilities("audio")` reports. Default: null (unsupported). */
+  audioCapabilities?: RTCRtpCapabilities | null;
 }
 
 export class FakeEnvironment implements CallEnvironment {
@@ -282,8 +404,33 @@ export class FakeEnvironment implements CallEnvironment {
   readonly blackTracks: FakeTrack[] = [];
   readonly gumCalls: MediaStreamConstraints[] = [];
   readonly deviceListeners = new Set<() => void>();
+  readonly visibilityListeners = new Set<() => void>();
+  documentHidden = false;
 
   constructor(public options: FakeEnvOptions = {}) {}
+
+  supportedConstraints(): MediaTrackSupportedConstraints {
+    return this.options.supported ?? { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+  }
+
+  senderCapabilities(kind: "audio" | "video"): RTCRtpCapabilities | null {
+    return kind === "audio" ? (this.options.audioCapabilities ?? null) : null;
+  }
+
+  isDocumentHidden(): boolean {
+    return this.documentHidden;
+  }
+
+  onVisibilityChange(listener: () => void): () => void {
+    this.visibilityListeners.add(listener);
+    return () => this.visibilityListeners.delete(listener);
+  }
+
+  /** What the browser does on `visibilitychange`. */
+  setDocumentHidden(hidden: boolean): void {
+    this.documentHidden = hidden;
+    for (const listener of [...this.visibilityListeners]) listener();
+  }
 
   get pc(): FakePeerConnection {
     const pc = this.pcs.at(-1);
