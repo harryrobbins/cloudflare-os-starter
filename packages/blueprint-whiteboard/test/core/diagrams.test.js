@@ -108,3 +108,52 @@ describe("tables through the board", () => {
     expect(history.some((e) => /table/.test(e.summary))).toBe(true);
   });
 });
+
+describe("review fixes", () => {
+  it("cell edits from different people both land, and undo restores only its own cells", async () => {
+    const { board } = setup(null);
+    const { created } = await board.addObjects({ objects: [{ type: "table", rows: [["a", "b"], ["c", "d"]] }] });
+    const t = created[0];
+    // Bo edits from the same base: a version conflict; the client's rebase keeps his other-cell
+    // edit and retries on the new version, which applies to the cells as they are then.
+    await apply(board, { by: "Ann", objectOps: [updateOp(t.id, t.version, { cellEdits: [{ r: 0, c: 0, text: "A" }] })] });
+    const stale = await apply(board, { by: "Bo", objectOps: [updateOp(t.id, t.version, { cellEdits: [{ r: 1, c: 1, text: "D" }] })] });
+    expect(stale.conflicts).toHaveLength(1);
+    const r = await apply(board, { by: "Bo", objectOps: [updateOp(t.id, t.version + 1, { cellEdits: [{ r: 1, c: 1, text: "D" }] })] });
+    expect(r.errors).toEqual([]);
+    expect((await board.getBoard()).objects[t.id].cells).toEqual([["A", "b"], ["c", "D"]]);
+    await board.undo({ by: "Ann" });
+    expect((await board.getBoard()).objects[t.id].cells).toEqual([["a", "b"], ["c", "D"]]);
+    // Edits outside the grid are ignored; cellEdits is never stored.
+    const x = (await board.getBoard()).objects[t.id];
+    await apply(board, { objectOps: [updateOp(t.id, x.version, { cellEdits: [{ r: 9, c: 9, text: "?" }, { r: 0, c: 1, text: "B" }] })] });
+    const y = (await board.getBoard()).objects[t.id];
+    expect(y.cells).toEqual([["a", "B"], ["c", "D"]]);
+    expect(y.cellEdits).toBeUndefined();
+  });
+
+  it("failed renders are not stored, retry after force, and a new drawing tells the host", async () => {
+    let fail = true;
+    const onRender = vi.fn();
+    const repo = new InMemoryRepository();
+    const board = createWhiteboard(repo, {
+      renderDiagram: async () => { if (fail) throw new Error("timeout"); return { data: svg("ok") }; }, onRender,
+    });
+    const d = await addDiagram(board);
+    expect((await board.diagramRender(d.id)).status).toBe("error");
+    expect(await repo.getRender(d.id)).toBeNull();
+    fail = false;
+    expect((await board.diagramRender(d.id)).status).toBe("error"); // cached briefly
+    expect((await board.diagramRender(d.id, { force: true })).status).toBe("ok");
+    expect(onRender).toHaveBeenCalledWith(d.id);
+    expect((await repo.getRender(d.id)).status).toBe("ok");
+  });
+
+  it("limits diagrams per board", async () => {
+    const repo = new InMemoryRepository();
+    const board = createWhiteboard(repo, { limits: { diagrams: 2 } });
+    const { created, errors } = await board.addObjects({ objects: [{ type: "diagram" }, { type: "diagram" }, { type: "diagram" }] });
+    expect(created).toHaveLength(2);
+    expect(errors[0]).toMatchObject({ code: "limit" });
+  });
+});

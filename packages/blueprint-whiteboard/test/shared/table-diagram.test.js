@@ -160,3 +160,13 @@ describe("diagrams", () => {
     expect(toPortable([t], { [t.id]: t })[0].cells).toEqual([["a", "b"]]);
   });
 });
+
+describe("review fixes", () => {
+  it("pasted text is a table only when it clearly is one", () => {
+    expect(parseTable("\tif (a) {\n\t\treturn b;\n\t}")).toBeNull();
+    expect(parseTable("a\tb\nc")).toBeNull();
+    expect(parseTable("Well, I think so, maybe.\nYes, of course, fine.")).toBeNull();
+    expect(parseTable("id,name\n1,Ann\n2,Bo")).toEqual({ cells: [["id", "name"], ["1", "Ann"], ["2", "Bo"]], header: false });
+    expect(parseTable("\tQ1\tQ2\nNorth\t1\t2")).toEqual({ cells: [["", "Q1", "Q2"], ["North", "1", "2"]], header: false });
+  });
+});

@@ -318,6 +318,7 @@ function diagramNodes(o, images) {
   const status = !o.text?.trim() ? "Empty: double-click to write its source"
     : !current ? (img?.status === "pending" ? "Rendering…" : "Not rendered yet")
     : current.status === "unavailable" ? "Renderer not connected: connect MermaiD2 to this board as MERMAID2"
+    : current.status === "too-large" ? "Drawn on the board; left out of this export to keep it small"
     : current.status === "error" ? `Could not render: ${current.error ?? "error"}`
     : current.status === "pending" ? "Rendering…" : "";
   const color = current?.status === "error" ? "#b91c1c" : "#6b7280";

@@ -284,17 +284,17 @@ export function createCanvas(store, options = {}) {
       if (!store.getDiagramRender) { diagramImages.set(id, { hash, status: "unavailable" }); redrawDiagram(id); continue; }
       diagramFetches.add(key);
       if (!cur || cur.hash !== hash) { diagramImages.set(id, { hash, status: "pending" }); redrawDiagram(id); }
-      store.getDiagramRender(id).then((r) => {
+      store.getDiagramRender(id, force ? { force: true } : undefined).then((r) => {
         if (destroyed) return;
-        if (!r) {
-          // The server does not have it yet (a create still on its way): ask again shortly, a
-          // few times, before saying the diagram cannot be drawn here.
+        if (!r || r.hash !== hash) {
+          // The server does not have it yet, or not this source yet (a create or an edit still on
+          // its way): ask again shortly, a few times, before saying it cannot be drawn here.
           const tries = (diagramRetries.get(key) ?? 0) + 1;
           diagramRetries.set(key, tries);
           if (tries <= 8) {
-            setTimeout(() => { if (!destroyed && diagramImages.get(id)?.hash === hash) { diagramImages.delete(id); ensureDiagramRenders(false, [id]); } }, 250 * tries);
+            setTimeout(() => { if (!destroyed && diagramImages.get(id)?.hash === hash) { diagramImages.delete(id); ensureDiagramRenders(force, [id]); } }, 250 * tries);
             diagramImages.set(id, { hash, status: "pending" });
-          } else diagramImages.set(id, { hash, status: "unavailable" });
+          } else diagramImages.set(id, r ? { hash, status: "error", error: "the source is still being saved; choose Render" } : { hash, status: "unavailable" });
           return;
         }
         diagramRetries.delete(key);
@@ -696,7 +696,8 @@ export function createCanvas(store, options = {}) {
         const cells = cellsOf(o);
         const text = cleanText(value, LIMITS.tableCell);
         if (!cells[cell.r] || cells[cell.r][cell.c] === text) return;
-        store.updateObjects([{ id, patch: { cells: cells.map((row, r) => (r === cell.r ? row.map((t, c) => (c === cell.c ? text : t)) : row)) } }]);
+        // Just this cell: others may be editing other cells at the same time.
+        store.updateObjects([{ id, patch: { cellEdits: [{ r: cell.r, c: cell.c, text }] } }]);
         return;
       }
       const patch = textPatch(o, value);
@@ -705,6 +706,9 @@ export function createCanvas(store, options = {}) {
         return;
       }
       if (patch) store.updateObjects([{ id, patch }]);
+    },
+    onCellLost() {
+      options.announce?.("The table's rows or columns changed while you were typing, so that cell's edit was not saved");
     },
     onCellMove(id, cell, move) {
       const o = objects()[id];

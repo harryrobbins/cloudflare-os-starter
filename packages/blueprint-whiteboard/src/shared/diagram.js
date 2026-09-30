@@ -23,7 +23,13 @@ export const DIAGRAM_EXAMPLES = Object.freeze({
 export const RENDER_THEMES = Object.freeze({ light: 0, dark: 200 });
 
 /** Largest rendered SVG kept (characters); a bigger result shows as an error. */
-export const MAX_RENDER_CHARS = 3_000_000;
+export const MAX_RENDER_CHARS = 2_000_000;
+/** Longest wait for the renderer before a render counts as failed. */
+export const RENDER_TIMEOUT_MS = 60_000;
+/** A failed render is retried after this long (failures are never stored). */
+export const RENDER_ERROR_TTL_MS = 60_000;
+/** Most drawing characters (base64) one SVG export inlines; diagrams beyond it are placeholders. */
+export const EXPORT_IMAGES_CHARS = 8_000_000;
 
 /** @param {string} s FNV-1a, 32-bit, as 8 hex digits */
 function fnv(s) {

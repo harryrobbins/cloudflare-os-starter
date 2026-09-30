@@ -160,7 +160,8 @@ export function fitColumns(o, measure) {
 
 /**
  * Cells from pasted text: a Markdown pipe table (with its |---| rule), tab-separated rows (what
- * spreadsheets copy) or CSV with quotes. Null when the text is not a table of at least two cells.
+ * spreadsheets copy) or CSV with quotes. Null when the text is not clearly a table: fewer than two
+ * rows, ragged rows, tab-indented text, or comma-separated sentences.
  * @param {string} text
  * @returns {{cells: string[][], header: boolean}|null}
  */
@@ -175,12 +176,20 @@ export function parseTable(text) {
     return square(cells, true);
   }
   if (src.includes("\t")) {
+    // Spreadsheet rows: at least two, all with the same number of cells, not just indented text
+    // (tab-indented code would otherwise be a table with an empty first column).
     const cells = lines.map((l) => l.split("\t"));
-    return cells.length * cells[0].length >= 2 && cells.some((r) => r.length > 1) ? square(cells, false) : null;
+    const cols = cells[0].length;
+    if (cells.length < 2 || cols < 2 || cells.some((r) => r.length !== cols)) return null;
+    if (cells.every((r) => r[0] === "")) return null;
+    return square(cells, false);
   }
+  // CSV: at least two rows of the same width, and short fields, not sentences with commas.
   const csv = parseCsv(src);
-  if (csv && csv.length >= 2 && csv[0].length >= 2 && csv.every((r) => r.length === csv[0].length)) return square(csv, false);
-  return null;
+  if (!csv || csv.length < 2 || csv[0].length < 2 || csv.some((r) => r.length !== csv[0].length)) return null;
+  if (lines.some((l) => /[.!?;:]\s*$/.test(l))) return null;
+  if (csv.some((r) => r.some((f) => f.length > 60 || f.split(/\s+/).length > 6))) return null;
+  return square(csv, false);
 }
 
 /** @param {string[][]} cells @param {boolean} header */

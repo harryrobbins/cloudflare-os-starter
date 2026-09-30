@@ -426,8 +426,8 @@ export class Gadget extends DurableObject {
     return (await this.drawings.open(id)).api.getHistory(limit);
   }
 
-  async drawingDiagramRender(id, diagramId) {
-    return (await this.drawings.open(id)).api.getDiagramRender(diagramId);
+  async drawingDiagramRender(id, diagramId, opts) {
+    return (await this.drawings.open(id)).api.getDiagramRender(diagramId, opts);
   }
 
   drawingPresence(id, presence) {

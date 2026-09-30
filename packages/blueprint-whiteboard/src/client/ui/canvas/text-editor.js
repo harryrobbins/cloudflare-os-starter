@@ -48,6 +48,43 @@ import { tableLayout, cellsOf } from "../../../shared/table.js";
 /** A table cell being edited. @typedef {{r: number, c: number}} Cell */
 
 /**
+ * What identifies an edited cell when rows or columns move: the grid's shape, and the other cells
+ * of its row and of its column.
+ * @typedef {{r: number, c: number, rows: number, cols: number, row: string[], col: string[]}} CellAnchor
+ */
+
+/** @param {string[][]} cells @param {Cell} cell @returns {CellAnchor} */
+export function cellAnchor(cells, cell) {
+  return {
+    ...cell, rows: cells.length, cols: cells[0].length,
+    row: cells[cell.r].filter((_, c) => c !== cell.c), col: cells.map((r) => r[cell.c]).filter((_, r) => r !== cell.r),
+  };
+}
+
+/**
+ * Where an anchored cell is now: the same place while the grid keeps its shape; after rows were
+ * added or removed, the row whose other cells are unchanged (the nearest, when several are alike,
+ * such as empty rows); likewise columns; else null.
+ * @param {CellAnchor|null} a @param {string[][]} cells @returns {Cell|null}
+ */
+export function relocateCell(a, cells) {
+  const nearest = (/** @type {number[]} */ xs, /** @type {number} */ to) => xs.reduce((b, x) => (Math.abs(x - to) < Math.abs(b - to) ? x : b));
+  if (!a) return null;
+  const rows = cells.length, cols = cells[0].length;
+  if (rows === a.rows && cols === a.cols) return { r: a.r, c: a.c };
+  const same = (/** @type {string[]} */ x, /** @type {string[]} */ y) => x.length === y.length && x.every((v, i) => v === y[i]);
+  if (cols === a.cols) {
+    const found = cells.map((row, r) => (same(row.filter((_, c) => c !== a.c), a.row) ? r : -1)).filter((r) => r >= 0);
+    return found.length ? { r: nearest(found, a.r), c: a.c } : null;
+  }
+  if (rows === a.rows) {
+    const found = cells[0].map((_, c) => (same(cells.map((row) => row[c]).filter((_, r) => r !== a.r), a.col) ? c : -1)).filter((c) => c >= 0);
+    return found.length ? { r: a.r, c: nearest(found, a.c) } : null;
+  }
+  return null;
+}
+
+/**
  * @param {WhiteboardObject} o @param {(id: string) => WhiteboardObject|undefined} resolve
  * @param {import("../../../shared/connectors.js").RouteEnv} [env]
  * @param {Cell|null} [cell]  tables: the cell (default the first)
@@ -150,6 +187,8 @@ export function textPatch(o, value) {
  * @property {import("../../../shared/connectors.js").RouteEnv} [routeEnv]
  * @property {() => Camera} getCamera
  * @property {(id: string, value: string, cell: Cell|null) => void} onCommit  `cell`: the table cell edited
+ * @property {() => void} [onCellLost]  the edited cell could not be found again after its table's
+ *   rows or columns changed elsewhere; the edit was closed without saving
  * @property {(id: string, cell: Cell, move: "next"|"prev"|"down") => void} [onCellMove]  Tab, Shift+Tab
  *   or Enter in a table cell, after that cell was committed
  * @property {(id: string) => void} onClose
@@ -174,6 +213,8 @@ export class TextEditor {
     this.closing = false;
     /** @type {Cell|null} */
     this.cell = null;
+    /** @type {CellAnchor|null} */
+    this.anchor = null;
   }
 
   get isOpen() {
@@ -219,6 +260,7 @@ export class TextEditor {
     }
     this.id = id;
     this.cell = cell;
+    this.anchor = cell ? cellAnchor(cellsOf(o), cell) : null;
     this.textarea = ta;
     this.box = box;
     this.deps.host.appendChild(ta);
@@ -310,9 +352,11 @@ export class TextEditor {
     const o = this.deps.getObject(this.id);
     if (!o) { this.close(); return; }
     if (this.cell && o.type === "table") {
-      // Rows or columns removed elsewhere: stay within the table.
-      const cells = cellsOf(o);
-      this.cell = { r: Math.min(this.cell.r, cells.length - 1), c: Math.min(this.cell.c, cells[0].length - 1) };
+      // Rows or columns added or removed elsewhere: follow the cell, or stop without saving.
+      const cell = relocateCell(this.anchor, cellsOf(o));
+      if (!cell) { this.close(); this.deps.onCellLost?.(); return; }
+      if (cell.r !== this.cell.r || cell.c !== this.cell.c) this.anchor = cellAnchor(cellsOf(o), cell);
+      this.cell = cell;
     }
     const box = editorBox(o, this.deps.resolve, this.deps.routeEnv, this.cell);
     if (!box) { this.close(); return; }

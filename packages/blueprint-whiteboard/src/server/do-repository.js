@@ -100,7 +100,9 @@ export class DoStorageRepository {
     const old = await this.storage.get(key);
     const oldKeys = Array.from({ length: old?.chunks ?? 0 }, (_, i) => `${key}:${i}`);
     if (!render) {
-      for (const batch of chunks([key, ...oldKeys])) await this.storage.delete(batch);
+      await this.storage.transaction(async (/** @type {any} */ txn) => {
+        for (const batch of chunks([key, ...oldKeys])) await txn.delete(batch);
+      });
       return;
     }
     const { svg = "", ...rest } = render;
@@ -110,8 +112,11 @@ export class DoStorageRepository {
     for (let i = 0; i < n; i++) puts[`${key}:${i}`] = svg.slice(i * RENDER_CHUNK, (i + 1) * RENDER_CHUNK);
     puts[key] = { ...rest, chunks: n, length: svg.length };
     const stale = oldKeys.filter((k) => !Object.hasOwn(puts, k));
-    for (const batch of chunks(stale)) await this.storage.delete(batch);
-    for (const batch of chunks(Object.entries(puts))) await this.storage.put(Object.fromEntries(batch));
+    // One transaction, so overlapping writes never leave chunks the head does not count.
+    await this.storage.transaction(async (/** @type {any} */ txn) => {
+      for (const batch of chunks(stale)) await txn.delete(batch);
+      for (const batch of chunks(Object.entries(puts))) await txn.put(Object.fromEntries(batch));
+    });
   }
 
   /** @param {Commit} commit */

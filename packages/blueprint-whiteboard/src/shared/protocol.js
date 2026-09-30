@@ -196,7 +196,15 @@ import { SYNTAXES, LAYOUTS, DIAGRAM_DEFAULTS } from "./diagram.js";
 
 /**
  * @typedef {Partial<Omit<WhiteboardObject, "style"|"id"|"type"|"version"|"createdAt"|"updatedAt"|"createdBy">>
- *   & {style?: Partial<Style>}} ObjectPatch
+ *   & {style?: Partial<Style>, cellEdits?: CellEdit[]}} ObjectPatch
+ */
+
+/**
+ * Tables: one cell's new text. A patch's `cellEdits` are applied to the table's cells as they are
+ * when the update lands (edits outside the table are ignored), so people editing different cells
+ * never overwrite each other; `cells` replaces the whole grid (adding or removing rows and columns).
+ * `cellEdits` is never stored.
+ * @typedef {{r: number, c: number, text: string}} CellEdit
  */
 
 /**
@@ -381,6 +389,8 @@ export const LIMITS = Object.freeze({
   tableCell: 1000,
   /** Characters of diagram source (a diagram's `text`). */
   diagramText: 20_000,
+  /** Diagrams on one board (each may keep a cached drawing of up to MAX_RENDER_CHARS). */
+  diagrams: 100,
   frameName: 80,
   connectorLabel: 200,
   boardTitle: 200,
@@ -462,7 +472,7 @@ export const EDITABLE_FIELDS = Object.freeze({
   connector: ["z", "text", "style", "from", "to", "fromSide", "toSide", "routing", "segments", "curve"],
   icon: ["x", "y", "w", "h", "rot", "z", "frameId", "text", "style", "packId", "iconId"],
   code: ["x", "y", "w", "h", "z", "frameId", "text", "style", "language", "theme", "lineNumbers", "wrap", "filename"],
-  table: ["x", "y", "w", "h", "z", "frameId", "style", "cells", "header", "colWidths"],
+  table: ["x", "y", "w", "h", "z", "frameId", "style", "cells", "cellEdits", "header", "colWidths"],
   diagram: ["x", "y", "w", "h", "z", "frameId", "text", "style", "syntax", "layout", "sketch", "theme"],
 });
 
@@ -744,6 +754,42 @@ export function cleanCells(v) {
 }
 
 /**
+ * Cell edits: at most LIMITS.tableRows x LIMITS.tableCols of {r, c, text} with integer indexes in
+ * range and cleaned text; the last edit of a cell wins. Null when unusable or empty.
+ * @param {unknown} v
+ * @returns {CellEdit[]|null}
+ */
+export function cleanCellEdits(v) {
+  if (!Array.isArray(v) || !v.length || v.length > LIMITS.tableRows * LIMITS.tableCols) return null;
+  /** @type {Map<string, CellEdit>} */
+  const out = new Map();
+  for (const e of v) {
+    if (!isObject(e)) return null;
+    const { r, c, text } = /** @type {any} */ (e);
+    if (!Number.isInteger(r) || !Number.isInteger(c) || r < 0 || c < 0 || r >= LIMITS.tableRows || c >= LIMITS.tableCols) return null;
+    if (typeof text !== "string") return null;
+    out.set(r + ":" + c, { r, c, text: cleanText(text, LIMITS.tableCell) });
+  }
+  return [...out.values()];
+}
+
+/**
+ * `cells` with `edits` applied (edits outside the grid are ignored); the same array when nothing
+ * changes. Never mutates.
+ * @param {string[][]} cells @param {CellEdit[]} edits
+ */
+export function applyCellEdits(cells, edits) {
+  let out = cells;
+  for (const { r, c, text } of edits) {
+    if (!out[r] || c >= out[r].length || out[r][c] === text) continue;
+    if (out === cells) out = cells.map((row) => row);
+    if (out[r] === cells[r]) out[r] = [...cells[r]];
+    out[r][c] = text;
+  }
+  return out;
+}
+
+/**
  * Relative column widths: 1..LIMITS.tableCols finite numbers clamped to 0.05..20, rounded to 3
  * decimals; null clears (equal columns). Undefined when invalid (dropped).
  * @param {unknown} v
@@ -859,6 +905,7 @@ export function cleanObjectPatch(raw, type) {
       case "lineNumbers": case "wrap": if (typeof v === "boolean") out[key] = v; break;
       case "filename": if (typeof v === "string") out.filename = cleanLine(v, LIMITS.codeFilename); break;
       case "cells": { const c = cleanCells(v); if (c) out.cells = c; break; }
+      case "cellEdits": { const e = cleanCellEdits(v); if (e) out.cellEdits = e; break; }
       case "header": if (typeof v === "boolean") out.header = v; break;
       case "colWidths": { const c = cleanColWidths(v); if (c !== undefined) out.colWidths = c; break; }
       case "syntax": if (typeof v === "string" && /** @type {readonly string[]} */ (SYNTAXES).includes(v)) out.syntax = v; break;

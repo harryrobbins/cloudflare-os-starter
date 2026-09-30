@@ -65,9 +65,12 @@ export class Gadget extends DurableObject {
     return this.#board.exportSvg(args);
   }
 
-  /** A diagram's rendered SVG (cached, else rendered now), or its status. @param {string} id */
-  getDiagramRender(id) {
-    return this.#board.diagramRender(id);
+  /**
+   * A diagram's rendered SVG (cached, else rendered now), or its status.
+   * @param {string} id @param {{force?: boolean}} [opts]  force: draw again (Render again)
+   */
+  getDiagramRender(id, opts) {
+    return this.#board.diagramRender(id, opts);
   }
 
   // --- Core writes ---------------------------------------------------------------------------

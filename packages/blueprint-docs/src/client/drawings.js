@@ -247,7 +247,7 @@ export function createDrawings({ editor, gadget, RpcTarget, viewer, activeBlockI
       leavePresence: (clientId, session) => gadget.drawingLeave(id, clientId, session),
       undo: (args) => gadget.drawingUndo(id, args),
       getHistory: (limit) => gadget.drawingHistory(id, limit),
-      getDiagramRender: (diagramId) => gadget.drawingDiagramRender(id, diagramId),
+      getDiagramRender: (diagramId, opts) => gadget.drawingDiagramRender(id, diagramId, opts),
       getBoard: () => gadget.drawing(id, "getBoard"),
     };
     const state = { id, host, destroy: () => {} };

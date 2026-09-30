@@ -40,7 +40,8 @@ export class FakeGadget {
   /** @param {any} args */
   exportSvg(args) { return this.board.exportSvg(args); }
   /** @param {string} id */
-  getDiagramRender(id) { return this.board.diagramRender(id); }
+  /** @param {any} [opts] */
+  getDiagramRender(id, opts) { return this.board.diagramRender(id, opts); }
 
   /** @param {any} request */
   async applyOperation(request) { return (await this.board.applyOperation(request)).result; }

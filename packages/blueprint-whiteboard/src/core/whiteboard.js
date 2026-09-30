@@ -40,7 +40,7 @@ import {
   BACKGROUNDS, COLORS, DEFAULT_TITLE, LIMITS as DEFAULT_LIMITS, SCHEMA_VERSION, TYPE_DEFAULTS,
   cleanColor, cleanCoord, cleanLine, cleanName, cleanNumber, cleanObjectPatch, cleanSize, compareObjects,
   isAcceptableOrderKey, isId, isObject, isObjectType, isRequestId, newId as protocolNewId, normalizeNewObject,
-  storedBytes, withStyleFallbacks, isArrowhead, DASHES, DASH_TYPES,
+  storedBytes, withStyleFallbacks, isArrowhead, DASHES, DASH_TYPES, applyCellEdits,
 } from "../shared/protocol.js";
 import { isValidOrderKey, keyBetween } from "../shared/order.js";
 import { boardToSvg } from "../shared/render.js";
@@ -50,7 +50,9 @@ import { codeHeight } from "../shared/code/layout.js";
 import { detectLanguage, languageLabel, resolveLanguage } from "../shared/code/languages.js";
 import { createRouteEnv } from "../shared/connectors.js";
 import { isShape, SHAPE_IDS, shapeLabel } from "../shared/shapes.js";
-import { diagramHash, renderRequest, acceptSvg, svgSize, svgDataUrl, renderErrorMessage } from "../shared/diagram.js";
+import {
+  diagramHash, renderRequest, acceptSvg, svgSize, svgDataUrl, renderErrorMessage, RENDER_TIMEOUT_MS, RENDER_ERROR_TTL_MS, EXPORT_IMAGES_CHARS,
+} from "../shared/diagram.js";
 
 /** @typedef {import("../shared/protocol.js").BoardMeta} BoardMeta */
 /** @typedef {import("../shared/protocol.js").BoardSnapshot} BoardSnapshot */
@@ -377,13 +379,15 @@ function placeZ(w, g, z) {
  * @param {Repository} repo
  * @param {{now?: () => number, newId?: typeof protocolNewId,
  *   onEvent?: (event: BoardEvent) => void, limits?: Partial<typeof DEFAULT_LIMITS>,
- *   renderDiagram?: ((request: ReturnType<typeof renderRequest>) => Promise<{data: unknown}>)|null}} [options]
+ *   renderDiagram?: ((request: ReturnType<typeof renderRequest>) => Promise<{data: unknown}>)|null,
+ *   onRender?: (id: string) => void}} [options]
  *   onEvent is called inside the queue right after each successful commit, so events are emitted
  *   in revision order. It must not block; errors it throws are swallowed. `limits` overrides
  *   LIMITS (tests only). renderDiagram is the MermaiD2 connector's render() (src/shared/diagram.js);
- *   without it diagrams report "unavailable" and draw as placeholders.
+ *   without it diagrams report "unavailable" and draw as placeholders. onRender is called after a new
+ *   drawing of diagram `id` was stored (a host refreshes its preview).
  */
-export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, onEvent, limits, renderDiagram = null } = {}) {
+export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, onEvent, limits, renderDiagram = null, onRender } = {}) {
   const L = limits ? { ...DEFAULT_LIMITS, ...limits } : DEFAULT_LIMITS;
 
   // --- Mutation queue ------------------------------------------------------------------------
@@ -413,9 +417,16 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
   /** @type {Map<string, Promise<import("../shared/diagram.js").DiagramRender>>} */
   const rendering = new Map();
 
+  /** When each failed render was made (failures are kept in memory only, and briefly). @type {Map<string, number>} */
+  const failedAt = new Map();
+
   /** @param {string} id */
   async function cachedRender(id) {
-    if (renders.has(id)) return renders.get(id) ?? null;
+    if (renders.has(id)) {
+      const r = renders.get(id) ?? null;
+      if (r?.status === "error" && Date.now() - (failedAt.get(id) ?? 0) > RENDER_ERROR_TTL_MS) { renders.delete(id); return null; }
+      return r;
+    }
     const r = repo.getRender ? await repo.getRender(id).catch(() => null) : null;
     if (r) renders.set(id, r);
     return r;
@@ -428,13 +439,14 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
   }
 
   /**
-   * The render of diagram `o` now (from the cache, else made by renderDiagram).
-   * @param {WhiteboardObject} o
+   * The render of diagram `o` now (from the cache, else made by renderDiagram; `force` skips the
+   * cache). Only drawings are stored; a failure is kept in memory for RENDER_ERROR_TTL_MS.
+   * @param {WhiteboardObject} o @param {boolean} [force]
    * @returns {Promise<import("../shared/diagram.js").DiagramRender>}
    */
-  async function renderOf(o) {
+  async function renderOf(o, force = false) {
     const hash = diagramHash(o);
-    const cached = await cachedRender(o.id);
+    const cached = force ? null : await cachedRender(o.id);
     if (cached && cached.hash === hash) return cached;
     if (!renderDiagram) return { hash, status: "unavailable" };
     const key = o.id + "#" + hash;
@@ -444,7 +456,12 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
         /** @type {import("../shared/diagram.js").DiagramRender} */
         let rec;
         try {
-          const out = await renderDiagram(renderRequest(o));
+          /** @type {ReturnType<typeof setTimeout>|undefined} */
+          let timer;
+          const out = await Promise.race([
+            renderDiagram(renderRequest(o)),
+            new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("The renderer took too long")), RENDER_TIMEOUT_MS); }),
+          ]).finally(() => clearTimeout(timer));
           const svg = acceptSvg(out?.data);
           rec = svg ? { hash, status: "ok", svg, ...(svgSize(svg) ?? {}) } : { hash, status: "error", error: "The renderer did not return a usable SVG" };
         } catch (e) {
@@ -455,7 +472,11 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
         const now = s.objects.get(o.id);
         if (now && now.type === "diagram" && diagramHash(now) === hash) {
           renders.set(o.id, rec);
-          try { await repo.putRender?.(o.id, rec); } catch { /* kept in memory */ }
+          if (rec.status === "ok") {
+            failedAt.delete(o.id);
+            try { await repo.putRender?.(o.id, rec); } catch { /* kept in memory */ }
+            try { onRender?.(o.id); } catch { /* a host's listener never fails a render */ }
+          } else failedAt.set(o.id, Date.now());
         }
         return rec;
       })().finally(() => rendering.delete(key));
@@ -720,6 +741,11 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       if (w.objects.size >= L.objects) {
         return void errors.push(opError(i, "limit", `A whiteboard may have at most ${L.objects} objects`));
       }
+      if (obj.type === "diagram") {
+        let n = 0;
+        for (const x of w.objects.values()) if (x.type === "diagram") n++;
+        if (n >= L.diagrams) return void errors.push(opError(i, "limit", `A whiteboard may have at most ${L.diagrams} diagrams`));
+      }
       if (obj.type === "frame" && w.frames >= L.frames) {
         return void errors.push(opError(i, "limit", `A whiteboard may have at most ${L.frames} frames`));
       }
@@ -756,6 +782,10 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       /** @type {any} */
       const next = { ...current, ...patch };
       if (patch.style) next.style = { ...current.style, ...patch.style };
+      if (patch.cellEdits) {
+        next.cells = applyCellEdits(next.cells ?? [], patch.cellEdits);
+        delete next.cellEdits;
+      }
       if (patch.frameId && !isFrame(patch.frameId)) {
         if (!force && w.objects.has(patch.frameId)) return void errors.push(opError(i, "invalid_ref", notAFrame(patch.frameId)));
         next.frameId = null; // the frame is gone (perhaps deleted concurrently): keep the rest of the op
@@ -866,6 +896,17 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
         const patch = {};
         for (const f of ALL_FIELDS) {
           if (fieldEqual(f, before, after)) continue;
+          // A table whose grid kept its shape is undone cell by cell, so undo never overwrites
+          // cells someone else changed since.
+          const b = /** @type {any} */ (before), a = /** @type {any} */ (after);
+          if (f === "cells" && Array.isArray(b.cells) && Array.isArray(a.cells) && b.cells.length === a.cells.length &&
+              b.cells.every((/** @type {string[]} */ row, /** @type {number} */ r) => row.length === a.cells[r]?.length)) {
+            /** @type {{r: number, c: number, text: string}[]} */
+            const edits = [];
+            b.cells.forEach((/** @type {string[]} */ row, /** @type {number} */ r) => row.forEach((t, c) => { if (t !== a.cells[r][c]) edits.push({ r, c, text: t }); }));
+            if (edits.length) patch.cellEdits = edits;
+            continue;
+          }
           const was = /** @type {any} */ (before)[f];
           patch[f] = was === undefined && Object.hasOwn(ROUTE_DEFAULTS, f) ? ROUTE_DEFAULTS[f]
             // Style keys older objects lack read as their fallbacks, so undo restores them.
@@ -1627,10 +1668,14 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
       // Diagrams draw from their cached renders (an export never waits for the renderer).
       /** @type {Map<string, {hash: string, status: string, href?: string, error?: string}>} */
       const images = new Map();
+      let inlined = 0;
       for (const o of s.objects.values()) {
         if (o.type !== "diagram") continue;
         const r = await cachedRender(o.id);
-        if (r) images.set(o.id, { hash: r.hash, status: r.status, error: r.error, ...(r.svg ? { href: svgDataUrl(r.svg) } : {}) });
+        if (!r) continue;
+        const href = r.svg && inlined + r.svg.length * 1.4 <= EXPORT_IMAGES_CHARS ? svgDataUrl(r.svg) : null;
+        if (href) inlined += href.length;
+        images.set(o.id, { hash: r.hash, status: r.svg && !href ? "too-large" : r.status, error: r.error, ...(href ? { href } : {}) });
       }
       return boardToSvg(snapshot(s), { frameId, images });
     }),
@@ -1638,15 +1683,15 @@ export function createWhiteboard(repo, { now = Date.now, newId = protocolNewId, 
     /**
      * A diagram's render for showing it: cached when its source has not changed, else made now
      * by the renderer (when one is connected). Never changes the board.
-     * @param {unknown} id
+     * @param {unknown} id @param {unknown} [opts]  {force: true}: draw again even when cached (Render again)
      * @returns {Promise<(import("../shared/diagram.js").DiagramRender & {id: string})|null>} null
      *   when `id` is not a diagram
      */
-    async diagramRender(id) {
+    async diagramRender(id, opts) {
       if (typeof id !== "string") return null;
       const o = await enqueue(async () => (await load()).objects.get(id));
       if (!o || o.type !== "diagram") return null;
-      return { id, ...(await renderOf(o)) };
+      return { id, ...(await renderOf(o, isObject(opts) && /** @type {any} */ (opts).force === true)) };
     },
   };
 }

@@ -635,3 +635,28 @@ describe("undo of style keys older objects lack", () => {
     expect(effectivePatch(older, { style: { shape: "star" } })).toEqual({ style: { shape: "star" } });
   });
 });
+
+describe("table cell edits on the client", () => {
+  it("merge, undo per cell, rebase per cell, and follow a moved cell", async () => {
+    const { mergePatches, patchObject } = await import("../../src/client/model/ops.js");
+    const { previousValues, effectivePatch } = await import("../../src/client/model/undo.js");
+    const { rebasePatch } = await import("../../src/client/model/rebase.js");
+    const { cellAnchor, relocateCell } = await import("../../src/client/ui/canvas/text-editor.js");
+    const t = obj("table", { cells: [["a", "b"], ["c", "d"]] });
+    const m = mergePatches({ cellEdits: [{ r: 0, c: 0, text: "A" }] }, { cellEdits: [{ r: 1, c: 1, text: "D" }] });
+    expect(patchObject(t, m).cells).toEqual([["A", "b"], ["c", "D"]]);
+    expect(patchObject(t, m).cellEdits).toBeUndefined();
+    expect(mergePatches({ cells: [["x"]] }, { cellEdits: [{ r: 0, c: 0, text: "y" }] })).toEqual({ cells: [["y"]] });
+    expect(previousValues(t, { cellEdits: [{ r: 0, c: 1, text: "Z" }] })).toEqual({ cellEdits: [{ r: 0, c: 1, text: "b" }] });
+    expect(effectivePatch(t, { cellEdits: [{ r: 0, c: 1, text: "b" }] })).toBeNull();
+    // They changed (0,0); my edits of (0,0) and (1,0): the first is dropped (flash), the second kept.
+    const theirs = { ...t, cells: [["THEIRS", "b"], ["c", "d"]] };
+    const r = rebasePatch({ cellEdits: [{ r: 0, c: 0, text: "mine" }, { r: 1, c: 0, text: "C" }] }, t, theirs);
+    expect(r.patch).toEqual({ cellEdits: [{ r: 1, c: 0, text: "C" }] });
+    expect(r.flash).toBe(true);
+    const a = cellAnchor([["h1", "h2"], ["x", "1"], ["y", "2"]], { r: 2, c: 1 });
+    expect(relocateCell(a, [["h1", "h2"], ["new", ""], ["x", "1"], ["y", "2"]])).toEqual({ r: 3, c: 1 });
+    expect(relocateCell(a, [["h1", "h2"], ["y", "2"]])).toEqual({ r: 1, c: 1 });
+    expect(relocateCell(a, [["h1"], ["x"]])).toBeNull();
+  });
+});

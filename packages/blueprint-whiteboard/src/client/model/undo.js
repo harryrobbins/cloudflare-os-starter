@@ -39,6 +39,12 @@ export function effectivePatch(obj, patch) {
   const o = /** @type {Record<string, any>} */ (obj);
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue;
+    if (key === "cellEdits") {
+      const cells = o.cells ?? [];
+      const edits = /** @type {any[]} */ (value).filter((e) => cells[e.r] && e.c < cells[e.r].length && cells[e.r][e.c] !== e.text);
+      if (edits.length) out.cellEdits = edits;
+      continue;
+    }
     if (key === "style") {
       /** @type {Record<string, any>} */
       const style = {};
@@ -64,7 +70,12 @@ export function previousValues(obj, patch) {
   const out = {};
   const o = /** @type {Record<string, any>} */ (obj);
   for (const key of Object.keys(patch)) {
-    if (key === "style") {
+    if (key === "cellEdits") {
+      // Undo puts back just these cells' previous text.
+      const cells = o.cells ?? [];
+      out.cellEdits = /** @type {any[]} */ (/** @type {any} */ (patch).cellEdits).filter((e) => cells[e.r] && e.c < cells[e.r].length)
+        .map((e) => ({ r: e.r, c: e.c, text: cells[e.r][e.c] }));
+    } else if (key === "style") {
       /** @type {Record<string, any>} */
       const style = {};
       // Style keys older objects lack read as their fallbacks, so undo restores them.

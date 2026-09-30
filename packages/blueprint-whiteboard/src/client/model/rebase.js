@@ -50,6 +50,17 @@ export function rebasePatch(patch, base, theirs) {
   const t = /** @type {Record<string, any>} */ (theirs);
   for (const [field, mine] of Object.entries(patch)) {
     if (mine === undefined) continue;
+    if (field === "cellEdits") {
+      // Each cell on its own: an edit of a cell they changed too is dropped (and flashed).
+      const bc = b.cells ?? [], tc = t.cells ?? [];
+      const kept = /** @type {any[]} */ (mine).filter((e) => {
+        if ((tc[e.r]?.[e.c] ?? null) === e.text) return false;
+        if ((bc[e.r]?.[e.c] ?? null) !== (tc[e.r]?.[e.c] ?? null)) { flash = true; return false; }
+        return true;
+      });
+      if (kept.length) out.cellEdits = kept;
+      continue;
+    }
     if (field === "style") {
       /** @type {Record<string, any>} */
       const style = {};
