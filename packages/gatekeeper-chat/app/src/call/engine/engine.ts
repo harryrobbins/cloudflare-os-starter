@@ -67,6 +67,7 @@ import {
   readConnection,
   receiverAudioLevel,
   sampleFor,
+  type ConnectionSample,
   type InboundSample,
   type OutboundSample,
 } from "./stats.js";
@@ -1386,6 +1387,9 @@ class Engine implements CallEngine {
     const session = this.session;
     if (!session) return;
     const raw = new Map<string, number>();
+    // The SSRC level is free but needs the audio-level header extension, which Cloudflare's SFU does
+    // not negotiate; without it, one connection report per tick gives `inbound-rtp.audioLevel`.
+    let report: ConnectionSample | null | undefined;
     for (const pull of this.pulls.values()) {
       if (pull.kind !== "audio" || !pull.transceiver) continue;
       let level: number | null = null;
@@ -1393,6 +1397,11 @@ class Engine implements CallEngine {
         level = receiverAudioLevel(pull.transceiver.receiver);
       } catch {
         level = null;
+      }
+      if (level === null && this.pc) {
+        report ??= await readStats(this.pc, readConnection);
+        if (gen !== this.gen) return;
+        level = report ? (sampleFor(report.inbound, pull.transceiver.mid, pull.transceiver.receiver.track)?.audioLevel ?? null) : null;
       }
       raw.set(pull.participantId, level ?? 0);
     }

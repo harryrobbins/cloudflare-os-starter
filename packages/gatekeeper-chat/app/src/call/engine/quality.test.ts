@@ -379,11 +379,20 @@ describe("stats readers", () => {
     expect(
       readInbound(
         report([
-          { id: "i", type: "inbound-rtp", packetsLost: -1, packetsReceived: 10, jitter: 0.012, framesPerSecond: 24, codecId: "c" },
+          { id: "i", type: "inbound-rtp", packetsLost: -1, packetsReceived: 10, jitter: 0.012, framesPerSecond: 24, codecId: "c", audioLevel: 0.25 },
           { id: "c", type: "codec", mimeType: "audio/opus" },
         ]),
       ),
-    ).toEqual({ packetsLost: 0, packetsReceived: 10, jitterMs: 12, framesPerSecond: 24, framesDecoded: 0, framesDropped: 0, mimeType: "audio/opus" });
+    ).toEqual({
+      packetsLost: 0,
+      packetsReceived: 10,
+      jitterMs: 12,
+      framesPerSecond: 24,
+      framesDecoded: 0,
+      framesDropped: 0,
+      mimeType: "audio/opus",
+      audioLevel: 0.25,
+    });
   });
 
   it("finds the selected pair via the transport or the nominated pair, relay or not", () => {

@@ -549,6 +549,20 @@ describe("active speaker", () => {
     expect(p2.getStatsCalls + p3.getStatsCalls).toBe(0);
   });
 
+  // Found on the real SFU: it negotiates no ssrc-audio-level extension, so synchronization sources
+  // carry no level and nobody was ever highlighted.
+  it("falls back to inbound-rtp audioLevel from one connection report when SSRC levels are missing", async () => {
+    const { env, engine } = await joinWith(callState([participant("p2", ["audio"]), participant("p3", ["audio"])]));
+    const p2 = receiverOf(env, streamTrack(engine.snapshot().remotes.p2!.audio)).receiver;
+    const p3 = receiverOf(env, streamTrack(engine.snapshot().remotes.p3!.audio)).receiver;
+    p2.ssrcLevels = false;
+    p3.ssrcLevels = false;
+    p3.audioLevel = 0.7;
+    await settle(1_800);
+    expect(engine.snapshot().activeSpeaker).toBe("p3");
+    expect(p2.getStatsCalls + p3.getStatsCalls).toBe(0);
+  });
+
   it("makes the local speaker active from media-source stats, and never publishes raw levels", async () => {
     const { env, engine } = await joinWith(callState([]));
     const mic = env.pc.transceivers[0]!.sender;

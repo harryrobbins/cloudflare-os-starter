@@ -19,7 +19,9 @@ export async function bytesSent(sender: StatsSource): Promise<number> {
 /**
  * A receiver's latest audio level (0..1) from its synchronization sources: synchronous and free,
  * where `getStats()` would build a whole report. Null when no source has reported a level (nothing
- * received for ten seconds, or no audio-level header extension).
+ * received for ten seconds, or no audio-level header extension -- which is always the case behind
+ * Cloudflare's SFU: its SDP negotiates no `ssrc-audio-level` extension, so the engine falls back to
+ * `inbound-rtp.audioLevel`).
  */
 export function receiverAudioLevel(receiver: Pick<RTCRtpReceiver, "getSynchronizationSources">): number | null {
   let level: number | null = null;
@@ -127,6 +129,8 @@ export interface InboundSample {
   readonly framesDecoded: number;
   readonly framesDropped: number;
   readonly mimeType: string | null;
+  /** `inbound-rtp.audioLevel` (0..1) for audio; null for video or when not reported. */
+  readonly audioLevel: number | null;
 }
 
 /** One receiver's `inbound-rtp`; null before the browser has one. */
@@ -150,6 +154,7 @@ function inboundOf(byId: Map<string, Entry>, entry: Entry): InboundSample {
     framesDecoded: num(entry.framesDecoded) ?? 0,
     framesDropped: num(entry.framesDropped) ?? 0,
     mimeType: codecOf(byId, entry),
+    audioLevel: num(entry.audioLevel),
   };
 }
 

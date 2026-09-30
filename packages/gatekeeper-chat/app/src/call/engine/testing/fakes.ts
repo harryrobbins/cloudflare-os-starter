@@ -242,8 +242,15 @@ export class FakeReceiver {
     return entries;
   }
 
+  /**
+   * False models a peer without the `ssrc-audio-level` header extension (Cloudflare's SFU): the
+   * synchronization sources carry no level, and only `inbound-rtp.audioLevel` has it.
+   */
+  ssrcLevels = true;
+
   /** The latest packet's level, as `RTCRtpReceiver.getSynchronizationSources()` reports it. */
   getSynchronizationSources(): RTCRtpSynchronizationSource[] {
+    if (!this.ssrcLevels) return [{ source: 1, timestamp: 0, rtpTimestamp: 0 } as RTCRtpSynchronizationSource];
     return [{ source: 1, timestamp: 0, rtpTimestamp: 0, audioLevel: this.audioLevel }];
   }
 }
