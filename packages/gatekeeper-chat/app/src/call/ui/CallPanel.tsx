@@ -12,8 +12,11 @@
 //
 // Tile sizes go to `engine.setTileSizes` so the SFU sends each camera at the layer it is drawn at;
 // when the shell hides the frame, or this view unmounts, every tile is reported hidden.
+//
+// While the call is in a picture-in-picture window (`pip.ts`), `CallDock` renders a `pip` panel into
+// it and the panel in the page is only a placeholder with a way back.
 
-import { ArrowClockwise, ArrowsClockwise, Prohibit, VideoCameraSlash, WarningCircle } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowsClockwise, PictureInPicture, Prohibit, VideoCameraSlash, WarningCircle } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 
 import type { CallState, User } from "../../contract.js";
@@ -26,6 +29,7 @@ import { CallControls } from "./CallControls.js";
 import { CallQualityNotices } from "./CallQuality.js";
 import { CallTile, ReconnectingOverlay, type TileModel } from "./CallTile.js";
 import { gridRows, handQueue, isFramed, mediaHelp } from "./layout.js";
+import { closePictureInPicture, usePipWindow } from "./pip.js";
 
 /** What a tile needs from the room besides media: the hand and the reactions over it. */
 function extras(
@@ -140,22 +144,43 @@ function useTileSizeReporting(hidden: boolean): (key: string, size: TileSize) =>
   return report;
 }
 
-export function CallPanel({
-  channelId,
-  label,
-  layout,
-  className = "",
-}: {
+interface CallPanelProps {
   channelId: string;
   label: string;
   layout: "page" | "dock";
   className?: string;
-}): ReactNode {
+  /** This is the panel inside the picture-in-picture window. */
+  pip?: boolean;
+}
+
+export function CallPanel(props: CallPanelProps): ReactNode {
+  const pipOpen = usePipWindow() !== null;
+  if (pipOpen && props.pip !== true) return <CallInPip label={props.label} className={props.className ?? ""} />;
+  return <LiveCallPanel {...props} />;
+}
+
+/** The page's stand-in while the call is in its own window. */
+function CallInPip({ label, className }: { label: string; className: string }): ReactNode {
+  return (
+    <section aria-label={`Call in ${label}`} className={`flex min-h-0 min-w-0 flex-col items-center justify-center gap-3 bg-kumo-base p-6 text-center ${className}`}>
+      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-kumo-tint text-kumo-subtle">
+        <PictureInPicture size={22} />
+      </span>
+      <p className="text-[13px] text-kumo-subtle">The call is in a floating window.</p>
+      <Button variant="primary" onClick={closePictureInPicture}>
+        Bring the call back here
+      </Button>
+    </section>
+  );
+}
+
+function LiveCallPanel({ channelId, label, layout, className = "", pip = false }: CallPanelProps): ReactNode {
   const local = useChat((state) => state.call);
   const room = useChat((state) => state.calls[channelId]);
   const users = useChat((state) => state.users);
   const me = useChat((state) => state.me);
-  const hidden = useChat((state) => state.shellLayout === "hidden" || !state.visible);
+  // The window stays on screen when this tab is hidden: only the page's own panel follows the tab.
+  const hidden = useChat((state) => !pip && (state.shellLayout === "hidden" || !state.visible));
   const embedded = useChat((state) => state.embedded);
   const reactions = useChat((state) => state.callReactions);
   const onSize = useTileSizeReporting(hidden);
@@ -273,7 +298,7 @@ export function CallPanel({
           {/blocked/iu.test(local.error) ? ` ${mediaHelp({ framed: embedded || isFramed() })}` : ""}
         </p>
       )}
-      <CallControls layout={layout} />
+      <CallControls layout={layout} pip={pip} />
     </section>
   );
 }

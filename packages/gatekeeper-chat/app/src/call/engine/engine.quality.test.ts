@@ -450,6 +450,22 @@ describe("pausing what is not seen", () => {
     ]);
   });
 
+  it("keeps video playing in a hidden tab while the call is in a picture-in-picture window", async () => {
+    const { env, sig, engine } = await joinWith(callState([participant("p2", ["audio", "video"])]));
+    engine.setTileSizes({ p2: "large" });
+    engine.setPictureInPicture(true);
+    env.setDocumentHidden(true);
+    await settle(ENGINE_TIMINGS.hiddenPauseMs + 100);
+    expect(sig.calls("closeTracks")).toHaveLength(0);
+    expect(engine.snapshot().remotes.p2!.videoPaused).toBe(false);
+
+    // Back in the page with the tab still hidden: the usual rule applies again.
+    engine.setPictureInPicture(false);
+    await settle(ENGINE_TIMINGS.hiddenPauseMs + 100);
+    expect(sig.calls("closeTracks")).toHaveLength(1);
+    expect(engine.snapshot().remotes.p2!.videoPaused).toBe(true);
+  });
+
   it("unsubscribes from visibility changes and clears pause timers on leave", async () => {
     const { env, engine } = await joinWith(callState([participant("p2", ["audio", "video"])]));
     expect(env.visibilityListeners.size).toBe(1);

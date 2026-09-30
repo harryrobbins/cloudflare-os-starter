@@ -20,6 +20,7 @@ import {
   MicrophoneSlash,
   PhoneDisconnect,
   Monitor,
+  PictureInPicture,
   SidebarSimple,
   SpeakerHigh,
   VideoCamera,
@@ -32,8 +33,9 @@ import { useChat, useStore } from "../../hooks/store.js";
 
 import { DeviceSelects, useDeviceLists } from "./DeviceSelects.js";
 import { canShareScreen, handQueue } from "./layout.js";
+import { canPictureInPicture, closePictureInPicture, openPictureInPicture } from "./pip.js";
 
-export function CallControls({ layout }: { layout: "page" | "dock" }): ReactNode {
+export function CallControls({ layout, pip = false }: { layout: "page" | "dock"; pip?: boolean }): ReactNode {
   const store = useStore();
   const call = useChat((state) => state.call);
   const pushToTalk = useChat((state) => state.callPushToTalk);
@@ -53,7 +55,15 @@ export function CallControls({ layout }: { layout: "page" | "dock" }): ReactNode
   const dock = layout === "dock";
   const screenShare = canShareScreen();
   const mod = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform ?? "") ? "⌘" : "Ctrl+";
-  const canPresent = embedded && store.onPresent !== null;
+  // Inside the floating window the page/sidebar moves mean nothing; its way out is "Back to the tab".
+  const canPresent = !pip && embedded && store.onPresent !== null;
+  const canFloat = !pip && canPictureInPicture();
+  const float = (): void => {
+    setMenu(null);
+    void openPictureInPicture().then((opened) => {
+      if (opened) store.announce("The call is in a floating window");
+    });
+  };
 
   const mic = (
     <BarButton
@@ -160,7 +170,7 @@ export function CallControls({ layout }: { layout: "page" | "dock" }): ReactNode
           <GearSix size={18} />
         </BarButton>
       )}
-      {chat}
+      {!pip && chat}
       {!dock && (
         <BarButton
           label={focus ? "Show the conversation list" : "Focus: hide the conversation list"}
@@ -173,6 +183,16 @@ export function CallControls({ layout }: { layout: "page" | "dock" }): ReactNode
       {!dock && canPresent && (
         <BarButton label="Pop out to sidebar" onClick={() => store.presentCall("dock")}>
           <SidebarSimple size={18} />
+        </BarButton>
+      )}
+      {!dock && canFloat && (
+        <BarButton label="Float the call over other tabs" onClick={float}>
+          <PictureInPicture size={18} />
+        </BarButton>
+      )}
+      {pip && (
+        <BarButton label="Back to the tab" onClick={closePictureInPicture}>
+          <PictureInPicture size={18} weight="fill" />
         </BarButton>
       )}
       {dock && (
@@ -198,6 +218,9 @@ export function CallControls({ layout }: { layout: "page" | "dock" }): ReactNode
               />
               {screenItem}
               <AudioOnlyItem disabled={!live} onDone={() => setMenu(null)} />
+              {canFloat && (
+                <MenuItem icon={<PictureInPicture size={15} />} label="Float the call over other tabs" onClick={float} />
+              )}
               {canPresent && (
                 <MenuItem
                   icon={<ArrowsOut size={15} />}

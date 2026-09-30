@@ -395,6 +395,10 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
       };
     },
 
+    setPictureInPicture(): void {
+      // Nothing to pause in the mock.
+    },
+
     async setAudioOnly(enabled: boolean): Promise<void> {
       // The mock pulls nothing, so only the snapshot and the camera change.
       if (enabled === (snapshot.audioOnlyChosen === true)) return;

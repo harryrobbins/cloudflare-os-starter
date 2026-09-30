@@ -243,6 +243,8 @@ class Engine implements CallEngine {
   private chosenAudioOnly = false;
   /** Whether to turn the camera back on when chosen audio-only ends. */
   private cameraBeforeAudioOnly = false;
+  /** `setPictureInPicture(true)`: the call is on screen in its own window whatever this tab does. */
+  private pictureInPicture = false;
   private telemetry: CallTelemetry | null = null;
   private telemetryTimer: unknown = null;
   /** When stats reports went out, for the per-minute cap. Survives calls: the cap is the server's. */
@@ -1278,6 +1280,7 @@ class Engine implements CallEngine {
     this.hiddenPaused.clear();
     this.chosenAudioOnly = false;
     this.cameraBeforeAudioOnly = false;
+    this.pictureInPicture = false;
     this.remoteQuality.clear();
     this.downlink = new DownlinkAdaptation();
     this.sendAdaptation = new SendAdaptation();
@@ -1454,6 +1457,13 @@ class Engine implements CallEngine {
     return this.chosenAudioOnly || this.downlink.mode === "audio-only" || this.hiddenPaused.has(participantId);
   }
 
+  setPictureInPicture(open: boolean): void {
+    if (this.pictureInPicture === open) return;
+    this.pictureInPicture = open;
+    this.log("picture-in-picture", { open });
+    this.refreshVisibility();
+  }
+
   async setAudioOnly(enabled: boolean): Promise<void> {
     if (!this.session || this.chosenAudioOnly === enabled) return;
     this.chosenAudioOnly = enabled;
@@ -1482,7 +1492,7 @@ class Engine implements CallEngine {
     if (!session) return;
     let documentHidden = false;
     try {
-      documentHidden = this.env.isDocumentHidden?.() ?? false;
+      documentHidden = !this.pictureInPicture && (this.env.isDocumentHidden?.() ?? false);
     } catch {
       documentHidden = false;
     }

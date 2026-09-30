@@ -211,6 +211,13 @@ export interface CallEngine {
    */
   setAudioOnly(enabled: boolean): Promise<void>;
 
+  /**
+   * The call is shown in a Document Picture-in-Picture window, which stays visible when this
+   * document's tab is hidden: while true, a hidden document does not pause remote video (the tiles in
+   * the window report their own sizes).
+   */
+  setPictureInPicture(open: boolean): void;
+
   /** The UI reports tile sizes whenever layout changes; the engine debounces layer switches. */
   setTileSizes(sizes: Readonly<Record<ParticipantId, TileSize>>): void;
 

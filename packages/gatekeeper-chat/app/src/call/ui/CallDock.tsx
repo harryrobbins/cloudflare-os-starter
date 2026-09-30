@@ -6,16 +6,21 @@
 //   bookmark and search-bar bindings only while a call is live, and push-to-talk: Space held while
 //   muted, unless focus is on something Space operates (a field, a button; see `shortcuts.ts`);
 // - a small "In a call" pill when the call's conversation is not the one on screen, to get back.
-//   When the shell has hidden the frame it shows its own pill instead, so this one stays away.
+//   When the shell has hidden the frame it shows its own pill instead, so this one stays away;
+// - the picture-in-picture window's call panel, portalled into that window (`pip.ts`), so it lives
+//   as long as the call does whatever the page shows.
 
 import { Microphone, MicrophoneSlash, PhoneDisconnect, VideoCamera } from "@phosphor-icons/react";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { useChat, useStore } from "../../hooks/store.js";
 import { channelLabel } from "../../lib/labels.js";
 import { isLivePhase } from "../../store/calls.js";
 import { RemoteAudio } from "./CallTile.js";
+import { CallPanel } from "./CallPanel.js";
+import { closePictureInPicture, syncPipTheme, usePipWindow } from "./pip.js";
 import { callKeyHandlers } from "./shortcuts.js";
 
 export function CallDock(): ReactNode {
@@ -30,6 +35,15 @@ export function CallDock(): ReactNode {
   const users = useChat((state) => state.users);
   const meId = useChat((state) => state.me?.id);
   const live = isLivePhase(call.phase);
+  const pip = usePipWindow();
+  const theme = useChat((state) => state.theme);
+
+  // The engine keeps the window's video playing when this tab is hidden; the call ending closes it.
+  useEffect(() => {
+    store.callEngine?.setPictureInPicture(pip !== null && live);
+    if (pip !== null && !live) closePictureInPicture();
+  }, [pip, live, store]);
+  useEffect(() => syncPipTheme(), [theme, pip]);
 
   useEffect(() => {
     if (!live) return;
@@ -37,19 +51,25 @@ export function CallDock(): ReactNode {
     function onVisibility(): void {
       if (document.visibilityState === "hidden") keys.release();
     }
-    window.addEventListener("keydown", keys.onKeyDown);
-    window.addEventListener("keyup", keys.onKeyUp);
-    // A release the frame never sees (focus moved to the shell, another window) must still mute.
-    window.addEventListener("blur", keys.release);
+    // The floating window has its own keyboard focus; the same shortcuts work there.
+    const targets = pip === null ? [window] : [window, pip];
+    for (const target of targets) {
+      target.addEventListener("keydown", keys.onKeyDown);
+      target.addEventListener("keyup", keys.onKeyUp);
+      // A release the frame never sees (focus moved to the shell, another window) must still mute.
+      target.addEventListener("blur", keys.release);
+    }
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      window.removeEventListener("keydown", keys.onKeyDown);
-      window.removeEventListener("keyup", keys.onKeyUp);
-      window.removeEventListener("blur", keys.release);
+      for (const target of targets) {
+        target.removeEventListener("keydown", keys.onKeyDown);
+        target.removeEventListener("keyup", keys.onKeyUp);
+        target.removeEventListener("blur", keys.release);
+      }
       document.removeEventListener("visibilitychange", onVisibility);
       keys.release();
     };
-  }, [live, store]);
+  }, [live, store, pip]);
 
   if (!live) return null;
   const label = channel === undefined ? "the call" : channelLabel(channel, users, meId);
@@ -57,6 +77,14 @@ export function CallDock(): ReactNode {
 
   return (
     <>
+      {pip !== null &&
+        call.channelId !== null &&
+        createPortal(
+          <div className="flex h-dvh flex-col bg-kumo-base text-kumo-default">
+            <CallPanel channelId={call.channelId} label={label} layout="dock" pip className="flex-1" />
+          </div>,
+          pip.document.body,
+        )}
       <div className="hidden" aria-hidden="true">
         {Object.values(call.remotes).map((remote) =>
           remote.audio === null ? null : <RemoteAudio key={remote.participantId} stream={remote.audio} sinkId={sinkId} />,
