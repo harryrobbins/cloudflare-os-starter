@@ -9,7 +9,7 @@
 
 import { build } from "esbuild";
 import { copyFile, mkdir, readFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const pkg = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -19,8 +19,13 @@ const common = { bundle: true, format: "esm", target: "es2022", legalComments: "
 const raw = {
   name: "raw",
   setup(b) {
-    b.onResolve({ filter: /\?raw$/ }, (args) => ({ path: resolve(args.resolveDir, args.path.slice(0, -4)), namespace: "raw" }));
-    b.onLoad({ filter: /.*/, namespace: "raw" }, async (args) => ({ contents: await readFile(args.path, "utf8"), loader: "text" }));
+    // Package-relative paths: esbuild prints them as module comments, and an absolute path would
+    // make the packed archive depend on where the checkout lives.
+    b.onResolve({ filter: /\?raw$/ }, (args) => ({
+      path: relative(pkg, resolve(args.resolveDir, args.path.slice(0, -4))).split(sep).join("/"),
+      namespace: "raw",
+    }));
+    b.onLoad({ filter: /.*/, namespace: "raw" }, async (args) => ({ contents: await readFile(join(pkg, args.path), "utf8"), loader: "text" }));
   },
 };
 
