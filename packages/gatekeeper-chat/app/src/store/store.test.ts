@@ -3,7 +3,7 @@
  * about the *sequencing* the store owns -- optimistic send then reconcile, `hello` then catch-up, the
  * three conditions that mark a conversation read -- so the transport has to be steerable, not realistic.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
   Channel,
@@ -252,6 +252,56 @@ async function settle(): Promise<void> {
 
 beforeEach(() => {
   window.localStorage.clear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+describe("browser notifications", () => {
+  it.each([
+    { embedded: true, hidden: true, optedIn: true, permission: "granted", expected: 1 },
+    { embedded: true, hidden: false, optedIn: true, permission: "granted", expected: 0 },
+    { embedded: true, hidden: true, optedIn: false, permission: "granted", expected: 0 },
+    { embedded: true, hidden: true, optedIn: true, permission: "denied", expected: 0 },
+    { embedded: false, hidden: true, optedIn: true, permission: "granted", expected: 1 },
+  ])("respects tab visibility and permission: %j", async ({ embedded, hidden, optedIn, permission, expected }) => {
+    const click = vi.fn();
+    const close = vi.fn();
+    const NotificationMock = vi.fn(function (_title: string, _options: NotificationOptions) {
+      return { addEventListener: click, close };
+    });
+    Object.assign(NotificationMock, { permission });
+    vi.stubGlobal("Notification", NotificationMock);
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue(hidden ? "hidden" : "visible");
+    if (optedIn) window.localStorage.setItem("chat.notifications", "1");
+
+    const h = harness();
+    const forward = vi.fn();
+    const open = vi.fn();
+    h.store.onNotify = forward;
+    h.store.onNotificationClick = open;
+    await h.store.start({ embedded });
+    await h.store.openConversation("c1");
+    h.store.setVisible(false);
+    const event = { t: "msg" as const, message: message({ id: "m3", seq: 3, body: "new message" }) };
+    h.socket.emit(event);
+    h.socket.emit(event);
+    await settle();
+
+    expect(NotificationMock).toHaveBeenCalledTimes(expected);
+    expect(forward).toHaveBeenCalledTimes(embedded ? 1 : 0);
+    if (expected && embedded) {
+      expect(NotificationMock).toHaveBeenCalledWith("Alice in #general", {
+        body: "new message", tag: expect.any(String),
+      });
+      vi.spyOn(window, "focus").mockImplementation(() => undefined);
+      click.mock.calls[0]![1]();
+      expect(open).toHaveBeenCalledWith(NotificationMock.mock.calls[0]![1].tag);
+      expect(close).toHaveBeenCalledOnce();
+    }
+  });
 });
 
 describe("start", () => {

@@ -40,6 +40,7 @@ async function main(): Promise<void> {
   if (bridge.active) {
     store.onBadgeChange = (unread, mentions) => bridge.badge(unread, mentions);
     store.onNotify = (title, body, href) => bridge.notify(title, body, href);
+    store.onNotificationClick = (href) => bridge.expand(href);
   }
 
   // The three browser signals the read model depends on: is the document visible, is the window focused,

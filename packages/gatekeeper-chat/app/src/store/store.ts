@@ -1291,7 +1291,7 @@ export class ChatStore {
 
   /**
    * In-app toast when the conversation is not on screen; a browser notification when the tab is hidden
-   * and the user has opted in; when embedded, the shell's toast in both cases. Deduplicated by message
+   * and the user has opted in; when embedded, also forward the shell's toast. Deduplicated by message
    * id across every path.
    */
   #maybeNotify(message: Message): void {
@@ -1337,7 +1337,9 @@ export class ChatStore {
   #systemNotify(title: string, body: string, href: string): void {
     if (this.#state.embedded) {
       this.onNotify?.(title, body, href);
-      return;
+      // A closed dock also reports a visible document. Only a background browser tab should
+      // produce a system notification, while the shell still receives its in-app toast.
+      if (typeof document === "undefined" || document.visibilityState !== "hidden") return;
     }
     if (!this.#state.notificationsOptIn) return;
     if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
@@ -1345,7 +1347,8 @@ export class ChatStore {
       const notification = new Notification(title, { body, tag: href });
       notification.addEventListener("click", () => {
         window.focus();
-        this.#navigate(href);
+        if (this.#state.embedded) this.onNotificationClick?.(href);
+        else this.#navigate(href);
         notification.close();
       });
     } catch {
@@ -1357,6 +1360,9 @@ export class ChatStore {
 
   /** Set by the embed bridge, so a notification becomes a Kumo toast in the shell instead. */
   onNotify: ((title: string, body: string, href: string) => void) | null = null;
+
+  /** Open the embedded chat in the shell when a browser notification is clicked. */
+  onNotificationClick: ((href: string) => void) | null = null;
 
   /**
    * The permission prompt, asked only from a user gesture on the settings toggle. Never on load: an
