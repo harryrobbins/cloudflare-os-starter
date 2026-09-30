@@ -14,6 +14,7 @@ Postgres + PostgREST, SQL commands, a small TypeScript gateway and a change rela
 legacy runtime; follow the
 [checked delivery plan](records-delivery.md) for implemented features, evidence and open gates.
 
+- [Records as an immutable fact store](records-immutable-facts.md): proposed storage, sync and performance architecture based on Perry's *The Art of Immutable Architecture*. It supersedes the roadmap in [records-performance-ideas.md](../../research/records-performance-ideas.md) and keeps that document's measurement protocol
 - [Blueprint adaptation plan: Jira/Linear work example](records-blueprint-adaptation.md)
 - [Records Explorer blueprint plan](records-explorer-blueprint.md)
 - [Launch checklist](records-launch.md) and [deployment record](../../../packages/records-service/deploy/homeserver.md)
@@ -36,7 +37,7 @@ actual environments before use.
 | [organisation-datastores.md](organisation-datastores.md) | **Implemented and deployed** (2026-09-24), signed-in checks pending; **framing superseded** | Records: the Postgres-backed service on Neon, with registry, memberships, approvals, viewer assertions, outbox delivery, the Data management page and the project board and report blueprints. Includes the deployment record |
 | [records-operations.md](records-operations.md) | Historical runbook | Backups, restore rehearsal, per-datastore restore, redaction, retention, analytics |
 | [gadget-http-api.md](gadget-http-api.md) | Planned, not built | Give one gadget a REST endpoint through a gatekeeper and hook. For gadget automation, not organisational records |
-| [immutable-datastores.md](immutable-datastores.md) | **Not pursued** | Event-sourced Durable Object shards exporting to an R2 lakehouse. Rejected because the source of truth must be strongly consistent; its ordering and journal ideas moved into the canonical plan |
+| [immutable-datastores.md](immutable-datastores.md) | **Not pursued** | Event-sourced Durable Object shards exporting to an R2 lakehouse. Rejected because the source of truth must be strongly consistent; its ordering and journal ideas moved into the canonical plan. Immutability is revisited inside Postgres by [records-immutable-facts.md](records-immutable-facts.md) |
 | [external-records-service.md](external-records-service.md) | **Superseded** | An earlier Postgres records-service sketch using PostgREST and the Neon Data API. Its PostgREST idea is reconsidered in the reframing |
 
 

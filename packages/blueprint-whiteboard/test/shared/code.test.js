@@ -184,7 +184,8 @@ describe("lexers are bounded (ReDoS and work cap)", () => {
     // 20 languages x 38 inputs of 10,000-20,000 characters: generous even for slow CI.
     expect(performance.now() - t0).toBeLessThan(15_000);
     expect(worst).toBeLessThan(WORK_PER_CHAR);
-  });
+    // Let the runner reach the existing 15s performance assertion on slower hosts.
+  }, 20_000);
 
   it("the work cap degrades the rest of a block to plain text instead of running on", () => {
     const text = "const a = 1; // x\n".repeat(200);

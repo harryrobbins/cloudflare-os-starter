@@ -6,6 +6,7 @@ Background research behind the plans in [`../plans/`](../plans/collaborative-blu
 | --- | --- |
 | [external_datastores/](external_datastores/README.md) | Everything about organisation datastores and APIs onto data: the Postgres Records decisions, the canonical Postgres datastore, gadget HTTP APIs, data connectors, and the alternatives considered (mirrors, immutable lake). Its README is the index. |
 | [chat-video-sfu.md](chat-video-sfu.md) | Cloudflare Realtime SFU and TURN for chat video calls: the HTTP API, negotiation as orange and video-room do it, simulcast layer switching, TURN credentials, limits, pricing per call-hour, and the gotchas that shaped [the plan](../plans/chat-video.md). |
+| [records-performance-ideas.md](records-performance-ideas.md) | Records performance measurement programme: test environments, harness, dataset tiers, diagnosis and experiment gates. **Its roadmap is superseded** by [Records as an immutable fact store](../plans/external_datastores/records-immutable-facts.md), which keeps this document's measurement protocol. |
 | [gadget-collaboration-runtime.md](gadget-collaboration-runtime.md) | Code trace of the pinned release: what a gadget, blueprint, workspace and chat are at runtime; where state lives; how sharing resolves to one Durable Object; the live-push plumbing; the sandbox policy. Every claim carries a `file:line`. |
 | [bundled-blueprint-sync-patterns.md](bundled-blueprint-sync-patterns.md) | How the three shipped format blueprints (Docs, Sheets, Slides) implement multi-user sync, with the wire protocol, conflict policy and presence handling side by side. The reference for the plans. |
 | [cloudflare-os-collaboration-public-docs.md](cloudflare-os-collaboration-public-docs.md) | What Cloudflare says publicly about collaboration in gadgets, known gaps and open issues, where upstream `main` has moved since our pin, and Cloudflare's general 2026 guidance for realtime on Workers. |
@@ -18,6 +19,7 @@ Background research behind the plans in [`../plans/`](../plans/collaborative-blu
 | [hybrid-search-on-cloudflare.md](hybrid-search-on-cloudflare.md) | Product facts for hybrid search on Cloudflare: Vectorize limits and metadata filtering, Workers AI embedding and reranker models, AI Search versus a hand-rolled index, FTS5 in a Durable Object versus D1, costs and dead ends; the evidence behind `docs/plans/omni-search.md`. |
 | [procedural-data-performance-and-cost.md](procedural-data-performance-and-cost.md) | Performance and cost boundaries for finite synthetic datasets on Workers: safe query shapes, worst-case scans, current limits and pricing, and benchmark gates for larger releases. |
 | [upstream-gatekeeper-credentials.md](upstream-gatekeeper-credentials.md) | Credential and trust-boundary inventory for every upstream Gatekeeper: deployment OAuth apps, per-user grants, user-supplied secrets, credential-free local services, and the MCP Portal and Email exceptions. |
+| [embeddable-apps.md](embeddable-apps.md) | Embedding one app in another (Whiteboard or Vega chart inside Docs): MCP Apps spec and bridge, draw.io/Fluid prior art, agent-to-agent options, the gadget sandbox limits, and four candidate architectures. Recommendation in [Drawings in Docs](../plans/docs-drawing-embeds.md). |
 
 The notebook/IDE recommendation, implementation status and remaining validation gates are in [Notebook and IDE blueprints](../plans/notebook-ide-blueprints.md). These three research documents retain the baseline feasibility research and now include the isolated notebook implementation update. Docker lifecycle and two-user browser checks have passed locally, and no deployed integration or upstream `main` comparison is claimed.
 
@@ -45,3 +47,9 @@ What the research could not show, and the kanban and whiteboard builds found on 
 - V8 value sizes versus JSON;
 - guessable request ids;
 - native undo in the sandbox.
+
+## Mobile apps
+
+[Mobile Chat and PWA](mobile-chat-and-pwa.md) investigates app-specific launch versus
+workspace sharing, home-screen installation, phone interaction and Slack-replacement
+requirements. Implementation and qualification: [Mobile Chat plan](../plans/mobile-chat.md).

@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./embed/server": "./src/embed/server.js",
+    "./embed/client": "./src/embed/client.js"
+  },
   "scripts": {
     "build:gadget": "node scripts/build.mjs",
     "pack:gadget": "node scripts/build.mjs && node scripts/pack-gadget.mjs",

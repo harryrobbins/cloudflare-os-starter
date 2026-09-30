@@ -212,5 +212,7 @@ describe("through the store", () => {
     }
     expect(total).toBeLessThanOrEqual(5 * 12 + 45 * 2);
     for (const c of clients) c.store.dispose();
-  });
+    // Fifty stores and their fake-timer callbacks need headroom on a loaded validation host.
+    // The presence traffic budget above remains the acceptance criterion.
+  }, 20_000);
 });

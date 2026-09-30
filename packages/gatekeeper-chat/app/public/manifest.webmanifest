@@ -1,0 +1,39 @@
+{
+  "id": "/gatekeeper/chat/",
+  "name": "Team Chat",
+  "short_name": "Chat",
+  "description": "Team conversations in Cloudflare OS",
+  "start_url": "/gatekeeper/chat/",
+  "scope": "/gatekeeper/chat/",
+  "display": "standalone",
+  "background_color": "#fcfcfb",
+  "theme_color": "#fcfcfb",
+  "icons": [
+    {
+      "src": "/gatekeeper/chat/chat-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/gatekeeper/chat/chat-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Inbox",
+      "url": "/gatekeeper/chat/"
+    },
+    {
+      "name": "Mentions",
+      "url": "/gatekeeper/chat/mentions"
+    },
+    {
+      "name": "Search",
+      "url": "/gatekeeper/chat/search"
+    }
+  ]
+}

@@ -583,3 +583,30 @@ off (`chat.enabled: false` deploys nothing chat-related). What it sets:
 
 Deploy order: the Workshop, then chat, then the router, so every binding points at a Worker that is
 already deployed; with `chat.agentAccess` on, chat goes before the Workshop.
+
+## Mobile and home-screen installation
+
+Open `/gatekeeper/chat/` directly and sign in. Settings explains iPhone/iPad Share →
+Add to Home Screen and Android's browser installation menu. The app's manifest and
+service worker are scoped to this path, independently of the Workshop shell.
+Installation provides standalone launch; closed-app push is not implemented. Offline
+navigation shows a connection explanation and does not cache messages or files.
+
+Mobile uses thumb navigation, a focus-trapped conversation drawer, one conversation or
+thread at a time, larger touch actions, safe areas and keyboard viewport sizing.
+Phone Enter inserts a newline; Send sends. Drafts flush before suspension or navigation,
+and long background periods/network recovery reconnect through existing catch-up.
+The embedded compact dock keeps its host sizing and omits the standalone bottom bar.
+
+After building, start the local Worker on a free port and run:
+
+```sh
+pnpm exec wrangler dev -c wrangler.dev.jsonc --port 8798
+CHAT_URL=http://localhost:8798 node --test --test-concurrency=1 e2e/mobile.test.mjs
+# Include WebKit on a host with its browser/system dependencies:
+CHAT_WEBKIT=1 CHAT_URL=http://localhost:8798 node --test --test-concurrency=1 e2e/mobile.test.mjs
+```
+
+[Research](../../docs/research/mobile-chat-and-pwa.md) covers sharing, installation and
+Slack-replacement gaps; [delivery plan](../../docs/plans/mobile-chat.md) records validation
+and physical-device qualification still needed.

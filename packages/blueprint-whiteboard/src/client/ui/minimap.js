@@ -165,7 +165,7 @@ export function createMinimap(app) {
     }
   }
 
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) schedule(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) schedule(); }, { signal: app.signal });
 
   return {
     zoom, el,

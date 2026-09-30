@@ -193,6 +193,17 @@ describe("serveChat, with an already-verified identity", () => {
     expect(response.status).toBe(404);
   });
 
+  it("serves cached permalink navigation with a body instead of treating shell 304 as missing", async () => {
+    const first = await serveChat(new Request(`${ORIGIN}${CHAT_PREFIX}/c/general`), env, identity);
+    const etag = first.headers.get("etag");
+    expect(etag).not.toBeNull();
+    const again = await serveChat(new Request(`${ORIGIN}${CHAT_PREFIX}/c/general`, {
+      headers: { "if-none-match": etag! },
+    }), env, identity);
+    expect(again.status).toBe(200);
+    expect(await again.text()).toContain("<html");
+  });
+
   it("serves the SPA shell and falls back to it for a permalink", async () => {
     const shell = await serveChat(new Request(`${ORIGIN}${APP_BASE}`), env, identity);
     expect(shell.status).toBe(200);

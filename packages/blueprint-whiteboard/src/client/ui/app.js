@@ -48,6 +48,8 @@ import { mountShare, SHARE_CSS } from "./share.js";
  * @property {boolean} [iconPickerOpen]
  * @property {() => void} [toggleIconPicker]  opens or closes the icon and shape picker (I)
  * @property {() => void} [openEmojiPicker]   opens the picker on its Emoji & symbols tab (Ctrl/⌘+.)
+ * @property {AbortSignal} signal     aborted when the app is destroyed; page-level listeners use it
+ * @property {boolean} embedded       mounted inside another app (Docs): the host owns the page
  */
 
 /** Gap between announcements of other people's changes. */
@@ -90,8 +92,12 @@ function lowerFirst(s) {
 /**
  * @param {HTMLElement} root
  * @param {Store} store
+ * @param {{embedded?: boolean}} [options]  embedded: another app hosts the whiteboard (Docs). It
+ *   leaves document.title and pagehide to the host, which calls destroy() when it closes the board.
  */
-export function mountApp(root, store) {
+export function mountApp(root, store, { embedded = false } = {}) {
+  const lifetime = new AbortController();
+  const signal = lifetime.signal;
   injectStyles();
   ensureToastHost();
   const announce = createAnnouncer();
@@ -133,6 +139,8 @@ export function mountApp(root, store) {
     store: uiStore,
     canvas,
     root: appEl,
+    signal,
+    embedded,
     outlineOpen: false,
     activityOpen: false,
     announce,
@@ -246,7 +254,7 @@ export function mountApp(root, store) {
     if (action?.type !== "command" || t?.closest(".menu")) return;
     e.preventDefault();
     runCommand(action.command);
-  });
+  }, { signal });
 
   // ---- store changes
   let lastErrorShown = /** @type {string|null} */ (null);
@@ -299,7 +307,7 @@ export function mountApp(root, store) {
     if (conn.title !== status.detail) conn.title = status.detail;
     connAnnouncer.update(state);
     const t = state.board.title || DEFAULT_TITLE;
-    if (document.title !== t) document.title = t;
+    if (!embedded && document.title !== t) document.title = t;
   }
 
   /**
@@ -376,7 +384,19 @@ export function mountApp(root, store) {
   const unsubscribe = uiStore.subscribe(onChange);
 
   // Leave presence promptly when the iframe goes away.
-  window.addEventListener("pagehide", () => { closeMenu(); store.dispose(); });
+  if (!embedded) window.addEventListener("pagehide", () => { closeMenu(); store.dispose(); }, { signal });
 
-  return { app, unsubscribe };
+  /** Removes the app and everything it added to the page. The store is the caller's to dispose. */
+  const destroy = () => {
+    if (signal.aborted) return;
+    lifetime.abort();
+    unsubscribe();
+    clearTimeout(remoteTimer);
+    closeMenu();
+    share.destroy();
+    canvas.destroy();
+    root.replaceChildren();
+  };
+
+  return { app, unsubscribe, destroy };
 }

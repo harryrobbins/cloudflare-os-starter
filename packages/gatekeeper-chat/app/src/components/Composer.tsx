@@ -37,6 +37,7 @@ import {
 import { searchEmoji } from "../lib/emoji.js";
 import { formatBytes } from "../lib/format.js";
 import { channelLabel } from "../lib/labels.js";
+import { useMediaQuery } from "../hooks/useMedia.js";
 import { useChat, useStore } from "../hooks/store.js";
 import { composerAgentNote } from "../lib/agent.js";
 import { useNavigate } from "@tanstack/react-router";
@@ -193,7 +194,11 @@ export function Composer({
     });
   }
 
+  const touchInput = useMediaQuery("(pointer: coarse)");
+
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
+    if (event.nativeEvent.isComposing) return;
+    if (touchInput && event.key === "Enter" && !event.ctrlKey && !event.metaKey) return;
     if (suggestions.length > 0) {
       if (event.key === "ArrowDown") {
         event.preventDefault();
@@ -505,7 +510,7 @@ export function Composer({
               </span>
             )}
             <span className="hidden text-[11px] text-kumo-inactive sm:inline">
-              <kbd className="font-sans">Enter</kbd> to send
+              {touchInput ? "Tap Send to send" : <><kbd className="font-sans">Enter</kbd> to send</>}
             </span>
             <button
               type="button"

@@ -351,7 +351,7 @@ export const MessageRow = memo(function MessageRow({
 
       {/* Action bar. Absolutely positioned so it never changes the row's height. */}
       {!tombstone && !editing && !pending && (
-        <div className="pointer-events-none absolute -top-3 right-4 z-10 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        <div className="chat-message-actions pointer-events-none absolute -top-3 right-4 z-10 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
           <div className="pointer-events-auto flex items-center gap-0.5 rounded-lg border border-kumo-line bg-kumo-control p-0.5 shadow-sm">
             {quickPicks.map((emoji) => (
               <button

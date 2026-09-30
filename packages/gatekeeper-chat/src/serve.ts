@@ -129,7 +129,13 @@ async function serveApp(request: Request, env: ChatEnv, url: URL): Promise<Respo
   // `index.html`, because the asset server's `html_handling` turns an explicit `index.html` into a
   // redirect whose Location has lost the `/gatekeeper/chat` prefix -- which is also why a redirect
   // from the asset server is never forwarded.
-  const shell = await env.ASSETS.fetch(assetRequest(request, url, APP_BASE));
+  // A cached permalink can send validators for its HTML. The asset binding may return 304
+  // for the fallback shell, which has no body to turn into this route's 200 response.
+  const shellRequest = assetRequest(request, url, APP_BASE);
+  const shellHeaders = new Headers(shellRequest.headers);
+  shellHeaders.delete("if-none-match");
+  shellHeaders.delete("if-modified-since");
+  const shell = await env.ASSETS.fetch(new Request(shellRequest, { headers: shellHeaders }));
   if (!shell.ok) return notFound();
   const headers = new Headers(shell.headers);
   headers.delete("location");

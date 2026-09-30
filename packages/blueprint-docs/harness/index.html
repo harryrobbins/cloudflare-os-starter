@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Docs with Drawings harness</title>
+  <style>
+    body { margin: 0; font: 13px system-ui, sans-serif; display: flex; flex-direction: column; height: 100vh; }
+    header { padding: 6px 10px; background: #1d2230; color: #fff; }
+    #panes { flex: 1; display: flex; gap: 6px; padding: 6px; min-height: 0; }
+    .pane { flex: 1; display: flex; flex-direction: column; min-width: 0; border: 1px solid #ccc; }
+    .pane b { padding: 4px 8px; background: #eee; }
+    .pane iframe { flex: 1; border: 0; width: 100%; }
+  </style>
+</head>
+<body>
+  <header>Docs with Drawings: the real built client in each pane, the real server (src/server/index.js) in this page. <code>harness.server</code> is the Gadget, for agent-style calls.</header>
+  <div id="panes"></div>
+  <script type="module" src="./harness.js"></script>
+</body>
+</html>
