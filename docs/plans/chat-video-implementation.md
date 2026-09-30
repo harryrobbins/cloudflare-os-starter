@@ -101,26 +101,77 @@ While a call is active the dock only hides on close, and the `/chat` page's unmo
 
 ## Stream E: integration and end to end
 
-- [ ] Wire engine + UI + Worker on the local platform
-- [x] `e2e/call-check.mjs`: five fake-media Chromium contexts against a real dev SFU app (written;
-      verified only up to the join step, see below)
-- [ ] Five-person run against the real SFU (blocked on the SFU app token)
+- [x] Wire engine + UI + Worker on the local platform (`e2e/start-local-platform.sh` with
+      `CHAT_DEV_ENV_FILE`, and `CHAT_PORT` when 8788 is taken)
+- [x] `e2e/call-check.mjs`: five fake-media Chromium contexts against a real dev SFU app, the last
+      relay-only; plus camera-off keep-alive and a DM ring
+- [x] `e2e/call-move-check.mjs`: full page ↔ sidebar ↔ pill through the real router and shell
+- [x] Five-person run against the real SFU
 
-Real-SFU attempt 2026-09-30 (standalone `wrangler dev` via `CHAT_DEV_ENV_FILE`, credentials from a
-file outside the repo, deleted afterwards):
-- **SFU: blocked.** `sessions/new` answers 401 `Invalid bearer token, please ensure the token is
-  current and not expired` for the supplied app id and token, from the Worker and from a direct
-  `curl`. The app id itself exists (an unknown id answers 404). The token needs re-copying or
-  regenerating in the dashboard (Realtime → SFU → the app). Nothing past the join was exercised, so
-  RED, munged Opus fmtp, simulcast, black-frame keep-alive, downgrade paths, sidebar/full-page moves
-  and the stats log line remain unverified.
-- **Join failure path: pass.** The join answers 502, the pane shows "The call could not connect ·
-  The call service refused that request (unauthorized)" with Close/Retry, and no call row or system
-  message is left behind (`GET /channels/general/call` → `null`, history empty).
-- **TURN: pass.** The Worker mints credentials (`chat.call.turn outcome=ok`). Two Chromium peer
-  connections with `iceTransportPolicy: "relay"` and freshly minted credentials connected in 4.2 s
-  over `relay/udp` (RTT 13 ms) and carried audio and video.
-- Firefox/WebKit: not run.
+### Real-SFU results, 2026-09-30
+
+Dev SFU app and TURN key from `.env.local`, passed to `wrangler dev` with `--env-file` from a file
+outside the repo (deleted afterwards). Headless Chromium 149 with fake devices unless stated.
+
+A first attempt the same day failed at the join: the SFU answered 401 `Invalid bearer token` for the
+first app token. After the app was replaced, the pane showed "The call could not connect · … (unauthorized)"
+with Retry, and left no call row or message. TURN relayed media with that key already.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Five people, one channel call | pass | `call-check.mjs` 43/43 (twice, final build): 5 tiles each, 4 video + 4 audio inbound each |
+| Simulcast | pass | every sender `a,b,c` at 1280/640/320; pulls follow tile size |
+| RED | **not negotiated** | our offer lists `red/48000/2` first (`m=audio … 63 111 …`); the SFU answers `111 0 8` (Opus only) |
+| Opus FEC + DTX | pass | codec stats `minptime=10;usedtx=1;useinbandfec=1`; FEC is what protects speech |
+| Relay-only participant | pass | `iceTransportPolicy: "relay"` → selected pair `relay/udp`, full media; telemetry `relayed:true` |
+| TURN credentials | pass | `chat.call.turn outcome=ok`; STUN + six TURN/TURNS URLs |
+| Camera off past 30 s | pass after fix | see bug 3; now all three layers keep sending ~0.3–0.7 KB/s; video resumes for every puller within 2 s of camera on |
+| CPU adaptation | pass | forced with `--force-fieldtrials=WebRTC-ForceSimulatedOveruseIntervalMs/5000-30000-5000/` (CDP CPU throttling does not reach the encoder): `cpu` from t=3 s, shed `a` at 9 s, `b` at 15 s, `c` kept, banner shown; restored `b` then `a` 12 s and 21 s after overuse ended |
+| Downlink adaptation | pass after fix | CDP network emulation does not throttle WebRTC, and host `tc` was not allowed, so a user-space UDP proxy in front of Cloudflare TURN policed one relay-only person's downlink to 250 kbps: layer c at ~4 s, audio-only + banner at ~14 s (audio kept), one probe per backed-off interval, full recovery after the limit lifted (bugs 1–2) |
+| Per-minute stats line | pass | `chat.call.stats` with `final:false`, `intervalMs` ≈ 60 000, plus `final:true` on leave |
+| DM ring | pass after fix | bug 4; "Dev Admin is calling" card, Join → pre-join → both connected with media |
+| Full page ↔ sidebar ↔ pill (shell) | pass after fix | `call-move-check.mjs` 8/8: one `RTCPeerConnection` throughout, B's audio packets keep arriving across every move; bug 5 |
+| Tab closed mid-call | pass after fix | bug 6: the others lose the tile in 258 ms |
+| Firefox 151 (Playwright build) | pass | with Chromium in one call: connected, sends a/b/c at 1280/640/320, receives both; camera-off black frames keep flowing 40 s and video resumes; no `qualityLimitationReason`, so CPU shedding never triggers there (as expected); warns "Using five or more STUN/TURN servers slows down discovery" |
+| WebKit | not run | Playwright's WebKit needs `libevent-2.1-7t64 libavif16 libmanette-0.2-0 libwoff1` (apt, sudo) |
+
+Bugs found and fixed (each with a test that fails without the fix):
+
+1. **Audio-only on a healthy link.** `availableIncomingBitrate` saws between ~300 kbps and 1.5 Mbps
+   on a clean link and restarts near zero when video resumes; on its own it paused video with 0 %
+   loss (a five-minute three-person call spent 39 s audio-only at `lossReceivePct: 0`) and kept a
+   recovered link flapping back to audio-only. It now only corroborates loss (`downlinkVerdict`), and
+   "good" is loss-based: with every camera on layer c the estimate levelled off near 450 kbps, below
+   the old 500 kbps "good" bar, so a recovered link would have stayed on layer c.
+2. **Probing every ~20 s on a constrained link.** Audio-only has no estimate and no loss, so it read
+   as good and re-probed video every 15 s, each probe freezing video for seconds. A relapse within
+   30 s of a step up now doubles the wait (15 → 30 → 60 → 120 s cap); a step that holds for 30 s
+   resets it.
+3. **Camera-off starved layers b and c.** The 320×180 black canvas gets one VP8 simulcast layer from
+   Chrome, so pullers on b or c received nothing (intermittent: 3 of 4 tracks moving). The placeholder
+   is now the camera's 1280×720; all three layers keep sending.
+4. **A new DM never rang.** The ring went through the socket's `sub` filter, which lists only the
+   conversations the callee knew when it connected. The Worker now rings members' sockets directly,
+   and the store fetches the channel list (re-subscribing) when a ring names an unknown conversation.
+5. **Focus lost when the call moved** (fork `31cb0002`). After Pop out the home composer's autofocus
+   took the keyboard; closing the drawer mid-call left it on the body. Focus now follows the frame
+   after a move, goes to the pill when the frame hides mid-call, and returns to the opener otherwise.
+   Inside the frame focus lands on the document, not a call control (not changed).
+6. **Tab close left a ghost for 45 s.** `pagehide` tore the engine down without telling the server;
+   the store now sends `leave` with `fetch(…, {keepalive: true})`.
+7. **"Agent started a call".** System messages are authored by the agent user, and the row named the
+   author; it now shows the server-written body ("Dev Admin started a call").
+
+Observed, not fixed:
+- `leave` holds its HTTP request ~5–6.6 s: the engine closes its peer connection first, so the
+  Worker's force-close of its tracks gets a slow `410 gone` from the SFU. Nothing waits on it.
+- One of six `call-check` runs had the DM caller publish but never announce, then leave (callee
+  connected alone); not reproduced in five further runs, including a targeted repro.
+- Firefox's TURN warning: the Worker passes six TURN URLs; trimming to three would silence it.
+
+SFU usage for the whole session: about 25 calls, mostly 1–3 minutes with 2–5 people and 3 simulcast
+layers each, plus the TURN-proxied runs — a few GB of SFU egress at most, and a few hundred MB relayed
+through TURN. Nothing was deployed.
 - [ ] README section for calls; update chat.md "out of scope" note
 - [ ] Production mutation summary for Harry (SFU app + TURN key creation, secrets, release)
 

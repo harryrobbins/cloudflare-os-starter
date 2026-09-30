@@ -18,7 +18,7 @@ import { join } from 'node:path'
 
 import { chromium } from 'playwright'
 
-import { APP, until } from './helpers.mjs'
+import { APP, apiClient, until } from './helpers.mjs'
 
 const SHOTS = process.env.CALL_SHOTS ?? join(process.env.TMPDIR ?? '/tmp', 'cfos-call-check')
 mkdirSync(SHOTS, { recursive: true })
@@ -57,10 +57,10 @@ function snapshot(page) {
       candidate: local ? `${local.candidateType}/${local.protocol}` : null,
       out: all
         .filter((s) => s.type === 'outbound-rtp')
-        .map((s) => ({ kind: s.kind, rid: s.rid ?? null, bytes: s.bytesSent, width: s.frameWidth ?? null, active: s.active, limit: s.qualityLimitationReason ?? null })),
+        .map((s) => ({ kind: s.kind, rid: s.rid ?? null, bytes: s.bytesSent, frames: s.framesEncoded ?? 0, width: s.frameWidth ?? null, active: s.active, limit: s.qualityLimitationReason ?? null })),
       in: all
         .filter((s) => s.type === 'inbound-rtp')
-        .map((s) => ({ kind: s.kind, mid: s.mid, bytes: s.bytesReceived, width: s.frameWidth ?? null })),
+        .map((s) => ({ kind: s.kind, mid: s.mid, bytes: s.bytesReceived, frames: s.framesDecoded ?? 0, width: s.frameWidth ?? null })),
       codecs: all.filter((s) => s.type === 'codec').map((s) => ({ id: s.id, mime: s.mimeType, fmtp: s.sdpFmtpLine ?? '' })),
       tiles: document.querySelectorAll("[data-testid='call-tile']").length,
     }
@@ -135,14 +135,35 @@ try {
   const [first, second] = people
   await first.page.getByRole('button', { name: /^Turn camera off/ }).click()
   await first.page.waitForTimeout(35_000)
-  const outAfter = (await snapshot(first.page)).out.filter((o) => o.kind === 'video')
+  const layers = async () => Object.fromEntries((await snapshot(first.page)).out.filter((o) => o.kind === 'video').map((o) => [o.rid, o.frames]))
+  const sent = async () => (await snapshot(first.page)).out.filter((o) => o.kind === 'video').reduce((sum, o) => sum + o.bytes, 0)
+  const layers1 = await layers()
+  const sent1 = await sent()
   const t1 = (await snapshot(second.page)).in.filter((i) => i.kind === 'video')
-  await second.page.waitForTimeout(3_000)
+  // The black track is a 1 fps canvas: a window of a few frames, not a few packets.
+  await second.page.waitForTimeout(6_000)
+  const sent2 = await sent()
+  const layers2 = await layers()
+  const encoding = Object.keys(layers2).filter((rid) => layers2[rid] > (layers1[rid] ?? 0))
   const t2 = (await snapshot(second.page)).in.filter((i) => i.kind === 'video')
   const flowing = t2.filter((b) => b.bytes > (t1.find((a) => a.mid === b.mid)?.bytes ?? 0)).length
-  check(`camera off 35 s: ${first.id} still sends video (black frames)`, outAfter.some((o) => o.bytes > 0 && o.active !== false), JSON.stringify(outAfter))
+  check(`camera off 35 s: ${first.id} still sends video (black frames)`, sent2 > sent1, `${sent2 - sent1} bytes in 6 s`)
+  check(`camera off 35 s: ${first.id} keeps every simulcast layer alive`, encoding.length === Object.keys(layers2).length, `encoding ${encoding.join(',') || 'none'} of ${Object.keys(layers2).join(',')}`)
   check(`camera off 35 s: ${second.id} still receives every video track`, flowing >= people.length - 1, `flowing=${flowing}`)
   await first.page.getByRole('button', { name: /^Turn camera on/ }).click()
+  // Back on: everybody decodes real video from everybody again, whatever layer they pull.
+  const decodingAll = async () => {
+    for (const person of people) {
+      const a = (await snapshot(person.page)).in.filter((i) => i.kind === 'video')
+      await person.page.waitForTimeout(1_500)
+      const b = (await snapshot(person.page)).in.filter((i) => i.kind === 'video')
+      const moving = b.filter((x) => x.frames > (a.find((y) => y.mid === x.mid)?.frames ?? 0) + 5).length
+      if (moving < people.length - 1) return false
+    }
+    return true
+  }
+  const back = await until(decodingAll, 20_000, 'video after camera on').then(() => true, () => false)
+  check(`camera on again: everybody decodes ${first.id}'s video`, back)
 
   // --- leave ------------------------------------------------------------------
   for (const person of people) {
@@ -151,6 +172,32 @@ try {
   await people[0].page.waitForTimeout(3_000)
   const history = await people[0].page.locator("[data-call='ended']").count()
   check('call ends with an "ended" history row', history >= 1, `rows=${history}`)
+
+  // --- a DM rings the other person ------------------------------------------
+  const caller = await apiClient(first.id)
+  const dm = await caller.ok('POST', '/api/channels', { kind: 'dm', memberIds: [second.id] })
+  const dmId = dm.channel?.id ?? dm.id
+  await first.page.goto(`${APP}/c/${encodeURIComponent(dmId)}`)
+  await first.page.getByRole('button', { name: /^Start call/ }).click({ timeout: 20_000 })
+  await first.page.locator('[data-call-join]').click({ timeout: 20_000 })
+  const ring = second.page.getByTestId('incoming-call')
+  const rang = await ring.waitFor({ timeout: 15_000 }).then(() => true, () => false)
+  check(`DM call rings ${second.id}`, rang, rang ? await ring.getAttribute('aria-label') : 'no incoming-call card')
+  if (rang) {
+    await second.page.screenshot({ path: join(SHOTS, 'dm-ring.png') })
+    await ring.getByRole('button', { name: 'Join', exact: true }).click()
+    await second.page.locator('[data-call-join]').click({ timeout: 20_000 })
+    const both = await until(async () => {
+      const [a, b] = [await snapshot(first.page), await snapshot(second.page)]
+      return a?.state === 'connected' && b?.state === 'connected' && a.tiles === 2 && b.tiles === 2
+        && a.in.some((i) => i.kind === 'video' && i.bytes > 0) && b.in.some((i) => i.kind === 'video' && i.bytes > 0)
+    }, 30_000, 'DM call media').then(() => true, () => false)
+    const brief = (x) => x && { state: x.state, tiles: x.tiles, videoIn: x.in.filter((i) => i.kind === 'video').map((i) => i.bytes) }
+    check('DM call connects both ways with media', both, both ? '' : JSON.stringify([brief(await snapshot(first.page)), brief(await snapshot(second.page))]))
+  }
+  for (const person of [first, second]) {
+    await person.page.getByRole('button', { name: 'Leave the call' }).first().click().catch(() => undefined)
+  }
 } catch (error) {
   if (error.message !== 'join failed') check('run completed', false, error.stack ?? String(error))
 } finally {
