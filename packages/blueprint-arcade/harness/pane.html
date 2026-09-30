@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- The platform's gadget iframe CSP (workshop-frontend GadgetUI.tsx). The iframe itself is
+       sandboxed like the platform's, plus allow-same-origin because the parent has to reach in. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src 'none'; script-src data: 'unsafe-inline'; style-src data: 'unsafe-inline'; img-src data:; media-src data:; object-src 'none'; base-uri 'none'; form-action 'none'; connect-src 'none'">
+  <title>Pane</title>
+</head>
+<body>
+  <script type="module">
+    // Mimics the platform iframe: no markup of its own. The platform prepends a prefix to
+    // client.js that declares `gadget`, `gadgetViewer` and `RpcTarget` (and RpcStub, newMessagePortRpcSession,
+    // blockedOpen) as MODULE-SCOPE bindings, not properties of window, so the client must read them
+    // as free identifiers. The same is done here. `gadgetExportFormatId` is a real global in export
+    // mode (browser-export.ts). Then the real built client runs, inlined.
+    const pane = new URLSearchParams(location.search).get("pane");
+    window.addEventListener("error", (e) => { window.clientError = String(e.error?.stack || e.message); });
+    window.addEventListener("unhandledrejection", (e) => { window.clientError = String(e.reason?.stack || e.reason); });
+    class HarnessRpcTarget {}
+    const { gadget, viewer, exportFormat, clientSource } = parent.harness.connect(pane, window, HarnessRpcTarget);
+    window.__harnessGadget = gadget;
+    window.__harnessViewer = Object.freeze({ ...viewer });
+    window.__harnessRpcTarget = HarnessRpcTarget;
+    if (exportFormat) window.gadgetExportFormatId = exportFormat;
+    const prefix = [
+      "//# sourceURL=client.js",
+      "let gadget = window.__harnessGadget;",
+      "const gadgetViewer = window.__harnessViewer;",
+      "const RpcTarget = window.__harnessRpcTarget;",
+      "const RpcStub = undefined, newMessagePortRpcSession = undefined, blockedOpen = () => null;",
+      "delete window.__harnessGadget; delete window.__harnessViewer; delete window.__harnessRpcTarget;",
+      "",
+    ].join("\n");
+    const script = document.createElement("script");
+    script.type = "module";
+    script.textContent = prefix + (await clientSource) + "\n;window.clientLoaded = true;\n";
+    document.body.appendChild(script);
+  </script>
+</body>
+</html>

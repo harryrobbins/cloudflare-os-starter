@@ -1,0 +1,17 @@
+{
+  "blueprintId": "format.arcade",
+  "title": "Arcade",
+  "description": "Make and play retro games together: a shelf of adaptable starters (invaders, asteroids, falling blocks, bricks, and BBC Micro and RM Nimbus style classroom games), a code editor with live preview, a chiptune composer whose tunes export as WAV or MIDI, shared high scores and per-player key layouts.",
+  "output": {
+    "id": "arcade",
+    "noun": "Arcade",
+    "plural": "Arcades",
+    "icon": "appWindow"
+  },
+  "author": {
+    "type": "user",
+    "name": "Surprisingly Ltd",
+    "id": "harryrobbins@gmail.com"
+  },
+  "revision": 1
+}
