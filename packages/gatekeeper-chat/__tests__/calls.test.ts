@@ -305,7 +305,12 @@ describe("joining", () => {
     expect(joined.iceServers).toEqual([
       { urls: ["stun:stun.cloudflare.com:3478"] },
       {
-        urls: ["turn:turn.cloudflare.com:3478?transport=udp", "turns:turn.cloudflare.com:443?transport=tcp"],
+        // Port 53 dropped; TURN over TCP added (src/do/turn.ts, withFirewallFallbacks).
+        urls: [
+          "turn:turn.cloudflare.com:3478?transport=udp",
+          "turns:turn.cloudflare.com:443?transport=tcp",
+          "turn:turn.cloudflare.com:3478?transport=tcp",
+        ],
         username: "minted-user",
         credential: "minted-credential",
       },

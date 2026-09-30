@@ -394,6 +394,8 @@ correction, DSCP marking and native clients — disproportionate for a five-pers
   survive upstream rebases like the other dock patches.
 - **Safari.** Simulcast send in Safari is supported but its layer behaviour differs; the e2e run is
   Chromium-only, so Safari needs a manual check.
-- **Corporate firewalls** that block UDP rely on TURN over TCP/TLS 443; the TURN URL list must
-  include `turns:…:443`.
+- **Corporate firewalls** that block UDP rely on TURN over TCP/TLS 443. Cloudflare's
+  `generate-ice-servers` list includes `turns:turn.cloudflare.com:443?transport=tcp` and TURN over
+  TCP (checked 2026-09-30), and `withFirewallFallbacks` in `src/do/turn.ts` adds both to any
+  credentialed Cloudflare TURN entry that lacks them.
 - **One device per person per call** is a simplification (no "join from phone and laptop").
