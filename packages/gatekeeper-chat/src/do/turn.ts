@@ -6,6 +6,10 @@
 //
 // Two rules from the research note:
 //   * **Drop every port-53 URL.** Browsers block it, and a gather waits for its timeout.
+//   * **Keep the firewall fallbacks.** Networks that block UDP (and often every port but 443) can only
+//     reach TURN over TCP, ideally TLS on 443, which also passes proxies that only allow HTTPS-shaped
+//     traffic. Cloudflare's list includes both today; `withFirewallFallbacks` guarantees them for
+//     each credentialed TURN entry in case the list ever changes shape.
 //   * **TURN is an improvement, not a requirement.** Without a TURN key, or when minting fails, the
 //     participant gets Cloudflare's public STUN server: most networks connect with it, and a join
 //     that fails outright because TURN was briefly down would be worse than one that might not
@@ -38,7 +42,7 @@ export async function iceServersFor(config: RealtimeConfig): Promise<readonly Ca
       logEvent("chat.call.turn", { outcome: `http_${response.status}`, ms: Date.now() - started });
       return STUN_ONLY;
     }
-    const servers = normaliseIceServers(await response.json());
+    const servers = withFirewallFallbacks(normaliseIceServers(await response.json()));
     logEvent("chat.call.turn", { outcome: servers.length > 0 ? "ok" : "empty", ms: Date.now() - started });
     return servers.length > 0 ? servers : STUN_ONLY;
   } catch {
@@ -74,4 +78,24 @@ export function normaliseIceServers(body: unknown): readonly CallIceServer[] {
 /** `turn:host:53?transport=udp`, `stun:host:53` and the like. */
 function usesPort53(url: string): boolean {
   return /:53(?:[?/]|$)/u.test(url);
+}
+
+/** TLS on 443 passes firewalls and proxies that allow only HTTPS; plain TCP passes those that block UDP. */
+export const TURN_TLS_443 = "turns:turn.cloudflare.com:443?transport=tcp";
+export const TURN_TCP = "turn:turn.cloudflare.com:3478?transport=tcp";
+
+/**
+ * Every credentialed entry with a `turn:`/`turns:` URL on Cloudflare's TURN host also carries
+ * {@link TURN_TLS_443} and {@link TURN_TCP}, appended when missing. Entries for other hosts, STUN
+ * entries and entries without credentials are left alone: a URL is only useful with the credential
+ * minted for that host.
+ */
+export function withFirewallFallbacks(servers: readonly CallIceServer[]): readonly CallIceServer[] {
+  return servers.map((server) => {
+    const credentialed = server.username !== undefined && server.credential !== undefined;
+    const onCloudflareTurn = server.urls.some((url) => /^turns?:turn\.cloudflare\.com[:?]/u.test(url));
+    if (!credentialed || !onCloudflareTurn) return server;
+    const missing = [TURN_TCP, TURN_TLS_443].filter((url) => !server.urls.includes(url));
+    return missing.length === 0 ? server : { ...server, urls: [...server.urls, ...missing] };
+  });
 }

@@ -110,3 +110,24 @@ export function typingAllowed(userId: string, channelId: string, now: number, th
   }
   return true;
 }
+
+// Call reactions: a sliding window per participant, in memory like the typing throttle. A reaction
+// is worth nothing a few seconds later, so losing the window to an eviction costs nothing.
+const reactionsSent = new Map<string, number[]>();
+
+/** True, and counted, when `participantId` may send another reaction at `now`. */
+export function reactionAllowed(participantId: string, now: number, burst: number, windowMs: number): boolean {
+  const recent = (reactionsSent.get(participantId) ?? []).filter((at) => now - at < windowMs);
+  if (recent.length >= burst) {
+    reactionsSent.set(participantId, recent);
+    return false;
+  }
+  recent.push(now);
+  reactionsSent.set(participantId, recent);
+  if (reactionsSent.size > 1024) {
+    for (const [key, times] of reactionsSent) {
+      if (times.every((at) => now - at >= windowMs)) reactionsSent.delete(key);
+    }
+  }
+  return true;
+}

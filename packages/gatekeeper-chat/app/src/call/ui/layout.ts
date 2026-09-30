@@ -1,7 +1,7 @@
 // The call UI's pure rules: grid shape, tile sizes, and the words on the history message and the
 // error states. Kept out of the components so they are tested without a DOM.
 
-import type { CallSummary, UserId } from "../../contract.js";
+import type { CallState, CallSummary, UserId } from "../../contract.js";
 import type { TileSize } from "../engine/types.js";
 
 /**
@@ -98,4 +98,11 @@ export function isFramed(): boolean {
 /** Screen share needs `getDisplayMedia`, which phones and tablets do not have. */
 export function canShareScreen(): boolean {
   return typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getDisplayMedia === "function";
+}
+
+/** Raised hands in queue order (first raised first): participant id to its 1-based place. */
+export function handQueue(room: CallState | undefined): ReadonlyMap<string, number> {
+  const raised = (room?.participants ?? []).filter((participant) => participant.hand !== undefined);
+  raised.sort((a, b) => a.hand! - b.hand!);
+  return new Map(raised.map((participant, index) => [participant.id, index + 1]));
 }

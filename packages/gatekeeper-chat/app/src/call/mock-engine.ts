@@ -12,6 +12,7 @@
 // pins the local state that raises each banner, for screenshots.
 
 import { CALL_HEARTBEAT_MS, type CallState, type ParticipantId } from "../contract.js";
+import { supportsBackgroundBlur, supportsNoiseSuppression } from "./effects/support.js";
 import type {
   CallEngine,
   ConnectionQuality,
@@ -278,6 +279,9 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
           videoEnabled: camera !== null,
           error: null,
           ...mockLocalQuality(force),
+          // The switches show where this browser could run the real effects; the mock only flips them.
+          noiseSuppression: supportsNoiseSuppression() ? (options.noiseSuppression === true ? "on" : "off") : "unsupported",
+          backgroundBlur: supportsBackgroundBlur() ? (options.backgroundBlur === true ? "on" : "off") : "unsupported",
         });
         syncRemotes();
         sendBeat();
@@ -393,6 +397,26 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
         videoInputs: all.filter((device) => device.kind === "videoinput"),
         audioOutputs: all.filter((device) => device.kind === "audiooutput"),
       };
+    },
+
+    // The mock sends nothing, so an effect is only a switch in the snapshot.
+    async setNoiseSuppression(enabled: boolean): Promise<void> {
+      set({ noiseSuppression: enabled ? "on" : "off" });
+    },
+
+    async setBackgroundBlur(enabled: boolean): Promise<void> {
+      set({ backgroundBlur: enabled ? "on" : "off" });
+    },
+
+    setPictureInPicture(): void {
+      // Nothing to pause in the mock.
+    },
+
+    async setAudioOnly(enabled: boolean): Promise<void> {
+      // The mock pulls nothing, so only the snapshot and the camera change.
+      if (enabled === (snapshot.audioOnlyChosen === true)) return;
+      set({ audioOnlyChosen: enabled });
+      if (enabled && snapshot.videoEnabled) await engine.setVideoEnabled(false);
     },
 
     setTileSizes(next) {

@@ -5,11 +5,13 @@ import type {
   Attachment,
   BadgeSummary,
   CallFeature,
+  CallReaction,
   CallState,
   Channel,
   ChannelId,
   Membership,
   MessageId,
+  ParticipantId,
   ReadCursor,
   SearchResult,
   ThreadSummary,
@@ -188,7 +190,13 @@ export interface ChatState {
   /** Remembered per browser; null ids mean the system default. */
   readonly callDevices: DeviceChoice;
   /** Whether the next join starts with the microphone and the camera on. */
-  readonly callStart: { readonly audio: boolean; readonly video: boolean };
+  readonly callStart: {
+    readonly audio: boolean;
+    readonly video: boolean;
+    /** Quality phase 2 effects, remembered like the toggles; absent is off. */
+    readonly noiseSuppression?: boolean;
+    readonly backgroundBlur?: boolean;
+  };
   /**
    * Where the shell has put this frame (`chat:layout`): its full `/chat` page, the dock, or out of
    * sight behind the floating call pill. Null when no shell has said, standalone included.
@@ -196,7 +204,21 @@ export interface ChatState {
   readonly shellLayout: "page" | "dock" | "hidden" | null;
   /** Full-page "Focus": the rail is hidden so the call takes the whole width. */
   readonly callFocus: boolean;
+  /** Space is held while muted: the microphone is on until it is released (push-to-talk). */
+  readonly callPushToTalk: boolean;
+  /** Reactions in this frame's call, newest last, each shown for {@link CALL_REACTION_SHOW_MS}. */
+  readonly callReactions: readonly CallReactionShown[];
 }
+
+/** One reaction on screen: over the sender's tile. `id` is local, for keys and expiry. */
+export interface CallReactionShown {
+  readonly id: number;
+  readonly participantId: ParticipantId;
+  readonly emoji: CallReaction;
+}
+
+/** How long a reaction floats over a tile. */
+export const CALL_REACTION_SHOW_MS = 4_000;
 
 export const INITIAL_STATE: ChatState = {
   phase: "loading",
@@ -243,4 +265,6 @@ export const INITIAL_STATE: ChatState = {
   callStart: { audio: true, video: true },
   shellLayout: null,
   callFocus: false,
+  callPushToTalk: false,
+  callReactions: [],
 };

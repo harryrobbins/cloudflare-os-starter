@@ -1,6 +1,7 @@
 // The real browser behind `CallEnvironment`: WebRTC, media devices, a black placeholder track and
 // window timers. Everything the engine touches in the browser goes through here so tests can fake it.
 
+import { supportsBackgroundBlur, supportsNoiseSuppression } from "../effects/support.js";
 import { CAMERA_HEIGHT, CAMERA_WIDTH, detectSupportedConstraints } from "./media.js";
 import type { CallEnvironment } from "./types.js";
 
@@ -52,6 +53,11 @@ export function createBrowserCallEnvironment(): CallEnvironment {
       document.addEventListener("visibilitychange", listener);
       return () => document.removeEventListener("visibilitychange", listener);
     },
+    // Quality phase 2: loaded on first use, so a call without effects never downloads them.
+    supportsNoiseSuppression: () => supportsNoiseSuppression(),
+    createNoiseSuppressor: async (microphone) => (await import("../effects/noise.js")).createNoiseSuppressor(microphone),
+    supportsBackgroundBlur: () => supportsBackgroundBlur(),
+    createBackgroundBlur: async (camera) => (await import("../effects/blur.js")).createBackgroundBlur(camera),
   };
 }
 

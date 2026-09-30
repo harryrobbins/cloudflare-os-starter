@@ -218,7 +218,9 @@ describe("serveChat, with an already-verified identity", () => {
       const response = await serveChat(new Request(`${ORIGIN}${path}`), env, identity);
       const csp = response.headers.get("content-security-policy") ?? "";
       expect(csp).toContain("frame-ancestors 'self'");
-      expect(csp).toContain("script-src 'self'");
+      // Wasm compilation only (the call's effects); never 'unsafe-eval' or 'unsafe-inline'.
+      expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval';");
+      expect(csp).not.toMatch(/'unsafe-eval'|script-src[^;]*'unsafe-inline'/);
       expect(csp).toContain(`connect-src 'self' ${ORIGIN.replace(/^http/, "ws")}`);
       expect(response.headers.get("x-content-type-options")).toBe("nosniff");
       // Calls: media capture for this origin only, which the shell's same-origin frame shares.

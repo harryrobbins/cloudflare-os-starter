@@ -18,7 +18,7 @@ import type {
   SessionDescription,
 } from "../../../contract.js";
 import { ApiError } from "../../../api/types.js";
-import type { CallEnvironment, CallSignalling } from "../types.js";
+import type { CallEnvironment, CallSignalling, TrackProcessor } from "../types.js";
 
 let trackCounter = 0;
 
@@ -396,6 +396,18 @@ export interface FakeEnvOptions {
   supported?: MediaTrackSupportedConstraints;
   /** What `RTCRtpSender.getCapabilities("audio")` reports. Default: null (unsupported). */
   audioCapabilities?: RTCRtpCapabilities | null;
+  /** Quality phase 2: which effects the fake supports. Default: neither. */
+  effects?: { noise?: boolean; blur?: boolean };
+  /** An effect factory rejects with this instead of building. */
+  effectError?: string;
+}
+
+/** A built effect: its processed track, the raw track it wraps, and whether it was closed. */
+export interface FakeEffect {
+  readonly kind: "noise" | "blur";
+  readonly source: FakeTrack;
+  readonly track: FakeTrack;
+  closed: boolean;
 }
 
 export class FakeEnvironment implements CallEnvironment {
@@ -406,8 +418,40 @@ export class FakeEnvironment implements CallEnvironment {
   readonly deviceListeners = new Set<() => void>();
   readonly visibilityListeners = new Set<() => void>();
   documentHidden = false;
+  readonly effects: FakeEffect[] = [];
 
   constructor(public options: FakeEnvOptions = {}) {}
+
+  supportsNoiseSuppression(): boolean {
+    return this.options.effects?.noise === true;
+  }
+
+  supportsBackgroundBlur(): boolean {
+    return this.options.effects?.blur === true;
+  }
+
+  async createNoiseSuppressor(microphone: MediaStreamTrack): Promise<TrackProcessor | null> {
+    return this.buildEffect("noise", microphone);
+  }
+
+  async createBackgroundBlur(camera: MediaStreamTrack): Promise<TrackProcessor | null> {
+    return this.buildEffect("blur", camera);
+  }
+
+  private async buildEffect(kind: "noise" | "blur", source: MediaStreamTrack): Promise<TrackProcessor | null> {
+    await Promise.resolve();
+    if (this.options.effectError !== undefined) throw new Error(this.options.effectError);
+    const raw = source as unknown as FakeTrack;
+    const effect: FakeEffect = { kind, source: raw, track: new FakeTrack(raw.kind, `${kind}(${raw.label})`), closed: false };
+    this.effects.push(effect);
+    return {
+      track: effect.track as unknown as MediaStreamTrack,
+      close() {
+        effect.closed = true;
+        effect.track.stop();
+      },
+    };
+  }
 
   supportedConstraints(): MediaTrackSupportedConstraints {
     return this.options.supported ?? { echoCancellation: true, noiseSuppression: true, autoGainControl: true };

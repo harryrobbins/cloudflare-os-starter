@@ -6,11 +6,15 @@
 // why the store takes a `Transport` rather than reaching for `fetch`: the mock swaps it wholesale.
 
 import {
+  CALL_REACTION_BURST,
+  CALL_REACTION_WINDOW_MS,
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
   permalink,
   utf8Bytes,
   type Attachment,
+  type CallParticipant,
+  type CallReaction,
   type CallState,
   type Channel,
   type ChannelId,
@@ -19,6 +23,7 @@ import {
   type Message,
   type MessageId,
   type NotifyLevel,
+  type ParticipantId,
   type ReadCursor,
   type ServerEvent,
   type ThreadSummary,
@@ -71,6 +76,7 @@ import {
   shouldNotify,
 } from "./unread.js";
 import {
+  CALL_REACTION_SHOW_MS,
   EMPTY_CONVERSATION,
   INITIAL_STATE,
   type ChatState,
@@ -344,6 +350,9 @@ export class ChatStore {
         return;
       case "call-moved":
         this.#callEngine?.handleMoved(event.call, event.participant);
+        return;
+      case "call-react":
+        this.#onCallReaction(event.call, event.participant, event.emoji);
         return;
       case "error":
         // A frame the server refused. Surfaced quietly: it is a client bug, not the user's problem.
@@ -1503,6 +1512,7 @@ export class ChatStore {
 
   #onCallEvent(channelId: ChannelId, call: CallState | null, ring: boolean | undefined): void {
     if (call !== null) this.#noticeUsers(call.participants.map((participant) => participant.userId));
+    this.#announceHands(this.#state.calls[channelId], call);
     const calls = applyCallEvent(this.#state.calls, channelId, call);
     this.#patch({ calls, rings: pruneRings(this.#state.rings, calls) });
     if (this.#engineChannel() === channelId) this.#forwardRoom(call);
@@ -1531,6 +1541,18 @@ export class ChatStore {
       !this.#state.rings.some((existing) => existing.callId === call.id)
     ) {
       this.#ring(call);
+    }
+  }
+
+  /** In this frame's call, somebody else's hand going up is announced; lowering is not news. */
+  #announceHands(before: CallState | undefined, after: CallState | null): void {
+    const local = this.#state.call;
+    if (after === null || local.callId !== after.id || !isLivePhase(local.phase)) return;
+    for (const participant of after.participants) {
+      if (participant.hand === undefined || participant.id === local.participantId) continue;
+      const previous = before?.participants.find((entry) => entry.id === participant.id);
+      if (previous?.hand !== undefined) continue;
+      this.announce(`${this.#state.users[participant.userId]?.name ?? "Someone"} raised their hand`);
     }
   }
 
@@ -1575,6 +1597,8 @@ export class ChatStore {
 
     if (previous.phase !== snapshot.phase) this.#announceCallPhase(previous, snapshot);
     if (!isLivePhase(snapshot.phase) && this.#state.callFocus) this.#patch({ callFocus: false });
+    if (!isLivePhase(snapshot.phase) && this.#state.callPushToTalk) this.#patch({ callPushToTalk: false });
+    if (!isLivePhase(snapshot.phase) && this.#state.callReactions.length > 0) this.#patch({ callReactions: [] });
 
     const live = snapshot.channelId !== null && isLivePhase(snapshot.phase);
     const bridged = live
@@ -1632,7 +1656,7 @@ export class ChatStore {
     if (this.#state.callUi.chatOpen !== chatOpen) this.#setCallUi({ chatOpen });
   }
 
-  setCallStart(start: { audio?: boolean; video?: boolean }): void {
+  setCallStart(start: { audio?: boolean; video?: boolean; noiseSuppression?: boolean; backgroundBlur?: boolean }): void {
     const callStart = { ...this.#state.callStart, ...start };
     this.#patch({ callStart });
     saveCallPrefs({ devices: this.#state.callDevices, start: callStart });
@@ -1678,6 +1702,8 @@ export class ChatStore {
         channelId,
         audio: this.#state.callStart.audio,
         video: this.#state.callStart.video,
+        noiseSuppression: this.#state.callStart.noiseSuppression === true,
+        backgroundBlur: this.#state.callStart.backgroundBlur === true,
         devices: this.#state.callDevices,
       });
       // A `call` event can beat the join's own answer; hand the engine the latest room either way.
@@ -1708,8 +1734,31 @@ export class ChatStore {
     const engine = this.#callEngine;
     if (engine === null || !isLivePhase(this.#state.call.phase)) return;
     const next = !this.#state.call.audioEnabled;
+    // A deliberate toggle while Space is held wins: releasing Space must not undo it.
+    if (this.#state.callPushToTalk) this.#patch({ callPushToTalk: false });
     engine.setAudioEnabled(next);
     this.announce(next ? "Microphone on" : "Microphone off");
+  }
+
+  /**
+   * Push-to-talk: Space pressed while muted turns the microphone on, and its release (or the frame
+   * losing focus) turns it off again. Pressing Space with the microphone already on does nothing, so
+   * it never mutes somebody who unmuted on purpose.
+   */
+  pushToTalk(down: boolean): void {
+    const engine = isLivePhase(this.#state.call.phase) ? this.#callEngine : null;
+    if (down) {
+      if (engine === null || this.#state.callPushToTalk || this.#state.call.audioEnabled) return;
+      this.#patch({ callPushToTalk: true });
+      engine.setAudioEnabled(true);
+      this.announce("Talking. Release Space to mute");
+      return;
+    }
+    if (!this.#state.callPushToTalk) return;
+    this.#patch({ callPushToTalk: false });
+    if (engine === null) return;
+    engine.setAudioEnabled(false);
+    this.announce("Microphone off");
   }
 
   async toggleCallVideo(): Promise<void> {
@@ -1721,6 +1770,95 @@ export class ChatStore {
       await engine.setVideoEnabled(next);
     } catch (cause) {
       this.#toast({ tone: "error", title: next ? "Could not start the camera" : "Could not stop the camera", body: describe(cause) });
+    }
+  }
+
+  /** This frame's own participant in the room, when it is in a call. */
+  #myParticipant(): CallParticipant | null {
+    const local = this.#state.call;
+    if (local.channelId === null || local.participantId === null || !isLivePhase(local.phase)) return null;
+    return this.#state.calls[local.channelId]?.participants.find((entry) => entry.id === local.participantId) ?? null;
+  }
+
+  /** Raise or lower this person's hand. The room's `call` event is what shows it, here as everywhere. */
+  setCallHand(raised: boolean): void {
+    const local = this.#state.call;
+    const mine = this.#myParticipant();
+    if (mine === null || local.callId === null) return;
+    if ((mine.hand !== undefined) === raised) return;
+    this.#socket.send({ t: "call-hand", call: local.callId, participant: mine.id, raised });
+    this.announce(raised ? "You raised your hand" : "You lowered your hand");
+  }
+
+  toggleCallHand(): void {
+    const mine = this.#myParticipant();
+    if (mine !== null) this.setCallHand(mine.hand === undefined);
+  }
+
+  /** When this frame sent its recent reactions, so it stays inside the server's burst. */
+  #reactionsSentAt: number[] = [];
+
+  /** A quick reaction. Beyond the server's burst it is dropped here, quietly, rather than refused. */
+  sendCallReaction(emoji: CallReaction): void {
+    const local = this.#state.call;
+    const mine = this.#myParticipant();
+    if (mine === null || local.callId === null) return;
+    const now = Date.now();
+    this.#reactionsSentAt = this.#reactionsSentAt.filter((at) => now - at < CALL_REACTION_WINDOW_MS);
+    if (this.#reactionsSentAt.length >= CALL_REACTION_BURST) return;
+    this.#reactionsSentAt.push(now);
+    this.#socket.send({ t: "call-react", call: local.callId, participant: mine.id, emoji });
+  }
+
+  #reactionSeq = 0;
+
+  #onCallReaction(callId: string, participantId: ParticipantId, emoji: CallReaction): void {
+    const local = this.#state.call;
+    if (local.callId !== callId || !isLivePhase(local.phase)) return;
+    const id = ++this.#reactionSeq;
+    // A handful at most on screen: a burst from five people cannot pile up.
+    const callReactions = [...this.#state.callReactions, { id, participantId, emoji }].slice(-12);
+    this.#patch({ callReactions });
+    this.#later(() => {
+      const left = this.#state.callReactions.filter((shown) => shown.id !== id);
+      if (left.length !== this.#state.callReactions.length) this.#patch({ callReactions: left });
+    }, CALL_REACTION_SHOW_MS);
+    if (participantId === local.participantId) return;
+    const room = local.channelId === null ? undefined : this.#state.calls[local.channelId];
+    const who = room?.participants.find((entry) => entry.id === participantId);
+    const name = who === undefined ? "Someone" : (this.#state.users[who.userId]?.name ?? "Someone");
+    this.announce(`${name} reacted ${emoji}`);
+  }
+
+  /**
+   * Quality phase 2 effects: switched live in the call and remembered for the next one. An effect
+   * the CPU monitor turned off stays remembered as chosen; the person decides whether to try again.
+   */
+  async toggleCallEffect(effect: "noiseSuppression" | "backgroundBlur"): Promise<void> {
+    const engine = this.#callEngine;
+    if (engine === null || !isLivePhase(this.#state.call.phase)) return;
+    const next = this.#state.call[effect] !== "on" && this.#state.call[effect] !== "starting";
+    this.setCallStart({ [effect]: next });
+    const name = effect === "noiseSuppression" ? "Noise suppression" : "Background blur";
+    this.announce(`${name} ${next ? "on" : "off"}`);
+    try {
+      await (effect === "noiseSuppression" ? engine.setNoiseSuppression(next) : engine.setBackgroundBlur(next));
+    } catch (cause) {
+      this.#toast({ tone: "error", title: `Could not switch ${name.toLowerCase()}`, body: describe(cause) });
+    }
+    if (next && this.#state.call[effect] === "failed") this.announce(`${name} could not start`);
+  }
+
+  /** Chosen audio-only: pause everyone's video and turn the camera off, to save bandwidth or focus. */
+  async toggleCallAudioOnly(): Promise<void> {
+    const engine = this.#callEngine;
+    if (engine === null || !isLivePhase(this.#state.call.phase)) return;
+    const next = this.#state.call.audioOnlyChosen !== true;
+    this.announce(next ? "Audio only: video is paused" : "Video is back on");
+    try {
+      await engine.setAudioOnly(next);
+    } catch (cause) {
+      this.#toast({ tone: "error", title: "Could not switch audio only", body: describe(cause) });
     }
   }
 

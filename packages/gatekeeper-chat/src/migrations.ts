@@ -406,6 +406,14 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    version: 6,
+    description: "video calls: a raised hand per participant",
+    up(sql) {
+      // When the hand went up; NULL while it is down. A rejoin is a new row, so the hand starts down.
+      addColumn(sql, "call_participants", "hand_at", "INTEGER");
+    },
+  },
 ];
 
 /**

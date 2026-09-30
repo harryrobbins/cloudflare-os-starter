@@ -368,6 +368,11 @@ viewer a layer that suits them. Browser-side processing is for effects, not tran
 
 ### Quality phase 2 (separate plan when phase 1 is measured)
 
+Noise suppression and background blur are built on `feat/chat-video-next` (see
+[the implementation checklist, Stream H](chat-video-implementation.md#stream-h-further-improvements-featchat-video-next));
+SVC and captions remain open.
+
+
 - **ML noise suppression** toggle: RNNoise (or DTLN) as WASM in an `AudioWorklet`, ~10 ms added
   latency, low CPU; off by default because the browser's own suppression is decent.
 - **Background blur / replacement**: MediaPipe Image Segmenter (WebGL/WebGPU) on raw frames via
@@ -394,6 +399,8 @@ correction, DSCP marking and native clients — disproportionate for a five-pers
   survive upstream rebases like the other dock patches.
 - **Safari.** Simulcast send in Safari is supported but its layer behaviour differs; the e2e run is
   Chromium-only, so Safari needs a manual check.
-- **Corporate firewalls** that block UDP rely on TURN over TCP/TLS 443; the TURN URL list must
-  include `turns:…:443`.
+- **Corporate firewalls** that block UDP rely on TURN over TCP/TLS 443. Cloudflare's
+  `generate-ice-servers` list includes `turns:turn.cloudflare.com:443?transport=tcp` and TURN over
+  TCP (checked 2026-09-30), and `withFirewallFallbacks` in `src/do/turn.ts` adds both to any
+  credentialed Cloudflare TURN entry that lacks them.
 - **One device per person per call** is a simplification (no "join from phone and laptop").

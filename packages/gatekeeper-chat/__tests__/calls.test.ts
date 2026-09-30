@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CALL_PARTICIPANT_TTL_MS,
+  CALL_REACTION_BURST,
   CALL_TURN_TTL_SECONDS,
   MAX_CALL_PARTICIPANTS,
   MAX_SDP_BYTES,
@@ -246,6 +247,8 @@ describe("migration 5", () => {
       "video",
       "screen",
       "tracks",
+      // Migration 6.
+      "hand_at",
     ]);
   });
 });
@@ -305,7 +308,12 @@ describe("joining", () => {
     expect(joined.iceServers).toEqual([
       { urls: ["stun:stun.cloudflare.com:3478"] },
       {
-        urls: ["turn:turn.cloudflare.com:3478?transport=udp", "turns:turn.cloudflare.com:443?transport=tcp"],
+        // Port 53 dropped; TURN over TCP added (src/do/turn.ts, withFirewallFallbacks).
+        urls: [
+          "turn:turn.cloudflare.com:3478?transport=udp",
+          "turns:turn.cloudflare.com:443?transport=tcp",
+          "turn:turn.cloudflare.com:3478?transport=tcp",
+        ],
         username: "minted-user",
         credential: "minted-credential",
       },
@@ -941,6 +949,84 @@ describe("call-beat", () => {
     // A malformed beat is invalid_request.
     bobSocket.send({ t: "call-beat", call: a.call.id, participant: a.participantId, audio: "yes" });
     expect(await bobSocket.next("error")).toMatchObject({ code: "invalid_request" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Raised hands and reactions
+// ---------------------------------------------------------------------------
+
+describe("call-hand", () => {
+  it("raises and lowers a hand, broadcasting only a change, keeping the first raise's time", async () => {
+    const { alice, bob } = await setup("hand");
+    const a = await join(alice, "general");
+    const watcher = await bob.socket();
+    await watcher.next("hello");
+    const socket = await alice.socket();
+
+    socket.send({ t: "call-hand", call: a.call.id, participant: a.participantId, raised: true });
+    const raised = await watcher.next("call");
+    const hand = raised.call!.participants[0]!.hand;
+    expect(typeof hand).toBe("number");
+
+    // Raising again is not a change: no broadcast, and the queue position is kept.
+    socket.send({ t: "call-hand", call: a.call.id, participant: a.participantId, raised: true });
+    await tick(50);
+    expect(watcher.all("call")).toHaveLength(1);
+
+    socket.send({ t: "call-hand", call: a.call.id, participant: a.participantId, raised: false });
+    const lowered = await watcher.next("call");
+    expect(lowered.call!.participants[0]).not.toHaveProperty("hand");
+
+    // Somebody else's participant is refused and the socket stays open.
+    const bobSocket = await bob.socket();
+    bobSocket.send({ t: "call-hand", call: a.call.id, participant: a.participantId, raised: true });
+    expect(await bobSocket.next("error")).toMatchObject({ code: "forbidden" });
+    bobSocket.send({ t: "call-hand", call: a.call.id, participant: a.participantId, raised: "yes" });
+    expect(await bobSocket.next("error")).toMatchObject({ code: "invalid_request" });
+  });
+
+  it("starts lowered on a rejoin", async () => {
+    const { alice } = await setup("hand-rejoin");
+    const a = await join(alice, "general");
+    const socket = await alice.socket();
+    socket.send({ t: "call-hand", call: a.call.id, participant: a.participantId, raised: true });
+    await socket.next("call");
+    const again = await join(alice, "general");
+    expect(again.call.participants.find((participant) => participant.id === again.participantId)).not.toHaveProperty("hand");
+  });
+});
+
+describe("call-react", () => {
+  it(`fans a reaction out, sender included, allows ${CALL_REACTION_BURST} per window and refuses others`, async () => {
+    const { alice, bob } = await setup("react");
+    const a = await join(alice, "general");
+    const watcher = await bob.socket();
+    await watcher.next("hello");
+    const socket = await alice.socket();
+    await socket.next("hello");
+
+    socket.send({ t: "call-react", call: a.call.id, participant: a.participantId, emoji: "🎉" });
+    expect(await watcher.next("call-react")).toEqual({
+      t: "call-react",
+      channel: "general",
+      call: a.call.id,
+      participant: a.participantId,
+      emoji: "🎉",
+    });
+    expect(await socket.next("call-react")).toMatchObject({ emoji: "🎉" });
+
+    for (let i = 1; i < CALL_REACTION_BURST; i += 1) {
+      socket.send({ t: "call-react", call: a.call.id, participant: a.participantId, emoji: "👍" });
+    }
+    socket.send({ t: "call-react", call: a.call.id, participant: a.participantId, emoji: "👍" });
+    expect(await socket.next("error")).toMatchObject({ code: "rate_limited" });
+    await tick(50);
+    expect(watcher.all("call-react")).toHaveLength(CALL_REACTION_BURST);
+
+    // Not a reaction the call offers.
+    socket.send({ t: "call-react", call: a.call.id, participant: a.participantId, emoji: "💩" });
+    expect(await socket.next("error")).toMatchObject({ code: "invalid_request" });
   });
 });
 

@@ -460,6 +460,22 @@ describe("pausing what is not seen", () => {
     ]);
   });
 
+  it("keeps video playing in a hidden tab while the call is in a picture-in-picture window", async () => {
+    const { env, sig, engine } = await joinWith(callState([participant("p2", ["audio", "video"])]));
+    engine.setTileSizes({ p2: "large" });
+    engine.setPictureInPicture(true);
+    env.setDocumentHidden(true);
+    await settle(ENGINE_TIMINGS.hiddenPauseMs + 100);
+    expect(sig.calls("closeTracks")).toHaveLength(0);
+    expect(engine.snapshot().remotes.p2!.videoPaused).toBe(false);
+
+    // Back in the page with the tab still hidden: the usual rule applies again.
+    engine.setPictureInPicture(false);
+    await settle(ENGINE_TIMINGS.hiddenPauseMs + 100);
+    expect(sig.calls("closeTracks")).toHaveLength(1);
+    expect(engine.snapshot().remotes.p2!.videoPaused).toBe(true);
+  });
+
   it("unsubscribes from visibility changes and clears pause timers on leave", async () => {
     const { env, engine } = await joinWith(callState([participant("p2", ["audio", "video"])]));
     expect(env.visibilityListeners.size).toBe(1);
@@ -487,6 +503,154 @@ const REPORT_KEYS = [
   "rttMs",
   "videoCodec",
 ];
+
+describe("chosen audio-only", () => {
+  it("closes camera pulls and the camera, keeps audio and screens, and restores both", async () => {
+    const { env, sig, engine } = await joinWith(callState([participant("p2", ["audio", "video"]), participant("p3", ["screen"])]));
+    engine.setTileSizes({ p2: "large", p3: "large" });
+    await settle(1_100);
+    const videoMid = midOf(env, engine.snapshot().remotes.p2!.video);
+    expect(engine.snapshot().videoEnabled).toBe(true);
+
+    await engine.setAudioOnly(true);
+    await settle();
+    expect(engine.snapshot()).toMatchObject({ audioOnlyChosen: true, audioOnly: false, videoEnabled: false });
+    expect((sig.calls("closeTracks").at(-1) as { mids: string[] }).mids).toEqual([videoMid]);
+    expect(engine.snapshot().remotes.p2).toMatchObject({ video: null, videoPaused: true });
+    expect(engine.snapshot().remotes.p2!.audio).not.toBeNull();
+    expect(engine.snapshot().remotes.p3!.screen).not.toBeNull();
+    // The camera sender keeps the SFU's track alive with the black placeholder.
+    expect(cameraSender(env).track?.kind).toBe("video");
+
+    const pulls = sig.calls("pullTracks").length;
+    await engine.setAudioOnly(false);
+    await settle();
+    expect(engine.snapshot()).toMatchObject({ audioOnlyChosen: false, videoEnabled: true });
+    expect((sig.calls("pullTracks")[pulls] as PullTracksRequest).tracks).toEqual([{ participantId: "p2", name: "p2-video", rid: "a" }]);
+    expect(engine.snapshot().remotes.p2).toMatchObject({ videoPaused: false });
+  });
+
+  it("leaves a camera that was off, off, and one turned on meanwhile, on", async () => {
+    const { engine } = await joinWith(callState([participant("p2", ["audio", "video"])]), {}, { video: false });
+    await engine.setAudioOnly(true);
+    await engine.setAudioOnly(false);
+    expect(engine.snapshot().videoEnabled).toBe(false);
+
+    await engine.setAudioOnly(true);
+    await engine.setVideoEnabled(true);
+    await engine.setAudioOnly(false);
+    expect(engine.snapshot().videoEnabled).toBe(true);
+  });
+
+  it("ends with the call", async () => {
+    const { engine } = await joinWith(callState([participant("p2", ["audio", "video"])]));
+    await engine.setAudioOnly(true);
+    await engine.leave();
+    expect(engine.snapshot().audioOnlyChosen).toBe(false);
+  });
+});
+
+describe("effects (quality phase 2)", () => {
+  const both = { effects: { noise: true, blur: true } };
+  const micSender = (env: FakeEnvironment): FakeSender => env.pc.transceivers[0]!.sender;
+
+  it("reports unsupported effects and ignores a request for one", async () => {
+    const { env, engine } = await joinWith(callState([]));
+    expect(engine.snapshot()).toMatchObject({ noiseSuppression: "unsupported", backgroundBlur: "unsupported" });
+    await engine.setNoiseSuppression(true);
+    expect(env.effects).toHaveLength(0);
+    expect(engine.snapshot().noiseSuppression).toBe("unsupported");
+  });
+
+  it("swaps the processed track onto the sender and back, with no renegotiation", async () => {
+    const { env, sig, engine } = await joinWith(callState([]), both);
+    expect(engine.snapshot()).toMatchObject({ noiseSuppression: "off", backgroundBlur: "off" });
+    const offers = sig.calls("publishTracks").length;
+    const rawMic = micSender(env).track;
+
+    await engine.setNoiseSuppression(true);
+    const noise = env.effects.find((effect) => effect.kind === "noise")!;
+    expect(noise.source).toBe(rawMic);
+    expect(micSender(env).track).toBe(noise.track);
+    expect(engine.snapshot().noiseSuppression).toBe("on");
+
+    await engine.setBackgroundBlur(true);
+    const blur = env.effects.find((effect) => effect.kind === "blur")!;
+    expect(cameraSender(env).track).toBe(blur.track);
+    // The preview shows what others see.
+    expect(engine.snapshot().localVideo?.getVideoTracks()[0]).toBe(blur.track);
+
+    await engine.setNoiseSuppression(false);
+    expect(micSender(env).track).toBe(rawMic);
+    expect(noise.closed).toBe(true);
+    expect(engine.snapshot().noiseSuppression).toBe("off");
+    expect(sig.calls("publishTracks")).toHaveLength(offers);
+  });
+
+  it("starts chosen effects before the first publish", async () => {
+    const { env, sig } = await joinWith(callState([]), both, { noiseSuppression: true, backgroundBlur: true });
+    const published = env.effects.map((effect) => effect.track);
+    expect(published).toHaveLength(2);
+    expect(sig.calls("publishTracks")).toHaveLength(1);
+    expect(micSender(env).track).toBe(published[0]);
+    expect(cameraSender(env).track).toBe(published[1]);
+  });
+
+  it("rebuilds around a new device, and drops blur while the camera is off", async () => {
+    const { env, engine } = await joinWith(callState([]), both);
+    await engine.setBackgroundBlur(true);
+    const first = env.effects[0]!;
+    await engine.setDevices({ videoInputId: "cam-2" });
+    expect(first.closed).toBe(true);
+    const second = env.effects[1]!;
+    expect(second.source).not.toBe(first.source);
+    expect(cameraSender(env).track).toBe(second.track);
+
+    await engine.setVideoEnabled(false);
+    expect(second.closed).toBe(true);
+    expect(engine.snapshot().backgroundBlur).toBe("on");
+    await engine.setVideoEnabled(true);
+    const third = env.effects[2]!;
+    expect(cameraSender(env).track).toBe(third.track);
+  });
+
+  it("marks an effect that fails to start, and leaves the raw track on the sender", async () => {
+    const { env, engine } = await joinWith(callState([]), { ...both, effectError: "no wasm" });
+    const rawMic = micSender(env).track;
+    await engine.setNoiseSuppression(true);
+    expect(engine.snapshot().noiseSuppression).toBe("failed");
+    expect(micSender(env).track).toBe(rawMic);
+  });
+
+  it("sheds blur, then noise suppression, before any simulcast layer under sustained cpu", async () => {
+    const { env, engine } = await joinWith(callState([]), both);
+    await engine.setBackgroundBlur(true);
+    await engine.setNoiseSuppression(true);
+    const sender = cameraSender(env);
+    const active = (): boolean[] => sender.encodings.map((encoding) => encoding.active !== false);
+    sender.stats = { qualityLimitationReason: "cpu" };
+    await ticks(3);
+    await settle();
+    expect(engine.snapshot()).toMatchObject({ backgroundBlur: "cpu", noiseSuppression: "on" });
+    expect(active()).toEqual([true, true, true]);
+    await ticks(3);
+    await settle();
+    expect(engine.snapshot()).toMatchObject({ backgroundBlur: "cpu", noiseSuppression: "cpu" });
+    expect(active()).toEqual([true, true, true]);
+    await ticks(3);
+    expect(active()).toEqual([false, true, true]);
+    // Switching one back on is allowed.
+    await engine.setNoiseSuppression(true);
+    expect(engine.snapshot().noiseSuppression).toBe("on");
+  });
+
+  it("closes every processor on leave", async () => {
+    const { env, engine } = await joinWith(callState([]), both, { noiseSuppression: true, backgroundBlur: true });
+    await engine.leave();
+    expect(env.effects.every((effect) => effect.closed)).toBe(true);
+    expect(engine.snapshot().noiseSuppression).toBe("unsupported");
+  });
+});
 
 describe("telemetry", () => {
   it("posts a summary every 60 s with codec names, relay flag and counters, and nothing identifying", async () => {

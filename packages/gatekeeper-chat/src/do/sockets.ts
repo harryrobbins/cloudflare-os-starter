@@ -32,7 +32,7 @@ import {
 } from "../shared/protocol.js";
 import { parseClientEvent, utf8Bytes } from "../shared/validate.js";
 import { recipientsOf, requireRead } from "./access.js";
-import { activeCallsFor, callBeat } from "./calls.js";
+import { activeCallsFor, callBeat, callHand, callReact } from "./calls.js";
 import type { Broadcaster, Ctx } from "./context.js";
 import { newSessionId } from "./ids.js";
 import { typingAllowed } from "./limits.js";
@@ -291,6 +291,13 @@ export function handleFrame(ctx: Ctx, ws: WebSocket, raw: string | ArrayBuffer):
       // An unknown or foreign participant is an `error` event, never a close: a tab that was
       // replaced or expired may still send one beat before its `call-moved` arrives.
       const result = callBeat(ctx, user, parsed.value);
+      if (!result.ok) send(ws, { t: "error", code: result.code, message: result.message });
+      return;
+    }
+
+    case "call-hand":
+    case "call-react": {
+      const result = parsed.value.t === "call-hand" ? callHand(ctx, user, parsed.value) : callReact(ctx, user, parsed.value);
       if (!result.ok) send(ws, { t: "error", code: result.code, message: result.message });
       return;
     }

@@ -12,6 +12,9 @@ export interface FakeCallEngine extends CallEngine {
   readonly tileSizes: Readonly<Record<ParticipantId, TileSize>>[];
   readonly audio: boolean[];
   readonly video: boolean[];
+  readonly audioOnly: boolean[];
+  readonly pictureInPicture: boolean[];
+  readonly effects: [string, boolean][];
   readonly devices: Partial<DeviceChoice>[];
   left: number;
   disposed: number;
@@ -31,6 +34,9 @@ export function createFakeCallEngine(): FakeCallEngine {
     tileSizes: [],
     audio: [],
     video: [],
+    audioOnly: [],
+    pictureInPicture: [],
+    effects: [],
     devices: [],
     left: 0,
     disposed: 0,
@@ -79,6 +85,21 @@ export function createFakeCallEngine(): FakeCallEngine {
     async setVideoEnabled(enabled) {
       fake.video.push(enabled);
       fake.set({ videoEnabled: enabled });
+    },
+    async setNoiseSuppression(enabled) {
+      fake.effects.push(["noise", enabled]);
+      fake.set({ noiseSuppression: enabled ? "on" : "off" });
+    },
+    async setBackgroundBlur(enabled) {
+      fake.effects.push(["blur", enabled]);
+      fake.set({ backgroundBlur: enabled ? "on" : "off" });
+    },
+    setPictureInPicture(open) {
+      fake.pictureInPicture.push(open);
+    },
+    async setAudioOnly(enabled) {
+      fake.audioOnly.push(enabled);
+      fake.set({ audioOnlyChosen: enabled, ...(enabled ? { videoEnabled: false } : {}) });
     },
     async setScreenEnabled(enabled) {
       fake.set({ screenEnabled: enabled });

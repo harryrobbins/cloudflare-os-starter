@@ -302,7 +302,12 @@ const CALL_PREFS_KEY = "chat.call";
 
 export interface CallPrefs {
   readonly devices: DeviceChoice;
-  readonly start: { readonly audio: boolean; readonly video: boolean };
+  readonly start: {
+    readonly audio: boolean;
+    readonly video: boolean;
+    readonly noiseSuppression?: boolean;
+    readonly backgroundBlur?: boolean;
+  };
 }
 
 /** Pre-join choices, remembered per browser. Anything unreadable falls back to the defaults. */
@@ -322,6 +327,9 @@ export function loadCallPrefs(): CallPrefs {
       start: {
         audio: parsed.start?.audio !== false,
         video: parsed.start?.video !== false,
+        // Quality phase 2 effects are opt-in: only an explicit true turns one on.
+        ...(parsed.start?.noiseSuppression === true ? { noiseSuppression: true } : {}),
+        ...(parsed.start?.backgroundBlur === true ? { backgroundBlur: true } : {}),
       },
     };
   } catch {

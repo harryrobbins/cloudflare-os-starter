@@ -16,6 +16,7 @@ import type {
   ServerEvent,
   User,
 } from "../contract.js";
+import { CALL_REACTION_BURST } from "../contract.js";
 import { ApiError, type ChatApi, type ChatSocket, type SocketStatus } from "../api/types.js";
 import { createFakeCallEngine, type FakeCallEngine } from "../call/ui/fake-engine.js";
 import { conversationKey } from "./drafts.js";
@@ -39,6 +40,7 @@ import {
   shouldHintHeadphones,
   shouldRing,
 } from "./calls.js";
+import { CALL_REACTION_SHOW_MS } from "./state.js";
 import { ChatStore, RING_TIMEOUT_MS } from "./store.js";
 
 const ENABLED = { enabled: true, maxParticipants: 5 };
@@ -547,7 +549,14 @@ describe("joining and leaving", () => {
     expect(store.state.callUi).toMatchObject({ channelId: "c1", prejoin: true });
     await store.joinCall("c1");
     expect(engine.joins).toEqual([
-      { channelId: "c1", audio: true, video: false, devices: { audioInputId: "mic-2", videoInputId: null, audioOutputId: null } },
+      {
+        channelId: "c1",
+        audio: true,
+        video: false,
+        devices: { audioInputId: "mic-2", videoInputId: null, audioOutputId: null },
+        noiseSuppression: false,
+        backgroundBlur: false,
+      },
     ]);
     expect(store.state.call.phase).toBe("connected");
     expect(store.state.callUi.prejoin).toBe(false);
@@ -595,12 +604,142 @@ describe("joining and leaving", () => {
     expect(store.state.announcement).toBe("Camera off");
   });
 
+  it("push-to-talk unmutes while held and mutes on release, announcing both", async () => {
+    const { store, engine } = await harness();
+    store.setCallStart({ audio: false });
+    await store.joinCall("c1");
+    store.pushToTalk(true);
+    expect(store.state.callPushToTalk).toBe(true);
+    expect(store.state.announcement).toBe("Talking. Release Space to mute");
+    // A second press while held is ignored.
+    store.pushToTalk(true);
+    store.pushToTalk(false);
+    expect(engine.audio).toEqual([true, false]);
+    expect(store.state.callPushToTalk).toBe(false);
+    expect(store.state.announcement).toBe("Microphone off");
+    // A release without a press does nothing.
+    store.pushToTalk(false);
+    expect(engine.audio).toEqual([true, false]);
+  });
+
+  it("push-to-talk never mutes a microphone that was on, and a toggle while held sticks", async () => {
+    const { store, engine } = await harness();
+    await store.joinCall("c1");
+    store.pushToTalk(true);
+    expect(engine.audio).toEqual([]);
+    store.toggleCallAudio(); // mute
+    store.toggleCallAudio(); // unmute on purpose
+    engine.audio.length = 0;
+    // Held from muted, then clicked: the click wins and the release leaves the microphone alone.
+    store.toggleCallAudio(); // mute
+    store.pushToTalk(true);
+    store.toggleCallAudio(); // deliberate: mic off while holding
+    store.pushToTalk(false);
+    expect(engine.audio).toEqual([false, true, false]);
+    expect(store.state.callPushToTalk).toBe(false);
+  });
+
+  it("push-to-talk ends with the call", async () => {
+    const { store } = await harness();
+    store.setCallStart({ audio: false });
+    await store.joinCall("c1");
+    store.pushToTalk(true);
+    await store.leaveCall();
+    expect(store.state.callPushToTalk).toBe(false);
+  });
+
+  it("toggles chosen audio-only through the engine and announces it", async () => {
+    const { store, engine } = await harness();
+    await store.toggleCallAudioOnly(); // not in a call: nothing
+    expect(engine.audioOnly).toEqual([]);
+    await store.joinCall("c1");
+    await store.toggleCallAudioOnly();
+    expect(store.state.call.audioOnlyChosen).toBe(true);
+    expect(store.state.announcement).toBe("Audio only: video is paused");
+    await store.toggleCallAudioOnly();
+    expect(engine.audioOnly).toEqual([true, false]);
+    expect(store.state.announcement).toBe("Video is back on");
+  });
+
+  it("switches effects live, remembers them for the next join, and announces them", async () => {
+    const { store, engine } = await harness();
+    await store.joinCall("c1");
+    await store.toggleCallEffect("noiseSuppression");
+    expect(engine.effects).toEqual([["noise", true]]);
+    expect(store.state.announcement).toBe("Noise suppression on");
+    expect(loadCallPrefs().start).toMatchObject({ noiseSuppression: true });
+    await store.leaveCall();
+    await store.joinCall("c1");
+    expect(engine.joins.at(-1)).toMatchObject({ noiseSuppression: true, backgroundBlur: false });
+    engine.set({ noiseSuppression: "on" });
+    await store.toggleCallEffect("noiseSuppression");
+    expect(engine.effects.at(-1)).toEqual(["noise", false]);
+    expect(loadCallPrefs().start.noiseSuppression).toBeUndefined();
+  });
+
   it("disposes the engine on unload without leaving", async () => {
     const { store, engine } = await harness();
     await store.joinCall("c1");
     store.disposeCall();
     expect(engine.disposed).toBe(1);
     expect(engine.left).toBe(0);
+  });
+});
+
+describe("raised hands and reactions", () => {
+  async function inCall(): Promise<Harness & { room: (patch?: Partial<CallParticipant>, alicePatch?: Partial<CallParticipant>) => CallState }> {
+    const h = await harness();
+    await h.store.joinCall("c1");
+    const room = (mine: Partial<CallParticipant> = {}, theirs: Partial<CallParticipant> = {}): CallState =>
+      call("c1", [participant("p-alice", "alice", theirs), participant("p-me", me.id, mine)], { id: "call-1" });
+    h.socket.emit({ t: "call", channel: "c1", call: room() });
+    return { ...h, room };
+  }
+
+  it("raises and lowers this person's hand over the socket, once per change", async () => {
+    const { store, socket, room } = await inCall();
+    store.toggleCallHand();
+    expect(socket.sent.at(-1)).toEqual({ t: "call-hand", call: "call-1", participant: "p-me", raised: true });
+    expect(store.state.announcement).toBe("You raised your hand");
+    socket.emit({ t: "call", channel: "c1", call: room({ hand: 5 }) });
+    const sent = socket.sent.length;
+    store.setCallHand(true); // already up
+    expect(socket.sent).toHaveLength(sent);
+    store.toggleCallHand();
+    expect(socket.sent.at(-1)).toMatchObject({ t: "call-hand", raised: false });
+  });
+
+  it("announces somebody else raising their hand, once", async () => {
+    const { store, socket, room } = await inCall();
+    store.announce("");
+    socket.emit({ t: "call", channel: "c1", call: room({}, { hand: 7 }) });
+    expect(store.state.announcement).toBe("Alice Chen raised their hand");
+    store.announce("");
+    socket.emit({ t: "call", channel: "c1", call: room({ audio: false }, { hand: 7 }) });
+    expect(store.state.announcement).toBe("");
+  });
+
+  it("shows reactions for this call for a few seconds, and keeps inside the burst", async () => {
+    vi.useFakeTimers();
+    const { store, socket } = await inCall();
+    socket.emit({ t: "call-react", channel: "c1", call: "call-1", participant: "p-alice", emoji: "🎉" });
+    socket.emit({ t: "call-react", channel: "c9", call: "call-other", participant: "p-x", emoji: "👍" });
+    expect(store.state.callReactions).toEqual([{ id: expect.any(Number), participantId: "p-alice", emoji: "🎉" }]);
+    expect(store.state.announcement).toBe("Alice Chen reacted 🎉");
+    vi.advanceTimersByTime(CALL_REACTION_SHOW_MS + 10);
+    expect(store.state.callReactions).toEqual([]);
+
+    const before = socket.sent.length;
+    for (let i = 0; i < CALL_REACTION_BURST + 2; i += 1) store.sendCallReaction("👍");
+    expect(socket.sent.slice(before)).toHaveLength(CALL_REACTION_BURST);
+    expect(socket.sent.at(-1)).toEqual({ t: "call-react", call: "call-1", participant: "p-me", emoji: "👍" });
+  });
+
+  it("clears reactions when the call ends", async () => {
+    const { store, socket } = await inCall();
+    socket.emit({ t: "call-react", channel: "c1", call: "call-1", participant: "p-alice", emoji: "👏" });
+    await store.leaveCall();
+    expect(store.state.callReactions).toEqual([]);
   });
 });
 

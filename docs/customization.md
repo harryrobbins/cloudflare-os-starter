@@ -313,6 +313,8 @@ CLOUDFLARE_ACCOUNT_ID=<accountId> pnpm exec wrangler secret put REALTIME_SFU_APP
 CLOUDFLARE_ACCOUNT_ID=<accountId> pnpm exec wrangler secret put REALTIME_TURN_KEY_API_TOKEN --name <workers.chat.name>
 ```
 
+The chat app's Content Security Policy allows `'wasm-unsafe-eval'` (compiling WebAssembly, nothing else) for the optional noise suppression and background blur, whose Wasm and model are served from the chat Worker's own assets; no call feature loads anything from a CDN.
+
 The dock's iframe delegates the camera, microphone and screen sharing to the app, which sends `Permissions-Policy: camera=(self), microphone=(self), display-capture=(self), ...` on its HTML. While the dock's frame is in a call, closing the dock only hides it and the Chat triggers show an **In a call** indicator that brings it back.
 
 To disable chat, set `"enabled": false`. The build, the deploy and both service bindings disappear, and `pnpm check` stops validating the rest of the block. The Worker, its Durable Object and its bucket are not deleted by disabling it, so re-enabling with the same names and bucket brings the history back.
