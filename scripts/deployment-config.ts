@@ -310,6 +310,8 @@ export interface DeploymentConfig {
     scheduler: { name: string };
     /** Credential-free deterministic synthetic datasets. */
     procgen: { name: string };
+    /** MermaiD2 diagram renderer. Required when mermaid2.enabled. */
+    mermaid2?: { name: string };
     customGatekeeper: { name: string };
     /** Only required when `errorReporting.enabled`. */
     errorReporter?: { name: string };
@@ -328,6 +330,8 @@ export interface DeploymentConfig {
   };
   /** Optional private Python execution service; disabled unless explicitly enabled. */
   runtime?: { enabled: boolean; workerName: string; maxInstances: number };
+  /** Optional ephemeral diagram rendering connector. */
+  mermaid2?: { enabled: boolean };
   access: AccessConfig;
   aiGateway: AiGatewayConfigInput;
   context: ContextConfig;
@@ -439,6 +443,8 @@ export interface GeneratedConfigs {
   context: ProdWranglerConfig;
   scheduler: ProdWranglerConfig;
   procgen: ProdWranglerConfig;
+  /** MermaiD2 base/config; present only when enabled. */
+  mermaid2?: ProdWranglerConfig;
   customGatekeeper: ProdWranglerConfig;
   /** Absent when `errorReporting.enabled` is false. */
   errorReporter?: ProdWranglerConfig;
@@ -465,6 +471,8 @@ export interface BaseConfigs {
   context: ProdWranglerConfig;
   scheduler: ProdWranglerConfig;
   procgen: ProdWranglerConfig;
+  /** MermaiD2 base/config; present only when enabled. */
+  mermaid2?: ProdWranglerConfig;
   customGatekeeper: ProdWranglerConfig;
   errorReporter: ProdWranglerConfig;
   /** Team chat base; required only when chat is enabled. */

@@ -47,6 +47,8 @@ allowBuilds:
   # Links the embedded Postgres binaries the Records database tests run against.
   '@embedded-postgres/linux-x64': true
   '@google/genai': true
+  # jsPDF brings core-js; its optional installation notification is unnecessary.
+  core-js: false
   core-js-pure: true
   esbuild: true
   protobufjs: true

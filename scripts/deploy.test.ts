@@ -83,6 +83,7 @@ async function baseConfigs(): Promise<BaseConfigs> {
     context: await baseConfig("../cloudflare-os/packages/gatekeeper-context/wrangler.jsonc"),
     scheduler: await baseConfig("../cloudflare-os/packages/gatekeeper-scheduler/wrangler.jsonc"),
     procgen: await baseConfig("../packages/gatekeeper-procgen/wrangler.jsonc"),
+    mermaid2: await baseConfig("../packages/gatekeeper-mermaid2/wrangler.jsonc"),
     customGatekeeper: await baseConfig("../packages/custom-gatekeeper/wrangler.jsonc"),
     errorReporter: await baseConfig("../packages/error-reporter/wrangler.jsonc"),
     runtime: await baseConfig("../packages/gatekeeper-runtime/wrangler.jsonc"),
@@ -1740,4 +1741,25 @@ test("Workshop-only releases select no router, Gatekeeper or infrastructure Work
   assert.deepEqual(deployTargets(validConfig), deployOrder(validConfig));
   assert.deepEqual(deployTargets(searchVariant(), true), ["workshop"]);
   assert.deepEqual(deployTargets(searchVariant(), false), deployOrder(searchVariant()));
+});
+
+
+test("MermaiD2 is private, opt-in and precedes the Workshop in focused releases", async () => {
+  const config = variant(c => {
+    c.mermaid2 = { enabled: true };
+    c.workers.mermaid2 = { name: "acme-mermaid2" };
+  });
+  const generated = generateConfigs(config, await baseConfigs());
+  assert.equal(generated.mermaid2?.workers_dev, false);
+  assert.equal(generated.mermaid2?.preview_urls, false);
+  assert.equal(generated.mermaid2?.browser?.binding, "BROWSER");
+  assert.equal(generated.mermaid2?.observability?.traces?.enabled, true);
+  assert.equal(generated.workshop.services?.find(s => s.binding === "GATEKEEPER_MERMAID2")?.service, "acme-mermaid2");
+  assert.ok(!generated.router.services?.some(s => s.service === "acme-mermaid2"));
+  assert.deepEqual(deployTargets(config, false, true), ["mermaid2", "workshop"]);
+  assert.throws(() => deployTargets(config, true, true), /Choose/);
+  assert.throws(() => deployTargets(validConfig, false, true), /requires/);
+  assert.ok(deployOrder(config).indexOf("mermaid2") < deployOrder(config).indexOf("workshop"));
+  delete config.workers.mermaid2;
+  assert.throws(() => validateConfig(config), /workers.mermaid2.name/);
 });

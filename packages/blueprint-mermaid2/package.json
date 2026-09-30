@@ -1,0 +1,26 @@
+{
+  "name": "blueprint-mermaid2",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:gadget": "node scripts/build.mjs",
+    "pack:gadget": "node scripts/build.mjs && node scripts/pack-gadget.mjs",
+    "test": "pnpm --filter gatekeeper-mermaid2 build && node scripts/build.mjs && node scripts/pack-gadget.mjs --check ../../formats && node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "gatekeeper-mermaid2": "workspace:*",
+    "@codemirror/commands": "^6.8.1",
+    "@codemirror/language": "^6.11.0",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.36.5",
+    "dompurify": "^3.2.6"
+  },
+  "devDependencies": {
+    "capnweb": "catalog:",
+    "esbuild": "0.28.1",
+    "playwright": "1.61.0",
+    "yjs": "13.6.31",
+    "@playwright/test": "1.61.0"
+  }
+}

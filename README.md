@@ -172,3 +172,8 @@ The standards-based Records alpha is live at [records.surprisingly.ltd](https://
 separate from the legacy OS Records integration. Read [current status](docs/plans/external_datastores/records-status.md),
 [blueprint adaptation](docs/plans/external_datastores/records-blueprint-adaptation.md), and
 [Records Explorer](docs/plans/external_datastores/records-explorer-blueprint.md).
+
+## MermaiD2 diagrams
+
+The [MermaiD2 guide](docs/mermaid2.md) covers the Mermaid/D2 playground blueprint,
+the reusable TALA/Dagre/ELK renderer connector, image exports and bundled agent skills.

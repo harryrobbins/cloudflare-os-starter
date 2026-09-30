@@ -1,0 +1,17 @@
+{
+  "blueprintId": "format.mermaid2",
+  "title": "MermaiD2",
+  "description": "Write Mermaid or D2, compare TALA, Dagre and ELK, and export diagrams. Includes 14 examples and reusable rendering through the MermaiD2 connector.",
+  "output": {
+    "id": "mermaid2",
+    "noun": "Diagram",
+    "plural": "Diagrams",
+    "icon": "flowArrow"
+  },
+  "author": {
+    "type": "user",
+    "name": "Surprisingly Ltd",
+    "id": "harryrobbins@gmail.com"
+  },
+  "revision": 2
+}

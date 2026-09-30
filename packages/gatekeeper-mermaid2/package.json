@@ -1,0 +1,30 @@
+{
+  "name": "gatekeeper-mermaid2",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "node scripts/build-converter.mjs && node scripts/build-renderer.mjs && node scripts/types.mjs && tsc --noEmit",
+    "types:check": "tsc --noEmit",
+    "test": "node scripts/build-converter.mjs && node scripts/build-renderer.mjs && node --test test/*.test.mjs",
+    "types:generate": "node scripts/types.mjs"
+  },
+  "dependencies": {
+    "@gadgets/workshop-shared": "workspace:*",
+    "@cloudflare/puppeteer": "^1.3.0",
+    "@d2lang/d2": "0.1.34",
+    "dompurify": "^3.2.6",
+    "jspdf": "^4.2.1",
+    "capnweb": "catalog:",
+    "capnweb-validate": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260808.1",
+    "esbuild": "0.28.1",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "wrangler": "catalog:",
+    "playwright": "1.61.0"
+  }
+}

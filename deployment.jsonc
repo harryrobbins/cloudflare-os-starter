@@ -35,6 +35,9 @@
     // Credential-free, deterministic synthetic datasets. RPC-only; it has no public route.
     "procgen": { "name": "cfos-procgen" },
 
+    // Private diagram rendering and reusable image exports. RPC only.
+    "mermaid2": { "name": "cfos-mermaid2" },
+
     "customGatekeeper": { "name": "cfos-custom-gatekeeper" },
     "errorReporter": { "name": "cfos-error-reporter" },
 
@@ -191,6 +194,9 @@
   // beside our Board. null ships upstream's set.
   // Reference: docs/customization.md#bundled-formats
   "formatBlueprintsDir": "formats",
+
+  // Credential-free diagram connector; users explicitly connect it to apps/workspaces.
+  "mermaid2": { "enabled": true },
 
   // null values use Wrangler automatic provisioning. Set IDs/names to reuse owned resources.
   // https://developers.cloudflare.com/workers/wrangler/configuration/#automatic-provisioning

@@ -39,6 +39,7 @@ const packageDirs = {
   context: "cloudflare-os/packages/gatekeeper-context",
   scheduler: "cloudflare-os/packages/gatekeeper-scheduler",
   procgen: "packages/gatekeeper-procgen",
+  mermaid2: "packages/gatekeeper-mermaid2",
   customGatekeeper: "packages/custom-gatekeeper",
   errorReporter: "packages/error-reporter",
   runtime: "packages/gatekeeper-runtime",
@@ -236,6 +237,7 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
     ...(config.jev?.enabled ? jevPaths : []),
     ...(config.search?.enabled === true ? searchPaths : []),
     ...(config.recordsService?.enabled === true ? recordsServicePaths : []),
+    ...(config.mermaid2?.enabled ? ["workers.mermaid2.name"] : []),
   ];
   for (const path of activePaths) {
     const value = valueAt(config, path);
@@ -305,6 +307,9 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
       recordsService: undefined,
     };
   }
+  if (!config.mermaid2?.enabled) {
+    activeConfig = { ...activeConfig, workers: { ...activeConfig.workers, mermaid2: undefined }, mermaid2: undefined };
+  }
   const placeholder = JSON.stringify(activeConfig).match(/<[^>]+>/)?.[0];
   if (placeholder) throw new Error(`Replace deployment placeholder ${placeholder}.`);
 
@@ -339,6 +344,7 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
       throw new Error("Runtime Worker name must be unique.");
     }
   }
+  if (config.mermaid2 !== undefined && typeof config.mermaid2.enabled !== "boolean") throw new Error("mermaid2.enabled must be boolean.");
   const workerNames = Object.entries(config.workers)
     .filter(([key]) => key !== "errorReporter" || config.errorReporting.enabled)
     // A dormant chat name may collide with nothing, because no chat Worker is deployed for it.
@@ -348,6 +354,7 @@ export function validateConfig(config: DeploymentConfig): DeploymentConfig {
     .filter(([key]) => key !== "jev" || (config.jev?.enabled ?? false))
     .filter(([key]) => key !== "search" || config.search?.enabled === true)
     .filter(([key]) => key !== "recordsService" || config.recordsService?.enabled === true)
+    .filter(([key]) => key !== "mermaid2" || config.mermaid2?.enabled === true)
     .map(([, worker]) => worker!.name);
   if (new Set(workerNames).size !== workerNames.length) {
     throw new Error(
@@ -867,6 +874,8 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
   const context = structuredClone(bases.context);
   const scheduler = structuredClone(bases.scheduler);
   const procgen = structuredClone(bases.procgen);
+  const mermaid2 = config.mermaid2?.enabled ? structuredClone(bases.mermaid2) : undefined;
+  if (config.mermaid2?.enabled && !mermaid2) throw new Error("MermaiD2 base configuration is required.");
   const customGatekeeper = structuredClone(bases.customGatekeeper);
   const errorReporter = config.errorReporting.enabled
     ? structuredClone(bases.errorReporter)
@@ -1041,6 +1050,11 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     runtime.containers = runtime.containers?.map(container => ({ ...container, max_instances: config.runtime!.maxInstances }));
     // RPC only: no Router binding, HTTP ingress or preview URLs for Python execution.
     workshop.services!.push({ binding: "GATEKEEPER_RUNTIME", service: config.runtime.workerName, entrypoint: "GatekeeperVendor" });
+  }
+  if (mermaid2) {
+    setCommon(mermaid2, config, config.workers.mermaid2!.name);
+    mermaid2.observability!.traces = { enabled: true, head_sampling_rate: 0.1 };
+    workshop.services!.push({ binding: "GATEKEEPER_MERMAID2", service: config.workers.mermaid2!.name, entrypoint: "GatekeeperVendor" });
   }
   workshop.kv_namespaces = [
     { binding: "BLUEPRINTS", ...(config.resources.blueprintsKvNamespaceId
@@ -1265,6 +1279,7 @@ export function generateConfigs(config: DeploymentConfig, bases: BaseConfigs): G
     router, workshop, context, scheduler, procgen, customGatekeeper,
     ...(errorReporter && { errorReporter }),
     ...(runtime && { runtime }),
+    ...(mermaid2 && { mermaid2 }),
     ...(chat && { chat }),
     ...(webSearch && { webSearch }),
     ...(records && { records }),
@@ -1382,6 +1397,7 @@ export function buildCommandBatches(
       // The Scheduler's `build` is the same three-part script, so it gets the same treatment.
       { args: submoduleBuild("@gadgets/gatekeeper-scheduler", "build:app", useCache) },
       { args: ownBuild("gatekeeper-procgen", "build", useCache) },
+      ...(config.mermaid2?.enabled ? [{ args: ownBuild("gatekeeper-mermaid2", "build", useCache) }] : []),
       { args: ownBuild("custom-gatekeeper", "build", useCache) },
       ...(config.runtime?.enabled
         ? [{ args: ownBuild("gatekeeper-runtime", "build", useCache) }]
@@ -1508,6 +1524,7 @@ export function deployOrder(config: DeploymentConfig): (keyof typeof packageDirs
     "context",
     "scheduler",
     "procgen",
+    ...(config.mermaid2?.enabled ? ["mermaid2" as const] : []),
     "customGatekeeper",
     ...(config.runtime?.enabled ? ["runtime" as const] : []),
     ...(config.webSearch?.enabled ? ["webSearch" as const] : []),
@@ -1528,7 +1545,12 @@ export function deployOrder(config: DeploymentConfig): (keyof typeof packageDirs
 /** A format-only release can update the existing Workshop without redeploying its dependencies.
  * This is for existing deployments only: it does not provision the services the Workshop binds.
  */
-export function deployTargets(config: DeploymentConfig, workshopOnly = false): (keyof typeof packageDirs)[] {
+export function deployTargets(config: DeploymentConfig, workshopOnly = false, diagramsOnly = false): (keyof typeof packageDirs)[] {
+  if (workshopOnly && diagramsOnly) throw new Error("Choose --workshop-only or --diagrams-only.");
+  if (diagramsOnly) {
+    if (!config.mermaid2?.enabled) throw new Error("--diagrams-only requires mermaid2.enabled.");
+    return ["mermaid2", "workshop"];
+  }
   return workshopOnly ? ["workshop"] : deployOrder(config);
 }
 
@@ -1752,8 +1774,9 @@ async function deployWorkers(
   extraArgs: string[],
   concurrency: number,
   workshopOnly = false,
+  diagramsOnly = false,
 ): Promise<void> {
-  await runWithConcurrency(deployTargets(config, workshopOnly), concurrency, async (name) => {
+  await runWithConcurrency(deployTargets(config, workshopOnly, diagramsOnly), concurrency, async (name) => {
     await deployWorker(packageDirs[name], extraArgs);
   });
 }
@@ -1831,6 +1854,8 @@ async function main(): Promise<void> {
   const check = process.argv.includes("--check");
   const release = process.argv.includes("--release");
   const workshopOnly = process.argv.includes("--workshop-only");
+  const diagramsOnly = process.argv.includes("--diagrams-only");
+  if (diagramsOnly && workshopOnly) throw new Error("Choose --workshop-only or --diagrams-only.");
   const useCache = process.argv.includes("--use-cache");
   if (check && release) throw new Error("Choose either --check or --release, not both.");
   if (useCache && !check) {
@@ -1849,6 +1874,7 @@ async function main(): Promise<void> {
     context: await readJsonc(join(root, packageDirs.context, "wrangler.jsonc")),
     scheduler: await readJsonc(join(root, packageDirs.scheduler, "wrangler.jsonc")),
     procgen: await readJsonc(join(root, packageDirs.procgen, "wrangler.jsonc")),
+    ...(config.mermaid2?.enabled ? { mermaid2: await readJsonc(join(root, packageDirs.mermaid2, "wrangler.jsonc")) } : {}),
     customGatekeeper: await readJsonc(join(root, packageDirs.customGatekeeper, "wrangler.jsonc")),
     errorReporter: await readJsonc(join(root, packageDirs.errorReporter, "wrangler.jsonc")),
     ...(config.runtime?.enabled ? { runtime: await readJsonc(join(root, packageDirs.runtime, "wrangler.jsonc")) } : {}),
@@ -1892,14 +1918,14 @@ async function main(): Promise<void> {
     }
     if (check || release) {
       await timed(timings, `Wrangler dry-runs (up to ${localConcurrency} concurrent)`, async () => {
-        await deployWorkers(config, ["--dry-run"], localConcurrency, workshopOnly);
+        await deployWorkers(config, ["--dry-run"], localConcurrency, workshopOnly, diagramsOnly);
       });
     }
     if (!check) {
       requireChatAssets(config);
       requireSearchAssets(config);
-      await timed(timings, workshopOnly ? "production deploy (Workshop only)" : "production deploy (serial, router last)", async () => {
-        await deployWorkers(config, [], 1, workshopOnly);
+      await timed(timings, diagramsOnly ? "production deploy (MermaiD2 then Workshop)" : workshopOnly ? "production deploy (Workshop only)" : "production deploy (serial, router last)", async () => {
+        await deployWorkers(config, [], 1, workshopOnly, diagramsOnly);
       });
     }
   } finally {
