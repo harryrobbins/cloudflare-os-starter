@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { audioConstraints, videoConstraints } from "./media.js";
+import { BLACK_HEIGHT, BLACK_WIDTH } from "./browser-env.js";
+import { CAMERA_SIMULCAST_ENCODINGS, audioConstraints, videoConstraints } from "./media.js";
 import {
   DOWNLINK_POOR_MS,
+  DOWNLINK_RECOVER_MAX_MS,
   DOWNLINK_RECOVER_MS,
+  DOWNLINK_RELAPSE_MS,
   DownlinkAdaptation,
   LossWindow,
   SEND_RESTORE_MS,
@@ -118,6 +121,16 @@ describe("codec preferences", () => {
     expect(codecName("audio/opus")).toBe("opus");
     expect(codecName("video/VP8")).toBe("VP8");
     expect(codecName("audio/red")).toBe("red");
+  });
+});
+
+describe("camera-off placeholder", () => {
+  // Chrome encodes one VP8 simulcast layer at 320x180, two at 640x360 and three from 960x540: a smaller
+  // black frame starves pullers of the lower layers while the camera is off.
+  it("is large enough for every simulcast layer", () => {
+    expect(CAMERA_SIMULCAST_ENCODINGS).toHaveLength(3);
+    expect(BLACK_WIDTH).toBeGreaterThanOrEqual(960);
+    expect(BLACK_HEIGHT).toBeGreaterThanOrEqual(540);
   });
 });
 
@@ -265,11 +278,56 @@ describe("send adaptation", () => {
 describe("downlink adaptation", () => {
   it("verdicts from loss and available bitrate", () => {
     expect(downlinkVerdict(12, null)).toBe("poor");
-    expect(downlinkVerdict(0, 200_000)).toBe("poor");
+    expect(downlinkVerdict(4, 200_000)).toBe("poor");
     expect(downlinkVerdict(1, null)).toBe("good");
     expect(downlinkVerdict(null, null)).toBe("good");
     expect(downlinkVerdict(5, null)).toBe("fair");
-    expect(downlinkVerdict(1, 400_000)).toBe("fair");
+    expect(downlinkVerdict(1, 400_000)).toBe("good");
+  });
+
+  // Seen on the real SFU: the estimate saws down to ~300 kbps on a clean link and restarts near zero
+  // whenever video resumes. Without loss, a low estimate must never pause anyone's video.
+  it("never calls a link poor, or keeps it from good, on the bitrate estimate alone", () => {
+    expect(downlinkVerdict(0, 13_000)).toBe("good");
+    expect(downlinkVerdict(2, 200_000)).toBe("good");
+    expect(downlinkVerdict(null, 100_000)).toBe("good");
+    // Every camera on layer c: the estimate levels off below what normal mode needs.
+    expect(downlinkVerdict(0, 450_000)).toBe("good");
+  });
+
+  it("doubles the recovery wait after each relapse, and restores it once a step holds", () => {
+    const adapt = new DownlinkAdaptation();
+    let t = 0;
+    const run = (verdict: "good" | "fair" | "poor", ms: number): void => {
+      for (const end = t + ms; t < end; t += 2_000) adapt.sample(t, verdict);
+    };
+    run("poor", 2 * DOWNLINK_POOR_MS + 4_000);
+    expect(adapt.mode).toBe("audio-only");
+    // Probe: back to low after 15 s, which relapses at once.
+    run("good", DOWNLINK_RECOVER_MS + 2_000);
+    expect(adapt.mode).toBe("low");
+    run("poor", DOWNLINK_POOR_MS + 2_000);
+    expect(adapt.mode).toBe("audio-only");
+    expect(adapt.recoverMs).toBe(2 * DOWNLINK_RECOVER_MS);
+    // The next probe waits 30 s, not 15.
+    run("good", DOWNLINK_RECOVER_MS + 2_000);
+    expect(adapt.mode).toBe("audio-only");
+    run("good", DOWNLINK_RECOVER_MS);
+    expect(adapt.mode).toBe("low");
+    run("poor", DOWNLINK_POOR_MS + 2_000);
+    expect(adapt.recoverMs).toBe(4 * DOWNLINK_RECOVER_MS);
+    for (let i = 0; i < 5; i += 1) {
+      run("good", adapt.recoverMs + 2_000);
+      run("poor", DOWNLINK_POOR_MS + 2_000);
+    }
+    expect(adapt.recoverMs).toBe(DOWNLINK_RECOVER_MAX_MS);
+    // A step that holds for 30 s resets the wait.
+    run("good", adapt.recoverMs + 2_000);
+    expect(adapt.mode).toBe("low");
+    run("fair", DOWNLINK_RELAPSE_MS);
+    expect(adapt.recoverMs).toBe(DOWNLINK_RECOVER_MS);
+    run("good", DOWNLINK_RECOVER_MS + 2_000);
+    expect(adapt.mode).toBe("normal");
   });
 
   it("steps normal -> low -> audio-only on sustained poor, and back one step per 15 s of good", () => {

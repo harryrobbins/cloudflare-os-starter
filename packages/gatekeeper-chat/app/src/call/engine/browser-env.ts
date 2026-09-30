@@ -1,12 +1,17 @@
 // The real browser behind `CallEnvironment`: WebRTC, media devices, a black placeholder track and
 // window timers. Everything the engine touches in the browser goes through here so tests can fake it.
 
-import { detectSupportedConstraints } from "./media.js";
+import { CAMERA_HEIGHT, CAMERA_WIDTH, detectSupportedConstraints } from "./media.js";
 import type { CallEnvironment } from "./types.js";
 
-/** Small on purpose: the SFU forwards it at 1 fps while the camera is off. */
-const BLACK_WIDTH = 320;
-const BLACK_HEIGHT = 180;
+/**
+ * The camera's own size, not smaller: Chrome caps VP8 simulcast layers by input resolution (one layer
+ * at 320x180, two at 640x360, three from 960x540), so a small black frame stopped layers b and c and a
+ * puller on either got nothing while the camera was off (seen on the real SFU). A static black frame
+ * at 1 fps costs a few hundred bytes a second at any size.
+ */
+export const BLACK_WIDTH = CAMERA_WIDTH;
+export const BLACK_HEIGHT = CAMERA_HEIGHT;
 
 function mediaDevices(): MediaDevices {
   const devices = typeof navigator === "undefined" ? undefined : navigator.mediaDevices;

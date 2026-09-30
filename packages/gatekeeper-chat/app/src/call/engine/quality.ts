@@ -31,19 +31,35 @@ export const SEND_SUSTAIN_SAMPLES = 3;
 export const SEND_RESTORE_MS = 10_000;
 
 /**
- * Downlink: aggregate receive loss at or above this, or `availableIncomingBitrate` below
- * `poorBitrate`, is a poor sample; below `goodLossPercent` with no low bitrate is a good one.
+ * Downlink: aggregate receive loss at or above `poorLossPercent` is a poor sample, and so is an
+ * `availableIncomingBitrate` below `poorBitrate` when loss is at least `goodLossPercent` too. Loss
+ * below `goodLossPercent` is a good sample whatever the estimate says.
+ *
+ * The estimate only ever corroborates loss. On the real SFU it saws between ~300 kbps and 1.5 Mbps on a
+ * healthy link, restarts near zero whenever video resumes (it took ~50 s to pass 300 kbps), and only
+ * measures what is flowing, so with every camera on layer c it levelled off near 450 kbps: as a
+ * condition of its own it paused video with no loss at all, and as a condition for "good" it kept a
+ * recovered link on layer c for good. A probe that the link cannot carry shows up as loss, and
+ * {@link DownlinkAdaptation} backs off.
  */
 export const DOWNLINK_THRESHOLDS = Object.freeze({
   poorLossPercent: 10,
   poorBitrate: 300_000,
   goodLossPercent: 3,
-  goodBitrate: 500_000,
 });
 /** Downlink: poor this long steps down one mode (normal -> low -> audio-only). */
 export const DOWNLINK_POOR_MS = 6_000;
 /** Downlink: good this long steps back up one mode (audio-only -> low -> normal). */
 export const DOWNLINK_RECOVER_MS = 15_000;
+/**
+ * Downlink: stepping down again this soon after stepping up means the link still cannot carry it,
+ * so the next recovery waits twice as long (up to `DOWNLINK_RECOVER_MAX_MS`). Audio-only has no
+ * bitrate estimate and little loss, so without this a constrained link re-probes video every ~20 s,
+ * and each probe freezes video and loses packets for several seconds. Holding the step for this long
+ * restores the normal wait.
+ */
+export const DOWNLINK_RELAPSE_MS = 30_000;
+export const DOWNLINK_RECOVER_MAX_MS = 120_000;
 
 const RANK: Record<ConnectionQuality, number> = { unknown: -1, good: 0, fair: 1, poor: 2 };
 
@@ -127,12 +143,11 @@ export type DownlinkVerdict = "good" | "fair" | "poor";
 
 export function downlinkVerdict(lossPercent: number | null, availableIncomingBitrate: number | null): DownlinkVerdict {
   const t = DOWNLINK_THRESHOLDS;
-  if ((lossPercent !== null && lossPercent >= t.poorLossPercent) || (availableIncomingBitrate !== null && availableIncomingBitrate < t.poorBitrate)) {
+  const lossy = lossPercent !== null && lossPercent >= t.goodLossPercent;
+  if ((lossPercent !== null && lossPercent >= t.poorLossPercent) || (lossy && availableIncomingBitrate !== null && availableIncomingBitrate < t.poorBitrate)) {
     return "poor";
   }
-  if ((lossPercent === null || lossPercent < t.goodLossPercent) && (availableIncomingBitrate === null || availableIncomingBitrate >= t.goodBitrate)) {
-    return "good";
-  }
+  if (!lossy) return "good";
   return "fair";
 }
 
@@ -144,23 +159,33 @@ export type DownlinkMode = "normal" | "low" | "audio-only";
 
 export class DownlinkAdaptation {
   mode: DownlinkMode = "normal";
+  /** Good time needed for the next step up; doubles on each relapse. */
+  recoverMs = DOWNLINK_RECOVER_MS;
   private poorSince: number | null = null;
   private goodSince: number | null = null;
+  private steppedUpAt: number | null = null;
 
   sample(now: number, verdict: DownlinkVerdict): DownlinkMode {
+    if (this.steppedUpAt !== null && now - this.steppedUpAt >= DOWNLINK_RELAPSE_MS) {
+      this.steppedUpAt = null;
+      this.recoverMs = DOWNLINK_RECOVER_MS;
+    }
     if (verdict === "poor") {
       this.goodSince = null;
       this.poorSince ??= now;
       if (this.mode !== "audio-only" && now - this.poorSince >= DOWNLINK_POOR_MS) {
         this.mode = this.mode === "normal" ? "low" : "audio-only";
         this.poorSince = now;
+        if (this.steppedUpAt !== null) this.recoverMs = Math.min(this.recoverMs * 2, DOWNLINK_RECOVER_MAX_MS);
+        this.steppedUpAt = null;
       }
     } else if (verdict === "good") {
       this.poorSince = null;
       this.goodSince ??= now;
-      if (this.mode !== "normal" && now - this.goodSince >= DOWNLINK_RECOVER_MS) {
+      if (this.mode !== "normal" && now - this.goodSince >= this.recoverMs) {
         this.mode = this.mode === "audio-only" ? "low" : "normal";
         this.goodSince = now;
+        this.steppedUpAt = now;
       }
     } else {
       this.poorSince = null;

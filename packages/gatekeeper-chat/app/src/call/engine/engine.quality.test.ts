@@ -387,13 +387,23 @@ describe("receive quality and downlink adaptation", () => {
     expect(sig.calls("setLayer").at(-1)).toMatchObject({ trackParticipantId: "p2", rid: "a" });
   });
 
-  it("treats a low available incoming bitrate as a poor downlink", async () => {
+  it("treats a low available incoming bitrate with some loss as a poor downlink", async () => {
     const { env, sig, engine } = await joinWith(callState([participant("p2", ["video"])]));
     env.pc.transport = { relayed: false, availableIncomingBitrate: 200_000 };
     const video = receiver(env, engine.snapshot().remotes.p2!.video);
-    await ticks(4, () => video.flow(100, 0));
+    await ticks(4, () => video.flow(100, 5));
     await settle(ENGINE_TIMINGS.layerDebounceMs + 100);
     expect(sig.calls("setLayer").at(-1)).toMatchObject({ rid: "c" });
+  });
+
+  it("ignores a low available incoming bitrate while nothing is lost", async () => {
+    const { env, sig, engine } = await joinWith(callState([participant("p2", ["video"])]));
+    env.pc.transport = { relayed: false, availableIncomingBitrate: 200_000 };
+    const video = receiver(env, engine.snapshot().remotes.p2!.video);
+    await ticks(8, () => video.flow(100, 0));
+    await settle(ENGINE_TIMINGS.layerDebounceMs + 100);
+    expect(sig.calls("setLayer").filter((call) => (call as { rid?: string }).rid === "c")).toHaveLength(0);
+    expect(engine.snapshot().audioOnly).toBe(false);
   });
 });
 
