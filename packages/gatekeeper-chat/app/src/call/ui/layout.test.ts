@@ -109,7 +109,28 @@ describe("remoteTiles", () => {
         // Camera on in the room, but no media pulled yet: the monogram until frames arrive.
         videoOn: false,
         speaking: true,
+        paused: false,
       },
     ]);
+  });
+
+  it("carries each remote's quality, and pauses a camera that is on in audio-only mode or when its pull is", () => {
+    const media = {
+      participantId: "p-a",
+      userId: "a",
+      video: null,
+      screen: null,
+      audio: null,
+      audioLevel: 0,
+      videoRid: null,
+      quality: "fair" as const,
+    };
+    const base = { ...IDLE_CALL, participantId: "p-me", remotes: { "p-a": media } };
+    expect(remoteTiles(room, base, users)[0]).toMatchObject({ quality: "fair", paused: false });
+    expect(remoteTiles(room, { ...base, audioOnly: true }, users)[0]?.paused).toBe(true);
+    expect(remoteTiles(room, { ...base, remotes: { "p-a": { ...media, videoPaused: true } } }, users)[0]?.paused).toBe(true);
+    // A camera that is off is just off, whatever the engine says about the pull.
+    const cameraOff = { ...room, participants: room.participants.map((p) => ({ ...p, video: false })) };
+    expect(remoteTiles(cameraOff, { ...base, audioOnly: true }, users)[0]?.paused).toBe(false);
   });
 });

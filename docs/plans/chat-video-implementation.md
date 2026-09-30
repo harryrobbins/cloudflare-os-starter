@@ -130,11 +130,23 @@ route in the shared protocol; `ConnectionQuality`, `QualityLimitation`, and opti
 
 See [chat-video.md, "Quality phase 1"](chat-video.md#quality-phase-1-after-the-initial-call-work-lands-this-branch).
 
-- [ ] Capture constraints (AEC/NS/AGC, `voiceIsolation`, 720p30 cap)
-- [ ] Opus FEC + DTX; RED where negotiated (verify on the real SFU)
-- [ ] Degradation preferences and screen-share content hints
-- [ ] CPU / bandwidth adaptation from `qualityLimitationReason` and receive stats; audio-only fallback
-- [ ] Pause hidden video pulls; re-pull on show
-- [ ] Connection quality indicators and unstable-connection banner
-- [ ] `POST /calls/:callId/stats` telemetry route (Worker) and client summaries
-- [ ] Pre-join mic check, speaker test, headphones hint
+- [x] Capture constraints (AEC/NS/AGC, `voiceIsolation`, 720p30 cap)
+- [x] Opus FEC + DTX; RED where negotiated (verify on the real SFU)
+- [x] Degradation preferences and screen-share content hints
+- [x] CPU / bandwidth adaptation from `qualityLimitationReason` and receive stats; audio-only fallback
+- [x] Pause hidden video pulls; re-pull on show
+- [x] Connection quality indicators and unstable-connection banner
+- [x] `POST /calls/:callId/stats` telemetry route (Worker) and client summaries
+- [x] Pre-join mic check, speaker test, headphones hint
+
+Complete 2026-09-30: Worker 308 tests (6 in `call-stats.test.ts`), app 476 (engine 112). Engine:
+`sdp.ts` munges Opus `useinbandfec=1;usedtx=1` on every description it sets (local and remote), RED
+preferred via `setCodecPreferences` when offered; CPU sheds a→b (never c) after 3×2 s samples and
+restores after 10 s; `bandwidth` limitation is reported only (the browser's BWE already drops layers);
+downlink poor 6 s → all cameras on `c`, 6 s more → audio-only (audio and screen keep flowing), recovery
+one step per 15 s good; hidden tiles/document pause camera pulls after 5 s; stats every 60 s + final on
+leave. Worker: `POST /calls/:callId/stats` validated, per-participant 4/min, one redacted log line,
+nothing stored; accepted up to 2 min after leave. UI: quality bars, one banner at a time (audio-only >
+unstable > CPU), paused tiles, mic silence warning, speaker test tone, headphones tip.
+Real-SFU/browser checks outstanding: RED negotiation, munged fmtp acceptance, Firefox `active=false` and
+missing `qualityLimitationReason`, Safari simulcast, `availableIncomingBitrate` availability.

@@ -6,14 +6,17 @@
 // how a laptop's light stays on after a call. The choices are remembered per browser through the
 // store. Nothing here is a `<form>` -- Join is an ordinary button, and Enter on it is a click.
 
-import { Microphone, MicrophoneSlash, VideoCamera, VideoCameraSlash } from "@phosphor-icons/react";
+import { Headphones, Microphone, MicrophoneSlash, VideoCamera, VideoCameraSlash } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { useChat, useStore } from "../../hooks/store.js";
 import { Avatar, Button, Spinner } from "../../components/primitives.js";
+import { shouldHintHeadphones } from "../../store/calls.js";
+import { audioConstraints, videoConstraints } from "../engine/media.js";
 import { DeviceSelects, useDeviceLists } from "./DeviceSelects.js";
 import { VideoView } from "./CallTile.js";
 import { isFramed, mediaHelp } from "./layout.js";
+import { MicCheck, SpeakerTest } from "./PrejoinChecks.js";
 
 export function CallPrejoin({ channelId, label }: { channelId: string; label: string }): ReactNode {
   const store = useStore();
@@ -49,8 +52,9 @@ export function CallPrejoin({ channelId, label }: { channelId: string; label: st
     let opened: MediaStream | null = null;
     media
       .getUserMedia({
-        video: start.video ? (devices.videoInputId === null ? true : { deviceId: { exact: devices.videoInputId } }) : false,
-        audio: start.audio ? (devices.audioInputId === null ? true : { deviceId: { exact: devices.audioInputId } }) : false,
+        // The engine's own constraints, so the preview sounds and looks like the call will.
+        video: start.video ? videoConstraints(devices.videoInputId) : false,
+        audio: start.audio ? audioConstraints(devices.audioInputId) : false,
       })
       .then((stream) => {
         if (!live) {
@@ -134,19 +138,8 @@ export function CallPrejoin({ channelId, label }: { channelId: string; label: st
         </div>
 
         {start.audio && preview !== null && preview.getAudioTracks().length > 0 && (
-          <div className="mt-2 flex items-center gap-2 text-[11px] text-kumo-subtle">
-            <Microphone size={12} aria-hidden="true" />
-            <div
-              role="meter"
-              aria-label="Microphone level"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.round(level * 100)}
-              className="h-1.5 flex-1 overflow-hidden rounded-full bg-kumo-fill"
-            >
-              <div className="h-full rounded-full bg-kumo-success transition-[width] duration-100" style={{ width: `${Math.round(level * 100)}%` }} />
-            </div>
-          </div>
+          // Where the level cannot be measured (no Web Audio) the meter stays and the warning does not.
+          <MicCheck level={level ?? 0} active={level !== null} />
         )}
 
         {previewError !== null && (
@@ -162,6 +155,15 @@ export function CallPrejoin({ channelId, label }: { channelId: string; label: st
             onChange={(patch) => void store.setCallDevices(patch)}
             compact={compact}
           />
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <SpeakerTest outputId={devices.audioOutputId} />
+          {shouldHintHeadphones({ others: inCall.filter((p) => p.userId !== me?.id).length, outputId: devices.audioOutputId, outputs: lists.audioOutputs }) && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-kumo-subtle">
+              <Headphones size={12} aria-hidden="true" /> Using headphones prevents echo
+            </span>
+          )}
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
@@ -220,26 +222,37 @@ function ToggleButton({
   );
 }
 
-/** A 0..1 level from the preview's microphone, sampled about ten times a second. */
-function useMicLevel(stream: MediaStream | null): number {
-  const [level, setLevel] = useState(0);
+/**
+ * A 0..1 level from the preview's microphone, sampled about ten times a second; null where it cannot
+ * be measured (no stream, no Web Audio), so silence is never inferred from a meter that is not there.
+ */
+function useMicLevel(stream: MediaStream | null): number | null {
+  const [level, setLevel] = useState<number | null>(null);
   useEffect(() => {
     const Context = typeof window === "undefined" ? undefined : window.AudioContext;
     if (stream === null || Context === undefined || stream.getAudioTracks().length === 0) {
-      setLevel(0);
+      setLevel(null);
       return;
     }
     let context: AudioContext;
     try {
       context = new Context();
     } catch {
+      setLevel(null);
       return;
     }
+    setLevel(0);
     const analyser = context.createAnalyser();
     analyser.fftSize = 512;
     context.createMediaStreamSource(stream).connect(analyser);
     const samples = new Uint8Array(analyser.fftSize);
+    // A context the autoplay policy left suspended reads as silence; it is not evidence of any.
+    if (context.state === "suspended") void context.resume().catch(() => undefined);
     const timer = setInterval(() => {
+      if (context.state !== "running") {
+        setLevel(null);
+        return;
+      }
       analyser.getByteTimeDomainData(samples);
       let sum = 0;
       for (const sample of samples) sum += ((sample - 128) / 128) ** 2;

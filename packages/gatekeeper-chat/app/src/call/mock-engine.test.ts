@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type { ClientEvent, ServerEvent } from "../contract.js";
 import { createMockTransport } from "../mock/index.js";
-import { createMockCallEngine, type MockMedia } from "./mock-engine.js";
+import { createMockCallEngine, mockLocalQuality, type MockMedia, type MockQualityForce } from "./mock-engine.js";
 import type { CallEngine } from "./engine/types.js";
 
 async function until(check: () => boolean, timeoutMs = 6000): Promise<void> {
@@ -30,7 +30,7 @@ afterEach(() => {
   for (const engine of engines.splice(0)) engine.dispose();
 });
 
-function setup() {
+function setup(quality?: { intervalMs?: number; force?: MockQualityForce | null }) {
   const transport = createMockTransport();
   const sent: ClientEvent[] = [];
   const events: ServerEvent[] = [];
@@ -44,6 +44,7 @@ function setup() {
     },
     media: noMedia,
     speakerIntervalMs: 30,
+    ...(quality === undefined ? {} : { quality }),
   });
   engines.push(engine);
   return { transport, engine, sent, events };
@@ -136,5 +137,35 @@ describe("the mock engine", () => {
     const edited = [...events].reverse().find((event) => event.t === "edit" && event.message.call?.id === callId);
     expect(edited?.t === "edit" && edited.message.call?.state).toBe("ended");
     expect(edited?.t === "edit" && edited.message.call?.participantIds).toEqual(["u-harry", "u-bob"]);
+  });
+
+  it("fakes call quality: the first remote cycles good, fair, poor while the rest stay good", async () => {
+    const { engine } = setup({ intervalMs: 25, force: null });
+    await engine.join({ ...defaults, channelId: "c-design" });
+    const snapshot = engine.snapshot();
+    expect(snapshot).toMatchObject({ localQuality: "good", limitation: "none", audioOnly: false, sendLayers: 3 });
+    const [first, ...rest] = Object.values(snapshot.remotes);
+    expect(first!.quality).toBe("good");
+    expect(rest.every((remote) => remote.quality === "good" && remote.videoPaused !== true)).toBe(true);
+    const seen = new Set<string>();
+    await until(() => {
+      seen.add(engine.snapshot().remotes[first!.participantId]!.quality ?? "unknown");
+      return seen.size === 3;
+    });
+    expect([...seen].sort()).toEqual(["fair", "good", "poor"]);
+  });
+
+  it("pins the degraded local states the banners are raised by", async () => {
+    expect(mockLocalQuality("cpu")).toEqual({ localQuality: "good", limitation: "cpu", audioOnly: false, sendLayers: 2 });
+    expect(mockLocalQuality("poor")).toMatchObject({ localQuality: "poor", audioOnly: false });
+    const { engine } = setup({ force: "audio-only" });
+    await engine.join({ ...defaults, channelId: "c-design" });
+    const snapshot = engine.snapshot();
+    expect(snapshot.audioOnly).toBe(true);
+    expect(snapshot.localQuality).toBe("poor");
+    // Only people whose camera is on have a paused pull; a camera that is off stays just off.
+    expect(snapshot.remotes["p-eve"]?.videoPaused).toBe(true);
+    expect(snapshot.remotes["p-bob"]?.videoPaused).toBe(true);
+    expect(snapshot.remotes["p-alice"]?.videoPaused).toBe(false);
   });
 });

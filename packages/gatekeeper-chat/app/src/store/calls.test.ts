@@ -24,13 +24,19 @@ import {
   IDLE_CALL,
   NO_CALL_UI,
   applyCallEvent,
+  callBanner,
   callButtonState,
   callHref,
   callPaneFor,
   classifyCallFailure,
+  connectionQualityLabel,
+  dismissHeadphonesHint,
+  headphonesHintDismissed,
   loadCallPrefs,
+  looksLikeBuiltInSpeakers,
   pruneRings,
   saveCallPrefs,
+  shouldHintHeadphones,
   shouldRing,
 } from "./calls.js";
 import { ChatStore, RING_TIMEOUT_MS } from "./store.js";
@@ -611,5 +617,81 @@ describe("the shell's layout and call pill", () => {
     store.onPresent = present;
     store.presentCall("dock");
     expect(present).toHaveBeenCalledWith("dock");
+  });
+});
+
+describe("call quality rules", () => {
+  it("labels good, fair and poor, and shows nothing for unknown or absent", () => {
+    expect(connectionQualityLabel("good")).toBe("Connection: good");
+    expect(connectionQualityLabel("fair")).toBe("Connection: fair");
+    expect(connectionQualityLabel("poor")).toBe("Connection: poor");
+    expect(connectionQualityLabel("unknown")).toBeNull();
+    expect(connectionQualityLabel(undefined)).toBeNull();
+  });
+
+  const connected = { ...IDLE_CALL, phase: "connected" as const };
+
+  it("shows no banner when nothing is wrong, the fields are absent, or the call is not connected", () => {
+    expect(callBanner(connected)).toBeNull();
+    expect(callBanner({ ...connected, localQuality: "fair", limitation: "bandwidth", audioOnly: false })).toBeNull();
+    expect(callBanner({ ...connected, phase: "reconnecting", audioOnly: true })).toBeNull();
+  });
+
+  it("puts audio-only first, then a poor uplink, then a CPU limit", () => {
+    const all = { ...connected, audioOnly: true, localQuality: "poor" as const, limitation: "cpu" as const };
+    expect(callBanner(all)?.kind).toBe("audio-only");
+    expect(callBanner(all)?.message).toBe("Your connection is unstable — video paused to keep audio clear");
+    expect(callBanner({ ...all, audioOnly: false })).toEqual({ kind: "unstable", message: "Your connection is unstable" });
+    expect(callBanner({ ...connected, limitation: "cpu" })).toEqual({
+      kind: "cpu",
+      message: "Your computer is struggling — sending lower video quality",
+    });
+  });
+
+  it("respects dismissals, and dismissing audio-only also silences the plain unstable banner", () => {
+    const all = { ...connected, audioOnly: true, localQuality: "poor" as const, limitation: "cpu" as const };
+    expect(callBanner(all, new Set(["audio-only"]))?.kind).toBe("cpu");
+    expect(callBanner({ ...all, limitation: "none" }, new Set(["audio-only"]))).toBeNull();
+    expect(callBanner({ ...all, audioOnly: false }, new Set(["unstable"]))?.kind).toBe("cpu");
+    expect(callBanner(all, new Set(["audio-only", "cpu"]))).toBeNull();
+  });
+
+  it("recognises built-in speakers by label, never headphones or a blank label", () => {
+    expect(looksLikeBuiltInSpeakers("MacBook Pro Speakers (Built-in)")).toBe(true);
+    expect(looksLikeBuiltInSpeakers("Speakers (Realtek(R) Audio)")).toBe(true);
+    expect(looksLikeBuiltInSpeakers("Internal Audio Analog Stereo")).toBe(true);
+    expect(looksLikeBuiltInSpeakers("Default - MacBook Air Speakers")).toBe(true);
+    expect(looksLikeBuiltInSpeakers("Headphones (Built-in)")).toBe(false);
+    expect(looksLikeBuiltInSpeakers("Jabra Evolve2 Headset")).toBe(false);
+    expect(looksLikeBuiltInSpeakers("Harry's AirPods Pro")).toBe(false);
+    expect(looksLikeBuiltInSpeakers("Galaxy Buds2 speaker")).toBe(false);
+    expect(looksLikeBuiltInSpeakers("HDMI Output")).toBe(false);
+    expect(looksLikeBuiltInSpeakers("")).toBe(false);
+    expect(looksLikeBuiltInSpeakers(undefined)).toBe(false);
+  });
+
+  it("hints headphones only with two or more others on labelled built-in speakers", () => {
+    const outputs = [
+      { deviceId: "default", label: "Default - MacBook Pro Speakers (Built-in)" },
+      { deviceId: "spk", label: "MacBook Pro Speakers (Built-in)" },
+      { deviceId: "hp", label: "AirPods Pro" },
+    ];
+    expect(shouldHintHeadphones({ others: 2, outputId: "spk", outputs })).toBe(true);
+    expect(shouldHintHeadphones({ others: 2, outputId: null, outputs })).toBe(true);
+    expect(shouldHintHeadphones({ others: 1, outputId: "spk", outputs })).toBe(false);
+    expect(shouldHintHeadphones({ others: 3, outputId: "hp", outputs })).toBe(false);
+    // Labels unavailable (no permission yet): the default device proves nothing.
+    expect(shouldHintHeadphones({ others: 3, outputId: null, outputs: [{ deviceId: "default", label: "" }] })).toBe(false);
+    expect(shouldHintHeadphones({ others: 3, outputId: null, outputs: [] })).toBe(false);
+    // A remembered device that has gone away is not evidence either.
+    expect(shouldHintHeadphones({ others: 3, outputId: "gone", outputs })).toBe(false);
+  });
+
+  it("remembers the headphones tip's dismissal", () => {
+    window.localStorage.removeItem("chat.call.headphonesHint");
+    expect(headphonesHintDismissed()).toBe(false);
+    dismissHeadphonesHint();
+    expect(headphonesHintDismissed()).toBe(true);
+    window.localStorage.removeItem("chat.call.headphonesHint");
   });
 });

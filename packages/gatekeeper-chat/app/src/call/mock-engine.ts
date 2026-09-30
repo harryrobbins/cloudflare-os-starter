@@ -6,10 +6,15 @@
 // Only the media is fake: every remote participant's camera is the local camera looped back, or a
 // moving canvas test pattern when there is no camera (a headless browser, a denied prompt). The
 // active speaker walks round whoever has their microphone on, so the ring has something to do.
+//
+// Call quality (phase 1) is faked too: the first other participant's connection cycles good -> fair
+// -> poor slowly, everyone else is good, and `?callQuality=audio-only|poor|cpu` (or `quality.force`)
+// pins the local state that raises each banner, for screenshots.
 
 import { CALL_HEARTBEAT_MS, type CallState, type ParticipantId } from "../contract.js";
 import type {
   CallEngine,
+  ConnectionQuality,
   CallSignalling,
   CallSnapshot,
   DeviceChoice,
@@ -34,6 +39,36 @@ export interface MockEngineDeps {
   readonly media?: MockMedia;
   /** How often the fake active speaker moves. */
   readonly speakerIntervalMs?: number;
+  readonly quality?: {
+    /** How often the first remote's quality steps (good, fair, poor, good...). */
+    readonly intervalMs?: number;
+    /** Pins a degraded local state; defaults to the page's `?callQuality=` query. */
+    readonly force?: MockQualityForce | null;
+  };
+}
+
+/** The local states the call banners are raised by. */
+export type MockQualityForce = "audio-only" | "poor" | "cpu";
+
+const QUALITY_CYCLE: readonly ConnectionQuality[] = ["good", "fair", "poor"];
+
+function forcedFromQuery(): MockQualityForce | null {
+  if (typeof location === "undefined") return null;
+  const value = new URLSearchParams(location.search).get("callQuality");
+  return value === "audio-only" || value === "poor" || value === "cpu" ? value : null;
+}
+
+/** The snapshot's quality fields for a forced (or healthy) local state. */
+export function mockLocalQuality(force: MockQualityForce | null): Pick<
+  CallSnapshot,
+  "localQuality" | "limitation" | "audioOnly" | "sendLayers"
+> {
+  return {
+    localQuality: force === "audio-only" || force === "poor" ? "poor" : "good",
+    limitation: force === "cpu" ? "cpu" : force === "audio-only" ? "bandwidth" : "none",
+    audioOnly: force === "audio-only",
+    sendLayers: force === "cpu" ? 2 : force === "audio-only" ? 1 : 3,
+  };
 }
 
 const IDLE: CallSnapshot = {
@@ -67,6 +102,13 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
   let speaker: ReturnType<typeof setInterval> | null = null;
   let room: CallState | null = null;
   let sizes: Readonly<Record<ParticipantId, TileSize>> = {};
+  const force = deps.quality?.force === undefined ? forcedFromQuery() : deps.quality.force;
+  let qualityStep = 0;
+  let qualityTimer: ReturnType<typeof setInterval> | null = null;
+
+  function qualityFor(index: number): ConnectionQuality {
+    return index === 0 ? QUALITY_CYCLE[qualityStep % QUALITY_CYCLE.length]! : "good";
+  }
 
   function set(patch: Partial<CallSnapshot>): void {
     snapshot = { ...snapshot, ...patch };
@@ -135,8 +177,10 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
       return;
     }
     const remotes: Record<ParticipantId, RemoteMedia> = {};
+    let index = -1;
     for (const participant of room.participants) {
       if (participant.id === snapshot.participantId) continue;
+      index += 1;
       const previous = snapshot.remotes[participant.id];
       remotes[participant.id] = {
         participantId: participant.id,
@@ -147,6 +191,9 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
         audio: null,
         audioLevel: previous?.audioLevel ?? 0,
         videoRid: ridFor(participant.id),
+        quality: qualityFor(index),
+        // As the real engine: audio-only mode, or a tile nobody can see, pauses the pull.
+        videoPaused: participant.video && (force === "audio-only" || sizes[participant.id] === "hidden"),
       };
     }
     for (const [id, stream] of patterns) {
@@ -181,11 +228,19 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
     set({ activeSpeaker: next.id, remotes });
   }
 
+  function stepQuality(): void {
+    qualityStep += 1;
+    if (room !== null) syncRemotes();
+  }
+
   function stopAll(): void {
     if (beat !== null) clearInterval(beat);
     if (speaker !== null) clearInterval(speaker);
+    if (qualityTimer !== null) clearInterval(qualityTimer);
     beat = null;
     speaker = null;
+    qualityTimer = null;
+    qualityStep = 0;
     for (const stream of [camera, microphone, screen, ...patterns.values()]) {
       for (const track of stream?.getTracks() ?? []) track.stop();
     }
@@ -222,11 +277,13 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
           audioEnabled: microphone !== null,
           videoEnabled: camera !== null,
           error: null,
+          ...mockLocalQuality(force),
         });
         syncRemotes();
         sendBeat();
         beat = setInterval(sendBeat, CALL_HEARTBEAT_MS);
         speaker = setInterval(moveSpeaker, deps.speakerIntervalMs ?? 2600);
+        qualityTimer = setInterval(stepQuality, deps.quality?.intervalMs ?? 9000);
       } catch (cause) {
         stopAll();
         set({ ...IDLE, phase: "failed", channelId: options.channelId, error: cause instanceof Error ? cause.message : "Could not join." });

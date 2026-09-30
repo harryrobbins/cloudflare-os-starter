@@ -17,7 +17,7 @@ import {
   type Membership,
   type UserId,
 } from "../contract.js";
-import type { CallPhase, CallSnapshot, DeviceChoice } from "../call/engine/types.js";
+import type { CallPhase, CallSnapshot, ConnectionQuality, DeviceChoice } from "../call/engine/types.js";
 import { readSetting, writeSetting } from "./drafts.js";
 
 /** The engine's snapshot before anything has happened, and whenever no engine is attached. */
@@ -212,6 +212,88 @@ export function classifyCallFailure(
     return { kind: "permission", message };
   }
   return { kind: "error", message };
+}
+
+// --- call quality (chat-video.md, "Quality phase 1") -----------------------------------------------
+
+/** The tile indicator's accessible label and tooltip, or null when there is nothing to show. */
+export function connectionQualityLabel(quality: ConnectionQuality | undefined): string | null {
+  if (quality === undefined || quality === "unknown") return null;
+  return `Connection: ${quality}`;
+}
+
+export type CallBannerKind = "audio-only" | "unstable" | "cpu";
+
+export interface CallBanner {
+  readonly kind: CallBannerKind;
+  readonly message: string;
+}
+
+const BANNER_MESSAGES: Readonly<Record<CallBannerKind, string>> = {
+  "audio-only": "Your connection is unstable — video paused to keep audio clear",
+  unstable: "Your connection is unstable",
+  cpu: "Your computer is struggling — sending lower video quality",
+};
+
+/**
+ * The one quality banner the call shows, if any: audio-only mode first, then a poor uplink, then a
+ * CPU-limited encoder. Absent snapshot fields read as "nothing wrong".
+ *
+ * Dismissal is per call and per kind. Dismissing the audio-only banner also covers "unstable", which
+ * would only repeat its first half; a CPU limit is a different problem and still gets its say.
+ */
+export function callBanner(
+  local: Pick<CallSnapshot, "phase" | "audioOnly" | "localQuality" | "limitation">,
+  dismissed: ReadonlySet<CallBannerKind> = new Set(),
+): CallBanner | null {
+  if (local.phase !== "connected") return null;
+  const active: CallBannerKind[] = [];
+  if (local.audioOnly === true) active.push("audio-only");
+  if (local.localQuality === "poor") active.push("unstable");
+  if (local.limitation === "cpu") active.push("cpu");
+  for (const kind of active) {
+    if (dismissed.has(kind)) continue;
+    if (kind === "unstable" && dismissed.has("audio-only")) continue;
+    return { kind, message: BANNER_MESSAGES[kind] };
+  }
+  return null;
+}
+
+const SPEAKER_LABEL = /speaker|built-in|internal/iu;
+const HEADPHONE_LABEL = /headphone|headset|airpods|buds/iu;
+
+/** Whether an output device's label reads as the computer's own speakers. A blank label is not evidence. */
+export function looksLikeBuiltInSpeakers(label: string | null | undefined): boolean {
+  if (label === null || label === undefined || label.trim() === "") return false;
+  return SPEAKER_LABEL.test(label) && !HEADPHONE_LABEL.test(label);
+}
+
+/**
+ * Whether to suggest headphones: a call with two or more other people, played through what looks
+ * like built-in speakers. The chosen output is looked up by id; with no choice, the browser's
+ * `default` entry is used (Chromium labels it "Default - MacBook Pro Speakers"). Without a label --
+ * no permission yet, or a browser that does not list outputs -- nothing is known, so no hint.
+ */
+export function shouldHintHeadphones(params: {
+  readonly others: number;
+  readonly outputId: string | null;
+  readonly outputs: readonly Pick<MediaDeviceInfo, "deviceId" | "label">[];
+}): boolean {
+  if (params.others < 2) return false;
+  const id = params.outputId ?? "default";
+  const device = params.outputs.find((output) => output.deviceId === id);
+  return looksLikeBuiltInSpeakers(device?.label);
+}
+
+const HEADPHONES_HINT_KEY = "chat.call.headphonesHint";
+
+/** The headphones tip is shown until it is dismissed once, per browser. */
+export function headphonesHintDismissed(): boolean {
+  return readSetting(HEADPHONES_HINT_KEY) === "dismissed";
+}
+
+export function dismissHeadphonesHint(): void {
+  writeSetting(HEADPHONES_HINT_KEY, "dismissed");
 }
 
 // --- remembered choices ------------------------------------------------------------------------

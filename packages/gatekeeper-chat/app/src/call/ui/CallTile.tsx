@@ -5,12 +5,13 @@
 // element `setSinkId` switches to the chosen speakers. `srcObject` is a property, not an attribute,
 // so both are set from an effect.
 
-import { MicrophoneSlash, WifiSlash } from "@phosphor-icons/react";
+import { MicrophoneSlash, VideoCameraSlash, WifiSlash } from "@phosphor-icons/react";
 import { useEffect, useRef, type ReactNode } from "react";
 
 import { Avatar } from "../../components/primitives.js";
 import { applyAudioOutput } from "../engine/devices.js";
-import type { TileSize } from "../engine/types.js";
+import type { ConnectionQuality, TileSize } from "../engine/types.js";
+import { QualityBars } from "./CallQuality.js";
 import { tileSizeFor } from "./layout.js";
 
 export function VideoView({
@@ -84,6 +85,13 @@ export interface TileModel {
   readonly self?: boolean;
   /** A screen share, drawn whole rather than cropped. */
   readonly screen?: boolean;
+  /** Their connection (remotes) or ours (self); absent or `unknown` draws no indicator. */
+  readonly quality?: ConnectionQuality;
+  /**
+   * The camera is on but its video is paused (tile hidden, audio-only mode): the avatar and a hint
+   * instead of a frozen last frame.
+   */
+  readonly paused?: boolean;
 }
 
 export function CallTile({
@@ -111,7 +119,8 @@ export function CallTile({
     return () => observer.disconnect();
   }, [onSize, tile.key, stage]);
 
-  const showVideo = tile.stream !== null && (tile.videoOn || tile.screen === true);
+  const paused = tile.paused === true && tile.screen !== true;
+  const showVideo = !paused && tile.stream !== null && (tile.videoOn || tile.screen === true);
   return (
     <div
       ref={ref}
@@ -131,7 +140,19 @@ export function CallTile({
           label={tile.screen === true ? `${tile.name}'s screen` : `${tile.name}'s camera`}
         />
       ) : (
-        <Avatar name={tile.name} id={tile.userId} size={compact ? 44 : 72} />
+        <div className="flex flex-col items-center gap-1.5">
+          <Avatar name={tile.name} id={tile.userId} size={compact ? 44 : 72} />
+          {/* A strip tile is too short for the hint under the avatar; it goes in the name pill. */}
+          {paused && !compact && (
+            <span
+              data-testid="video-paused"
+              className="inline-flex items-center gap-1 rounded-md bg-black/45 px-1.5 py-0.5 text-[11px] text-white/90"
+            >
+              <VideoCameraSlash size={12} aria-hidden="true" />
+              Video paused
+            </span>
+          )}
+        </div>
       )}
       <span
         className={[
@@ -139,8 +160,12 @@ export function CallTile({
           compact ? "text-[11px]" : "text-[12px]",
         ].join(" ")}
       >
+        {paused && compact && (
+          <VideoCameraSlash data-testid="video-paused" size={12} weight="bold" aria-label="Video paused" className="shrink-0 text-white/80" />
+        )}
         {!tile.audioOn && <MicrophoneSlash size={12} weight="bold" aria-label="Microphone off" className="shrink-0 text-red-300" />}
         <span className="truncate">{tile.self === true ? `${tile.name} (you)` : tile.name}</span>
+        {tile.screen !== true && <QualityBars quality={tile.quality} size={compact ? 10 : 12} />}
       </span>
     </div>
   );

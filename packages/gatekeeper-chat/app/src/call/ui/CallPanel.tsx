@@ -22,6 +22,7 @@ import { Button, Spinner } from "../../components/primitives.js";
 import type { CallPane, CallFailure } from "../../store/calls.js";
 import type { CallSnapshot, TileSize } from "../engine/types.js";
 import { CallControls } from "./CallControls.js";
+import { CallQualityNotices } from "./CallQuality.js";
 import { CallTile, ReconnectingOverlay, type TileModel } from "./CallTile.js";
 import { gridRows, isFramed, mediaHelp } from "./layout.js";
 
@@ -44,6 +45,9 @@ export function remoteTiles(
         audioOn: participant.audio,
         videoOn: participant.video && media?.video != null,
         speaking: local.activeSpeaker === participant.id,
+        quality: media?.quality,
+        // Only a camera that is on can be paused; a camera that is off is just the avatar.
+        paused: participant.video && (media?.videoPaused === true || local.audioOnly === true),
       };
     });
 }
@@ -151,6 +155,7 @@ export function CallPanel({
     videoOn: local.videoEnabled && local.localVideo !== null,
     speaking: false,
     self: true,
+    quality: local.localQuality,
   };
 
   let body: ReactNode;
@@ -228,6 +233,7 @@ export function CallPanel({
       data-layout={layout}
       className={`relative flex min-h-0 min-w-0 flex-col bg-kumo-base ${className}`}
     >
+      <CallQualityNotices />
       <div className={`relative min-h-0 flex-1 ${dock ? "p-2" : "p-3"}`}>
         {body}
         {local.phase === "reconnecting" && <ReconnectingOverlay />}
