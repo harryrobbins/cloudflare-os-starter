@@ -11,13 +11,15 @@
 import { isValidOrderKey } from "./order.js";
 import { resolveLanguage } from "./code/languages.js";
 import { truncateText } from "./graphemes.js";
+import { isShape } from "./shapes.js";
+import { SYNTAXES, LAYOUTS, DIAGRAM_DEFAULTS } from "./diagram.js";
 
 // ---------------------------------------------------------------------------------------------
 // Data model
 // ---------------------------------------------------------------------------------------------
 
 /**
- * @typedef {"sticky"|"rect"|"ellipse"|"text"|"frame"|"pen"|"connector"|"icon"|"code"} ObjectType
+ * @typedef {"sticky"|"rect"|"ellipse"|"text"|"frame"|"pen"|"connector"|"icon"|"code"|"table"|"diagram"} ObjectType
  */
 
 /**
@@ -33,8 +35,19 @@ import { truncateText } from "./graphemes.js";
  * @property {string} textColor    "#rrggbb"
  * @property {number} fontSize     LIMITS.fontSizeMin..LIMITS.fontSizeMax, world units
  * @property {"left"|"center"|"right"} align
- * @property {"none"|"arrow"} arrowStart  connectors only; "none" elsewhere
- * @property {"none"|"arrow"} arrowEnd    connectors only; "none" elsewhere
+ * @property {Arrowhead} arrowStart  connectors only; "none" elsewhere
+ * @property {Arrowhead} arrowEnd    connectors only; "none" elsewhere
+ * @property {string} [shape]  rect only: the outline, an id from src/shared/shapes.js SHAPES
+ *   ("rect", "diamond", "cylinder", ...). Absent on other types and on older rectangles (reads as "rect").
+ * @property {"solid"|"dashed"|"dotted"} [dash]  DASH_TYPES only: the line pattern. Absent on other
+ *   types and on older objects (reads as "solid").
+ */
+
+/**
+ * Connector end markers: a filled arrow, an open (line) arrow, a hollow triangle (UML
+ * inheritance), filled and hollow diamonds (composition, aggregation), a dot, a bar and a crow's
+ * foot (entity-relationship "many").
+ * @typedef {"none"|"arrow"|"open"|"triangle"|"diamond"|"diamondOpen"|"circle"|"bar"|"crow"} Arrowhead
  */
 
 /**
@@ -84,10 +97,19 @@ import { truncateText } from "./graphemes.js";
  * @property {string} [iconId]     icon only: the icon within its pack
  * @property {string} [language]   code only: a language id from src/shared/code/languages.js
  *   ("plain", "python", ...); aliases ("py") are accepted on input and stored as the id
- * @property {"light"|"dark"} [theme]  code only: highlighting palette
+ * @property {"light"|"dark"} [theme]  code: highlighting palette; diagram: rendering palette
  * @property {boolean} [lineNumbers]   code only: draw a line-number gutter
  * @property {boolean} [wrap]      code only: wrap long lines at the box width (else clip them)
  * @property {string} [filename]   code only: optional title shown in the header (LIMITS.codeFilename, one line)
+ * @property {string[][]} [cells]  table only: rows of cell text, 1..LIMITS.tableRows rows of the same
+ *   1..LIMITS.tableCols columns, each cell at most LIMITS.tableCell characters (newlines kept)
+ * @property {boolean} [header]    table only: the first row is a header (bold, shaded)
+ * @property {number[]} [colWidths] table only: relative column widths (one per column, each
+ *   0.05..20); absent or the wrong length means equal columns
+ * @property {"d2"|"mermaid"} [syntax]  diagram only: the language of `text` (its source, at most
+ *   LIMITS.diagramText characters); see src/shared/diagram.js
+ * @property {"tala"|"dagre"|"elk"} [layout]  diagram only: the layout engine
+ * @property {boolean} [sketch]    diagram only: hand-drawn style
  * @property {number} version      1 on create, bumped once per request that changes the object
  * @property {number} createdAt    epoch ms
  * @property {number} updatedAt    epoch ms
@@ -174,7 +196,15 @@ import { truncateText } from "./graphemes.js";
 
 /**
  * @typedef {Partial<Omit<WhiteboardObject, "style"|"id"|"type"|"version"|"createdAt"|"updatedAt"|"createdBy">>
- *   & {style?: Partial<Style>}} ObjectPatch
+ *   & {style?: Partial<Style>, cellEdits?: CellEdit[]}} ObjectPatch
+ */
+
+/**
+ * Tables: one cell's new text. A patch's `cellEdits` are applied to the table's cells as they are
+ * when the update lands (edits outside the table are ignored), so people editing different cells
+ * never overwrite each other; `cells` replaces the whole grid (adding or removing rows and columns).
+ * `cellEdits` is never stored.
+ * @typedef {{r: number, c: number, text: string}} CellEdit
  */
 
 /**
@@ -353,6 +383,14 @@ export const LIMITS = Object.freeze({
   codeText: 20_000,
   codeLines: 1000,
   codeFilename: 120,
+  /** Table size and cell text. */
+  tableRows: 60,
+  tableCols: 20,
+  tableCell: 1000,
+  /** Characters of diagram source (a diagram's `text`). */
+  diagramText: 20_000,
+  /** Diagrams on one board (each may keep a cached drawing of up to MAX_RENDER_CHARS). */
+  diagrams: 100,
   frameName: 80,
   connectorLabel: 200,
   boardTitle: 200,
@@ -408,10 +446,16 @@ export const ZOOM_MAX = 20;
 
 export const DEFAULT_TITLE = "Untitled whiteboard";
 
-export const OBJECT_TYPES = /** @type {const} */ (["sticky", "rect", "ellipse", "text", "frame", "pen", "connector", "icon", "code"]);
+export const OBJECT_TYPES = /** @type {const} */ (["sticky", "rect", "ellipse", "text", "frame", "pen", "connector", "icon", "code", "table", "diagram"]);
 /** Types that rotate; every other type has rot 0. */
 export const ROTATABLE = /** @type {const} */ (["sticky", "rect", "ellipse", "text", "icon"]);
 export const SIDES = /** @type {const} */ (["auto", "top", "right", "bottom", "left"]);
+/** Connector end markers (see Arrowhead). */
+export const ARROWHEADS = /** @type {const} */ (["none", "arrow", "open", "triangle", "diamond", "diamondOpen", "circle", "bar", "crow"]);
+/** Line patterns (style.dash). */
+export const DASHES = /** @type {const} */ (["solid", "dashed", "dotted"]);
+/** Types whose outline or line takes style.dash. */
+export const DASH_TYPES = Object.freeze(new Set(["rect", "ellipse", "frame", "pen", "connector"]));
 export const BACKGROUNDS = /** @type {const} */ (["dots", "grid", "plain"]);
 
 /**
@@ -428,6 +472,8 @@ export const EDITABLE_FIELDS = Object.freeze({
   connector: ["z", "text", "style", "from", "to", "fromSide", "toSide", "routing", "segments", "curve"],
   icon: ["x", "y", "w", "h", "rot", "z", "frameId", "text", "style", "packId", "iconId"],
   code: ["x", "y", "w", "h", "z", "frameId", "text", "style", "language", "theme", "lineNumbers", "wrap", "filename"],
+  table: ["x", "y", "w", "h", "z", "frameId", "style", "cells", "cellEdits", "header", "colWidths"],
+  diagram: ["x", "y", "w", "h", "z", "frameId", "text", "style", "syntax", "layout", "sketch", "theme"],
 });
 
 /** Geometry fields a client rebases by delta when a concurrent change conflicts. */
@@ -449,17 +495,23 @@ export const INK = Object.freeze(["#1f2937", "#6b7280", "#dc2626", "#ea580c", "#
  */
 export const TYPE_DEFAULTS = Object.freeze({
   sticky: { w: 200, h: 200, text: "", style: style({ fill: COLORS.yellow, stroke: "none", strokeWidth: 0, fontSize: 20, align: "center" }) },
-  rect: { w: 200, h: 120, text: "", style: style({ fill: "#ffffff", stroke: "#1f2937", strokeWidth: 2, fontSize: 18, align: "center" }) },
-  ellipse: { w: 200, h: 120, text: "", style: style({ fill: "#ffffff", stroke: "#1f2937", strokeWidth: 2, fontSize: 18, align: "center" }) },
+  rect: { w: 200, h: 120, text: "", style: style({ fill: "#ffffff", stroke: "#1f2937", strokeWidth: 2, fontSize: 18, align: "center", shape: "rect", dash: "solid" }) },
+  ellipse: { w: 200, h: 120, text: "", style: style({ fill: "#ffffff", stroke: "#1f2937", strokeWidth: 2, fontSize: 18, align: "center", dash: "solid" }) },
   text: { w: 240, h: 40, text: "", style: style({ fill: "none", stroke: "none", strokeWidth: 0, fontSize: 24, align: "left" }) },
-  frame: { w: 800, h: 600, text: "Frame", style: style({ fill: "#ffffff", stroke: "#9ca3af", strokeWidth: 1, fontSize: 16, align: "left" }) },
-  pen: { w: 1, h: 1, text: "", style: style({ fill: "none", stroke: "#1f2937", strokeWidth: 4, fontSize: 16, align: "left" }) },
-  connector: { w: 1, h: 1, text: "", routing: "straight", style: style({ fill: "none", stroke: "#1f2937", strokeWidth: 2, fontSize: 14, align: "center", arrowEnd: "arrow" }) },
+  frame: { w: 800, h: 600, text: "Frame", style: style({ fill: "#ffffff", stroke: "#9ca3af", strokeWidth: 1, fontSize: 16, align: "left", dash: "solid" }) },
+  pen: { w: 1, h: 1, text: "", style: style({ fill: "none", stroke: "#1f2937", strokeWidth: 4, fontSize: 16, align: "left", dash: "solid" }) },
+  connector: { w: 1, h: 1, text: "", routing: "straight", style: style({ fill: "none", stroke: "#1f2937", strokeWidth: 2, fontSize: 14, align: "center", arrowEnd: "arrow", dash: "solid" }) },
   // A glyph's defaults; the board applies each icon's own size and style (registry iconDefaults).
   icon: { w: 96, h: 96, text: "", style: style({ fill: "none", stroke: "#1f2937", strokeWidth: 2, fontSize: 18, align: "center" }) },
   // Colours come from the code theme (src/shared/code/theme.js); only fontSize is used.
   code: { w: 480, h: 120, text: "", style: style({ fill: "none", stroke: "none", strokeWidth: 0, fontSize: 14, align: "left" }) },
+  table: { w: 420, h: 136, text: "", style: style({ fill: "#ffffff", stroke: "#9ca3af", strokeWidth: 1, fontSize: 16, align: "left" }) },
+  // The renderer draws the diagram itself; the frame around it takes fill and stroke.
+  diagram: { w: 480, h: 320, text: "", style: style({ fill: "#ffffff", stroke: "#e5e7eb", strokeWidth: 1, fontSize: 14, align: "left" }) },
 });
+
+/** A new table: three columns, a header row and two body rows. */
+export const TABLE_DEFAULT_CELLS = Object.freeze([["Column 1", "Column 2", "Column 3"], ["", "", ""], ["", "", ""]].map((r) => Object.freeze(r)));
 
 /** Code-block fields a create takes when it does not give them. */
 export const CODE_DEFAULTS = Object.freeze({ language: "plain", theme: "light", lineNumbers: true, wrap: false, filename: "" });
@@ -625,6 +677,28 @@ export function isAcceptableOrderKey(value) {
   return isOrderKey(value) && value.length <= LIMITS.orderKeyAccept && value[0] >= "B" && value[0] <= "y";
 }
 
+/** @param {unknown} v @returns {v is Arrowhead} */
+export function isArrowhead(v) {
+  return typeof v === "string" && /** @type {readonly string[]} */ (ARROWHEADS).includes(v);
+}
+
+/**
+ * Style keys added after launch, with the value an object that lacks them reads as. Undo and
+ * conflict rebase use these, so changing one on an older object can be undone.
+ */
+export const STYLE_FALLBACKS = Object.freeze({ shape: "rect", dash: "solid" });
+
+/**
+ * `style` with the STYLE_FALLBACKS its type takes filled in where missing.
+ * @param {ObjectType} type @param {Partial<Style>} style @returns {Partial<Style>}
+ */
+export function withStyleFallbacks(type, style) {
+  const out = { ...style };
+  if (type === "rect" && out.shape === undefined) out.shape = STYLE_FALLBACKS.shape;
+  if (DASH_TYPES.has(type) && out.dash === undefined) out.dash = /** @type {Style["dash"]} */ (STYLE_FALLBACKS.dash);
+  return out;
+}
+
 /** @param {unknown} v @returns {v is ObjectType} */
 export function isObjectType(v) {
   return typeof v === "string" && /** @type {readonly string[]} */ (OBJECT_TYPES).includes(v);
@@ -632,7 +706,7 @@ export function isObjectType(v) {
 
 /**
  * Cleans a partial style. Unknown keys and invalid values are dropped; arrow keys only survive for
- * connectors.
+ * connectors, `shape` for rectangles and `dash` for DASH_TYPES.
  * @param {unknown} raw
  * @param {ObjectType} type
  * @returns {Partial<Style>}
@@ -654,8 +728,81 @@ export function cleanStylePatch(raw, type) {
   if (fontSize !== null) out.fontSize = fontSize;
   if (s.align === "left" || s.align === "center" || s.align === "right") out.align = s.align;
   if (type === "connector") {
-    if (s.arrowStart === "none" || s.arrowStart === "arrow") out.arrowStart = s.arrowStart;
-    if (s.arrowEnd === "none" || s.arrowEnd === "arrow") out.arrowEnd = s.arrowEnd;
+    if (isArrowhead(s.arrowStart)) out.arrowStart = s.arrowStart;
+    if (isArrowhead(s.arrowEnd)) out.arrowEnd = s.arrowEnd;
+  }
+  if (type === "rect" && isShape(s.shape)) out.shape = s.shape;
+  if (DASH_TYPES.has(type) && typeof s.dash === "string" && /** @type {readonly string[]} */ (DASHES).includes(s.dash)) {
+    out.dash = /** @type {Style["dash"]} */ (s.dash);
+  }
+  return out;
+}
+
+/**
+ * Table cells: a non-empty array of rows of strings, squared up to the widest row (short rows are
+ * padded with ""), at most LIMITS.tableRows x LIMITS.tableCols, each cell LIMITS.tableCell
+ * characters. Null when unusable.
+ * @param {unknown} v
+ * @returns {string[][]|null}
+ */
+export function cleanCells(v) {
+  if (!Array.isArray(v) || !v.length) return null;
+  const rows = v.slice(0, LIMITS.tableRows);
+  if (!rows.every((r) => Array.isArray(r) && r.length)) return null;
+  const cols = Math.min(LIMITS.tableCols, Math.max(...rows.map((r) => r.length)));
+  return rows.map((r) => Array.from({ length: cols }, (_, i) => (typeof r[i] === "string" || typeof r[i] === "number" ? cleanText(String(r[i]), LIMITS.tableCell) : "")));
+}
+
+/**
+ * Cell edits: at most LIMITS.tableRows x LIMITS.tableCols of {r, c, text} with integer indexes in
+ * range and cleaned text; the last edit of a cell wins. Null when unusable or empty.
+ * @param {unknown} v
+ * @returns {CellEdit[]|null}
+ */
+export function cleanCellEdits(v) {
+  if (!Array.isArray(v) || !v.length || v.length > LIMITS.tableRows * LIMITS.tableCols) return null;
+  /** @type {Map<string, CellEdit>} */
+  const out = new Map();
+  for (const e of v) {
+    if (!isObject(e)) return null;
+    const { r, c, text } = /** @type {any} */ (e);
+    if (!Number.isInteger(r) || !Number.isInteger(c) || r < 0 || c < 0 || r >= LIMITS.tableRows || c >= LIMITS.tableCols) return null;
+    if (typeof text !== "string") return null;
+    out.set(r + ":" + c, { r, c, text: cleanText(text, LIMITS.tableCell) });
+  }
+  return [...out.values()];
+}
+
+/**
+ * `cells` with `edits` applied (edits outside the grid are ignored); the same array when nothing
+ * changes. Never mutates.
+ * @param {string[][]} cells @param {CellEdit[]} edits
+ */
+export function applyCellEdits(cells, edits) {
+  let out = cells;
+  for (const { r, c, text } of edits) {
+    if (!out[r] || c >= out[r].length || out[r][c] === text) continue;
+    if (out === cells) out = cells.map((row) => row);
+    if (out[r] === cells[r]) out[r] = [...cells[r]];
+    out[r][c] = text;
+  }
+  return out;
+}
+
+/**
+ * Relative column widths: 1..LIMITS.tableCols finite numbers clamped to 0.05..20, rounded to 3
+ * decimals; null clears (equal columns). Undefined when invalid (dropped).
+ * @param {unknown} v
+ * @returns {number[]|null|undefined}
+ */
+export function cleanColWidths(v) {
+  if (v === null) return null;
+  if (!Array.isArray(v) || !v.length || v.length > LIMITS.tableCols) return undefined;
+  const out = [];
+  for (const x of v) {
+    const c = cleanNumber(x, 0.05, 20, 3);
+    if (c === null) return undefined;
+    out.push(c);
   }
   return out;
 }
@@ -739,6 +886,7 @@ export function cleanObjectPatch(raw, type) {
         out.text = type === "frame" ? cleanLine(v, LIMITS.frameName)
           : type === "connector" ? cleanLine(v, LIMITS.connectorLabel)
           : type === "code" ? cleanCode(v)
+          : type === "diagram" ? cleanText(v, LIMITS.diagramText)
           : cleanText(v, LIMITS.text);
         break;
       case "style": { const s = cleanStylePatch(v, type); if (Object.keys(s).length) out.style = s; break; }
@@ -756,6 +904,13 @@ export function cleanObjectPatch(raw, type) {
       case "theme": if (v === "light" || v === "dark") out.theme = v; break;
       case "lineNumbers": case "wrap": if (typeof v === "boolean") out[key] = v; break;
       case "filename": if (typeof v === "string") out.filename = cleanLine(v, LIMITS.codeFilename); break;
+      case "cells": { const c = cleanCells(v); if (c) out.cells = c; break; }
+      case "cellEdits": { const e = cleanCellEdits(v); if (e) out.cellEdits = e; break; }
+      case "header": if (typeof v === "boolean") out.header = v; break;
+      case "colWidths": { const c = cleanColWidths(v); if (c !== undefined) out.colWidths = c; break; }
+      case "syntax": if (typeof v === "string" && /** @type {readonly string[]} */ (SYNTAXES).includes(v)) out.syntax = v; break;
+      case "layout": if (typeof v === "string" && /** @type {readonly string[]} */ (LAYOUTS).includes(v)) out.layout = v; break;
+      case "sketch": if (typeof v === "boolean") out.sketch = v; break;
     }
   }
   return /** @type {ObjectPatch} */ (out);
@@ -806,6 +961,15 @@ export function normalizeNewObject(raw) {
   }
   if (type === "code") {
     for (const k of /** @type {const} */ (["language", "theme", "lineNumbers", "wrap", "filename"])) obj[k] = patch[k] ?? CODE_DEFAULTS[k];
+  }
+  if (type === "table") {
+    obj.text = "";
+    obj.cells = patch.cells ?? TABLE_DEFAULT_CELLS.map((r) => [...r]);
+    obj.header = patch.header ?? true;
+    if (patch.colWidths && patch.colWidths.length === obj.cells[0].length) obj.colWidths = patch.colWidths;
+  }
+  if (type === "diagram") {
+    for (const k of /** @type {const} */ (["syntax", "layout", "sketch", "theme"])) obj[k] = patch[k] ?? DIAGRAM_DEFAULTS[k];
   }
   return obj;
 }

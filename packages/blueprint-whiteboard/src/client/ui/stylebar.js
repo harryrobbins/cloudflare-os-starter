@@ -1,6 +1,6 @@
 // @ts-check
-// The contextual style bar for the current selection: colours, stroke width, font size,
-// alignment, connector routing and arrows, stacking, duplicate, delete, edit text, and a Move
+// The contextual style bar for the current selection: colours, shape, stroke width and pattern,
+// font size, alignment, connector routing and end markers, stacking, duplicate, delete, edit text, and a Move
 // group and a Size group (the keyboard alternatives to dragging, resizing and rotating), and Connect
 // for two selected objects (the alternative to dragging a connector). Every change applies to all
 // applicable selected objects in ONE store call. Also the long-press / right-click / context-menu
@@ -10,7 +10,9 @@
 // between its buttons (the width and height fields keep their own Tab stops), and Escape returns
 // focus to the canvas.
 
-import { COLORS, INK, ROTATABLE } from "../../shared/protocol.js";
+import { COLORS, INK, ROTATABLE, DASH_TYPES } from "../../shared/protocol.js";
+import { shapeOf, shapeLabel } from "../../shared/shapes.js";
+import { openPicker, closePicker, shapeIcon, markerIcon, dashIcon, SHAPE_CHOICES, MARKER_CHOICES, DASH_CHOICES } from "./shape-picker.js";
 import { h, icon, rovingFocus } from "./dom.js";
 import { openMenu } from "./dialogs.js";
 import { expandMoveIds, moveUpdates, resizeUpdates, rotateUpdates } from "./canvas/index.js";
@@ -19,6 +21,7 @@ import { canEditText } from "./canvas/model.js";
 import { objectLink } from "../../shared/link-card.js";
 import { openWebsiteDialog } from "./share.js";
 import { createCodeControls } from "./code-block.js";
+import { createTableDiagramControls } from "./table-diagram.js";
 import { canResetRoute, hasRouteHandles } from "./canvas/route-edit.js";
 
 /** @typedef {import("./app.js").App} App */
@@ -26,13 +29,13 @@ import { canResetRoute, hasRouteHandles } from "./canvas/route-edit.js";
 /** @typedef {import("../../shared/protocol.js").ObjectType} ObjectType */
 /** @typedef {import("../../shared/protocol.js").Style} Style */
 
-const FILL_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame", "icon"]);
-const STROKE_TYPES = new Set(["rect", "ellipse", "frame", "pen", "connector", "icon"]);
+const FILL_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame", "icon", "table"]);
+const STROKE_TYPES = new Set(["rect", "ellipse", "frame", "pen", "connector", "icon", "table"]);
 // Text controls apply to icons only when they hold text (stencils); see textObjs in render().
-const TEXT_COLOR_TYPES = new Set(["sticky", "rect", "ellipse", "text", "connector", "icon"]);
+const TEXT_COLOR_TYPES = new Set(["sticky", "rect", "ellipse", "text", "connector", "icon", "table"]);
 const WIDTH_TYPES = new Set(["rect", "ellipse", "frame", "pen", "connector", "icon"]);
-const FONT_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame", "connector", "icon"]);
-const ALIGN_TYPES = new Set(["sticky", "rect", "ellipse", "text", "icon"]);
+const FONT_TYPES = new Set(["sticky", "rect", "ellipse", "text", "frame", "connector", "icon", "table"]);
+const ALIGN_TYPES = new Set(["sticky", "rect", "ellipse", "text", "icon", "table"]);
 const MOVABLE = (/** @type {WhiteboardObject} */ o) => o.type !== "connector";
 const RESIZABLE = MOVABLE;
 const ROTATABLE_TYPES = new Set(/** @type {readonly string[]} */ (ROTATABLE));
@@ -65,9 +68,14 @@ export function colorLabel(hex) {
   return COLOR_NAMES.get(hex) ?? (i >= 0 ? INK_NAMES[i] : hex);
 }
 
+/** A name for one object: its shape's for shaped rectangles, else its type's. @param {WhiteboardObject} o */
+export function objectLabel(o) {
+  return o.type === "rect" ? shapeLabel(shapeOf(o) ?? "rect") : typeLabel(o.type);
+}
+
 /** @param {ObjectType} type */
 export function typeLabel(type) {
-  return { sticky: "Sticky note", rect: "Rectangle", ellipse: "Ellipse", text: "Text", frame: "Frame", pen: "Drawing", connector: "Connector", icon: "Icon", code: "Code block" }[type] ?? type;
+  return { sticky: "Sticky note", rect: "Rectangle", ellipse: "Ellipse", text: "Text", frame: "Frame", pen: "Drawing", connector: "Connector", icon: "Icon", code: "Code block", table: "Table", diagram: "Diagram" }[type] ?? type;
 }
 
 /** @param {App} app */
@@ -87,6 +95,7 @@ export function createStyleBar(app) {
   let renderKey = "";
   const arrange = createArrange(app);
   const code = createCodeControls(app);
+  const tableDiagram = createTableDiagramControls(app);
 
   /** @returns {WhiteboardObject[]} */
   function selected() {
@@ -235,6 +244,7 @@ export function createStyleBar(app) {
   }
 
   function closePopover() {
+    closePicker();
     if (!popover) return;
     /** @type {any} */ (popover)._cleanup?.();
     popover.remove();
@@ -258,6 +268,25 @@ export function createStyleBar(app) {
    */
   function btn(key, attrs, ...children) {
     return h("button", { type: "button", class: "btn small", ...attrs, dataset: { key, ...(attrs.dataset ?? {}) } }, ...children);
+  }
+
+  /**
+   * A connector end-marker button: shows the current marker and opens the marker picker.
+   * @param {string} key @param {string} label @param {"start"|"end"} end @param {string|null} current  null when mixed
+   * @param {WhiteboardObject[]} conns
+   */
+  function markerButton(key, label, end, current, conns) {
+    const prop = end === "start" ? "arrowStart" : "arrowEnd";
+    const name = MARKER_CHOICES.find((c) => c.value === current)?.label ?? "mixed";
+    const b = btn(key, {
+      class: `btn small icon-only ${key}-btn`, title: label, "aria-label": `${label}: ${name}`, "aria-haspopup": "true",
+      "aria-pressed": String(!!current && current !== "none"),
+    }, markerIcon(current ?? "none", end, 18));
+    b.addEventListener("click", () => openPicker(b, {
+      label, choices: MARKER_CHOICES, current, icon: (v) => markerIcon(v, end, 22), columns: 3, className: "marker-pop",
+      onPick: (v) => update((o) => o.type === "connector" && conns.some((c) => c.id === o.id), () => ({ style: { [prop]: v } })),
+    }));
+    return b;
   }
 
   /**
@@ -294,7 +323,8 @@ export function createStyleBar(app) {
       }
       return;
     }
-    const key = objs.map((o) => `${o.id}:${o.version}:${JSON.stringify(o.style)}:${o.routing ?? ""}:${o.w}:${o.h}:${o.rot}`).join("|");
+    const key = objs.map((o) => `${o.id}:${o.version}:${JSON.stringify(o.style)}:${o.routing ?? ""}:${o.w}:${o.h}:${o.rot}` +
+      (o.type === "diagram" ? `:${canvas.getDiagramRender?.(o.id)?.status ?? ""}` : "")).join("|");
     if (key === renderKey && !el.hidden) return;
     renderKey = key;
     const types = new Set(objs.map((o) => o.type));
@@ -314,7 +344,7 @@ export function createStyleBar(app) {
     /** @type {any[]} */
     const groups = [];
     const count = h("span", { class: "style-group-label selection-count", "aria-live": "off" },
-      objs.length === 1 ? typeLabel(objs[0].type) : `${objs.length} selected`);
+      objs.length === 1 ? objectLabel(objs[0]) : `${objs.length} selected`);
     groups.push(count);
     const website = objs.length === 1 ? objectLink(objs[0]) : null;
     if (website) groups.push(h("div", { class: "style-group", role: "group", "aria-label": "Website" },
@@ -329,6 +359,21 @@ export function createStyleBar(app) {
     );
     if (colors.children.length) groups.push(colors);
 
+    const rects = objs.filter((o) => o.type === "rect");
+    if (rects.length) {
+      const current = common(rects, (o) => shapeOf(o));
+      const b = btn("shape", {
+        class: "btn small icon-only shape-btn", title: "Shape", "aria-haspopup": "true",
+        "aria-label": `Shape: ${current ? shapeLabel(current) : "mixed"}`,
+      }, shapeIcon(current ?? "rect", 18));
+      b.addEventListener("click", () => openPicker(b, {
+        label: "Shape", choices: SHAPE_CHOICES.filter((c) => c.value !== "ellipse"), current, icon: (v) => shapeIcon(v, 22),
+        columns: 7, className: "shape-pop",
+        onPick: (v) => { update((o) => o.type === "rect", () => ({ style: { shape: v } })); app.announce?.(`Shape: ${shapeLabel(v)}`); },
+      }));
+      groups.push(h("div", { class: "style-group shape-group", role: "group", "aria-label": "Shape" }, b));
+    }
+
     if (has(WIDTH_TYPES)) {
       const current = common(objs.filter((o) => WIDTH_TYPES.has(o.type)), (o) => o.style.strokeWidth);
       groups.push(h("div", { class: "style-group width-group", role: "group", "aria-label": "Line width" },
@@ -336,6 +381,14 @@ export function createStyleBar(app) {
           class: "btn small width-btn", "aria-pressed": String(current === w), "aria-label": `Line width ${w}`, title: `Line width ${w}`,
           onclick: () => setStyle(WIDTH_TYPES, { strokeWidth: w }),
         }, h("span", { "aria-hidden": "true", style: { display: "block", width: "16px", height: Math.max(1, Math.min(6, w)) + "px", background: "currentColor", borderRadius: "2px" } })))));
+    }
+    if (has(DASH_TYPES)) {
+      const current = common(objs.filter((o) => DASH_TYPES.has(o.type)), (o) => o.style.dash ?? "solid");
+      groups.push(h("div", { class: "style-group dash-group", role: "group", "aria-label": "Line pattern" },
+        DASH_CHOICES.map((d) => btn("dash-" + d.value, {
+          class: "btn small icon-only dash-btn", "aria-pressed": String(current === d.value), "aria-label": d.label, title: d.label,
+          dataset: { dash: d.value }, onclick: () => setStyle(DASH_TYPES, { dash: /** @type {any} */ (d.value) }),
+        }, dashIcon(d.value, 16)))));
     }
     if (textObjs.some((o) => FONT_TYPES.has(o.type))) {
       const current = common(textObjs.filter((o) => FONT_TYPES.has(o.type)), (o) => o.style.fontSize);
@@ -366,14 +419,15 @@ export function createStyleBar(app) {
           title: ROUTING_LABELS[r], dataset: { routing: r },
           onclick: () => update(isConn, () => ({ routing: r })),
         }, icon(r, 16))),
-        btn("arrow-start", {
-          class: "btn small icon-only arrow-start-btn", "aria-pressed": String(start === "arrow"), "aria-label": "Arrow at start", title: "Arrow at start",
-          onclick: () => update(isConn, () => ({ style: { arrowStart: start === "arrow" ? "none" : "arrow" } })),
-        }, icon("arrowStart", 16)),
-        btn("arrow-end", {
-          class: "btn small icon-only arrow-end-btn", "aria-pressed": String(end === "arrow"), "aria-label": "Arrow at end", title: "Arrow at end",
-          onclick: () => update(isConn, () => ({ style: { arrowEnd: end === "arrow" ? "none" : "arrow" } })),
-        }, icon("arrowEnd", 16)),
+        markerButton("arrow-start", "Start marker", "start", start, conns),
+        markerButton("arrow-end", "End marker", "end", end, conns),
+        btn("arrow-swap", {
+          class: "btn small icon-only arrow-swap-btn", "aria-label": "Swap end markers", title: "Swap end markers (reverse the arrow)",
+          onclick: () => {
+            update(isConn, (o) => ({ style: { arrowStart: o.style.arrowEnd, arrowEnd: o.style.arrowStart } }));
+            app.announce?.("End markers swapped");
+          },
+        }, icon("swap", 16)),
         // Route editing (route-edit.js): the keyboard path for dragging route handles, and a reset.
         conns.length === 1 && hasRouteHandles(conns[0])
           ? btn("route-edit", {
@@ -417,6 +471,7 @@ export function createStyleBar(app) {
     }
     const codeGroup = code.group(objs, btn);
     if (codeGroup) groups.push(codeGroup);
+    groups.push(...tableDiagram.groups(objs, btn));
     groups.push(...arrange.groups(objs, btn));
     groups.push(h("div", { class: "style-group arrange-group", role: "group", "aria-label": "Arrange" },
       canConnect(objs)
@@ -489,6 +544,7 @@ export function createStyleBar(app) {
       if (objs.length === 1 && canEditText(objs[0])) items.push({ label: "Edit text", className: "ctx-edit", onSelect: editText });
       if (canConnect(objs)) items.push({ label: "Connect", className: "ctx-connect", onSelect: connect });
       items.push(...code.menuItems(objs));
+      items.push(...tableDiagram.menuItems(objs));
       if (objs.length === 1 && hasRouteHandles(objs[0])) items.push({ label: "Edit route", className: "ctx-route-edit", onSelect: () => { canvas.editRoute?.(objs[0].id); } });
       if (objs.some(canResetRoute)) items.push({ label: "Reset route", className: "ctx-route-reset", onSelect: () => { canvas.resetRoute?.(objs.map((o) => o.id)); } });
       items.push(...arrange.menuItems(objs, { x: at.x, y: at.y, returnFocus: canvas.element, avoid: at.rect ?? null, pointerType: at.pointerType }));

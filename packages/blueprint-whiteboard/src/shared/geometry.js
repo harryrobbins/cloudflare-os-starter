@@ -4,6 +4,7 @@
 // wrapping and camera fitting. No DOM, no measurement: the same input gives the same output on the
 // server and in every browser, which is what keeps an SVG export identical to the board.
 
+import { shapeOf, hasCustomOutline, shapeOutline, insideShape, localOutlineAnchor } from "./shapes.js";
 import { iconTextBox } from "./icons/registry.js";
 import { graphemes, isExtender, isRegionalIndicator } from "./graphemes.js";
 import { connectorRoute, routeBounds } from "./connectors.js";
@@ -99,9 +100,10 @@ export function rectContainsPoint(r, p) {
 }
 
 /**
- * True when world point `p` is inside the object's rotated box (ellipses use the ellipse).
+ * True when world point `p` is inside the object's rotated box (ellipses use the ellipse, shaped
+ * rectangles their outline: src/shared/shapes.js).
  * Pens and connectors use distance to their path instead (see distanceToPolyline).
- * @param {{type?: string, x: number, y: number, w: number, h: number, rot?: number}} o
+ * @param {{type?: string, x: number, y: number, w: number, h: number, rot?: number, style?: {shape?: string}}} o
  * @param {Point} p
  */
 export function pointInObjectBox(o, p) {
@@ -111,6 +113,8 @@ export function pointInObjectBox(o, p) {
     const dx = (local.x - (o.x + rx)) / rx, dy = (local.y - (o.y + ry)) / ry;
     return dx * dx + dy * dy <= 1;
   }
+  const shape = shapeOf(o);
+  if (shape && shape !== "rect") return rectContainsPoint(o, local) && insideShape(shape, o.w, o.h, local.x - o.x, local.y - o.y);
   return rectContainsPoint(o, local);
 }
 
@@ -230,6 +234,23 @@ export function facingSide(o, toward) {
   const dx = (p.x - c.x) / Math.max(1, o.w), dy = (p.y - c.y) / Math.max(1, o.h);
   if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? "right" : "left";
   return dy >= 0 ? "bottom" : "top";
+}
+
+/**
+ * Where a connector end on `side` of `o` touches the object: the side's anchor (the midpoint of
+ * the box side) for boxes, ellipses and everything else, or the outermost point of a shaped
+ * rectangle's outline on the line from its centre to that anchor (a diamond's tip, a triangle's
+ * slanted edge). Rotation included.
+ * @param {{x: number, y: number, w: number, h: number, rot?: number, type?: string, style?: {shape?: string}}} o
+ * @param {"top"|"right"|"bottom"|"left"} side
+ * @returns {Point}
+ */
+export function outlineAnchor(o, side) {
+  const shape = shapeOf(o);
+  if (!shape || shape === "rect") return anchor(o, side).point;
+  const local = localOutlineAnchor(shape, o.w, o.h, side);
+  if (!local) return anchor(o, side).point;
+  return rotatePoint({ x: o.x + local.x, y: o.y + local.y }, center(o), o.rot ?? 0);
 }
 
 // connectorRoute, elbowPoints and the rest of connector routing live in ./connectors.js (curves,
@@ -465,7 +486,7 @@ export function wrapText(text, maxWidth, fontSize, maxLines = Infinity) {
 /**
  * Where an object's text goes: the inner box (world, unrotated) and wrapped lines that fit it.
  * Sticky, rect, ellipse: centred vertically in the padded box (ellipses use the inscribed
- * rectangle). Text objects: top-aligned, no padding. Frames: their name sits above the frame
+ * rectangle, shaped rectangles their shape's text box). Text objects: top-aligned, no padding. Frames: their name sits above the frame
  * (one line). Icons: centred in their icon's text box (the whole box when it has none). Connectors: see connector labels in render.js. Stickies and shapes lay out only the
  * lines that fit the box, text objects at most MAX_TEXT_LINES.
  * @param {WhiteboardObject} o
@@ -484,6 +505,10 @@ export function textLayout(o) {
     const inner = iconTextBox(o) ?? o;
     const pad = fontSize * TEXT_PAD_EM;
     box = { x: inner.x + pad, y: inner.y + pad, w: Math.max(1, inner.w - 2 * pad), h: Math.max(1, inner.h - 2 * pad) };
+  } else if (hasCustomOutline(o)) {
+    const t = shapeOutline(/** @type {string} */ (shapeOf(o)), o.w, o.h).text;
+    const pad = fontSize * TEXT_PAD_EM;
+    box = { x: o.x + t.x + pad, y: o.y + t.y + pad, w: Math.max(1, t.w - 2 * pad), h: Math.max(1, t.h - 2 * pad) };
   } else {
     const inset = o.type === "ellipse" ? (1 - Math.SQRT1_2) / 2 : 0;
     const pad = fontSize * TEXT_PAD_EM;

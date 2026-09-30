@@ -25,6 +25,9 @@
  * @property {() => Promise<HistoryEntry[]>} getHistory       oldest first
  * @property {() => Promise<RequestRecord[]>} getRequests     oldest first
  * @property {(commit: Commit) => Promise<void>} commit
+ * @property {(id: string) => Promise<import("../shared/diagram.js").DiagramRender|null>} [getRender]
+ *   a diagram's cached render (optional: without it renders are kept in memory only)
+ * @property {(id: string, render: import("../shared/diagram.js").DiagramRender|null) => Promise<void>} [putRender]
  */
 
 /**
@@ -42,6 +45,8 @@ export class InMemoryRepository {
     this.history = [];
     /** @type {RequestRecord[]} */
     this.requests = [];
+    /** @type {Map<string, any>} diagram renders */
+    this.renders = new Map();
     /** Number of commits, for tests. */
     this.commits = 0;
   }
@@ -50,6 +55,10 @@ export class InMemoryRepository {
   async getObjects() { return clone(Object.fromEntries(this.objects)); }
   async getHistory() { return clone(this.history); }
   async getRequests() { return clone(this.requests); }
+  /** @param {string} id */
+  async getRender(id) { return clone(this.renders.get(id) ?? null); }
+  /** @param {string} id @param {any} render */
+  async putRender(id, render) { if (render) this.renders.set(id, clone(render)); else this.renders.delete(id); }
 
   /** @param {Commit} commit */
   async commit(commit) {

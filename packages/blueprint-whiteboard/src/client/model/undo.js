@@ -10,6 +10,7 @@
 //                       cascaded to, endpoints first
 
 import { deepEqual } from "./equal.js";
+import { STYLE_FALLBACKS } from "../../shared/protocol.js";
 
 /** @typedef {import("../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("../../shared/protocol.js").ObjectPatch} ObjectPatch */
@@ -38,10 +39,18 @@ export function effectivePatch(obj, patch) {
   const o = /** @type {Record<string, any>} */ (obj);
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue;
+    if (key === "cellEdits") {
+      const cells = o.cells ?? [];
+      const edits = /** @type {any[]} */ (value).filter((e) => cells[e.r] && e.c < cells[e.r].length && cells[e.r][e.c] !== e.text);
+      if (edits.length) out.cellEdits = edits;
+      continue;
+    }
     if (key === "style") {
       /** @type {Record<string, any>} */
       const style = {};
-      for (const [k, v] of Object.entries(value)) if (!deepEqual(obj.style?.[/** @type {keyof typeof obj.style} */ (k)], v)) style[k] = v;
+      for (const [k, v] of Object.entries(value)) {
+        if (!deepEqual(obj.style?.[/** @type {keyof typeof obj.style} */ (k)] ?? /** @type {any} */ (STYLE_FALLBACKS)[k], v)) style[k] = v;
+      }
       if (Object.keys(style).length) out.style = style;
       continue;
     }
@@ -61,10 +70,16 @@ export function previousValues(obj, patch) {
   const out = {};
   const o = /** @type {Record<string, any>} */ (obj);
   for (const key of Object.keys(patch)) {
-    if (key === "style") {
+    if (key === "cellEdits") {
+      // Undo puts back just these cells' previous text.
+      const cells = o.cells ?? [];
+      out.cellEdits = /** @type {any[]} */ (/** @type {any} */ (patch).cellEdits).filter((e) => cells[e.r] && e.c < cells[e.r].length)
+        .map((e) => ({ r: e.r, c: e.c, text: cells[e.r][e.c] }));
+    } else if (key === "style") {
       /** @type {Record<string, any>} */
       const style = {};
-      for (const k of Object.keys(/** @type {any} */ (patch).style)) style[k] = /** @type {any} */ (obj.style)[k];
+      // Style keys older objects lack read as their fallbacks, so undo restores them.
+      for (const k of Object.keys(/** @type {any} */ (patch).style)) style[k] = /** @type {any} */ (obj.style)[k] ?? /** @type {any} */ (STYLE_FALLBACKS)[k];
       out.style = style;
     } else {
       // Fields older objects lack read as their defaults, so undo restores "no edits".

@@ -42,6 +42,15 @@ export function describeObject(o, objects) {
     const first = String(o.text || "").split("\n").find((l) => l.trim()) ?? "";
     return `${languageLabel(o.language ?? "plain")}${first ? " — " + excerpt(first) : ""}${o.filename ? ` (${excerpt(o.filename)})` : ""}`;
   }
+  if (o.type === "table") {
+    const cells = Array.isArray(o.cells) ? o.cells : [];
+    const first = cells.flat().find((t) => String(t).trim()) ?? "";
+    return `${cells.length} × ${cells[0]?.length ?? 0} table${first ? " — " + excerpt(String(first)) : ""}`;
+  }
+  if (o.type === "diagram") {
+    const first = String(o.text || "").split("\n").find((l) => l.trim()) ?? "";
+    return `${o.syntax === "mermaid" ? "Mermaid" : "D2"} diagram${first ? " — " + excerpt(first) : ""}`;
+  }
   if (o.type === "icon") {
     // Named by its icon, so a list of icons reads "Database", "User: Customer", ...
     const name = getIcon(o.packId, o.iconId)?.label ?? "unknown icon";

@@ -67,6 +67,8 @@ export function whiteboardMethods(board) {
     findIcons: (args) => board.findIcons(args),
     /** @param {any} [args] */
     exportSvg: (args) => board.exportSvg(args),
+    /** @param {string} id @param {any} [opts] */
+    getDiagramRender: (id, opts) => board.diagramRender(id, opts),
     exportData: () => exportData(board),
     /** @param {any} args */
     importData: (args) => importData(board, args),
@@ -104,6 +106,7 @@ export function whiteboardMethods(board) {
  * @property {number} chunks
  * @property {number} length    SVG characters
  * @property {boolean} [tooLarge]  no SVG stored: the drawing exceeds LIMITS.previewChars
+ * @property {number} [renders]   diagram drawings made when it was taken (a new one refreshes it)
  */
 
 /**
@@ -126,15 +129,20 @@ export class DrawingHost {
   #open = new Map();
   /** @type {Promise<unknown>} */
   #queue = Promise.resolve();
+  /** Diagram drawings made per drawing since this host started (part of the preview's key). @type {Map<string, number>} */
+  #renderStamps = new Map();
 
   /**
    * @param {any} storage DurableObjectStorage
-   * @param {{onChange?: (id: string) => void, limits?: Partial<typeof LIMITS>, defaultTitle?: string}} [options]
+   * @param {{onChange?: (id: string) => void, limits?: Partial<typeof LIMITS>, defaultTitle?: string,
+   *   renderDiagram?: ((request: any) => Promise<{data: unknown}>)|null}} [options]
    *   onChange: a drawing committed a change (the host refreshes its preview)
+   *   renderDiagram: the MermaiD2 connector's render(), for diagram objects (optional)
    *   defaultTitle: the title of a drawing created without one (else the whiteboard's own default)
    */
-  constructor(storage, { onChange, limits, defaultTitle } = {}) {
+  constructor(storage, { onChange, limits, defaultTitle, renderDiagram = null } = {}) {
     this.storage = storage;
+    this.renderDiagram = renderDiagram;
     this.onChange = onChange;
     this.defaultTitle = typeof defaultTitle === "string" && defaultTitle.trim() ? defaultTitle.trim() : null;
     this.limits = { ...LIMITS, ...limits };
@@ -252,6 +260,12 @@ export class DrawingHost {
         hub.broadcast(event);
         try { this.onChange?.(id); } catch { /* the host's listener never fails a commit */ }
       },
+      renderDiagram: this.renderDiagram,
+      // A new drawing changes the preview although the board did not change.
+      onRender: () => {
+        this.#renderStamps.set(id, (this.#renderStamps.get(id) ?? 0) + 1);
+        try { this.onChange?.(id); } catch { /* the host's listener never fails a render */ }
+      },
     });
     entry = { board, hub, api: whiteboardMethods(board) };
     this.#open.set(id, entry);
@@ -319,7 +333,8 @@ export class DrawingHost {
     const { api } = await this.open(id);
     const board = await api.getBoard();
     const current = await this.previewMeta(id);
-    if (current && current.revision === board.revision && current.title === board.title) return current;
+    const renders = this.#renderStamps.get(id) ?? 0;
+    if (current && current.revision === board.revision && current.title === board.title && (current.renders ?? 0) === renders) return current;
     const svg = await api.exportSvg({});
     const p = prefixOf(id);
     const old = current?.chunks ?? 0;
@@ -328,11 +343,11 @@ export class DrawingHost {
     /** @type {Record<string, unknown>} */
     const puts = {};
     if (svg.length > this.limits.previewChars) {
-      meta = { revision: board.revision, title: board.title, chunks: 0, length: svg.length, tooLarge: true };
+      meta = { revision: board.revision, title: board.title, chunks: 0, length: svg.length, tooLarge: true, renders };
     } else {
       const chunks = Math.ceil(svg.length / PREVIEW_CHUNK);
       for (let i = 0; i < chunks; i++) puts[p + "preview:" + i] = svg.slice(i * PREVIEW_CHUNK, (i + 1) * PREVIEW_CHUNK);
-      meta = { revision: board.revision, title: board.title, chunks, length: svg.length };
+      meta = { revision: board.revision, title: board.title, chunks, length: svg.length, renders };
     }
     puts[p + "preview"] = meta;
     const stale = [];

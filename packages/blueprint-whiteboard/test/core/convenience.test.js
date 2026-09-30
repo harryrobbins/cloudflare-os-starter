@@ -63,7 +63,7 @@ describe("addObjects", () => {
       objects: [
         { id: a, type: "rect", x: 0, y: 400, w: 300, h: 120, text: "Decision", color: "blue" },
         { type: "text", x: 0, y: -80, text: "Q4 priorities", style: { fontSize: 48 } },
-        { type: "star" },
+        { type: "squiggle" },
         { ...pen(), color: "red" },
         "nope",
         { type: "connector", from: a, to: "o_ffffffffffff" },

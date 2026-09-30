@@ -64,6 +64,8 @@ export function openHelp(returnFocus = null) {
         "Turn off to avoid accidental actions with speech input or assistive technology. Applies until this board is reloaded. Navigation keys and Ctrl/⌘ shortcuts still work."),
         h("p", null, "Paste a website or YouTube URL onto the board to create a link card. Select the card, then Open website to view or copy the address."),
         h("p", null, "For syntax-highlighted code, choose Code block from Add, or paste a Markdown code fence (three backticks, a language name, then your code). Select the block to change language, theme, line numbers and wrapping."),
+        h("p", null, "Tables: Tab and Shift+Tab move between cells, Enter moves down (both add a row past the end), Shift+Enter starts a new line. Paste spreadsheet cells, CSV or a Markdown table to make one."),
+        h("p", null, "Diagrams: write D2 or Mermaid, or paste a d2 or mermaid code fence. They are drawn by the MermaiD2 renderer when it is connected to the board."),
         results,
       ),
     );

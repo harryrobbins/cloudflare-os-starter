@@ -22,6 +22,7 @@ export const CANVAS_CSS = `
 .wb-canvas[data-tool="text"] { cursor: text; }
 .wb-canvas .wb-obj.wb-editing text { visibility: hidden; }
 .wb-canvas .wb-obj.wb-editing text.wb-code-head { visibility: visible; }
+.wb-canvas .wb-obj.wb-editing [data-type="table"] text { visibility: visible; }
 .wb-canvas .wb-editor.wb-editor-code { box-shadow: 0 0 0 1px var(--wb-accent, #2563eb); caret-color: currentColor; }
 .wb-canvas .wb-obj.wb-flash { animation: wb-flash 1.2s ease-out; }
 @keyframes wb-flash {
@@ -39,6 +40,8 @@ export const CANVAS_CSS = `
 .wb-canvas .wb-preview-line {
   fill: none; stroke: var(--wb-accent, #2563eb); stroke-width: 2; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke;
 }
+.wb-canvas .wb-preview-ghost { fill: rgba(37, 99, 235, 0.1); }
+.wb-canvas .wb-connect-point { pointer-events: none; }
 .wb-canvas .wb-preview-stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .wb-canvas .wb-connect-handle circle { fill: var(--wb-accent, #2563eb); stroke: #fff; stroke-width: 2; }
 .wb-canvas .wb-connect-handle path { fill: none; stroke: #fff; stroke-width: 1.5; stroke-linecap: round; }

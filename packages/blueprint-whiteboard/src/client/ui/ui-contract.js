@@ -27,12 +27,12 @@
 
 /**
  * @typedef {object} CanvasEvents
- * @property {"tool"|"camera"|"selection"|"editing"|"follow"|"command"|"routeEdit"} kind
+ * @property {"tool"|"camera"|"selection"|"editing"|"follow"|"command"|"routeEdit"|"diagram"} kind
  *   tool: the active tool changed. camera: pan or zoom (fired at most once per animation frame).
  *   selection: the selected ids changed. editing: inline text editing started or stopped.
  *   follow: following stopped or started (the user panning stops it).
  *   command: a shortcut that belongs to the shell (keymap.js ShellCommand) was pressed on the
- *   canvas or in the inline text editor; carries {command}. routeEdit: keyboard route editing started or stopped.
+ *   canvas or in the inline text editor; carries {command}. routeEdit: keyboard route editing started or stopped. diagram: a diagram's render arrived; carries {id}.
  *   The "tool" event also carries {tool, locked}.
  *
  * The canvas element also dispatches a bubbling CustomEvent "wb-contextmenu" with detail
@@ -47,6 +47,11 @@
  * @property {HTMLElement} element                  the canvas container the shell places in its layout
  * @property {() => Tool} getTool
  * @property {(tool: Tool, locked?: boolean) => void} setTool
+ * @property {() => string} getShape  the outline the rectangle tool draws (src/shared/shapes.js SHAPES)
+ * @property {(shape: string) => void} setShape  picks it (unknown ids are ignored); emits a "tool" event
+ * @property {(id: string) => void} refreshDiagram  asks the server for a diagram's render again
+ * @property {(id: string) => {hash: string, status: string, href?: string, error?: string}|null} getDiagramRender
+ *   the render state of a diagram as drawn now ("pending", "ok", "error", "unavailable", "empty")
  * @property {() => Camera} getCamera
  * @property {(camera: Camera, animate?: boolean) => void} setCamera   clamps zoom to ZOOM_MIN..ZOOM_MAX
  * @property {(factor: number) => void} zoomBy       about the view centre
@@ -54,14 +59,14 @@
  * @property {() => {x: number, y: number, w: number, h: number}} getViewport  world rect currently visible
  * @property {() => string[]} getSelection
  * @property {(ids: string[]) => void} setSelection  unknown ids are dropped
- * @property {(type: ObjectType) => string|null}  addAtCenter
+ * @property {(type: ObjectType, opts?: {shape?: string, syntax?: "d2"|"mermaid"}) => string|null}  addAtCenter
  *   Keyboard and button path for creating: adds a default-sized object of `type` at the view centre
  *   (not "pen" or "connector"), selects it, starts text editing for sticky/text, returns its id.
  * @property {(ref: string|{packId?: string, iconId: string}, at?: {clientX: number, clientY: number}) => string|null} addIcon
  *   adds an icon or stencil (src/shared/icons/registry.js) at its default size, centred on the view
  *   centre or on the client point `at` (a drop), selects it and returns its id; null when unknown
  * @property {(id: string) => void} editText         starts inline text editing of an object
- * @property {() => {id: string, type: ObjectType}|null} getTextEdit  the object whose text is being
+ * @property {() => {id: string, type: ObjectType, cell?: {r: number, c: number}}|null} getTextEdit  the object whose text is being
  *   edited inline, or null. The edit stays open while focus is inside an element marked
  *   `data-wb-keeps-editor` (the icon picker), so a picked character can go in at the caret
  * @property {() => void} finishTextEdit            commits and closes an open inline edit
