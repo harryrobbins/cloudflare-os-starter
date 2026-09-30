@@ -72,6 +72,7 @@ import {
 } from "./stats.js";
 import { CALL_STATS_INTERVAL_MS, CallTelemetry } from "./telemetry.js";
 import type {
+  CallEffect,
   CallEngine,
   CallEngineDeps,
   CallSnapshot,
@@ -86,6 +87,7 @@ import type {
   TileSize,
   TrackProcessor,
 } from "./types.js";
+import { IDLE_CALL, NO_DEVICES } from "./types.js";
 
 /** Timings. Exported so tests and diagnostics can name them. */
 export const ENGINE_TIMINGS = {
@@ -153,32 +155,6 @@ interface PublishItem {
 
 type WantedTrack = { readonly participant: CallParticipant; readonly track: CallTrack };
 
-const EMPTY_REMOTES: Readonly<Record<ParticipantId, RemoteMedia>> = Object.freeze({});
-
-const IDLE_SNAPSHOT: CallSnapshot = Object.freeze({
-  phase: "idle",
-  channelId: null,
-  callId: null,
-  participantId: null,
-  localVideo: null,
-  localScreen: null,
-  audioEnabled: false,
-  videoEnabled: false,
-  screenEnabled: false,
-  remotes: EMPTY_REMOTES,
-  activeSpeaker: null,
-  error: null,
-  audioOutputId: null,
-  localQuality: "unknown",
-  limitation: "none",
-  audioOnly: false,
-  audioOnlyChosen: false,
-  noiseSuppression: "unsupported",
-  backgroundBlur: "unsupported",
-});
-
-const NO_DEVICES: DeviceChoice = { audioInputId: null, videoInputId: null, audioOutputId: null };
-
 type CallTrackKindAv = "audio" | "video";
 
 /** One effect: whether it is wanted, and the processor currently built (around `source`). */
@@ -200,7 +176,7 @@ class Engine implements CallEngine {
   private readonly sendEvent: CallEngineDeps["send"];
   private readonly logSink: CallEngineDeps["log"];
 
-  private snap: CallSnapshot = IDLE_SNAPSHOT;
+  private snap: CallSnapshot = IDLE_CALL;
   private readonly listeners = new Set<() => void>();
 
   /** Bumped on every teardown and rebuild; queued work from an older generation is dropped. */
@@ -301,7 +277,7 @@ class Engine implements CallEngine {
     const gen = this.gen;
     this.devices = { ...options.devices };
     this.set({
-      ...IDLE_SNAPSHOT,
+      ...IDLE_CALL,
       phase: "joining",
       channelId: options.channelId,
       audioOutputId: this.devices.audioOutputId,
@@ -330,8 +306,8 @@ class Engine implements CallEngine {
       backgroundBlur: this.effectSupported("video") ? "off" : "unsupported",
     });
     // Effects chosen before joining are built now, so the first packets are already processed.
-    this.effects.audio.wanted = options.noiseSuppression === true && this.effectSupported("audio");
-    this.effects.video.wanted = options.backgroundBlur === true && this.effectSupported("video");
+    this.effects.audio.wanted = options.noiseSuppression && this.effectSupported("audio");
+    this.effects.video.wanted = options.backgroundBlur && this.effectSupported("video");
     await Promise.all([this.syncEffect("audio", gen), this.syncEffect("video", gen)]);
     if (gen !== this.gen) throw new Error("The join was cancelled.");
 
@@ -384,7 +360,7 @@ class Engine implements CallEngine {
     // Built before teardown (which drops the accumulated stats).
     const finalReport = session ? this.takeStatsReport(true) : null;
     this.teardown();
-    if (wasActive) this.set({ ...IDLE_SNAPSHOT, audioOutputId: this.devices.audioOutputId });
+    if (wasActive) this.set({ ...IDLE_CALL, audioOutputId: this.devices.audioOutputId });
     if (!session) return;
     this.log("leave", { callId: session.callId });
     const keepalive = options.keepalive === true;
@@ -402,7 +378,7 @@ class Engine implements CallEngine {
 
   dispose(): void {
     this.teardown();
-    this.set({ ...IDLE_SNAPSHOT });
+    this.set({ ...IDLE_CALL });
   }
 
   applyCallState(state: CallState | null): void {
@@ -422,7 +398,7 @@ class Engine implements CallEngine {
     const channelId = this.snap.channelId;
     this.teardown();
     this.set({
-      ...IDLE_SNAPSHOT,
+      ...IDLE_CALL,
       phase: "moved",
       channelId,
       callId,
@@ -1348,7 +1324,7 @@ class Engine implements CallEngine {
     const channelId = this.snap.channelId;
     const callId = this.snap.callId;
     this.teardown();
-    this.set({ ...IDLE_SNAPSHOT, phase: "failed", channelId, callId, error: message, audioOutputId: this.devices.audioOutputId });
+    this.set({ ...IDLE_CALL, phase: "failed", channelId, callId, error: message, audioOutputId: this.devices.audioOutputId });
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -1498,15 +1474,11 @@ class Engine implements CallEngine {
   // ---------------------------------------------------------------------------------------------
   // Quality phase 2 effects
 
-  async setNoiseSuppression(enabled: boolean): Promise<void> {
-    await this.setEffect("audio", enabled);
+  async setEffect(effect: CallEffect, enabled: boolean): Promise<void> {
+    await this.switchEffect(effect === "noiseSuppression" ? "audio" : "video", enabled);
   }
 
-  async setBackgroundBlur(enabled: boolean): Promise<void> {
-    await this.setEffect("video", enabled);
-  }
-
-  private async setEffect(kind: CallTrackKindAv, enabled: boolean): Promise<void> {
+  private async switchEffect(kind: CallTrackKindAv, enabled: boolean): Promise<void> {
     if (!this.session) return;
     const slot = this.effects[kind];
     if (enabled && !this.effectSupported(kind)) {
@@ -1762,7 +1734,7 @@ class Engine implements CallEngine {
     this.lastQualityAt = now;
 
     // Send side: CPU sheds simulcast layers (or resolution), none restores them.
-    let limitation: QualityLimitation = this.snap.limitation ?? "none";
+    let limitation: QualityLimitation = this.snap.limitation;
     let sendLayers = this.snap.sendLayers;
     const reason = cameraOut?.limitation ?? null;
     if (camera && reason !== null) {

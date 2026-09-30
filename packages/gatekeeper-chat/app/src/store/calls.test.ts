@@ -233,15 +233,16 @@ describe("call prefs", () => {
   it("round-trips the devices and toggles, and survives garbage", () => {
     expect(loadCallPrefs()).toEqual({
       devices: { audioInputId: null, videoInputId: null, audioOutputId: null },
-      start: { audio: true, video: true },
+      start: { audio: true, video: true, noiseSuppression: false, backgroundBlur: false },
     });
-    saveCallPrefs({ devices: { audioInputId: "mic-2", videoInputId: null, audioOutputId: "spk" }, start: { audio: false, video: true } });
+    const start = { audio: false, video: true, noiseSuppression: false, backgroundBlur: true };
+    saveCallPrefs({ devices: { audioInputId: "mic-2", videoInputId: null, audioOutputId: "spk" }, start });
     expect(loadCallPrefs()).toEqual({
       devices: { audioInputId: "mic-2", videoInputId: null, audioOutputId: "spk" },
-      start: { audio: false, video: true },
+      start,
     });
     window.localStorage.setItem("chat.call", "{not json");
-    expect(loadCallPrefs().start).toEqual({ audio: true, video: true });
+    expect(loadCallPrefs().start).toEqual({ audio: true, video: true, noiseSuppression: false, backgroundBlur: false });
   });
 });
 
@@ -658,7 +659,7 @@ describe("joining and leaving", () => {
     const { store, engine } = await harness();
     await store.joinCall("c1");
     await store.toggleCallEffect("noiseSuppression");
-    expect(engine.effects).toEqual([["noise", true]]);
+    expect(engine.effects).toEqual([["noiseSuppression", true]]);
     expect(store.state.announcement).toBe("Noise suppression on");
     expect(loadCallPrefs().start).toMatchObject({ noiseSuppression: true });
     await store.leaveCall();
@@ -666,8 +667,8 @@ describe("joining and leaving", () => {
     expect(engine.joins.at(-1)).toMatchObject({ noiseSuppression: true, backgroundBlur: false });
     engine.set({ noiseSuppression: "on" });
     await store.toggleCallEffect("noiseSuppression");
-    expect(engine.effects.at(-1)).toEqual(["noise", false]);
-    expect(loadCallPrefs().start.noiseSuppression).toBeUndefined();
+    expect(engine.effects.at(-1)).toEqual(["noiseSuppression", false]);
+    expect(loadCallPrefs().start.noiseSuppression).toBe(false);
   });
 
 });

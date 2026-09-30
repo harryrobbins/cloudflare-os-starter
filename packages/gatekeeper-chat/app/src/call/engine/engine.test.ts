@@ -35,6 +35,8 @@ const JOIN: JoinOptions = {
   channelId: CHANNEL_ID,
   audio: true,
   video: true,
+  noiseSuppression: false,
+  backgroundBlur: false,
   devices: { audioInputId: null, videoInputId: null, audioOutputId: null },
 };
 

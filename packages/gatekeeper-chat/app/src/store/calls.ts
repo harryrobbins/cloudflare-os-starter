@@ -17,29 +17,13 @@ import {
   type Membership,
   type UserId,
 } from "../contract.js";
-import type { CallPhase, CallSnapshot, ConnectionQuality, DeviceChoice } from "../call/engine/types.js";
+import { NO_DEVICES, type CallPhase, type CallSnapshot, type ConnectionQuality, type DeviceChoice } from "../call/engine/types.js";
 import { readSetting, writeSetting } from "./drafts.js";
 
-/** The engine's snapshot before anything has happened, and whenever no engine is attached. */
-export const IDLE_CALL: CallSnapshot = {
-  phase: "idle",
-  channelId: null,
-  callId: null,
-  participantId: null,
-  localVideo: null,
-  localScreen: null,
-  audioEnabled: false,
-  videoEnabled: false,
-  screenEnabled: false,
-  remotes: {},
-  activeSpeaker: null,
-  error: null,
-};
+export { IDLE_CALL, NO_DEVICES } from "../call/engine/types.js";
 
 /** Until `/api/me` says otherwise, calls are off: an older server never sends the field. */
 export const CALLS_DISABLED: CallFeature = { enabled: false, maxParticipants: MAX_CALL_PARTICIPANTS };
-
-export const DEFAULT_DEVICES: DeviceChoice = { audioInputId: null, videoInputId: null, audioOutputId: null };
 
 /** An incoming call's toast: a call started in a dm or group by somebody else. */
 export interface CallRing {
@@ -247,7 +231,7 @@ export function callBanner(
 ): CallBanner | null {
   if (local.phase !== "connected") return null;
   const active: CallBannerKind[] = [];
-  if (local.audioOnly === true) active.push("audio-only");
+  if (local.audioOnly) active.push("audio-only");
   if (local.localQuality === "poor") active.push("unstable");
   if (local.limitation === "cpu") active.push("cpu");
   for (const kind of active) {
@@ -299,19 +283,24 @@ export function dismissHeadphonesHint(): void {
 
 const CALL_PREFS_KEY = "chat.call";
 
+/** How the next join starts: microphone, camera and the Quality phase 2 effects. */
+export interface CallStart {
+  readonly audio: boolean;
+  readonly video: boolean;
+  readonly noiseSuppression: boolean;
+  readonly backgroundBlur: boolean;
+}
+
+export const DEFAULT_CALL_START: CallStart = { audio: true, video: true, noiseSuppression: false, backgroundBlur: false };
+
 export interface CallPrefs {
   readonly devices: DeviceChoice;
-  readonly start: {
-    readonly audio: boolean;
-    readonly video: boolean;
-    readonly noiseSuppression?: boolean;
-    readonly backgroundBlur?: boolean;
-  };
+  readonly start: CallStart;
 }
 
 /** Pre-join choices, remembered per browser. Anything unreadable falls back to the defaults. */
 export function loadCallPrefs(): CallPrefs {
-  const fallback: CallPrefs = { devices: DEFAULT_DEVICES, start: { audio: true, video: true } };
+  const fallback: CallPrefs = { devices: NO_DEVICES, start: DEFAULT_CALL_START };
   const raw = readSetting(CALL_PREFS_KEY);
   if (raw === null) return fallback;
   try {
@@ -327,8 +316,8 @@ export function loadCallPrefs(): CallPrefs {
         audio: parsed.start?.audio !== false,
         video: parsed.start?.video !== false,
         // Quality phase 2 effects are opt-in: only an explicit true turns one on.
-        ...(parsed.start?.noiseSuppression === true ? { noiseSuppression: true } : {}),
-        ...(parsed.start?.backgroundBlur === true ? { backgroundBlur: true } : {}),
+        noiseSuppression: parsed.start?.noiseSuppression === true,
+        backgroundBlur: parsed.start?.backgroundBlur === true,
       },
     };
   } catch {

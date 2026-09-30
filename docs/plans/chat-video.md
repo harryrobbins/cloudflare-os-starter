@@ -222,7 +222,8 @@ credentials are minted per join with a TTL of a few hours and returned only to t
     Mic mute is `track.enabled = false` (Opus keeps sending silence); camera off stops the camera
     (light off) and `replaceTrack(blackCanvasTrack)` at 1 fps, and back on `replaceTrack(newTrack)`;
     both with a `call-beat` so tiles show the right state. No renegotiation;
-  - active speaker: `getStats()` `audioLevel` on inbound audio every 250 ms, with hysteresis;
+  - active speaker: each audio receiver's `getSynchronizationSources()` `audioLevel` (and the
+    mic's `media-source` stats) every 250 ms, with hysteresis; levels stay inside the engine;
   - recovery (orange's rule): `connectionState` `failed`/`closed`, or `disconnected` for more than
     7 s, rebuilds — POST `reconnect` for a new session and ICE servers, new peer connection,
     re-publish, re-announce, re-pull. `restartIce()` is tried once on `disconnected` first. A lost

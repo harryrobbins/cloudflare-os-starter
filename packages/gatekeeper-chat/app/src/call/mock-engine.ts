@@ -13,16 +13,19 @@
 
 import { CALL_HEARTBEAT_MS, type CallState, type ParticipantId } from "../contract.js";
 import { supportsBackgroundBlur, supportsNoiseSuppression } from "./effects/support.js";
-import type {
-  CallEngine,
-  ConnectionQuality,
-  CallSignalling,
-  CallSnapshot,
-  DeviceChoice,
-  JoinOptions,
-  RemoteMedia,
-  SendClientEvent,
-  TileSize,
+import {
+  IDLE_CALL,
+  NO_DEVICES,
+  type CallEffect,
+  type CallEngine,
+  type ConnectionQuality,
+  type CallSignalling,
+  type CallSnapshot,
+  type DeviceChoice,
+  type JoinOptions,
+  type RemoteMedia,
+  type SendClientEvent,
+  type TileSize,
 } from "./engine/types.js";
 
 /** Where the fake gets real media from. Injected so the unit tests need no browser. */
@@ -72,26 +75,11 @@ export function mockLocalQuality(force: MockQualityForce | null): Pick<
   };
 }
 
-const IDLE: CallSnapshot = {
-  phase: "idle",
-  channelId: null,
-  callId: null,
-  participantId: null,
-  localVideo: null,
-  localScreen: null,
-  audioEnabled: false,
-  videoEnabled: false,
-  screenEnabled: false,
-  remotes: {},
-  activeSpeaker: null,
-  error: null,
-};
-
 export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
   const media = deps.media ?? browserMedia();
   const listeners = new Set<() => void>();
-  let snapshot: CallSnapshot = IDLE;
-  let devices: DeviceChoice = { audioInputId: null, videoInputId: null, audioOutputId: null };
+  let snapshot: CallSnapshot = IDLE_CALL;
+  let devices: DeviceChoice = NO_DEVICES;
   let camera: MediaStream | null = null;
   let microphone: MediaStream | null = null;
   let screen: MediaStream | null = null;
@@ -190,8 +178,9 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
         audio: null,
         videoRid: ridFor(participant.id),
         quality: qualityFor(index),
-        // As the real engine: audio-only mode, or a tile nobody can see, pauses the pull.
-        videoPaused: participant.video && (force === "audio-only" || sizes[participant.id] === "hidden"),
+        // As the real engine: audio-only (forced or chosen), or a tile nobody can see, pauses the pull.
+        videoPaused:
+          participant.video && (force === "audio-only" || snapshot.audioOnlyChosen || sizes[participant.id] === "hidden"),
       };
     }
     for (const [id, stream] of patterns) {
@@ -255,7 +244,7 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
     async join(options: JoinOptions): Promise<void> {
       stopAll();
       devices = options.devices;
-      set({ ...IDLE, phase: "joining", channelId: options.channelId });
+      set({ ...IDLE_CALL, phase: "joining", channelId: options.channelId });
       [camera, microphone] = await Promise.all([
         options.video ? openCamera() : Promise.resolve(null),
         options.audio ? openMicrophone() : Promise.resolve(null),
@@ -273,8 +262,8 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
           error: null,
           ...mockLocalQuality(force),
           // The switches show where this browser could run the real effects; the mock only flips them.
-          noiseSuppression: supportsNoiseSuppression() ? (options.noiseSuppression === true ? "on" : "off") : "unsupported",
-          backgroundBlur: supportsBackgroundBlur() ? (options.backgroundBlur === true ? "on" : "off") : "unsupported",
+          noiseSuppression: supportsNoiseSuppression() ? (options.noiseSuppression ? "on" : "off") : "unsupported",
+          backgroundBlur: supportsBackgroundBlur() ? (options.backgroundBlur ? "on" : "off") : "unsupported",
         });
         syncRemotes();
         sendBeat();
@@ -283,7 +272,7 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
         qualityTimer = setInterval(stepQuality, deps.quality?.intervalMs ?? 9000);
       } catch (cause) {
         stopAll();
-        set({ ...IDLE, phase: "failed", channelId: options.channelId, error: cause instanceof Error ? cause.message : "Could not join." });
+        set({ ...IDLE_CALL, phase: "failed", channelId: options.channelId, error: cause instanceof Error ? cause.message : "Could not join." });
         throw cause;
       }
     },
@@ -291,7 +280,7 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
     async leave(): Promise<void> {
       const { callId, participantId } = snapshot;
       stopAll();
-      set(IDLE);
+      set(IDLE_CALL);
       if (callId !== null && participantId !== null) {
         try {
           await deps.api.leaveCall(callId, { participantId });
@@ -306,7 +295,7 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
       if (state === null || state.id !== snapshot.callId) {
         // The call ended under us (or a different one started): nothing left to show.
         stopAll();
-        set(IDLE);
+        set(IDLE_CALL);
         return;
       }
       room = state;
@@ -317,7 +306,7 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
       if (snapshot.callId !== callId || snapshot.participantId !== participantId) return;
       const channelId = snapshot.channelId;
       stopAll();
-      set({ ...IDLE, phase: "moved", channelId, callId });
+      set({ ...IDLE_CALL, phase: "moved", channelId, callId });
     },
 
     setAudioEnabled(enabled: boolean): void {
@@ -393,12 +382,8 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
     },
 
     // The mock sends nothing, so an effect is only a switch in the snapshot.
-    async setNoiseSuppression(enabled: boolean): Promise<void> {
-      set({ noiseSuppression: enabled ? "on" : "off" });
-    },
-
-    async setBackgroundBlur(enabled: boolean): Promise<void> {
-      set({ backgroundBlur: enabled ? "on" : "off" });
+    async setEffect(effect: CallEffect, enabled: boolean): Promise<void> {
+      set({ [effect]: enabled ? "on" : "off" });
     },
 
     setPictureInPicture(): void {
@@ -407,8 +392,9 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
 
     async setAudioOnly(enabled: boolean): Promise<void> {
       // The mock pulls nothing, so only the snapshot and the camera change.
-      if (enabled === (snapshot.audioOnlyChosen === true)) return;
+      if (enabled === snapshot.audioOnlyChosen) return;
       set({ audioOnlyChosen: enabled });
+      if (room !== null) syncRemotes();
       if (enabled && snapshot.videoEnabled) await engine.setVideoEnabled(false);
     },
 
@@ -419,7 +405,7 @@ export function createMockCallEngine(deps: MockEngineDeps): CallEngine {
 
     dispose(): void {
       stopAll();
-      set(IDLE);
+      set(IDLE_CALL);
     },
   };
   return engine;

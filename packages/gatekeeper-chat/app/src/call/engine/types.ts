@@ -110,8 +110,8 @@ export interface JoinOptions {
   readonly video: boolean;
   readonly devices: DeviceChoice;
   /** Quality phase 2: start with these effects on, where supported. */
-  readonly noiseSuppression?: boolean;
-  readonly backgroundBlur?: boolean;
+  readonly noiseSuppression: boolean;
+  readonly backgroundBlur: boolean;
 }
 
 export interface LeaveOptions {
@@ -130,13 +130,10 @@ export interface RemoteMedia {
   readonly audio: MediaStream | null;
   /** The layer currently requested for their camera. */
   readonly videoRid: CallSimulcastRid | null;
-  /**
-   * How well their media reaches us (loss, jitter, frame rate of what we receive). Optional so
-   * hand-built snapshots need not set it; absent reads as `unknown`. Quality phase 1.
-   */
-  readonly quality?: ConnectionQuality;
-  /** True while their video pull is paused (tile hidden, or audio-only mode). */
-  readonly videoPaused?: boolean;
+  /** How well their media reaches us (loss, jitter, frame rate of what we receive). Quality phase 1. */
+  readonly quality: ConnectionQuality;
+  /** True while their video pull is paused: tile hidden, or audio-only (chosen or forced). */
+  readonly videoPaused: boolean;
 }
 
 /** Coarse connection quality for tile indicators (chat-video.md, "Quality phase 1"). */
@@ -169,30 +166,30 @@ export interface CallSnapshot {
   /**
    * The chosen audio output (`DeviceChoice.audioOutputId`), for the UI to apply to its remote
    * `<audio>` elements with `setSinkId` (see `applyAudioOutput` in `engine/devices.ts`). Null means
-   * the system default. Optional so hand-built snapshots (mock engine) need not set it.
+   * the system default.
    */
-  readonly audioOutputId?: string | null;
+  readonly audioOutputId: string | null;
   /** Our own uplink quality (RTT, remote-reported loss, qualityLimitation). Quality phase 1. */
-  readonly localQuality?: ConnectionQuality;
+  readonly localQuality: ConnectionQuality;
   /** Sustained encoder limitation, for the "your connection is unstable" / CPU banner. */
-  readonly limitation?: QualityLimitation;
+  readonly limitation: QualityLimitation;
   /**
    * True while the engine has paused every remote video because our downlink cannot carry it; audio
    * continues. The UI shows a banner; the engine restores video when it clears.
    */
-  readonly audioOnly?: boolean;
+  readonly audioOnly: boolean;
   /**
    * True while this person has chosen audio-only (`setAudioOnly`): every remote camera is paused and
    * their own camera is off. Separate from {@link audioOnly}, which the engine sets for a poor
    * downlink, so the UI does not blame the connection for a choice.
    */
-  readonly audioOnlyChosen?: boolean;
+  readonly audioOnlyChosen: boolean;
   /** How many simulcast layers we currently send for the camera (3 = all; fewer under CPU limits). */
-  readonly sendLayers?: number;
-  /** ML noise suppression on the microphone (RNNoise). Absent reads as `unsupported`. */
-  readonly noiseSuppression?: EffectState;
-  /** Background blur on the camera (MediaPipe segmentation). Absent reads as `unsupported`. */
-  readonly backgroundBlur?: EffectState;
+  readonly sendLayers: number;
+  /** ML noise suppression on the microphone (RNNoise). */
+  readonly noiseSuppression: EffectState;
+  /** Background blur on the camera (MediaPipe segmentation). */
+  readonly backgroundBlur: EffectState;
 }
 
 /**
@@ -200,6 +197,36 @@ export interface CallSnapshot {
  * `hidden` (off-screen, chat pane shown instead) requests the smallest layer.
  */
 export type TileSize = "large" | "medium" | "small" | "hidden";
+
+/** The two effects, named as their {@link CallSnapshot} fields. */
+export type CallEffect = "noiseSuppression" | "backgroundBlur";
+
+/** The snapshot before anything has happened, and whenever no engine is attached. */
+export const IDLE_CALL: CallSnapshot = Object.freeze({
+  phase: "idle",
+  channelId: null,
+  callId: null,
+  participantId: null,
+  localVideo: null,
+  localScreen: null,
+  audioEnabled: false,
+  videoEnabled: false,
+  screenEnabled: false,
+  remotes: Object.freeze({}),
+  activeSpeaker: null,
+  error: null,
+  audioOutputId: null,
+  localQuality: "unknown",
+  limitation: "none",
+  audioOnly: false,
+  audioOnlyChosen: false,
+  sendLayers: 3,
+  noiseSuppression: "unsupported",
+  backgroundBlur: "unsupported",
+});
+
+/** Every device the system default. */
+export const NO_DEVICES: DeviceChoice = Object.freeze({ audioInputId: null, videoInputId: null, audioOutputId: null });
 
 export interface CallEngine {
   /** Current state. Stable object identity between changes, so it works with useSyncExternalStore. */
@@ -254,8 +281,7 @@ export interface CallEngine {
    * track and swaps it onto the sender (no renegotiation); a device switch rebuilds it; sustained CPU
    * strain turns it off (`cpu`) before any simulcast layer is shed. Resolves when the swap is done.
    */
-  setNoiseSuppression(enabled: boolean): Promise<void>;
-  setBackgroundBlur(enabled: boolean): Promise<void>;
+  setEffect(effect: CallEffect, enabled: boolean): Promise<void>;
 
   /** The UI reports tile sizes whenever layout changes; the engine debounces layer switches. */
   setTileSizes(sizes: Readonly<Record<ParticipantId, TileSize>>): void;

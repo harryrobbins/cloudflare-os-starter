@@ -15,6 +15,6 @@ chat Worker's own assets: nothing is fetched from a CDN at run time.
 it, download the new file, check it is a `TFL3` flatbuffer, and record the new size and hash here.
 
 `support.ts` holds the feature detection, so asking whether an effect is available loads nothing.
-The engine owns the lifecycle (`setNoiseSuppression`, `setBackgroundBlur`: build around the current
+The engine owns the lifecycle (`setEffect("noiseSuppression" | "backgroundBlur", on)`: build around the current
 track, swap it onto the sender with `replaceTrack`, rebuild on a device switch, shed under CPU
 strain). `e2e/effects-check.mjs` runs both in headless Chromium against its fake devices.

@@ -32,7 +32,7 @@ import {
   type UserId,
 } from "../contract.js";
 import { ApiError, type ChatApi, type ChatSocket, type SocketStatus, type Transport } from "../api/types.js";
-import type { CallEngine, CallSnapshot, DeviceChoice } from "../call/engine/types.js";
+import type { CallEffect, CallEngine, CallSnapshot, DeviceChoice } from "../call/engine/types.js";
 import {
   CALLS_DISABLED,
   NO_CALL_UI,
@@ -45,6 +45,7 @@ import {
   pruneRings,
   saveCallPrefs,
   shouldRing,
+  type CallStart,
   type CallUi,
 } from "./calls.js";
 import { channelLabel } from "../lib/labels.js";
@@ -1669,7 +1670,7 @@ export class ChatStore {
     if (this.#state.callUi.chatOpen !== chatOpen) this.#setCallUi({ chatOpen });
   }
 
-  setCallStart(start: { audio?: boolean; video?: boolean; noiseSuppression?: boolean; backgroundBlur?: boolean }): void {
+  setCallStart(start: Partial<CallStart>): void {
     const callStart = { ...this.#state.callStart, ...start };
     this.#patch({ callStart });
     saveCallPrefs({ devices: this.#state.callDevices, start: callStart });
@@ -1715,8 +1716,8 @@ export class ChatStore {
         channelId,
         audio: this.#state.callStart.audio,
         video: this.#state.callStart.video,
-        noiseSuppression: this.#state.callStart.noiseSuppression === true,
-        backgroundBlur: this.#state.callStart.backgroundBlur === true,
+        noiseSuppression: this.#state.callStart.noiseSuppression,
+        backgroundBlur: this.#state.callStart.backgroundBlur,
         devices: this.#state.callDevices,
       });
       // A `call` event can beat the join's own answer; hand the engine the latest room either way.
@@ -1774,16 +1775,27 @@ export class ChatStore {
     this.announce("Microphone off");
   }
 
-  async toggleCallVideo(): Promise<void> {
+  /**
+   * Runs one call toggle against the engine while this frame is in a call, toasting `errorTitle`
+   * when it throws. False, doing nothing, when there is no live call.
+   */
+  async #withLiveEngine(errorTitle: string, run: (engine: CallEngine) => Promise<unknown>): Promise<boolean> {
     const engine = this.#callEngine;
-    if (engine === null || !isLivePhase(this.#state.call.phase)) return;
-    const next = !this.#state.call.videoEnabled;
-    this.announce(next ? "Camera on" : "Camera off");
+    if (engine === null || !isLivePhase(this.#state.call.phase)) return false;
     try {
-      await engine.setVideoEnabled(next);
+      await run(engine);
     } catch (cause) {
-      this.#toast({ tone: "error", title: next ? "Could not start the camera" : "Could not stop the camera", body: describe(cause) });
+      this.#toast({ tone: "error", title: errorTitle, body: describe(cause) });
     }
+    return true;
+  }
+
+  async toggleCallVideo(): Promise<void> {
+    const next = !this.#state.call.videoEnabled;
+    await this.#withLiveEngine(next ? "Could not start the camera" : "Could not stop the camera", (engine) => {
+      this.announce(next ? "Camera on" : "Camera off");
+      return engine.setVideoEnabled(next);
+    });
   }
 
   /** This frame's own participant in the room, when it is in a call. */
@@ -1847,44 +1859,32 @@ export class ChatStore {
    * Quality phase 2 effects: switched live in the call and remembered for the next one. An effect
    * the CPU monitor turned off stays remembered as chosen; the person decides whether to try again.
    */
-  async toggleCallEffect(effect: "noiseSuppression" | "backgroundBlur"): Promise<void> {
-    const engine = this.#callEngine;
-    if (engine === null || !isLivePhase(this.#state.call.phase)) return;
+  async toggleCallEffect(effect: CallEffect): Promise<void> {
     const next = this.#state.call[effect] !== "on" && this.#state.call[effect] !== "starting";
-    this.setCallStart({ [effect]: next });
     const name = effect === "noiseSuppression" ? "Noise suppression" : "Background blur";
-    this.announce(`${name} ${next ? "on" : "off"}`);
-    try {
-      await (effect === "noiseSuppression" ? engine.setNoiseSuppression(next) : engine.setBackgroundBlur(next));
-    } catch (cause) {
-      this.#toast({ tone: "error", title: `Could not switch ${name.toLowerCase()}`, body: describe(cause) });
-    }
-    if (next && this.#state.call[effect] === "failed") this.announce(`${name} could not start`);
+    const ran = await this.#withLiveEngine(`Could not switch ${name.toLowerCase()}`, (engine) => {
+      this.setCallStart({ [effect]: next });
+      this.announce(`${name} ${next ? "on" : "off"}`);
+      return engine.setEffect(effect, next);
+    });
+    if (ran && next && this.#state.call[effect] === "failed") this.announce(`${name} could not start`);
   }
 
   /** Chosen audio-only: pause everyone's video and turn the camera off, to save bandwidth or focus. */
   async toggleCallAudioOnly(): Promise<void> {
-    const engine = this.#callEngine;
-    if (engine === null || !isLivePhase(this.#state.call.phase)) return;
-    const next = this.#state.call.audioOnlyChosen !== true;
-    this.announce(next ? "Audio only: video is paused" : "Video is back on");
-    try {
-      await engine.setAudioOnly(next);
-    } catch (cause) {
-      this.#toast({ tone: "error", title: "Could not switch audio only", body: describe(cause) });
-    }
+    const next = !this.#state.call.audioOnlyChosen;
+    await this.#withLiveEngine("Could not switch audio only", (engine) => {
+      this.announce(next ? "Audio only: video is paused" : "Video is back on");
+      return engine.setAudioOnly(next);
+    });
   }
 
   async toggleCallScreen(): Promise<void> {
-    const engine = this.#callEngine;
-    if (engine === null || !isLivePhase(this.#state.call.phase)) return;
     const next = !this.#state.call.screenEnabled;
-    try {
+    await this.#withLiveEngine("Could not share the screen", async (engine) => {
       const done = await engine.setScreenEnabled(next);
       if (done) this.announce(next ? "You are sharing your screen" : "Screen sharing stopped");
-    } catch (cause) {
-      this.#toast({ tone: "error", title: "Could not share the screen", body: describe(cause) });
-    }
+    });
   }
 
   /**

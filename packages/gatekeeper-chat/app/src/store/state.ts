@@ -25,10 +25,12 @@ import type { LocalMessage } from "./merge.js";
 import type { CallSnapshot, DeviceChoice } from "../call/engine/types.js";
 import {
   CALLS_DISABLED,
-  DEFAULT_DEVICES,
+  DEFAULT_CALL_START,
   IDLE_CALL,
+  NO_DEVICES,
   NO_CALL_UI,
   type CallRing,
+  type CallStart,
   type CallUi,
 } from "./calls.js";
 
@@ -189,14 +191,8 @@ export interface ChatState {
   readonly rings: readonly CallRing[];
   /** Remembered per browser; null ids mean the system default. */
   readonly callDevices: DeviceChoice;
-  /** Whether the next join starts with the microphone and the camera on. */
-  readonly callStart: {
-    readonly audio: boolean;
-    readonly video: boolean;
-    /** Quality phase 2 effects, remembered like the toggles; absent is off. */
-    readonly noiseSuppression?: boolean;
-    readonly backgroundBlur?: boolean;
-  };
+  /** Whether the next join starts with the microphone, the camera and each effect on. */
+  readonly callStart: CallStart;
   /**
    * Where the shell has put this frame (`chat:layout`): its full `/chat` page, the dock, or out of
    * sight behind the floating call pill. Null when no shell has said, standalone included.
@@ -261,8 +257,8 @@ export const INITIAL_STATE: ChatState = {
   call: IDLE_CALL,
   callUi: NO_CALL_UI,
   rings: [],
-  callDevices: DEFAULT_DEVICES,
-  callStart: { audio: true, video: true },
+  callDevices: NO_DEVICES,
+  callStart: DEFAULT_CALL_START,
   shellLayout: null,
   callFocus: false,
   callPushToTalk: false,

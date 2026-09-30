@@ -50,7 +50,13 @@ function setup(quality?: { intervalMs?: number; force?: MockQualityForce | null 
   return { transport, engine, sent, events };
 }
 
-const defaults = { audio: true, video: true, devices: { audioInputId: null, videoInputId: null, audioOutputId: null } };
+const defaults = {
+  audio: true,
+  video: true,
+  noiseSuppression: false,
+  backgroundBlur: false,
+  devices: { audioInputId: null, videoInputId: null, audioOutputId: null },
+};
 
 describe("the mock engine", () => {
   it("joins the seeded #design call and shows the three others as remotes", async () => {

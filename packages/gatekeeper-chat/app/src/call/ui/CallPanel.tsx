@@ -68,8 +68,9 @@ export function remoteTiles(
         videoOn: participant.video && media?.video != null,
         speaking: local.activeSpeaker === participant.id,
         quality: media?.quality,
-        // Only a camera that is on can be paused; a camera that is off is just the avatar.
-        paused: participant.video && (media?.videoPaused === true || local.audioOnly === true || local.audioOnlyChosen === true),
+        // Only a camera that is on can be paused; a camera that is off is just the avatar. The engine's
+        // videoPaused already covers audio-only, chosen or forced.
+        paused: participant.video && media?.videoPaused === true,
         ...extras(participant.id, hands, reactions),
       };
     });
@@ -317,6 +318,7 @@ export function CallNotice({
 }): ReactNode {
   const store = useStore();
   const embedded = useChat((state) => state.embedded);
+  const maxParticipants = useChat((state) => state.callFeature.maxParticipants);
   const retry = (): void => void store.joinCall(channelId);
   const close = (): void => store.closeCallPane();
 
@@ -340,7 +342,7 @@ export function CallNotice({
   } else if (failure?.kind === "full") {
     icon = <Prohibit size={22} />;
     title = failure.message;
-    body = "Calls hold five people at once. You can join when somebody leaves.";
+    body = `Calls hold ${maxParticipants} people at once. You can join when somebody leaves.`;
   } else if (failure?.kind === "permission") {
     icon = <VideoCameraSlash size={22} />;
     title = "Camera and microphone are blocked";

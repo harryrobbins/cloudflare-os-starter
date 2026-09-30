@@ -382,7 +382,7 @@ function SwitchItem({
 /** "Audio only": everyone's video paused and the camera off, until chosen again. */
 function AudioOnlyItem({ disabled, onDone }: { disabled: boolean; onDone: () => void }): ReactNode {
   const store = useStore();
-  const on = useChat((state) => state.call.audioOnlyChosen === true);
+  const on = useChat((state) => state.call.audioOnlyChosen);
   return (
     <SwitchItem
       icon={<SpeakerHigh size={15} weight={on ? "fill" : "regular"} />}
@@ -413,8 +413,8 @@ const EFFECT_HINTS: Readonly<Record<EffectState, string | null>> = {
  */
 function EffectItems({ disabled }: { disabled: boolean }): ReactNode {
   const store = useStore();
-  const noise = useChat((state) => state.call.noiseSuppression ?? "unsupported");
-  const blur = useChat((state) => state.call.backgroundBlur ?? "unsupported");
+  const noise = useChat((state) => state.call.noiseSuppression);
+  const blur = useChat((state) => state.call.backgroundBlur);
   const video = useChat((state) => state.call.videoEnabled);
   return (
     <>

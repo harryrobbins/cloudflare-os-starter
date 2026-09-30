@@ -2,8 +2,16 @@
 // lets a test set the snapshot directly, so nothing here depends on the real engine or on WebRTC.
 
 import type { CallState, ParticipantId } from "../../contract.js";
-import { IDLE_CALL } from "../../store/calls.js";
-import type { CallEngine, CallSnapshot, DeviceChoice, JoinOptions, LeaveOptions, TileSize } from "../engine/types.js";
+import {
+  IDLE_CALL,
+  type CallEffect,
+  type CallEngine,
+  type CallSnapshot,
+  type DeviceChoice,
+  type JoinOptions,
+  type LeaveOptions,
+  type TileSize,
+} from "../engine/types.js";
 
 export interface FakeCallEngine extends CallEngine {
   readonly joins: JoinOptions[];
@@ -14,7 +22,7 @@ export interface FakeCallEngine extends CallEngine {
   readonly video: boolean[];
   readonly audioOnly: boolean[];
   readonly pictureInPicture: boolean[];
-  readonly effects: [string, boolean][];
+  readonly effects: [CallEffect, boolean][];
   readonly devices: Partial<DeviceChoice>[];
   left: number;
   /** The options of every `leave`, in order. */
@@ -90,13 +98,9 @@ export function createFakeCallEngine(): FakeCallEngine {
       fake.video.push(enabled);
       fake.set({ videoEnabled: enabled });
     },
-    async setNoiseSuppression(enabled) {
-      fake.effects.push(["noise", enabled]);
-      fake.set({ noiseSuppression: enabled ? "on" : "off" });
-    },
-    async setBackgroundBlur(enabled) {
-      fake.effects.push(["blur", enabled]);
-      fake.set({ backgroundBlur: enabled ? "on" : "off" });
+    async setEffect(effect, enabled) {
+      fake.effects.push([effect, enabled]);
+      fake.set({ [effect]: enabled ? "on" : "off" });
     },
     setPictureInPicture(open) {
       fake.pictureInPicture.push(open);
