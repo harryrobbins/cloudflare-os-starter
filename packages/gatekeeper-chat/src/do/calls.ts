@@ -39,7 +39,6 @@ import {
   type CallParticipant,
   type CallResponse,
   type CallState,
-  type CallSummary,
   type CallTrackKind,
   type ChannelId,
   type ClientEvent,
@@ -56,14 +55,17 @@ import {
   type RenegotiateRequest,
   type SetLayerRequest,
   type UserId,
+  formatCallDuration,
 } from "../shared/protocol.js";
 import { memberIdsOf, requireRead, requireWrite } from "./access.js";
 import { allow, firstRow, placeholders, refuse, type Ctx, type Outcome } from "./context.js";
-import { newMessageId } from "./ids.js";
+import { newCallId, newParticipantId } from "./ids.js";
+import { pruneCallStatsBudgets } from "./call-stats.js";
 import { consume, reactionAllowed } from "./limits.js";
 import { hashId, logDenial, logEvent } from "./logs.js";
 import { hydrateMessages, loadMessage, postSystemMessage } from "./messages.js";
 import type { UserRow } from "./rows.js";
+import { namesFor } from "./users.js";
 import { queueSearchMessage } from "./search-sync.js";
 import { SfuError, sfuClient, type RealtimeConfig, type RemoteTrack } from "./sfu.js";
 import { iceServersFor } from "./turn.js";
@@ -122,10 +124,6 @@ function readTracks(row: Pick<ParticipantRow, "tracks">): StoredTrack[] {
   }
 }
 
-/** Call and participant ids, shaped like every other id (`<prefix>_<time>_<random>`). */
-const newCallId = (now: number): string => `cl${newMessageId(now).slice(1)}`;
-const newParticipantId = (now: number): string => `p${newMessageId(now).slice(1)}`;
-
 function loadCall(ctx: Ctx, callId: string): CallRow | null {
   return firstRow<CallRow>(ctx, `SELECT * FROM calls WHERE id = ?`, callId);
 }
@@ -167,47 +165,65 @@ function toParticipant(row: ParticipantRow): CallParticipant {
   };
 }
 
-function toCallState(ctx: Ctx, call: CallRow): CallState {
+function toCallState(ctx: Ctx, call: CallRow, live: readonly ParticipantRow[] = liveParticipants(ctx, call.id)): CallState {
   return {
     id: call.id,
     channelId: call.channel_id,
     startedBy: call.started_by,
     startedAt: call.started_at,
     messageId: call.message_id,
-    participants: liveParticipants(ctx, call.id).map(toParticipant),
+    participants: live.map(toParticipant),
   };
 }
 
-/** Everyone who joined at any point, in first-join order. */
-function everJoined(ctx: Ctx, callId: string): UserId[] {
-  return ctx.sql
-    .exec<{ user_id: string }>(
-      `SELECT user_id FROM call_participants WHERE call_id = ?
-        GROUP BY user_id ORDER BY MIN(joined_at), MIN(rowid)`,
-      callId,
+/** Rows keyed by their `call_id`, keeping query order within each call. */
+function byCall<T extends { call_id: string }>(rows: readonly T[]): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const row of rows) {
+    const list = out.get(row.call_id);
+    if (list === undefined) out.set(row.call_id, [row]);
+    else list.push(row);
+  }
+  return out;
+}
+
+/**
+ * Everyone who joined at any point, per call, in first-join order. `callFilter` is a SQL condition
+ * on the call's id (`= ?`, `IN (...)`) and its parameters.
+ */
+function everJoinedBy(ctx: Ctx, callFilter: string, ...params: SqlStorageValue[]): Map<string, UserId[]> {
+  const rows = ctx.sql
+    .exec<{ call_id: string; user_id: string }>(
+      `SELECT call_id, user_id FROM call_participants WHERE call_id ${callFilter}
+        GROUP BY call_id, user_id ORDER BY MIN(joined_at), MIN(rowid)`,
+      ...params,
     )
-    .toArray()
-    .map((row) => row.user_id);
+    .toArray();
+  return new Map([...byCall(rows)].map(([callId, list]) => [callId, list.map((row) => row.user_id)]));
 }
 
-function toSummary(ctx: Ctx, call: CallRow): CallSummary {
-  return {
-    id: call.id,
-    state: call.ended_at === null ? "active" : "ended",
-    startedAt: call.started_at,
-    endedAt: call.ended_at,
-    participantIds: everJoined(ctx, call.id),
-  };
+function everJoined(ctx: Ctx, callId: string): UserId[] {
+  return everJoinedBy(ctx, "= ?", callId).get(callId) ?? [];
 }
 
 /** `Message.call` for the system messages calls posted, hydrated by message id like `agentRequest`. */
 export function callFieldsFor(ctx: Ctx, messageIds: readonly MessageId[]): Map<MessageId, Pick<Message, "call">> {
   const out = new Map<MessageId, Pick<Message, "call">>();
   if (messageIds.length === 0) return out;
-  for (const row of ctx.sql
-    .exec<CallRow>(`SELECT * FROM calls WHERE message_id IN (${placeholders(messageIds.length)})`, ...messageIds)
-    .toArray()) {
-    out.set(row.message_id, { call: toSummary(ctx, row) });
+  const inMessages = `IN (${placeholders(messageIds.length)})`;
+  const calls = ctx.sql.exec<CallRow>(`SELECT * FROM calls WHERE message_id ${inMessages}`, ...messageIds).toArray();
+  if (calls.length === 0) return out;
+  const joined = everJoinedBy(ctx, `IN (SELECT id FROM calls WHERE message_id ${inMessages})`, ...messageIds);
+  for (const call of calls) {
+    out.set(call.message_id, {
+      call: {
+        id: call.id,
+        state: call.ended_at === null ? "active" : "ended",
+        startedAt: call.started_at,
+        endedAt: call.ended_at,
+        participantIds: joined.get(call.id) ?? [],
+      },
+    });
   }
   return out;
 }
@@ -223,7 +239,7 @@ export function callFeature(ctx: Ctx): CallFeature {
  */
 export function activeCallsFor(ctx: Ctx, userId: UserId): CallState[] {
   sweepInBackground(ctx);
-  return ctx.sql
+  const calls = ctx.sql
     .exec<CallRow>(
       `SELECT k.* FROM calls k JOIN channels c ON c.id = k.channel_id
         WHERE k.ended_at IS NULL
@@ -232,8 +248,18 @@ export function activeCallsFor(ctx: Ctx, userId: UserId): CallState[] {
         ORDER BY k.started_at`,
       userId,
     )
-    .toArray()
-    .map((call) => toCallState(ctx, call));
+    .toArray();
+  if (calls.length === 0) return [];
+  // Every live participant of every running call in one read; few calls run at once.
+  const live = byCall(
+    ctx.sql
+      .exec<ParticipantRow>(
+        `SELECT p.* FROM call_participants p JOIN calls k ON k.id = p.call_id
+          WHERE k.ended_at IS NULL AND p.left_at IS NULL ORDER BY p.joined_at, p.rowid`,
+      )
+      .toArray(),
+  );
+  return calls.map((call) => toCallState(ctx, call, live.get(call.id) ?? []));
 }
 
 // ---------------------------------------------------------------------------
@@ -330,16 +356,8 @@ function endCall(ctx: Ctx, call: CallRow, now: number): void {
 /** "Call ended · 23 min · Harry, Alice, Bob" -- what search and a plain-text client see. */
 function endedBody(ctx: Ctx, call: CallRow, now: number): string {
   const ids = everJoined(ctx, call.id);
-  const names = new Map<string, string>();
-  if (ids.length > 0) {
-    for (const row of ctx.sql
-      .exec<{ id: string; name: string }>(`SELECT id, name FROM users WHERE id IN (${placeholders(ids.length)})`, ...ids)
-      .toArray()) {
-      names.set(row.id, row.name);
-    }
-  }
-  const minutes = Math.round((now - call.started_at) / 60_000);
-  const duration = minutes < 1 ? "under a minute" : `${minutes} min`;
+  const names = namesFor(ctx, ids);
+  const duration = formatCallDuration(now - call.started_at);
   const people = ids.map((id) => names.get(id) ?? "Someone").join(", ");
   return people.length > 0 ? `Call ended · ${duration} · ${people}` : `Call ended · ${duration}`;
 }
@@ -396,11 +414,12 @@ function sweepInBackground(ctx: Ctx): void {
 }
 
 /**
- * The alarm's share: expire stale participants, close their tracks, and say when the next live
- * participant would go stale (null when no call is running).
+ * The alarm's share: expire stale participants, close their tracks, prune spent stats budgets, and
+ * say when the next live participant would go stale (null when no call is running).
  */
 export async function runCallExpiry(ctx: Ctx): Promise<number | null> {
   await flush(ctx, expireStale(ctx));
+  pruneCallStatsBudgets(ctx);
   const oldest = firstRow<{ value: number | null }>(
     ctx,
     `SELECT MIN(last_seen_at) AS value FROM call_participants WHERE left_at IS NULL`,
@@ -416,13 +435,30 @@ function realtimeOf(ctx: Ctx): RealtimeConfig | null {
   return ctx.realtime ?? null;
 }
 
-function unavailable<T>(): Outcome<T> {
+/** The one refusal every call route gives on a deployment without Realtime credentials. */
+export function unavailable<T>(): Outcome<T> {
   return refuse("unavailable", "Calls are not available on this deployment.");
 }
 
 function upstream<T>(error: unknown): Outcome<T> {
   if (!(error instanceof SfuError)) throw error;
   return refuse("upstream_error", `The call service refused that request (${error.code}).`);
+}
+
+/** The participant a request or frame names, if the caller owns it in that call and it is still there. */
+function ownLiveParticipant(
+  ctx: Ctx,
+  user: UserRow,
+  event: { readonly call: string; readonly participant: string },
+  what: string,
+): Outcome<ParticipantRow> {
+  const row = loadParticipant(ctx, event.participant);
+  if (row === null || row.call_id !== event.call || row.user_id !== user.id) {
+    logDenial(what, { call: hashId(event.call), user: hashId(user.id) });
+    return refuse("forbidden", "That participant is not yours.");
+  }
+  if (row.left_at !== null) return refuse("not_found", "You are no longer in this call.");
+  return allow(row);
 }
 
 interface Owned {
@@ -452,15 +488,10 @@ async function owned(
   if (call === null) return refuse("not_found", "No such call.");
   const access = requireRead(ctx, call.channel_id, user.id);
   if (!access.ok) return refuse("not_found", "No such call.");
-  const participant = loadParticipant(ctx, participantId);
-  if (participant === null || participant.call_id !== callId || participant.user_id !== user.id) {
-    logDenial("call_participant", { call: hashId(callId), user: hashId(user.id) });
-    return refuse("forbidden", "That participant is not yours.");
-  }
-  if (participant.left_at !== null || call.ended_at !== null) {
-    return refuse("not_found", "You are no longer in this call.");
-  }
-  return allow({ config, call, participant });
+  const participant = ownLiveParticipant(ctx, user, { call: callId, participant: participantId }, "call_participant");
+  if (!participant.ok) return participant;
+  if (call.ended_at !== null) return refuse("not_found", "You are no longer in this call.");
+  return allow({ config, call, participant: participant.value });
 }
 
 /** The same participant, re-read after an `await`: still live, and still on the same SFU session. */
@@ -488,9 +519,7 @@ function writeTracks(ctx: Ctx, row: ParticipantRow, tracks: readonly StoredTrack
   ctx.sql.exec(
     `UPDATE call_participants SET tracks = ?, audio = ?, video = ?, screen = ? WHERE id = ?`,
     JSON.stringify(tracks),
-    flags.audio ? 1 : 0,
-    flags.video ? 1 : 0,
-    flags.screen ? 1 : 0,
+    ...flagParams(flags),
     row.id,
   );
 }
@@ -499,6 +528,11 @@ interface Flags {
   readonly audio: boolean;
   readonly video: boolean;
   readonly screen: boolean;
+}
+
+/** The `audio, video, screen` column values, in that order. */
+function flagParams(flags: Flags): [number, number, number] {
+  return [flags.audio ? 1 : 0, flags.video ? 1 : 0, flags.screen ? 1 : 0];
 }
 
 function flagsOf(row: ParticipantRow): Flags {
@@ -927,12 +961,9 @@ export async function leaveCall(
  */
 export function callBeat(ctx: Ctx, user: UserRow, beat: Extract<ClientEvent, { t: "call-beat" }>): Outcome<void> {
   if (realtimeOf(ctx) === null) return unavailable();
-  const row = loadParticipant(ctx, beat.participant);
-  if (row === null || row.call_id !== beat.call || row.user_id !== user.id) {
-    logDenial("call_beat", { call: hashId(beat.call), user: hashId(user.id) });
-    return refuse("forbidden", "That participant is not yours.");
-  }
-  if (row.left_at !== null) return refuse("not_found", "You are no longer in this call.");
+  const participant = ownLiveParticipant(ctx, user, beat, "call_beat");
+  if (!participant.ok) return participant;
+  const row = participant.value;
   const now = ctx.now();
   const flags = clampFlags(beat, readTracks(row));
   const changed = !sameFlags(flags, flagsOf(row));
@@ -944,30 +975,12 @@ export function callBeat(ctx: Ctx, user: UserRow, beat: Extract<ClientEvent, { t
   ctx.sql.exec(
     `UPDATE call_participants SET last_seen_at = ?, audio = ?, video = ?, screen = ? WHERE id = ?`,
     now,
-    flags.audio ? 1 : 0,
-    flags.video ? 1 : 0,
-    flags.screen ? 1 : 0,
+    ...flagParams(flags),
     row.id,
   );
   if (changed) broadcastCall(ctx, row.call_id);
   sweepInBackground(ctx);
   return allow(undefined);
-}
-
-/** The participant a hand or reaction frame names, if the caller owns it and it is still in the call. */
-function ownLiveParticipant(
-  ctx: Ctx,
-  user: UserRow,
-  event: { readonly call: string; readonly participant: string },
-  what: string,
-): Outcome<ParticipantRow> {
-  const row = loadParticipant(ctx, event.participant);
-  if (row === null || row.call_id !== event.call || row.user_id !== user.id) {
-    logDenial(what, { call: hashId(event.call), user: hashId(user.id) });
-    return refuse("forbidden", "That participant is not yours.");
-  }
-  if (row.left_at !== null) return refuse("not_found", "You are no longer in this call.");
-  return allow(row);
 }
 
 /**

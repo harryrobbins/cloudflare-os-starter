@@ -33,13 +33,21 @@ const round1 = (value: number): number => Math.round(value * 10) / 10;
 const orUndefined = (value: number | null, shape: (n: number) => number): number | undefined =>
   value === null ? undefined : shape(value);
 
+/**
+ * A scoped budget row per participant ever reported; windows that can no longer refuse are dead
+ * weight. Run by the alarm's call expiry rather than per report.
+ */
+export function pruneCallStatsBudgets(ctx: Ctx): void {
+  pruneScoped(ctx, "callStats", CALL_STATS_GRACE_MS);
+}
+
+/** `POST /calls/:callId/stats`. The router has already answered 503 when calls are off. */
 export function postCallStats(
   ctx: Ctx,
   user: UserRow,
   callId: string,
   report: CallStatsReport,
 ): Outcome<OkResponse> {
-  if ((ctx.realtime ?? null) === null) return refuse("unavailable", "Calls are not available on this deployment.");
   const row = firstRow<StatsParticipant>(
     ctx,
     `SELECT id, call_id, user_id, left_at FROM call_participants WHERE id = ?`,
@@ -57,9 +65,6 @@ export function postCallStats(
   // Charged only once ownership is proven, so nobody can mint budget rows for arbitrary ids.
   const budget = consume(ctx, user.id, "callStats", row.id);
   if (!budget.ok) return budget;
-  // A scoped row per participant ever reported; windows that can no longer refuse are dead weight.
-  pruneScoped(ctx, "callStats", CALL_STATS_GRACE_MS);
-
   logEvent("chat.call.stats", {
     call: hashId(callId),
     user: hashId(user.id),

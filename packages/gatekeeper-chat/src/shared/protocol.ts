@@ -956,6 +956,19 @@ export const CALL_REACTION_WINDOW_MS = 10_000;
 export const MAX_SDP_BYTES = 128 * 1024;
 
 /**
+ * A call's length as the history line says it: `under a minute`, `23 min`, `1 h`, `1 h 5 min`. The
+ * server writes it into the ended call's message body and the client renders it, so they agree.
+ */
+export function formatCallDuration(ms: number): string {
+  const minutes = Math.round(Math.max(0, ms) / 60_000);
+  if (minutes < 1) return "under a minute";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+}
+
+/**
  * A published track that is flowing (its owner saw `bytesSent > 0` and announced it). Only these
  * appear in {@link CallParticipant.tracks} and only these can be pulled.
  */

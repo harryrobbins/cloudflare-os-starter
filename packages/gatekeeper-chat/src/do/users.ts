@@ -253,3 +253,16 @@ export function matchUsers(ctx: Ctx, viewer: UserRow, text: string, limit: numbe
 export function escapeLike(value: string): string {
   return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
 }
+
+/** Display names by id, for up to 100 distinct ids; unknown ids are simply absent. */
+export function namesFor(ctx: Ctx, userIds: readonly UserId[]): Map<UserId, string> {
+  const ids = [...new Set(userIds)].slice(0, 100);
+  const out = new Map<UserId, string>();
+  if (ids.length === 0) return out;
+  for (const row of ctx.sql
+    .exec<{ id: string; name: string }>(`SELECT id, name FROM users WHERE id IN (${placeholders(ids.length)})`, ...ids)
+    .toArray()) {
+    out.set(row.id, row.name);
+  }
+  return out;
+}

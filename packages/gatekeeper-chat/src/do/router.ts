@@ -66,6 +66,7 @@ import {
   reconnectCall,
   renegotiateCall,
   setLayer,
+  unavailable,
 } from "./calls.js";
 import { postCallStats } from "./call-stats.js";
 import type { Ctx, Outcome } from "./context.js";
@@ -96,8 +97,11 @@ function respond<T>(outcome: Outcome<T>): Response {
     : errorResponse(outcome.code, outcome.message, outcome.retryAfter);
 }
 
-/** Turns a validator's {@link Result} into a 400, or hands the value to a handler. */
-function validated<T>(result: Result<T>, handler: (value: T) => Response): Response {
+/** Turns a validator's {@link Result} into a 400, or hands the value to a (possibly async) handler. */
+function validated<T, R extends Response | Promise<Response>>(
+  result: Result<T>,
+  handler: (value: T) => R,
+): R | Response {
   return result.ok ? handler(result.value) : errorResponse("invalid_request", result.message);
 }
 
@@ -204,12 +208,12 @@ export async function route(
 
     case "sendMessage": {
       const body = await readJson(request);
-      const parsed = parseSendMessage(body);
-      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
-      return respond(
-        await sendMessage(ctx, user, params["channelId"]!, parsed.value, {
-          workshopAccount: identity.workshopAccount ?? null,
-        }),
+      return validated(parseSendMessage(body), async (send) =>
+        respond(
+          await sendMessage(ctx, user, params["channelId"]!, send, {
+            workshopAccount: identity.workshopAccount ?? null,
+          }),
+        ),
       );
     }
 
@@ -316,7 +320,7 @@ export async function route(
     case "reconnectCall":
     case "postCallStats":
     case "leaveCall": {
-      if (!callFeature(ctx).enabled) return errorResponse("unavailable", "Calls are not available on this deployment.");
+      if (!callFeature(ctx).enabled) return respond(unavailable());
       return callRoute(ctx, user, name, params, await readJson(request));
     }
   }
@@ -332,55 +336,30 @@ async function callRoute(
 ): Promise<Response> {
   const callId = params["callId"] ?? "";
   switch (name) {
-    case "joinCall": {
-      const parsed = parseJoinCall(body);
-      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
-      return respond(await joinCall(ctx, user, params["channelId"]!));
-    }
-    case "publishTracks": {
-      const parsed = parsePublishTracks(body);
-      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
-      return respond(await publishTracks(ctx, user, callId, parsed.value));
-    }
-    case "announceTracks": {
-      const parsed = parseAnnounceTracks(body);
-      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
-      return respond(await announceTracks(ctx, user, callId, parsed.value));
-    }
-    case "pullTracks": {
-      const parsed = parsePullTracks(body);
-      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
-      return respond(await pullTracks(ctx, user, callId, parsed.value));
-    }
-    case "renegotiateCall": {
-      const parsed = parseRenegotiate(body);
-      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
-      return respond(await renegotiateCall(ctx, user, callId, parsed.value));
-    }
-    case "closeTracks": {
-      const parsed = parseCloseTracks(body);
-      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
-      return respond(await closeTracks(ctx, user, callId, parsed.value));
-    }
-    case "setLayer": {
-      const parsed = parseSetLayer(body);
-      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
-      return respond(await setLayer(ctx, user, callId, parsed.value));
-    }
-    case "postCallStats": {
-      const parsed = parseCallStatsReport(body);
-      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
-      return respond(postCallStats(ctx, user, callId, parsed.value));
-    }
+    case "joinCall":
+      return validated(parseJoinCall(body), async () => respond(await joinCall(ctx, user, params["channelId"]!)));
+    case "publishTracks":
+      return validated(parsePublishTracks(body), async (v) => respond(await publishTracks(ctx, user, callId, v)));
+    case "announceTracks":
+      return validated(parseAnnounceTracks(body), async (v) => respond(await announceTracks(ctx, user, callId, v)));
+    case "pullTracks":
+      return validated(parsePullTracks(body), async (v) => respond(await pullTracks(ctx, user, callId, v)));
+    case "renegotiateCall":
+      return validated(parseRenegotiate(body), async (v) => respond(await renegotiateCall(ctx, user, callId, v)));
+    case "closeTracks":
+      return validated(parseCloseTracks(body), async (v) => respond(await closeTracks(ctx, user, callId, v)));
+    case "setLayer":
+      return validated(parseSetLayer(body), async (v) => respond(await setLayer(ctx, user, callId, v)));
+    case "postCallStats":
+      return validated(parseCallStatsReport(body), (v) => respond(postCallStats(ctx, user, callId, v)));
     case "reconnectCall":
-    case "leaveCall": {
-      const parsed = parseParticipantRequest(body);
-      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
-      const participantId = parsed.value.participantId;
-      return name === "reconnectCall"
-        ? respond(await reconnectCall(ctx, user, callId, participantId))
-        : respond(await leaveCall(ctx, user, callId, participantId));
-    }
+      return validated(parseParticipantRequest(body), async ({ participantId }) =>
+        respond(await reconnectCall(ctx, user, callId, participantId)),
+      );
+    case "leaveCall":
+      return validated(parseParticipantRequest(body), async ({ participantId }) =>
+        respond(await leaveCall(ctx, user, callId, participantId)),
+      );
     default:
       return errorResponse("not_found", "No such call route.");
   }

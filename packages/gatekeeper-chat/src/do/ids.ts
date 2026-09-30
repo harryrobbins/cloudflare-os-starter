@@ -22,3 +22,5 @@ export const newMessageId = (now?: number): string => newId("m", now);
 export const newChannelId = (now?: number): string => newId("c", now);
 export const newAttachmentId = (now?: number): string => newId("a", now);
 export const newSessionId = (now?: number): string => newId("s", now);
+export const newCallId = (now?: number): string => newId("cl", now);
+export const newParticipantId = (now?: number): string => newId("p", now);

@@ -1,7 +1,8 @@
 // The call UI's pure rules: grid shape, tile sizes, and the words on the history message and the
 // error states. Kept out of the components so they are tested without a DOM.
 
-import type { CallState, CallSummary, UserId } from "../../contract.js";
+import { formatCallDuration, type CallState, type CallSummary, type UserId } from "../../contract.js";
+import { firstName } from "../../lib/digest.js";
 import type { TileSize } from "../engine/types.js";
 
 /**
@@ -40,26 +41,15 @@ export function tileSizeFor(widthPx: number, options: { stage?: boolean; hidden?
   return "small";
 }
 
-/** `under a minute`, `23 min`, `1 h`, `1 h 5 min`. */
-export function formatCallDuration(ms: number): string {
-  const minutes = Math.round(Math.max(0, ms) / 60_000);
-  if (minutes < 1) return "under a minute";
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
-}
-
-/** The first word of a display name: "Harry" for "Harry Robbins". */
-export function firstName(name: string): string {
-  return name.trim().split(/\s+/)[0] ?? name;
-}
-
-/** Up to four first names, then "+N": the tail of "Call ended · 23 min · Harry, Alice, Bob". */
-export function participantNames(ids: readonly UserId[], nameOf: (id: UserId) => string | undefined): string {
-  const names = ids.map((id) => firstName(nameOf(id) ?? "Someone"));
-  if (names.length <= 4) return names.join(", ");
-  return `${names.slice(0, 4).join(", ")} +${names.length - 4}`;
+/** Up to `cap` first names, then "+N": the tail of "Call ended · 23 min · Harry, Alice, Bob". */
+export function participantNames(
+  ids: readonly UserId[],
+  nameOf: (id: UserId) => string | undefined,
+  cap = 4,
+): string {
+  const names = ids.map((id) => firstName(nameOf(id)) ?? "Someone");
+  if (names.length <= cap) return names.join(", ");
+  return `${names.slice(0, cap).join(", ")} +${names.length - cap}`;
 }
 
 /** The history line for a call, once it has ended. */

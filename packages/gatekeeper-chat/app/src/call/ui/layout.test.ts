@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { IDLE_CALL } from "../../store/calls.js";
-import type { CallState, User } from "../../contract.js";
+import { formatCallDuration, type CallState, type User } from "../../contract.js";
 import { remoteTiles } from "./CallPanel.js";
 import {
   callEndedText,
-  formatCallDuration,
   gridRows,
   mediaHelp,
   participantNames,
