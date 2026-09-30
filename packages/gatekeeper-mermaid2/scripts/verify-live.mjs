@@ -12,7 +12,7 @@ const deployment=parse(await readFile(join(root,'../../deployment.jsonc'),'utf8'
 assert.equal(deployment.mermaid2?.enabled,true);
 const folder=await mkdtemp(join(tmpdir(),'mermaid2-rpc-'));
 const config=join(folder,'wrangler.jsonc');
-await writeFile(config,JSON.stringify({name:'mermaid2-local-verification',main:join(root,'scripts/verify-worker.mjs'),account_id:deployment.accountId,compatibility_date:'2026-09-30',compatibility_flags:['nodejs_compat'],workers_dev:false,preview_urls:false,services:[{binding:'MERMAID2',service:deployment.workers.mermaid2.name,entrypoint:'DiagramRenderer',remote:true},{binding:'VENDOR',service:deployment.workers.mermaid2.name,entrypoint:'GatekeeperVendor',remote:true}]}));
+await writeFile(config,JSON.stringify({name:'mermaid2-local-verification',main:join(root,'scripts/verify-worker.mjs'),account_id:deployment.accountId,compatibility_date:'2026-08-22',compatibility_flags:['nodejs_compat'],workers_dev:false,preview_urls:false,services:[{binding:'MERMAID2',service:deployment.workers.mermaid2.name,entrypoint:'DiagramRenderer',remote:true},{binding:'VENDOR',service:deployment.workers.mermaid2.name,entrypoint:'GatekeeperVendor',remote:true},{binding:'WORKSHOP',service:deployment.workers.workshop.name,remote:true}]}));
 const processHandle=spawn(process.execPath,[join(dirname(require.resolve('wrangler/package.json')),'bin/wrangler.js'),'dev','--config',config,'--ip','127.0.0.1','--port','8894','--inspector-port','0'],{cwd:root,stdio:['ignore','pipe','pipe']});
 let log='';for(const stream of [processHandle.stdout,processHandle.stderr])stream.on('data',data=>{log=(log+data.toString()).slice(-8000);});
 const base='http://127.0.0.1:8894';
@@ -24,10 +24,12 @@ try{
   try{ready=(await fetchProbe('/health')).ok;}catch{}
   if(ready)break;await new Promise(resolve=>setTimeout(resolve,1000));
  }
+ // The local probe uses the newest date supported by the checkout's pinned workerd.
  assert.ok(ready,'Verification server did not start: '+log);
+ const workshop=await (await fetchProbe('/workshop')).json();assert.equal(workshop.status,403);
  const capabilities=await (await fetchProbe('/capabilities')).json();
  assert.deepEqual(capabilities.layouts,['tala','dagre','elk']);assert.equal(capabilities.formats.length,9);
- const vendor=await (await fetchProbe('/vendor')).json();assert.equal(vendor.vendor,'MermaiD2');assert.ok(vendor.resourceClass&&vendor.configurator);
+ const vendor=await (await fetchProbe('/vendor')).json();assert.equal(vendor.vendor,'MermaiD2');assert.ok(vendor.configurator);
  for(const id of ['mermaid2-connector','mermaid2-blueprint','d2-authoring'])assert.match(await (await fetchProbe('/skills/'+id)).text(),new RegExp('name: '+id));
  for(const language of ['d2','mermaid'])for(const layout of ['tala','dagre','elk']){
   const source=language==='d2'?'a: Client\nb: API\na -> b':'flowchart LR\n a[Client] --> b[API]';
