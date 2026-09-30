@@ -23,7 +23,8 @@ The source distinguishes three things often called an app:
 
 Inspection: `cloudflare-os/packages/workshop-frontend/src/ShareModal.tsx`,
 `GadgetEditor.tsx`, `useWorkspaceOpen.ts`, and `packages/gatekeeper-chat/src/serve.ts`.
-A bookmark can open a workspace, but a home-screen shortcut does not change the shared
+`GadgetUI.tsx` renders the gadget as sandboxed `srcDoc`, not a persistent standalone
+HTTP app URL. A bookmark can open a workspace, but a home-screen shortcut does not change the shared
 capability or turn an arbitrary sandbox iframe into an independently installed app.
 Future generic gadget installation should have an explicit presentation route using
 existing capability checks, rather than treating share secrets as manifest identifiers.
