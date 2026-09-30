@@ -108,6 +108,9 @@
         },
         "xiaomi/mimo-v2.6-pro": {
           "name": "Xiaomi MiMo V2.6 Pro (OpenRouter)", "contextWindow": 1048576, "outputLimit": 131072
+        },
+        "xiaomi/mimo-v2.6-pro-ultraspeed": {
+          "name": "MiMo 2.6 ultrafast (expensive)", "contextWindow": 1048576, "outputLimit": 131072
         }
       }
     }
