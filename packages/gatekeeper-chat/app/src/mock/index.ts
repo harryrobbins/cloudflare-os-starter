@@ -639,7 +639,23 @@ function createMockApi(workspace: MockWorkspace): ChatApi {
       if (user === undefined) throw new ApiError("not_found", "No such user.", 404);
       return { user };
     },
+
+    // Calls: placeholders until Stream C's mock engine (docs/plans/chat-video-implementation.md).
+    getCall: async () => ({ call: null }),
+    joinCall: callsUnavailable,
+    publishTracks: callsUnavailable,
+    announceTracks: callsUnavailable,
+    pullTracks: callsUnavailable,
+    renegotiateCall: callsUnavailable,
+    closeTracks: callsUnavailable,
+    setLayer: callsUnavailable,
+    reconnectCall: callsUnavailable,
+    leaveCall: callsUnavailable,
   };
+}
+
+async function callsUnavailable(): Promise<never> {
+  throw new ApiError("unavailable", "Calls are not available in the mock yet.", 503);
 }
 
 const pendingAttachments = new Map<string, Attachment>();

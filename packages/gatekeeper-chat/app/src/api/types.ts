@@ -105,6 +105,18 @@ export interface ChatApi {
   /** Several directory entries by id, in one request. An id the directory does not show is absent. */
   getUsers(ids: readonly UserId[]): Promise<UserListResponse>;
   getUser(userId: UserId): Promise<{ user: import("../contract.js").User }>;
+
+  // Calls. The call routes are the engine's signalling channel; see `call/engine/types.ts`.
+  getCall(channelId: ChannelId): Promise<import("../contract.js").CallResponse>;
+  joinCall(channelId: ChannelId): Promise<import("../contract.js").JoinCallResponse>;
+  publishTracks(callId: string, request: import("../contract.js").PublishTracksRequest): Promise<import("../contract.js").PublishTracksResponse>;
+  announceTracks(callId: string, request: import("../contract.js").AnnounceTracksRequest): Promise<import("../contract.js").CallResponse>;
+  pullTracks(callId: string, request: import("../contract.js").PullTracksRequest): Promise<import("../contract.js").PullTracksResponse>;
+  renegotiateCall(callId: string, request: import("../contract.js").RenegotiateRequest): Promise<import("../contract.js").OkResponse>;
+  closeTracks(callId: string, request: import("../contract.js").CloseTracksRequest): Promise<import("../contract.js").CloseTracksResponse>;
+  setLayer(callId: string, request: import("../contract.js").SetLayerRequest): Promise<import("../contract.js").OkResponse>;
+  reconnectCall(callId: string, request: import("../contract.js").ReconnectCallRequest): Promise<import("../contract.js").ReconnectCallResponse>;
+  leaveCall(callId: string, request: import("../contract.js").LeaveCallRequest): Promise<import("../contract.js").OkResponse>;
 }
 
 export type SocketStatus = "idle" | "connecting" | "open" | "reconnecting" | "closed";

@@ -277,6 +277,19 @@ export async function route(
     case "subscribePush":
     case "unsubscribePush":
       return errorResponse("not_implemented", `${name} is not implemented yet.`);
+
+    // Placeholder until Stream A (docs/plans/chat-video-implementation.md) lands src/do/calls.ts.
+    case "getCall":
+    case "joinCall":
+    case "publishTracks":
+    case "announceTracks":
+    case "pullTracks":
+    case "renegotiateCall":
+    case "closeTracks":
+    case "setLayer":
+    case "reconnectCall":
+    case "leaveCall":
+      return errorResponse("unavailable", "Calls are not available yet.");
   }
 }
 

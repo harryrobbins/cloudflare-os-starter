@@ -237,6 +237,16 @@ function harness(): Harness {
     listUsers: async () => ({ users: [me, alice], cursor: null }),
     getUsers: async () => ({ users: [], cursor: null }),
     getUser: async () => ({ user: alice }),
+    getCall: async () => ({ call: null }),
+    joinCall: unavailable,
+    publishTracks: unavailable,
+    announceTracks: unavailable,
+    pullTracks: unavailable,
+    renegotiateCall: unavailable,
+    closeTracks: unavailable,
+    setLayer: unavailable,
+    reconnectCall: unavailable,
+    leaveCall: unavailable,
   };
 
   state.api = api;
@@ -820,3 +830,7 @@ describe("people the client has never seen", () => {
     expect(getUsers).toHaveBeenCalledTimes(1);
   });
 });
+
+async function unavailable(): Promise<never> {
+  throw new Error("calls are not exercised by this suite");
+}

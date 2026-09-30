@@ -84,6 +84,20 @@ export const API_ROUTES = {
 
   subscribePush: { method: "POST", path: "/push/subscribe" },
   unsubscribePush: { method: "DELETE", path: "/push/subscribe" },
+
+  // Calls (docs/plans/chat-video.md). Every SFU operation goes through the Durable Object, which
+  // checks the caller owns the participant and holds the SFU secret; the browser never talks to the
+  // SFU's control API directly, only to its media endpoints.
+  getCall: { method: "GET", path: "/channels/:channelId/call" },
+  joinCall: { method: "POST", path: "/channels/:channelId/call/join" },
+  publishTracks: { method: "POST", path: "/calls/:callId/publish" },
+  announceTracks: { method: "POST", path: "/calls/:callId/announce" },
+  pullTracks: { method: "POST", path: "/calls/:callId/pull" },
+  renegotiateCall: { method: "POST", path: "/calls/:callId/renegotiate" },
+  closeTracks: { method: "POST", path: "/calls/:callId/close-tracks" },
+  setLayer: { method: "POST", path: "/calls/:callId/layer" },
+  reconnectCall: { method: "POST", path: "/calls/:callId/reconnect" },
+  leaveCall: { method: "POST", path: "/calls/:callId/leave" },
 } as const satisfies Record<string, RouteDef>;
 
 export type ApiRouteName = keyof typeof API_ROUTES;
