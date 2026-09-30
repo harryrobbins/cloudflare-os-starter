@@ -119,16 +119,20 @@ function forCall(map: Map<string, Set<CallBannerKind>>, callId: string): Set<Cal
 /** The banner and tip strip for the live call: at most one of the two at a time, banner first. */
 export function CallQualityNotices(): ReactNode {
   const store = useStore();
-  const local = useChat((state) => state.call);
+  const phase = useChat((state) => state.call.phase);
+  const participantId = useChat((state) => state.call.participantId);
+  const audioOnly = useChat((state) => state.call.audioOnly);
+  const localQuality = useChat((state) => state.call.localQuality);
+  const limitation = useChat((state) => state.call.limitation);
   const room = useChat((state) => (state.call.channelId === null ? undefined : state.calls[state.call.channelId]));
   const outputId = useChat((state) => state.call.audioOutputId ?? state.callDevices.audioOutputId);
-  const callId = local.callId ?? "";
+  const callId = useChat((state) => state.call.callId) ?? "";
   const [, setVersion] = useState(0);
   const [tipDismissed, setTipDismissed] = useState(headphonesHintDismissed);
   const lists = useDeviceLists(store.callEngine, callId);
 
   const dismissed = forCall(dismissedByCall, callId);
-  const banner: CallBanner | null = callBanner(local, dismissed);
+  const banner: CallBanner | null = callBanner({ phase, audioOnly, localQuality, limitation }, dismissed);
 
   useEffect(() => {
     if (banner === null) return;
@@ -139,10 +143,10 @@ export function CallQualityNotices(): ReactNode {
   }, [banner?.kind, banner?.message, callId, store]);
 
   const others = useMemo(
-    () => (room?.participants ?? []).filter((participant) => participant.id !== local.participantId).length,
-    [room, local.participantId],
+    () => (room?.participants ?? []).filter((participant) => participant.id !== participantId).length,
+    [room, participantId],
   );
-  const tip = !tipDismissed && local.phase === "connected" && shouldHintHeadphones({ others, outputId, outputs: lists.audioOutputs });
+  const tip = !tipDismissed && phase === "connected" && shouldHintHeadphones({ others, outputId, outputs: lists.audioOutputs });
 
   if (banner !== null) {
     return (

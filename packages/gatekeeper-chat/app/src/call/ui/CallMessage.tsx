@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 
 import type { CallSummary, Message } from "../../contract.js";
 import { formatTime } from "../../lib/format.js";
-import { useChat, useStore } from "../../hooks/store.js";
+import { useCallPlace, useChat, useStore } from "../../hooks/store.js";
 import { callButtonState, type CallButtonState } from "../../store/calls.js";
 import { callEndedText } from "./layout.js";
 
@@ -19,7 +19,7 @@ export function CallMessage({ message, summary }: { message: Message; summary: C
   const users = useChat((state) => state.users);
   const live = useChat((state) => state.calls[message.channelId]);
   const feature = useChat((state) => state.callFeature);
-  const local = useChat((state) => state.call);
+  const local = useCallPlace();
   const meId = useChat((state) => state.me?.id);
   const member = useChat((state) => state.memberships[message.channelId] !== undefined);
   const button =

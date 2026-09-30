@@ -49,7 +49,7 @@ function extras(
 /** The remote participants' tiles, in join order, merged from the room and the engine's media. */
 export function remoteTiles(
   room: CallState | undefined,
-  local: CallSnapshot,
+  local: Pick<CallSnapshot, "participantId" | "remotes" | "activeSpeaker">,
   users: Readonly<Record<string, User>>,
   reactions: readonly CallReactionShown[] = [],
 ): TileModel[] {
@@ -77,7 +77,7 @@ export function remoteTiles(
 }
 
 /** The first screen being shared, remote before local: what the stage shows. */
-function screenTile(room: CallState | undefined, local: CallSnapshot, users: Readonly<Record<string, User>>, meName: string, meId: string): TileModel | null {
+function screenTile(room: CallState | undefined, local: Pick<CallSnapshot, "participantId" | "remotes" | "localScreen">, users: Readonly<Record<string, User>>, meName: string, meId: string): TileModel | null {
   for (const participant of room?.participants ?? []) {
     const screen = local.remotes[participant.id]?.screen;
     if (participant.id !== local.participantId && screen != null) {
@@ -187,23 +187,33 @@ function LiveCallPanel({ channelId, label, layout, className = "", pip = false }
   const onSize = useTileSizeReporting(hidden);
   const dock = layout === "dock";
 
-  const remotes = useMemo(() => remoteTiles(room, local, users, reactions), [room, local, users, reactions]);
-  const stage = useMemo(
-    () => screenTile(room, local, users, me?.name ?? "You", me?.id ?? "self"),
-    [room, local, users, me],
+  // Keyed on the snapshot fields each one reads, so a change elsewhere in the snapshot (quality,
+  // effects, a toggle) does not rebuild every tile.
+  const { participantId, remotes: media, activeSpeaker, localScreen, localVideo, audioEnabled, videoEnabled, localQuality } =
+    local;
+  const remotes = useMemo(
+    () => remoteTiles(room, { participantId, remotes: media, activeSpeaker }, users, reactions),
+    [room, participantId, media, activeSpeaker, users, reactions],
   );
-  const self: TileModel = {
-    key: "self",
-    userId: me?.id ?? "self",
-    name: me?.name ?? "You",
-    stream: local.localVideo,
-    audioOn: local.audioEnabled,
-    videoOn: local.videoEnabled && local.localVideo !== null,
-    speaking: false,
-    self: true,
-    quality: local.localQuality,
-    ...extras(local.participantId, handQueue(room), reactions),
-  };
+  const stage = useMemo(
+    () => screenTile(room, { participantId, remotes: media, localScreen }, users, me?.name ?? "You", me?.id ?? "self"),
+    [room, participantId, media, localScreen, users, me],
+  );
+  const self = useMemo<TileModel>(
+    () => ({
+      key: "self",
+      userId: me?.id ?? "self",
+      name: me?.name ?? "You",
+      stream: localVideo,
+      audioOn: audioEnabled,
+      videoOn: videoEnabled && localVideo !== null,
+      speaking: false,
+      self: true,
+      quality: localQuality,
+      ...extras(participantId, handQueue(room), reactions),
+    }),
+    [me, localVideo, audioEnabled, videoEnabled, localQuality, participantId, room, reactions],
+  );
 
   let body: ReactNode;
   if (remotes.length === 0 && stage === null) {

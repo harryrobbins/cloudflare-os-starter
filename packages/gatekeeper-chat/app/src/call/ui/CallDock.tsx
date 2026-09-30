@@ -15,7 +15,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { useChat, useStore } from "../../hooks/store.js";
+import { useCallPlace, useChat, useStore } from "../../hooks/store.js";
 import { channelLabel } from "../../lib/labels.js";
 import { isLivePhase } from "../../store/calls.js";
 import { RemoteAudio } from "./CallTile.js";
@@ -26,15 +26,17 @@ import { callKeyHandlers } from "./shortcuts.js";
 export function CallDock(): ReactNode {
   const store = useStore();
   const navigate = useNavigate();
-  const call = useChat((state) => state.call);
+  const { channelId: callChannelId, phase } = useCallPlace();
+  const remotes = useChat((state) => state.call.remotes);
+  const audioEnabled = useChat((state) => state.call.audioEnabled);
   // The engine reports the output it switched to; the remembered choice covers an engine that does not.
   const sinkId = useChat((state) => state.call.audioOutputId ?? state.callDevices.audioOutputId);
   const activeChannelId = useChat((state) => state.activeChannelId);
   const shellHidden = useChat((state) => state.shellLayout === "hidden");
-  const channel = useChat((state) => (call.channelId === null ? undefined : state.channels[call.channelId]));
+  const channel = useChat((state) => (callChannelId === null ? undefined : state.channels[callChannelId]));
   const users = useChat((state) => state.users);
   const meId = useChat((state) => state.me?.id);
-  const live = isLivePhase(call.phase);
+  const live = isLivePhase(phase);
   const pip = usePipWindow();
   const theme = useChat((state) => state.theme);
 
@@ -73,24 +75,24 @@ export function CallDock(): ReactNode {
 
   if (!live) return null;
   const label = channel === undefined ? "the call" : channelLabel(channel, users, meId);
-  const away = call.channelId !== activeChannelId && !shellHidden;
+  const away = callChannelId !== activeChannelId && !shellHidden;
 
   return (
     <>
       {pip !== null &&
-        call.channelId !== null &&
+        callChannelId !== null &&
         createPortal(
           <div className="flex h-dvh flex-col bg-kumo-base text-kumo-default">
-            <CallPanel channelId={call.channelId} label={label} layout="dock" pip className="flex-1" />
+            <CallPanel channelId={callChannelId} label={label} layout="dock" pip className="flex-1" />
           </div>,
           pip.document.body,
         )}
       <div className="hidden" aria-hidden="true">
-        {Object.values(call.remotes).map((remote) =>
+        {Object.values(remotes).map((remote) =>
           remote.audio === null ? null : <RemoteAudio key={remote.participantId} stream={remote.audio} sinkId={sinkId} />,
         )}
       </div>
-      {away && call.channelId !== null && (
+      {away && callChannelId !== null && (
         <div
           role="region"
           aria-label="Call in progress"
@@ -100,7 +102,7 @@ export function CallDock(): ReactNode {
             type="button"
             onClick={() => {
               store.setCallChatOpen(false);
-              void navigate({ to: "/c/$channelId", params: { channelId: call.channelId! } });
+              void navigate({ to: "/c/$channelId", params: { channelId: callChannelId! } });
             }}
             className="flex min-w-0 cursor-pointer items-center gap-2 text-[12px] font-medium text-kumo-default"
           >
@@ -112,11 +114,11 @@ export function CallDock(): ReactNode {
           <button
             type="button"
             onClick={() => store.toggleCallAudio()}
-            aria-label={call.audioEnabled ? "Mute microphone" : "Unmute microphone"}
-            title={call.audioEnabled ? "Mute microphone" : "Unmute microphone"}
+            aria-label={audioEnabled ? "Mute microphone" : "Unmute microphone"}
+            title={audioEnabled ? "Mute microphone" : "Unmute microphone"}
             className="press ml-1 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-kumo-subtle hover:bg-kumo-tint"
           >
-            {call.audioEnabled ? <Microphone size={14} weight="fill" /> : <MicrophoneSlash size={14} weight="fill" className="text-kumo-danger" />}
+            {audioEnabled ? <Microphone size={14} weight="fill" /> : <MicrophoneSlash size={14} weight="fill" className="text-kumo-danger" />}
           </button>
           <button
             type="button"

@@ -15,7 +15,7 @@ import { shouldHintHeadphones } from "../../store/calls.js";
 import { audioConstraints, videoConstraints } from "../engine/media.js";
 import { DeviceSelects, useDeviceLists } from "./DeviceSelects.js";
 import { VideoView } from "./CallTile.js";
-import { isFramed, mediaHelp } from "./layout.js";
+import { isFramed, mediaHelp, participantNames } from "./layout.js";
 import { MicCheck, SpeakerTest } from "./PrejoinChecks.js";
 
 export function CallPrejoin({ channelId, label }: { channelId: string; label: string }): ReactNode {
@@ -170,10 +170,11 @@ export function CallPrejoin({ channelId, label }: { channelId: string; label: st
           <p className="min-w-0 text-[12px] text-kumo-subtle">
             {inCall.length === 0
               ? `Nobody is in the call yet. Joining starts it${label.startsWith("#") ? "" : " and rings the others"}.`
-              : `${inCall
-                  .slice(0, 3)
-                  .map((participant) => users[participant.userId]?.name ?? "Someone")
-                  .join(", ")}${inCall.length > 3 ? ` and ${inCall.length - 3} more` : ""} ${inCall.length === 1 ? "is" : "are"} in the call.`}
+              : `${participantNames(
+                  inCall.map((participant) => participant.userId),
+                  (id) => users[id]?.name,
+                  3,
+                )} ${inCall.length === 1 ? "is" : "are"} in the call.`}
           </p>
           <div className="flex shrink-0 gap-2">
             <Button variant="ghost" onClick={() => store.closeCallPane()}>

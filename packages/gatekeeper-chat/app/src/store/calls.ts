@@ -127,7 +127,7 @@ export type CallButtonState =
 export function callButtonState(params: {
   readonly feature: CallFeature;
   readonly call: CallState | undefined;
-  readonly local: CallSnapshot;
+  readonly local: Pick<CallSnapshot, "channelId" | "phase">;
   readonly channelId: ChannelId;
   readonly meId: UserId | undefined;
   readonly member: boolean;
@@ -150,7 +150,7 @@ export function callButtonState(params: {
 export type CallPane = "none" | "prejoin" | Exclude<CallPhase, "idle">;
 
 /** Which call pane, if any, a conversation shows in place of its message column. */
-export function callPaneFor(channelId: ChannelId, local: CallSnapshot, ui: CallUi): CallPane {
+export function callPaneFor(channelId: ChannelId, local: Pick<CallSnapshot, "channelId" | "phase">, ui: CallUi): CallPane {
   if (local.channelId === channelId && local.phase !== "idle") {
     // A terminal state stays up until it is dismissed; dismissing clears `ui.channelId`.
     if ((local.phase === "failed" || local.phase === "moved") && ui.channelId !== channelId) return "none";

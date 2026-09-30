@@ -46,7 +46,7 @@ import { CallMessage } from "../call/ui/CallMessage.js";
 import { Attachments } from "./Attachments.js";
 import { EmojiPicker } from "./EmojiPicker.js";
 import { Markdown } from "./Markdown.js";
-import { AppBadge, Avatar, IconButton } from "./primitives.js";
+import { AppBadge, Avatar, IconButton, Menu, MenuItem } from "./primitives.js";
 
 export interface MessageRowProps {
   readonly message: LocalMessage;
@@ -392,45 +392,38 @@ export const MessageRow = memo(function MessageRow({
                 <DotsThree size={16} weight="bold" />
               </IconButton>
               {menuOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    aria-hidden="true"
-                    onClick={() => setMenuOpen(false)}
+                <Menu
+                  onClose={() => setMenuOpen(false)}
+                  className="absolute top-8 right-0 z-20 w-52 overflow-hidden rounded-lg border border-kumo-line bg-kumo-control py-1 shadow-lg"
+                >
+                  <MenuItem
+                    icon={<EnvelopeSimpleOpen size={14} />}
+                    label="Mark unread from here"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onMarkUnread(message);
+                    }}
                   />
-                  <div
-                    role="menu"
-                    className="absolute top-8 right-0 z-20 w-52 overflow-hidden rounded-lg border border-kumo-line bg-kumo-control py-1 shadow-lg"
-                  >
+                  <MenuItem
+                    icon={<LinkIcon size={14} />}
+                    label="Copy link to message"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onCopyLink(message);
+                    }}
+                  />
+                  {mine && (
                     <MenuItem
-                      icon={<EnvelopeSimpleOpen size={14} />}
-                      label="Mark unread from here"
+                      icon={<Trash size={14} />}
+                      label="Delete message"
+                      tone="danger"
                       onClick={() => {
                         setMenuOpen(false);
-                        onMarkUnread(message);
+                        void store.deleteMessage(message.id);
                       }}
                     />
-                    <MenuItem
-                      icon={<LinkIcon size={14} />}
-                      label="Copy link to message"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        onCopyLink(message);
-                      }}
-                    />
-                    {mine && (
-                      <MenuItem
-                        icon={<Trash size={14} />}
-                        label="Delete message"
-                        tone="danger"
-                        onClick={() => {
-                          setMenuOpen(false);
-                          void store.deleteMessage(message.id);
-                        }}
-                      />
-                    )}
-                  </div>
-                </>
+                  )}
+                </Menu>
               )}
             </div>
           </div>
@@ -542,35 +535,6 @@ function ReactionPill({
     >
       <span aria-hidden="true">{emoji}</span>
       <span className="tabular-nums">{userIds.length}</span>
-    </button>
-  );
-}
-
-function MenuItem({
-  icon,
-  label,
-  onClick,
-  tone = "default",
-}: {
-  icon: ReactNode;
-  label: string;
-  onClick: () => void;
-  tone?: "default" | "danger";
-}): ReactNode {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      onClick={onClick}
-      className={[
-        "flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left text-[13px] transition-colors",
-        tone === "danger"
-          ? "text-kumo-danger hover:bg-kumo-danger-tint"
-          : "text-kumo-default hover:bg-kumo-tint",
-      ].join(" ")}
-    >
-      <span className="text-kumo-subtle">{icon}</span>
-      {label}
     </button>
   );
 }

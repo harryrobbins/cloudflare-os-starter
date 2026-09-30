@@ -9,7 +9,7 @@
 import { VideoCamera } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 
-import { useChat, useStore } from "../../hooks/store.js";
+import { useCallPlace, useChat, useStore } from "../../hooks/store.js";
 import { callButtonState, type CallButtonState } from "../../store/calls.js";
 import { Avatar } from "../../components/primitives.js";
 
@@ -17,7 +17,7 @@ export function CallButton({ channelId }: { channelId: string }): ReactNode {
   const store = useStore();
   const feature = useChat((state) => state.callFeature);
   const call = useChat((state) => state.calls[channelId]);
-  const local = useChat((state) => state.call);
+  const local = useCallPlace();
   const meId = useChat((state) => state.me?.id);
   const member = useChat((state) => state.memberships[channelId] !== undefined);
   const archived = useChat((state) => state.channels[channelId]?.archived === true);

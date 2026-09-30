@@ -32,6 +32,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 
 import { CALL_REACTIONS } from "../../contract.js";
 import type { EffectState } from "../engine/types.js";
+import { Menu, MenuItem } from "../../components/primitives.js";
 import { useChat, useStore } from "../../hooks/store.js";
 
 import { DeviceSelects, useDeviceLists } from "./DeviceSelects.js";
@@ -40,7 +41,10 @@ import { canPictureInPicture, closePictureInPicture, openPictureInPicture } from
 
 export function CallControls({ layout, pip = false }: { layout: "page" | "dock"; pip?: boolean }): ReactNode {
   const store = useStore();
-  const call = useChat((state) => state.call);
+  const phase = useChat((state) => state.call.phase);
+  const audioEnabled = useChat((state) => state.call.audioEnabled);
+  const videoEnabled = useChat((state) => state.call.videoEnabled);
+  const screenEnabled = useChat((state) => state.call.screenEnabled);
   const pushToTalk = useChat((state) => state.callPushToTalk);
   const chatOpen = useChat((state) => state.callUi.chatOpen);
   const focus = useChat((state) => state.callFocus);
@@ -54,7 +58,7 @@ export function CallControls({ layout, pip = false }: { layout: "page" | "dock";
   const peopleCount = useChat((state) =>
     state.call.channelId === null ? 0 : (state.calls[state.call.channelId]?.participants.length ?? 0),
   );
-  const live = call.phase === "connected" || call.phase === "reconnecting";
+  const live = phase === "connected" || phase === "reconnecting";
   const dock = layout === "dock";
   const screenShare = canShareScreen();
   const mod = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform ?? "") ? "⌘" : "Ctrl+";
@@ -73,27 +77,27 @@ export function CallControls({ layout, pip = false }: { layout: "page" | "dock";
       label={
         pushToTalk
           ? "Talking: release Space to mute"
-          : call.audioEnabled
+          : audioEnabled
             ? `Mute microphone (${mod}D)`
             : `Unmute microphone (${mod}D), or hold Space to talk`
       }
-      pressed={!call.audioEnabled}
-      warn={!call.audioEnabled}
+      pressed={!audioEnabled}
+      warn={!audioEnabled}
       disabled={!live}
       onClick={() => store.toggleCallAudio()}
     >
-      {call.audioEnabled ? <Microphone size={18} weight="fill" /> : <MicrophoneSlash size={18} weight="fill" />}
+      {audioEnabled ? <Microphone size={18} weight="fill" /> : <MicrophoneSlash size={18} weight="fill" />}
     </BarButton>
   );
   const camera = (
     <BarButton
-      label={call.videoEnabled ? `Turn camera off (${mod}E)` : `Turn camera on (${mod}E)`}
-      pressed={!call.videoEnabled}
-      warn={!call.videoEnabled}
+      label={videoEnabled ? `Turn camera off (${mod}E)` : `Turn camera on (${mod}E)`}
+      pressed={!videoEnabled}
+      warn={!videoEnabled}
       disabled={!live}
       onClick={() => void store.toggleCallVideo()}
     >
-      {call.videoEnabled ? <VideoCamera size={18} weight="fill" /> : <VideoCameraSlash size={18} weight="fill" />}
+      {videoEnabled ? <VideoCamera size={18} weight="fill" /> : <VideoCameraSlash size={18} weight="fill" />}
     </BarButton>
   );
   const chat = (
@@ -119,17 +123,35 @@ export function CallControls({ layout, pip = false }: { layout: "page" | "dock";
     </button>
   );
 
-  const screenItem = screenShare ? (
+  // Raise hand and screen share sit on the full bar and in the sidebar's overflow menu: described
+  // once, drawn as whichever the layout needs.
+  const handAction: CallAction = {
+    label: handUp ? "Lower your hand" : "Raise your hand",
+    icon: (size) => <HandPalm size={size} weight={handUp ? "fill" : "regular"} />,
+    pressed: handUp,
+    disabled: !live,
+    run: () => store.toggleCallHand(),
+  };
+  const screenAction: CallAction | null = screenShare
+    ? {
+        label: screenEnabled ? "Stop sharing your screen" : "Share your screen",
+        icon: (size) => <Monitor size={size} weight={screenEnabled ? "fill" : "regular"} />,
+        pressed: screenEnabled,
+        disabled: !live,
+        run: () => void store.toggleCallScreen(),
+      }
+    : null;
+  const asMenuItem = (action: CallAction): ReactNode => (
     <MenuItem
-      icon={<Monitor size={15} />}
-      label={call.screenEnabled ? "Stop sharing" : "Share screen"}
-      disabled={!live}
+      icon={action.icon(15)}
+      label={action.label}
+      disabled={action.disabled}
       onClick={() => {
         setMenu(null);
-        void store.toggleCallScreen();
+        action.run();
       }}
     />
-  ) : null;
+  );
 
   return (
     <div
@@ -142,21 +164,8 @@ export function CallControls({ layout, pip = false }: { layout: "page" | "dock";
     >
       {mic}
       {camera}
-      {!dock && screenShare && (
-        <BarButton
-          label={call.screenEnabled ? "Stop sharing your screen" : "Share your screen"}
-          pressed={call.screenEnabled}
-          disabled={!live}
-          onClick={() => void store.toggleCallScreen()}
-        >
-          <Monitor size={18} weight={call.screenEnabled ? "fill" : "regular"} />
-        </BarButton>
-      )}
-      {!dock && (
-        <BarButton label={handUp ? "Lower your hand" : "Raise your hand"} pressed={handUp} disabled={!live} onClick={() => store.toggleCallHand()}>
-          <HandPalm size={18} weight={handUp ? "fill" : "regular"} />
-        </BarButton>
-      )}
+      {!dock && screenAction !== null && <ActionButton action={screenAction} />}
+      {!dock && <ActionButton action={handAction} />}
       {!dock && (
         <BarButton label="Send a reaction" pressed={menu === "react"} disabled={!live} onClick={() => setMenu(menu === "react" ? null : "react")}>
           <Smiley size={18} />
@@ -210,16 +219,8 @@ export function CallControls({ layout, pip = false }: { layout: "page" | "dock";
           {menu === "more" && (
             <div className="flex flex-col py-1">
               <ReactionRow disabled={!live} onDone={() => setMenu(null)} />
-              <MenuItem
-                icon={<HandPalm size={15} weight={handUp ? "fill" : "regular"} />}
-                label={handUp ? "Lower your hand" : "Raise your hand"}
-                disabled={!live}
-                onClick={() => {
-                  setMenu(null);
-                  store.toggleCallHand();
-                }}
-              />
-              {screenItem}
+              {asMenuItem(handAction)}
+              {screenAction !== null && asMenuItem(screenAction)}
               <AudioOnlyItem disabled={!live} onDone={() => setMenu(null)} />
               <EffectItems disabled={!live} />
               {canFloat && (
@@ -303,8 +304,8 @@ function ReactionRow({ disabled, onDone }: { disabled: boolean; onDone: () => vo
 
 /** Who is in the call: raised hands first, in the order they went up, then everyone in join order. */
 export function ParticipantList(): ReactNode {
-  const local = useChat((state) => state.call);
-  const room = useChat((state) => (local.channelId === null ? undefined : state.calls[local.channelId]));
+  const participantId = useChat((state) => state.call.participantId);
+  const room = useChat((state) => (state.call.channelId === null ? undefined : state.calls[state.call.channelId]));
   const users = useChat((state) => state.users);
   const hands = handQueue(room);
   const people = (room?.participants ?? []).toSorted(
@@ -316,7 +317,7 @@ export function ParticipantList(): ReactNode {
       {people.map((participant) => {
         const order = hands.get(participant.id);
         const name = users[participant.userId]?.name ?? "Someone";
-        const you = participant.id === local.participantId;
+        const you = participant.id === participantId;
         return (
           <li key={participant.id} data-testid="call-person" className="flex items-center gap-2 px-3 py-1 text-[13px] text-kumo-default">
             <span className="min-w-0 flex-1 truncate">
@@ -442,6 +443,23 @@ function EffectItems({ disabled }: { disabled: boolean }): ReactNode {
   );
 }
 
+/** A call control that can be a bar button or a menu item. */
+interface CallAction {
+  readonly label: string;
+  readonly icon: (size: number) => ReactNode;
+  readonly pressed: boolean;
+  readonly disabled: boolean;
+  readonly run: () => void;
+}
+
+function ActionButton({ action }: { action: CallAction }): ReactNode {
+  return (
+    <BarButton label={action.label} pressed={action.pressed} disabled={action.disabled} onClick={action.run}>
+      {action.icon(18)}
+    </BarButton>
+  );
+}
+
 function BarButton({
   label,
   pressed,
@@ -479,31 +497,6 @@ function BarButton({
   );
 }
 
-function MenuItem({
-  icon,
-  label,
-  onClick,
-  disabled = false,
-}: {
-  icon: ReactNode;
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-}): ReactNode {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      onClick={onClick}
-      disabled={disabled}
-      className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-[13px] text-kumo-default transition-colors hover:bg-kumo-tint disabled:cursor-not-allowed disabled:opacity-50"
-    >
-      <span className="text-kumo-subtle">{icon}</span>
-      {label}
-    </button>
-  );
-}
-
 /** Opens above the bar; Escape or a click outside closes it and focus returns to the bar. */
 function Popover({
   onClose,
@@ -527,27 +520,18 @@ function Popover({
     (ref.current?.querySelector<HTMLElement>("button, select") ?? ref.current)?.focus();
   }, []);
   return (
-    <>
-      <div className="fixed inset-0 z-20" aria-hidden="true" onClick={onClose} />
-      <div
-        ref={ref}
-        tabIndex={-1}
-        style={maxHeight === undefined ? undefined : { maxHeight }}
-        role="menu"
-        onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            event.stopPropagation();
-            onClose();
-          }
-        }}
-        className={[
-          "absolute bottom-full z-30 mb-2 max-w-[calc(100vw-1rem)] overflow-x-hidden overflow-y-auto rounded-xl border border-kumo-line bg-kumo-control shadow-xl",
-          align === "right" ? "right-2 w-64" : "left-1/2 -translate-x-1/2",
-        ].join(" ")}
-      >
-        {children}
-      </div>
-    </>
+    <Menu
+      onClose={onClose}
+      menuRef={ref}
+      backdrop="z-20"
+      style={maxHeight === undefined ? undefined : { maxHeight }}
+      className={[
+        "absolute bottom-full z-30 mb-2 max-w-[calc(100vw-1rem)] overflow-x-hidden overflow-y-auto rounded-xl border border-kumo-line bg-kumo-control shadow-xl",
+        align === "right" ? "right-2 w-64" : "left-1/2 -translate-x-1/2",
+      ].join(" ")}
+    >
+      {children}
+    </Menu>
   );
 }
 

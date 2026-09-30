@@ -21,7 +21,7 @@ import { agentHint, agentWorking, isAgentDm } from "../lib/agent.js";
 import { channelLabel, isDirect } from "../lib/labels.js";
 import { permalinkUrl } from "../lib/nav.js";
 import { pluralise } from "../lib/format.js";
-import { useChat, useStore } from "../hooks/store.js";
+import { useCallPlace, useChat, useStore } from "../hooks/store.js";
 import { useLayout } from "./AppShell.js";
 import { conversationKey } from "../store/drafts.js";
 import { EMPTY_CONVERSATION } from "../store/state.js";
@@ -30,7 +30,7 @@ import { firstUnreadSeq } from "../store/unread.js";
 import { ChannelStartCard, FirstRunCard } from "./ChannelStartCard.js";
 import { Composer } from "./Composer.js";
 import { MessageList } from "./MessageList.js";
-import { AppBadge, Button, EmptyState, IconButton, PresenceDot } from "./primitives.js";
+import { AppBadge, Button, EmptyState, IconButton, Menu, PresenceDot } from "./primitives.js";
 import { callPaneFor } from "../store/calls.js";
 import { CallButton } from "../call/ui/CallButton.js";
 import { CallNotice, CallPanel } from "../call/ui/CallPanel.js";
@@ -66,7 +66,8 @@ export function ConversationView({
   const online = useChat((state) => state.online);
   const readCursors = useChat((state) => state.readCursors[channelId]);
   const hasDisplayName = useChat((state) => state.prefs.displayName !== null);
-  const localCall = useChat((state) => state.call);
+  const localCall = useCallPlace();
+  const engineError = useChat((state) => state.call.error);
   const callUi = useChat((state) => state.callUi);
   const layout = useLayout();
   const pane = callPaneFor(channelId, localCall, callUi);
@@ -299,7 +300,7 @@ export function ConversationView({
       ) : pane === "prejoin" ? (
         <CallPrejoin channelId={channelId} label={label} />
       ) : pane === "moved" || pane === "failed" ? (
-        <CallNotice pane={pane} channelId={channelId} failure={callUi.failure} engineError={localCall.error} />
+        <CallNotice pane={pane} channelId={channelId} failure={callUi.failure} engineError={engineError} />
       ) : pane !== "none" && layout.narrow ? (
         // The sidebar: the call stacked over the conversation.
         <div className="flex min-h-0 flex-1 flex-col">
@@ -431,47 +432,44 @@ function Header({
               <CaretDown size={14} />
             </IconButton>
             {notifyOpen && (
-              <>
-                <div className="fixed inset-0 z-10" aria-hidden="true" onClick={() => setNotifyOpen(false)} />
-                <div
-                  role="menu"
-                  className="absolute top-8 right-0 z-20 w-56 overflow-hidden rounded-lg border border-kumo-line bg-kumo-control py-1 shadow-lg"
-                >
-                  <p className="px-3 py-1.5 text-[11px] font-semibold tracking-wide text-kumo-inactive uppercase">
-                    Notify me about
-                  </p>
-                  {(["all", "mentions", "none"] as NotifyLevel[]).map((level) => (
-                    <button
-                      key={level}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={membership.notify === level}
-                      onClick={() => {
-                        void store.setNotify(channelId, level);
-                        setNotifyOpen(false);
-                      }}
-                      className="flex w-full cursor-pointer items-center justify-between px-3 py-1.5 text-left text-[13px] text-kumo-default transition-colors hover:bg-kumo-tint"
-                    >
-                      {level === "all" ? "Every message" : level === "mentions" ? "Mentions only" : "Nothing"}
-                      {membership.notify === level && <span className="text-kumo-brand">✓</span>}
-                    </button>
-                  ))}
-                  <div className="my-1 h-px bg-kumo-line" />
+              <Menu
+                onClose={() => setNotifyOpen(false)}
+                className="absolute top-8 right-0 z-20 w-56 overflow-hidden rounded-lg border border-kumo-line bg-kumo-control py-1 shadow-lg"
+              >
+                <p className="px-3 py-1.5 text-[11px] font-semibold tracking-wide text-kumo-inactive uppercase">
+                  Notify me about
+                </p>
+                {(["all", "mentions", "none"] as NotifyLevel[]).map((level) => (
                   <button
+                    key={level}
                     type="button"
-                    role="menuitemcheckbox"
-                    aria-checked={membership.muted}
+                    role="menuitemradio"
+                    aria-checked={membership.notify === level}
                     onClick={() => {
-                      void store.toggleMute(channelId);
+                      void store.setNotify(channelId, level);
                       setNotifyOpen(false);
                     }}
-                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-[13px] text-kumo-default transition-colors hover:bg-kumo-tint"
+                    className="flex w-full cursor-pointer items-center justify-between px-3 py-1.5 text-left text-[13px] text-kumo-default transition-colors hover:bg-kumo-tint"
                   >
-                    <BellSlash size={14} className="text-kumo-subtle" />
-                    {membership.muted ? "Unmute conversation" : "Mute conversation"}
+                    {level === "all" ? "Every message" : level === "mentions" ? "Mentions only" : "Nothing"}
+                    {membership.notify === level && <span className="text-kumo-brand">✓</span>}
                   </button>
-                </div>
-              </>
+                ))}
+                <div className="my-1 h-px bg-kumo-line" />
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={membership.muted}
+                  onClick={() => {
+                    void store.toggleMute(channelId);
+                    setNotifyOpen(false);
+                  }}
+                  className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-[13px] text-kumo-default transition-colors hover:bg-kumo-tint"
+                >
+                  <BellSlash size={14} className="text-kumo-subtle" />
+                  {membership.muted ? "Unmute conversation" : "Mute conversation"}
+                </button>
+              </Menu>
             )}
           </div>
         )}

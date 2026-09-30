@@ -6,7 +6,7 @@
 // so both are set from an effect.
 
 import { MicrophoneSlash, VideoCameraSlash, WifiSlash } from "@phosphor-icons/react";
-import { useEffect, useRef, type ReactNode } from "react";
+import { memo, useEffect, useRef, type ReactNode } from "react";
 
 import { Avatar } from "../../components/primitives.js";
 import { applyAudioOutput } from "../engine/devices.js";
@@ -99,7 +99,7 @@ export interface TileModel {
   readonly reactions?: readonly { readonly id: number; readonly emoji: string }[];
 }
 
-export function CallTile({
+export const CallTile = memo(function CallTile({
   tile,
   compact = false,
   stage = false,
@@ -198,7 +198,7 @@ export function CallTile({
       </span>
     </div>
   );
-}
+});
 
 /** Across the whole panel while the engine rebuilds the connection. */
 export function ReconnectingOverlay(): ReactNode {
