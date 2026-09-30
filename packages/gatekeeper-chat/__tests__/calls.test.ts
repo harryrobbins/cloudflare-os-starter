@@ -376,6 +376,20 @@ describe("joining", () => {
     expect(event.ring).toBeUndefined();
   });
 
+  // Found on the real SFU: Bob's socket subscribed to the conversations it knew when it connected, so a
+  // DM Alice created afterwards (the usual first call) never rang him.
+  it("rings a member whose socket subscribed before the DM existed", async () => {
+    const { alice, bob } = await setup("ring-late-dm");
+    const bobSocket = await bob.socket();
+    await bobSocket.next("hello");
+    bobSocket.send({ t: "sub", channels: ["general"] });
+    const dm = await createChannel(alice, { kind: "dm", memberIds: ["bob"] });
+
+    await join(alice, dm);
+    const event = await bobSocket.next("call");
+    expect(event).toMatchObject({ channel: dm, ring: true });
+  });
+
   it(`refuses the participant after ${MAX_CALL_PARTICIPANTS} with conflict, before creating an SFU session`, async () => {
     const { workspace, fake } = await setup("cap");
     const people = Array.from({ length: MAX_CALL_PARTICIPANTS + 1 }, (_, i) => client(workspace, identity(`u${i}`)));

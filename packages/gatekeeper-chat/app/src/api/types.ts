@@ -116,7 +116,12 @@ export interface ChatApi {
   closeTracks(callId: string, request: import("../contract.js").CloseTracksRequest): Promise<import("../contract.js").CloseTracksResponse>;
   setLayer(callId: string, request: import("../contract.js").SetLayerRequest): Promise<import("../contract.js").OkResponse>;
   reconnectCall(callId: string, request: import("../contract.js").ReconnectCallRequest): Promise<import("../contract.js").ReconnectCallResponse>;
-  leaveCall(callId: string, request: import("../contract.js").LeaveCallRequest): Promise<import("../contract.js").OkResponse>;
+  /** `keepalive` lets the request outlive the page (sent from `pagehide`). */
+  leaveCall(
+    callId: string,
+    request: import("../contract.js").LeaveCallRequest,
+    options?: { readonly keepalive?: boolean },
+  ): Promise<import("../contract.js").OkResponse>;
   postCallStats(callId: string, report: import("../contract.js").CallStatsReport): Promise<import("../contract.js").OkResponse>;
 }
 

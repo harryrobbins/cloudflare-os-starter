@@ -1506,13 +1506,25 @@ export class ChatStore {
     const calls = applyCallEvent(this.#state.calls, channelId, call);
     this.#patch({ calls, rings: pruneRings(this.#state.rings, calls) });
     if (this.#engineChannel() === channelId) this.#forwardRoom(call);
-    const me = this.#state.me;
+    if (call === null) return;
+    // A ring for a conversation this client has not loaded yet -- somebody created the dm and called
+    // straight away. The server rings members' sockets directly; fetch the rail (which also
+    // re-subscribes) and ring once the membership is known, unless the call has moved on meanwhile.
+    if (ring === true && this.#state.memberships[channelId] === undefined) {
+      void this.refreshChannels().then(() => {
+        if (this.#state.calls[channelId]?.id === call.id) this.#ringIfWanted(channelId, call, ring);
+      });
+      return;
+    }
+    this.#ringIfWanted(channelId, call, ring);
+  }
+
+  #ringIfWanted(channelId: ChannelId, call: CallState, ring: boolean | undefined): void {
     if (
-      call !== null &&
       shouldRing({
         ring,
         call,
-        meId: me?.id,
+        meId: this.#state.me?.id,
         membership: this.#state.memberships[channelId],
         localCallId: this.#state.call.callId,
       }) &&
@@ -1774,8 +1786,19 @@ export class ChatStore {
   }
 
   /** Page unload: drop the media without calling the server, which expires the participant. */
+  /**
+   * The page is going away (`pagehide`). The engine only tears down locally, so the server is told
+   * here, with a `keepalive` request that outlives the page: without it the others saw a frozen tile
+   * for the 45 s heartbeat TTL after somebody closed the tab or navigated the shell elsewhere.
+   */
   disposeCall(): void {
-    this.#callEngine?.dispose();
+    const engine = this.#callEngine;
+    if (!engine) return;
+    const { callId, participantId } = engine.snapshot();
+    engine.dispose();
+    if (callId !== null && participantId !== null) {
+      void this.#api.leaveCall(callId, { participantId }, { keepalive: true }).catch(() => undefined);
+    }
   }
 
   // --- theme, toasts, announcements ----------------------------------------

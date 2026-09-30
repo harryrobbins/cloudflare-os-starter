@@ -275,12 +275,16 @@ interface Harness {
   store: ChatStore;
   socket: FakeSocket;
   engine: FakeCallEngine;
+  /** `api.leaveCall` calls: [callId, request, options]. */
+  leaves: unknown[][];
 }
 
 const seeded = call("c1", [participant("p-alice", "alice")]);
 
-async function started(options: { calls?: CallState[]; embedded?: boolean } = {}): Promise<Harness> {
+async function started(options: { calls?: CallState[]; embedded?: boolean; lateDm?: CallState } = {}): Promise<Harness> {
   const socket = new FakeSocket();
+  let listed = 0;
+  const leaves: unknown[][] = [];
   const engine = createFakeCallEngine();
   const api = {
     me: async (): Promise<MeResponse> => ({
@@ -293,13 +297,17 @@ async function started(options: { calls?: CallState[]; embedded?: boolean } = {}
       protocolVersion: 1,
       calls: ENABLED,
     }),
-    listChannels: async (): Promise<ChannelListResponse> => ({
-      channels: [channel("c1"), channel("d1", "dm")],
-      memberships: [membership("c1"), membership("d1")],
-      users: [me, alice],
-      badges: { unread: {}, mentions: {}, threads: 0 },
-      calls: options.calls ?? [seeded],
-    }),
+    // With `lateDm`, the dm it names exists from the second listing on (created after the first).
+    listChannels: async (): Promise<ChannelListResponse> => {
+      const late = options.lateDm !== undefined && (listed += 1) > 1 ? options.lateDm : null;
+      return {
+        channels: [channel("c1"), channel("d1", "dm"), ...(late ? [channel(late.channelId, "dm")] : [])],
+        memberships: [membership("c1"), membership("d1"), ...(late ? [membership(late.channelId)] : [])],
+        users: [me, alice],
+        badges: { unread: {}, mentions: {}, threads: 0 },
+        calls: [...(options.calls ?? [seeded]), ...(late ? [late] : [])],
+      };
+    },
     listThreads: async () => ({ threads: [], users: [], cursor: null }),
     listMessages: async () => ({
       messages: [],
@@ -309,10 +317,14 @@ async function started(options: { calls?: CallState[]; embedded?: boolean } = {}
       channelLastSeq: 1,
     }),
     getUsers: async () => ({ users: [], cursor: null }),
+    leaveCall: async (callId: string, request: unknown, options?: unknown) => {
+      leaves.push([callId, request, options]);
+      return { ok: true };
+    },
   } as unknown as ChatApi;
   const store = new ChatStore({ transport: { api, socket }, navigate: () => undefined, callEngine: engine });
   await store.start({ embedded: options.embedded ?? false });
-  return { store, socket, engine };
+  return { store, socket, engine, leaves };
 }
 
 let current: Harness | null = null;
@@ -385,6 +397,16 @@ describe("the store's room state", () => {
     expect(engine.applied).toContainEqual(seeded);
   });
 
+  it("tells the server with a keepalive leave when the page goes away mid-call, and nothing otherwise", async () => {
+    const { store, engine, leaves } = await harness();
+    store.disposeCall();
+    expect(leaves).toEqual([]);
+    await store.joinCall("c1");
+    engine.set({ callId: seeded.id, participantId: "p-me" });
+    store.disposeCall();
+    expect(leaves).toEqual([[seeded.id, { participantId: "p-me" }, { keepalive: true }]]);
+  });
+
   it("passes call-moved to the engine", async () => {
     const { socket, engine } = await harness();
     socket.emit({ t: "call-moved", call: "call-c1", participant: "p-me", reason: "replaced" });
@@ -437,6 +459,17 @@ describe("rings", () => {
     expect(store.state.rings).toHaveLength(1);
     vi.advanceTimersByTime(RING_TIMEOUT_MS + 10);
     expect(store.state.rings).toHaveLength(0);
+  });
+
+  it("rings for a dm created after this client loaded, once the channel list has it", async () => {
+    const late = call("d2", [participant("p-alice", "alice")], { startedBy: "alice" });
+    const { store, socket } = await harness({ calls: [], lateDm: late });
+    socket.emit({ t: "call", channel: "d2", call: late, ring: true });
+    await vi.waitFor(() => expect(store.state.rings).toHaveLength(1));
+    expect(store.state.rings[0]).toMatchObject({ callId: late.id, channelId: "d2" });
+    expect(store.state.memberships.d2).toBeDefined();
+    // The refresh re-subscribed the socket, so the dm's later events arrive too.
+    expect(socket.sent).toContainEqual({ t: "sub", channels: expect.arrayContaining(["d2"]) });
   });
 
   it("stops ringing when the call ends", async () => {

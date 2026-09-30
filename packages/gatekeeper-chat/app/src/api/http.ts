@@ -75,6 +75,7 @@ async function request<T>(
   path: string,
   body?: unknown,
   signal?: AbortSignal,
+  keepalive = false,
 ): Promise<T> {
   let response: Response;
   try {
@@ -89,6 +90,7 @@ async function request<T>(
       credentials: "same-origin",
       cache: "no-store",
       ...(signal ? { signal } : {}),
+      ...(keepalive ? { keepalive } : {}),
     });
   } catch (cause) {
     if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
@@ -223,8 +225,8 @@ export function createHttpApi(): ChatApi {
       request<OkResponse>("POST", apiPath("setLayer", { callId }), body),
     reconnectCall: (callId: string, body: ReconnectCallRequest) =>
       request<ReconnectCallResponse>("POST", apiPath("reconnectCall", { callId }), body),
-    leaveCall: (callId: string, body: LeaveCallRequest) =>
-      request<OkResponse>("POST", apiPath("leaveCall", { callId }), body),
+    leaveCall: (callId: string, body: LeaveCallRequest, options?: { readonly keepalive?: boolean }) =>
+      request<OkResponse>("POST", apiPath("leaveCall", { callId }), body, undefined, options?.keepalive === true),
     postCallStats: (callId: string, body: CallStatsReport) =>
       request<OkResponse>("POST", apiPath("postCallStats", { callId }), body),
   };
