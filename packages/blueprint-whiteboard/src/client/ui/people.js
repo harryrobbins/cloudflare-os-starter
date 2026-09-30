@@ -43,7 +43,7 @@ export function createPeople(app) {
     h("span", null, "Following ", followName), stopBtn);
 
   const phone = typeof matchMedia === "function" ? matchMedia("(max-width: 600px)") : null;
-  phone?.addEventListener?.("change", () => { listKey = ""; render(store.getState()); });
+  phone?.addEventListener?.("change", () => { listKey = ""; render(store.getState()); }, { signal: app.signal });
 
   /** @param {string} clientId @param {string} name */
   function toggleFollow(clientId, name) {

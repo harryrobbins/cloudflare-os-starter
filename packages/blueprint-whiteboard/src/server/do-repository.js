@@ -36,33 +36,38 @@ function chunks(items) {
 
 /** @implements {Repository} */
 export class DoStorageRepository {
-  /** @param {any} storage DurableObjectStorage */
-  constructor(storage) {
+  /**
+   * @param {any} storage DurableObjectStorage
+   * @param {{prefix?: string}} [options]
+   */
+  constructor(storage, { prefix = "" } = {}) {
     this.storage = storage;
+    this.prefix = prefix;
   }
 
   async getMeta() {
-    return (await this.storage.get("meta")) ?? null;
+    return (await this.storage.get(this.prefix + "meta")) ?? null;
   }
 
   async getObjects() {
+    const objectPrefix = this.prefix + OBJECT_PREFIX;
     /** @type {Map<string, WhiteboardObject>} */
-    const entries = await this.storage.list({ prefix: OBJECT_PREFIX });
+    const entries = await this.storage.list({ prefix: objectPrefix });
     /** @type {Record<string, WhiteboardObject>} */
     const objects = {};
     for (const [key, obj] of entries) {
-      const id = key.slice(OBJECT_PREFIX.length);
+      const id = key.slice(objectPrefix.length);
       if (obj && typeof obj === "object" && obj.id === id) objects[id] = obj;
     }
     return objects;
   }
 
   async getHistory() {
-    return (await this.storage.get("history")) ?? [];
+    return (await this.storage.get(this.prefix + "history")) ?? [];
   }
 
   async getRequests() {
-    return (await this.storage.get("requests")) ?? [];
+    return (await this.storage.get(this.prefix + "requests")) ?? [];
   }
 
   /** @param {Commit} commit */
@@ -70,11 +75,12 @@ export class DoStorageRepository {
     await this.storage.transaction(async (/** @type {any} */ txn) => {
       /** @type {Record<string, unknown>} */
       const puts = {};
-      if (commit.meta) puts.meta = commit.meta;
-      if (commit.history) puts.history = commit.history;
-      if (commit.requests) puts.requests = commit.requests;
-      for (const obj of commit.putObjects ?? []) puts[objectKey(obj.id)] = obj;
-      const deletes = (commit.deleteObjects ?? []).map(objectKey).filter((k) => !Object.hasOwn(puts, k));
+      const p = this.prefix;
+      if (commit.meta) puts[p + "meta"] = commit.meta;
+      if (commit.history) puts[p + "history"] = commit.history;
+      if (commit.requests) puts[p + "requests"] = commit.requests;
+      for (const obj of commit.putObjects ?? []) puts[p + objectKey(obj.id)] = obj;
+      const deletes = (commit.deleteObjects ?? []).map((id) => p + objectKey(id)).filter((k) => !Object.hasOwn(puts, k));
       for (const batch of chunks(deletes)) await txn.delete(batch);
       for (const batch of chunks(Object.entries(puts))) await txn.put(Object.fromEntries(batch));
     });

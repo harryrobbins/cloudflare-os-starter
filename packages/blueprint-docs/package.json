@@ -1,22 +1,16 @@
 {
-  "name": "blueprint-whiteboard",
+  "name": "blueprint-docs",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "exports": {
-    "./embed/server": "./src/embed/server.js",
-    "./embed/client": "./src/embed/client.js"
-  },
   "scripts": {
     "build:gadget": "node scripts/build.mjs",
     "pack:gadget": "node scripts/build.mjs && node scripts/pack-gadget.mjs",
-    "test:run": "vitest run && vitest run --config vitest.workers.config.ts",
-    "benchmark": "node scripts/benchmark.mjs"
+    "test:run": "vitest run && vitest run --config vitest.workers.config.ts"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",
-    "@tabler/icons": "3.48.0",
-    "emojibase-data": "17.0.0",
+    "blueprint-whiteboard": "workspace:*",
     "esbuild": "0.28.1",
     "playwright": "1.61.0",
     "vitest": "catalog:",

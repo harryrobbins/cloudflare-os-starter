@@ -1,0 +1,17 @@
+{
+  "blueprintId": "format.docs-drawings",
+  "title": "Docs with Drawings",
+  "description": "Write rich text documents together, with whiteboard drawings inside them: sketch diagrams, flows and sticky-note maps in place, co-edit them live, and ask the agent to draw or change them.",
+  "output": {
+    "id": "document",
+    "noun": "Illustrated doc",
+    "plural": "Illustrated docs",
+    "icon": "fileText"
+  },
+  "author": {
+    "type": "user",
+    "name": "Surprisingly Ltd",
+    "id": "harryrobbins@gmail.com"
+  },
+  "revision": 1
+}

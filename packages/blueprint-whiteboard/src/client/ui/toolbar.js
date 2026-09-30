@@ -104,7 +104,7 @@ export function createToolbar(app) {
     el.scrollLeft = 0;
   }
   layout();
-  phone?.addEventListener?.("change", layout);
+  phone?.addEventListener?.("change", layout, { signal: app.signal });
 
   /** @param {HTMLElement} anchor */
   function openAddMenu(anchor) {
