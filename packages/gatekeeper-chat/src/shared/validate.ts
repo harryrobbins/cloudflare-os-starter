@@ -23,7 +23,6 @@ import {
   MAX_TOPIC_LENGTH,
   MENTION_TOKEN_SOURCE,
   type AnnounceTracksRequest,
-  type CallReaction,
   type CallSimulcastRid,
   type CallStatsReport,
   type CallTrackKind,
@@ -105,17 +104,24 @@ function optionalNonNegativeInt(source: Json, key: string): Result<number | unde
   return ok(raw);
 }
 
-function stringArray(value: unknown, key: string, maxItems: number, maxLength: number): Result<string[]> {
+/**
+ * A bounded, deduplicated list of strings that each match `pattern` (which also bounds their length):
+ * the shape every inbound list takes -- channel members, attachments, subscriptions, track names,
+ * mids. Deduplicated here so no handler has to wonder whether it was.
+ */
+function patternList(
+  value: unknown,
+  key: string,
+  pattern: RegExp,
+  options: { readonly maxItems: number; readonly nonEmpty?: boolean; readonly what: string },
+): Result<string[]> {
   if (!Array.isArray(value)) return fail(`${key} must be an array`);
-  if (value.length > maxItems) return fail(`${key} must have at most ${maxItems} entries`);
-  const out: string[] = [];
-  for (const entry of value) {
-    if (typeof entry !== "string" || entry.length === 0 || entry.length > maxLength) {
-      return fail(`${key} must contain non-empty strings of at most ${maxLength} characters`);
-    }
-    out.push(entry);
+  if (options.nonEmpty === true && value.length === 0) return fail(`${key} must not be empty`);
+  if (value.length > options.maxItems) return fail(`${key} must have at most ${options.maxItems} entries`);
+  if (value.some((entry) => typeof entry !== "string" || !pattern.test(entry))) {
+    return fail(`${key} must contain ${options.what}`);
   }
-  return ok(out);
+  return ok([...new Set(value as string[])]);
 }
 
 const CHANNEL_KINDS: readonly ChannelKind[] = ["public", "private", "dm", "group"];
@@ -129,7 +135,6 @@ const CHANNEL_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 
 /** Opaque ids are generated server-side; accept only what one can look like. */
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
-const ID_MAX_LENGTH = 64;
 
 export function isId(value: unknown): value is string {
   return typeof value === "string" && ID_PATTERN.test(value);
@@ -141,15 +146,9 @@ function requiredId(source: Json, key: string): Result<string> {
   return ok(raw);
 }
 
-/**
- * A bounded, deduplicated list of ids: the shape every inbound list takes -- channel members,
- * attachments, subscriptions. Deduplicated here so no handler has to wonder whether it was.
- */
+/** A bounded, deduplicated list of ids: channel members, attachments, subscriptions. */
 function idArray(value: unknown, key: string, maxItems: number): Result<string[]> {
-  const parsed = stringArray(value, key, maxItems, ID_MAX_LENGTH);
-  if (!parsed.ok) return parsed;
-  if (parsed.value.some((id) => !ID_PATTERN.test(id))) return fail(`${key} must contain identifiers`);
-  return ok([...new Set(parsed.value)]);
+  return patternList(value, key, ID_PATTERN, { maxItems, what: "identifiers" });
 }
 
 // --- JSON bodies ------------------------------------------------------------
@@ -379,11 +378,17 @@ function requiredBoolean(source: Json, key: string): Result<boolean> {
   return ok(raw);
 }
 
-function rid(value: unknown, key: string): Result<CallSimulcastRid> {
-  if (typeof value !== "string" || !(CALL_SIMULCAST_RIDS as readonly string[]).includes(value)) {
-    return fail(`${key} must be one of ${CALL_SIMULCAST_RIDS.join(", ")}`);
-  }
-  return ok(value as CallSimulcastRid);
+/** A non-empty list of at most MAX_CALL_TRACKS_PER_REQUEST matching tokens: track names, mids. */
+function callTokenList(value: unknown, key: string, pattern: RegExp, what: string): Result<string[]> {
+  return patternList(value, key, pattern, { maxItems: MAX_CALL_TRACKS_PER_REQUEST, nonEmpty: true, what });
+}
+
+/** The prologue every call body shares: an object with the caller's own `participantId`. */
+function callBody(input: unknown): Result<{ readonly body: Json; readonly participantId: string }> {
+  if (!isRecord(input)) return fail("body must be an object");
+  const participantId = requiredId(input, "participantId");
+  if (!participantId.ok) return participantId;
+  return ok({ body: input, participantId: participantId.value });
 }
 
 function boundedList(value: unknown, key: string): Result<readonly unknown[]> {
@@ -403,28 +408,26 @@ export function parseJoinCall(input: unknown): Result<Record<string, never>> {
 
 /** `{participantId}`: reconnect and leave. */
 export function parseParticipantRequest(input: unknown): Result<{ readonly participantId: string }> {
-  if (!isRecord(input)) return fail("body must be an object");
-  const participantId = requiredId(input, "participantId");
-  if (!participantId.ok) return participantId;
-  return ok({ participantId: participantId.value });
+  const call = callBody(input);
+  if (!call.ok) return call;
+  return ok({ participantId: call.value.participantId });
 }
 
 export function parsePublishTracks(input: unknown): Result<PublishTracksRequest> {
-  if (!isRecord(input)) return fail("body must be an object");
-  const participantId = requiredId(input, "participantId");
-  if (!participantId.ok) return participantId;
-  const offer = sessionDescription(input, "offer", "offer");
+  const call = callBody(input);
+  if (!call.ok) return call;
+  const { body, participantId } = call.value;
+  const offer = sessionDescription(body, "offer", "offer");
   if (!offer.ok) return offer;
-  const list = boundedList(input["tracks"], "tracks");
+  const list = boundedList(body["tracks"], "tracks");
   if (!list.ok) return list;
   const tracks: { mid: string; kind: CallTrackKind; simulcast: boolean }[] = [];
   for (const entry of list.value) {
     if (!isRecord(entry)) return fail("tracks must contain objects");
     const mid = requiredMatch(entry, "mid", MID_PATTERN);
     if (!mid.ok) return mid;
-    const kind = optionalEnum(entry, "kind", CALL_TRACK_KINDS);
+    const kind = requiredEnum(entry, "kind", CALL_TRACK_KINDS, "tracks[].kind");
     if (!kind.ok) return kind;
-    if (kind.value === undefined) return fail("tracks[].kind is required");
     const simulcast = requiredBoolean(entry, "simulcast");
     if (!simulcast.ok) return simulcast;
     tracks.push({ mid: mid.value, kind: kind.value, simulcast: simulcast.value });
@@ -433,26 +436,21 @@ export function parsePublishTracks(input: unknown): Result<PublishTracksRequest>
   if (new Set(tracks.map((track) => track.kind)).size !== tracks.length) {
     return fail("tracks must not repeat a kind");
   }
-  return ok({ participantId: participantId.value, offer: offer.value, tracks });
+  return ok({ participantId, offer: offer.value, tracks });
 }
 
 export function parseAnnounceTracks(input: unknown): Result<AnnounceTracksRequest> {
-  if (!isRecord(input)) return fail("body must be an object");
-  const participantId = requiredId(input, "participantId");
-  if (!participantId.ok) return participantId;
-  const list = boundedList(input["names"], "names");
-  if (!list.ok) return list;
-  if (list.value.some((name) => typeof name !== "string" || !TRACK_NAME_PATTERN.test(name))) {
-    return fail("names must contain track names");
-  }
-  return ok({ participantId: participantId.value, names: [...new Set(list.value as string[])] });
+  const call = callBody(input);
+  if (!call.ok) return call;
+  const names = callTokenList(call.value.body["names"], "names", TRACK_NAME_PATTERN, "track names");
+  if (!names.ok) return names;
+  return ok({ participantId: call.value.participantId, names: names.value });
 }
 
 export function parsePullTracks(input: unknown): Result<PullTracksRequest> {
-  if (!isRecord(input)) return fail("body must be an object");
-  const participantId = requiredId(input, "participantId");
-  if (!participantId.ok) return participantId;
-  const list = boundedList(input["tracks"], "tracks");
+  const call = callBody(input);
+  if (!call.ok) return call;
+  const list = boundedList(call.value.body["tracks"], "tracks");
   if (!list.ok) return list;
   const tracks: { participantId: string; name: string; rid?: CallSimulcastRid }[] = [];
   for (const entry of list.value) {
@@ -465,55 +463,50 @@ export function parsePullTracks(input: unknown): Result<PullTracksRequest> {
       tracks.push({ participantId: owner.value, name: name.value });
       continue;
     }
-    const layer = rid(entry["rid"], "tracks[].rid");
+    const layer = requiredEnum(entry, "rid", CALL_SIMULCAST_RIDS, "tracks[].rid");
     if (!layer.ok) return layer;
     tracks.push({ participantId: owner.value, name: name.value, rid: layer.value });
   }
   if (new Set(tracks.map((track) => `${track.participantId}/${track.name}`)).size !== tracks.length) {
     return fail("tracks must not repeat a track");
   }
-  return ok({ participantId: participantId.value, tracks });
+  return ok({ participantId: call.value.participantId, tracks });
 }
 
 export function parseRenegotiate(input: unknown): Result<RenegotiateRequest> {
-  if (!isRecord(input)) return fail("body must be an object");
-  const participantId = requiredId(input, "participantId");
-  if (!participantId.ok) return participantId;
-  const answer = sessionDescription(input, "answer", "answer");
+  const call = callBody(input);
+  if (!call.ok) return call;
+  const answer = sessionDescription(call.value.body, "answer", "answer");
   if (!answer.ok) return answer;
-  return ok({ participantId: participantId.value, answer: answer.value });
+  return ok({ participantId: call.value.participantId, answer: answer.value });
 }
 
 export function parseCloseTracks(input: unknown): Result<CloseTracksRequest> {
-  if (!isRecord(input)) return fail("body must be an object");
-  const participantId = requiredId(input, "participantId");
-  if (!participantId.ok) return participantId;
-  const list = boundedList(input["mids"], "mids");
-  if (!list.ok) return list;
-  if (list.value.some((mid) => typeof mid !== "string" || !MID_PATTERN.test(mid))) {
-    return fail("mids must contain transceiver mids");
-  }
-  const mids = [...new Set(list.value as string[])];
-  if (input["offer"] === undefined) return ok({ participantId: participantId.value, mids });
-  const offer = sessionDescription(input, "offer", "offer");
+  const call = callBody(input);
+  if (!call.ok) return call;
+  const { body, participantId } = call.value;
+  const mids = callTokenList(body["mids"], "mids", MID_PATTERN, "transceiver mids");
+  if (!mids.ok) return mids;
+  if (body["offer"] === undefined) return ok({ participantId, mids: mids.value });
+  const offer = sessionDescription(body, "offer", "offer");
   if (!offer.ok) return offer;
-  return ok({ participantId: participantId.value, mids, offer: offer.value });
+  return ok({ participantId, mids: mids.value, offer: offer.value });
 }
 
 export function parseSetLayer(input: unknown): Result<SetLayerRequest> {
-  if (!isRecord(input)) return fail("body must be an object");
-  const participantId = requiredId(input, "participantId");
-  if (!participantId.ok) return participantId;
-  const mid = requiredMatch(input, "mid", MID_PATTERN);
+  const call = callBody(input);
+  if (!call.ok) return call;
+  const { body, participantId } = call.value;
+  const mid = requiredMatch(body, "mid", MID_PATTERN);
   if (!mid.ok) return mid;
-  const trackParticipantId = requiredId(input, "trackParticipantId");
+  const trackParticipantId = requiredId(body, "trackParticipantId");
   if (!trackParticipantId.ok) return trackParticipantId;
-  const name = requiredMatch(input, "name", TRACK_NAME_PATTERN);
+  const name = requiredMatch(body, "name", TRACK_NAME_PATTERN);
   if (!name.ok) return name;
-  const layer = rid(input["rid"], "rid");
+  const layer = requiredEnum(body, "rid", CALL_SIMULCAST_RIDS);
   if (!layer.ok) return layer;
   return ok({
-    participantId: participantId.value,
+    participantId,
     mid: mid.value,
     trackParticipantId: trackParticipantId.value,
     name: name.value,
@@ -561,57 +554,57 @@ function nullableCodec(source: Json, key: string): Result<string | null> {
 }
 
 export function parseCallStatsReport(input: unknown): Result<CallStatsReport> {
-  if (!isRecord(input)) return fail("body must be an object");
-  const participantId = requiredId(input, "participantId");
-  if (!participantId.ok) return participantId;
-  const final = requiredBoolean(input, "final");
+  const call = callBody(input);
+  if (!call.ok) return call;
+  const { body: report, participantId } = call.value;
+  const final = requiredBoolean(report, "final");
   if (!final.ok) return final;
-  const intervalMs = boundedNumber(input["intervalMs"], "intervalMs", DAY_MS);
+  const intervalMs = boundedNumber(report["intervalMs"], "intervalMs", DAY_MS);
   if (!intervalMs.ok) return intervalMs;
-  const durationMs = boundedNumber(input["durationMs"], "durationMs", DAY_MS);
+  const durationMs = boundedNumber(report["durationMs"], "durationMs", DAY_MS);
   if (!durationMs.ok) return durationMs;
 
-  const rtt = nested(input, "rttMs");
+  const rtt = nested(report, "rttMs");
   if (!rtt.ok) return rtt;
   const rttAvg = nullableNumber(rtt.value["avg"], "rttMs.avg", MAX_CALL_DELAY_MS);
   if (!rttAvg.ok) return rttAvg;
   const rttMax = nullableNumber(rtt.value["max"], "rttMs.max", MAX_CALL_DELAY_MS);
   if (!rttMax.ok) return rttMax;
 
-  const loss = nested(input, "lossPercent");
+  const loss = nested(report, "lossPercent");
   if (!loss.ok) return loss;
   const lossSend = nullableNumber(loss.value["send"], "lossPercent.send", 100);
   if (!lossSend.ok) return lossSend;
   const lossReceive = nullableNumber(loss.value["receive"], "lossPercent.receive", 100);
   if (!lossReceive.ok) return lossReceive;
 
-  const jitterMs = nullableNumber(input["jitterMs"], "jitterMs", MAX_CALL_DELAY_MS);
+  const jitterMs = nullableNumber(report["jitterMs"], "jitterMs", MAX_CALL_DELAY_MS);
   if (!jitterMs.ok) return jitterMs;
-  const framesDecoded = boundedNumber(input["framesDecoded"], "framesDecoded", MAX_CALL_FRAMES, true);
+  const framesDecoded = boundedNumber(report["framesDecoded"], "framesDecoded", MAX_CALL_FRAMES, true);
   if (!framesDecoded.ok) return framesDecoded;
-  const framesDropped = boundedNumber(input["framesDropped"], "framesDropped", MAX_CALL_FRAMES, true);
+  const framesDropped = boundedNumber(report["framesDropped"], "framesDropped", MAX_CALL_FRAMES, true);
   if (!framesDropped.ok) return framesDropped;
 
-  const limited = nested(input, "limitedMs");
+  const limited = nested(report, "limitedMs");
   if (!limited.ok) return limited;
   const limitedCpu = boundedNumber(limited.value["cpu"], "limitedMs.cpu", DAY_MS);
   if (!limitedCpu.ok) return limitedCpu;
   const limitedBandwidth = boundedNumber(limited.value["bandwidth"], "limitedMs.bandwidth", DAY_MS);
   if (!limitedBandwidth.ok) return limitedBandwidth;
 
-  const audioOnlyMs = boundedNumber(input["audioOnlyMs"], "audioOnlyMs", DAY_MS);
+  const audioOnlyMs = boundedNumber(report["audioOnlyMs"], "audioOnlyMs", DAY_MS);
   if (!audioOnlyMs.ok) return audioOnlyMs;
-  const relayed = input["relayed"] === null ? ok(null) : requiredBoolean(input, "relayed");
+  const relayed = report["relayed"] === null ? ok(null) : requiredBoolean(report, "relayed");
   if (!relayed.ok) return fail("relayed must be true, false or null");
-  const audioCodec = nullableCodec(input, "audioCodec");
+  const audioCodec = nullableCodec(report, "audioCodec");
   if (!audioCodec.ok) return audioCodec;
-  const videoCodec = nullableCodec(input, "videoCodec");
+  const videoCodec = nullableCodec(report, "videoCodec");
   if (!videoCodec.ok) return videoCodec;
-  const reconnects = boundedNumber(input["reconnects"], "reconnects", MAX_CALL_RECONNECTS, true);
+  const reconnects = boundedNumber(report["reconnects"], "reconnects", MAX_CALL_RECONNECTS, true);
   if (!reconnects.ok) return reconnects;
 
   return ok({
-    participantId: participantId.value,
+    participantId,
     final: final.value,
     intervalMs: intervalMs.value,
     durationMs: durationMs.value,
@@ -799,11 +792,9 @@ export function parseClientEvent(raw: string | ArrayBuffer): Result<ClientEvent>
       if (!call.ok) return call;
       const participant = requiredId(parsed, "participant");
       if (!participant.ok) return participant;
-      const emoji = parsed["emoji"];
-      if (typeof emoji !== "string" || !(CALL_REACTIONS as readonly string[]).includes(emoji)) {
-        return fail("emoji must be one of the call reactions");
-      }
-      return ok({ t: "call-react", call: call.value, participant: participant.value, emoji: emoji as CallReaction });
+      const emoji = requiredEnum(parsed, "emoji", CALL_REACTIONS);
+      if (!emoji.ok) return emoji;
+      return ok({ t: "call-react", call: call.value, participant: participant.value, emoji: emoji.value });
     }
     default:
       return fail(`unknown event type ${JSON.stringify(parsed["t"])}`);
@@ -817,6 +808,18 @@ function optionalBoolean(source: Json, key: string): Result<boolean | undefined>
   const raw = source[key];
   if (typeof raw !== "boolean") return fail(`${key} must be true or false`);
   return ok(raw);
+}
+
+/** `source[key]`, one of `allowed`; `name` is what the message calls it (`tracks[].rid`). */
+function requiredEnum<T extends string>(
+  source: Json,
+  key: string,
+  allowed: readonly T[],
+  name: string = key,
+): Result<T> {
+  const raw = source[key];
+  if (typeof raw !== "string" || !allowed.includes(raw as T)) return fail(`${name} must be one of ${allowed.join(", ")}`);
+  return ok(raw as T);
 }
 
 function optionalEnum<T extends string>(source: Json, key: string, allowed: readonly T[]): Result<T | undefined> {
