@@ -1563,6 +1563,7 @@ export class ChatStore {
 
     if (previous.phase !== snapshot.phase) this.#announceCallPhase(previous, snapshot);
     if (!isLivePhase(snapshot.phase) && this.#state.callFocus) this.#patch({ callFocus: false });
+    if (!isLivePhase(snapshot.phase) && this.#state.callPushToTalk) this.#patch({ callPushToTalk: false });
 
     const live = snapshot.channelId !== null && isLivePhase(snapshot.phase);
     const bridged = live
@@ -1696,8 +1697,31 @@ export class ChatStore {
     const engine = this.#callEngine;
     if (engine === null || !isLivePhase(this.#state.call.phase)) return;
     const next = !this.#state.call.audioEnabled;
+    // A deliberate toggle while Space is held wins: releasing Space must not undo it.
+    if (this.#state.callPushToTalk) this.#patch({ callPushToTalk: false });
     engine.setAudioEnabled(next);
     this.announce(next ? "Microphone on" : "Microphone off");
+  }
+
+  /**
+   * Push-to-talk: Space pressed while muted turns the microphone on, and its release (or the frame
+   * losing focus) turns it off again. Pressing Space with the microphone already on does nothing, so
+   * it never mutes somebody who unmuted on purpose.
+   */
+  pushToTalk(down: boolean): void {
+    const engine = isLivePhase(this.#state.call.phase) ? this.#callEngine : null;
+    if (down) {
+      if (engine === null || this.#state.callPushToTalk || this.#state.call.audioEnabled) return;
+      this.#patch({ callPushToTalk: true });
+      engine.setAudioEnabled(true);
+      this.announce("Talking. Release Space to mute");
+      return;
+    }
+    if (!this.#state.callPushToTalk) return;
+    this.#patch({ callPushToTalk: false });
+    if (engine === null) return;
+    engine.setAudioEnabled(false);
+    this.announce("Microphone off");
   }
 
   async toggleCallVideo(): Promise<void> {

@@ -29,6 +29,7 @@ import { canShareScreen } from "./layout.js";
 export function CallControls({ layout }: { layout: "page" | "dock" }): ReactNode {
   const store = useStore();
   const call = useChat((state) => state.call);
+  const pushToTalk = useChat((state) => state.callPushToTalk);
   const chatOpen = useChat((state) => state.callUi.chatOpen);
   const focus = useChat((state) => state.callFocus);
   const embedded = useChat((state) => state.embedded);
@@ -41,7 +42,13 @@ export function CallControls({ layout }: { layout: "page" | "dock" }): ReactNode
 
   const mic = (
     <BarButton
-      label={call.audioEnabled ? `Mute microphone (${mod}D)` : `Unmute microphone (${mod}D)`}
+      label={
+        pushToTalk
+          ? "Talking: release Space to mute"
+          : call.audioEnabled
+            ? `Mute microphone (${mod}D)`
+            : `Unmute microphone (${mod}D), or hold Space to talk`
+      }
       pressed={!call.audioEnabled}
       warn={!call.audioEnabled}
       disabled={!live}

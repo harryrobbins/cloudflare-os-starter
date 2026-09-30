@@ -196,6 +196,8 @@ export interface ChatState {
   readonly shellLayout: "page" | "dock" | "hidden" | null;
   /** Full-page "Focus": the rail is hidden so the call takes the whole width. */
   readonly callFocus: boolean;
+  /** Space is held while muted: the microphone is on until it is released (push-to-talk). */
+  readonly callPushToTalk: boolean;
 }
 
 export const INITIAL_STATE: ChatState = {
@@ -243,4 +245,5 @@ export const INITIAL_STATE: ChatState = {
   callStart: { audio: true, video: true },
   shellLayout: null,
   callFocus: false,
+  callPushToTalk: false,
 };

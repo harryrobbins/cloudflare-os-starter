@@ -3,7 +3,8 @@
 // - one hidden `<audio>` per remote participant, so the call stays audible while the grid is swapped
 //   for the conversation, another conversation is open, or the shell has hidden the frame;
 // - the in-call shortcuts (Ctrl/Cmd+D microphone, Ctrl/Cmd+E camera), which win over the browser's
-//   bookmark and search-bar bindings only while a call is live;
+//   bookmark and search-bar bindings only while a call is live, and push-to-talk: Space held while
+//   muted, unless focus is on something Space operates (a field, a button; see `shortcuts.ts`);
 // - a small "In a call" pill when the call's conversation is not the one on screen, to get back.
 //   When the shell has hidden the frame it shows its own pill instead, so this one stays away.
 
@@ -15,6 +16,7 @@ import { useChat, useStore } from "../../hooks/store.js";
 import { channelLabel } from "../../lib/labels.js";
 import { isLivePhase } from "../../store/calls.js";
 import { RemoteAudio } from "./CallTile.js";
+import { callKeyHandlers } from "./shortcuts.js";
 
 export function CallDock(): ReactNode {
   const store = useStore();
@@ -31,19 +33,22 @@ export function CallDock(): ReactNode {
 
   useEffect(() => {
     if (!live) return;
-    function onKeyDown(event: KeyboardEvent): void {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
-      const key = event.key.toLowerCase();
-      if (key === "d") {
-        event.preventDefault();
-        store.toggleCallAudio();
-      } else if (key === "e") {
-        event.preventDefault();
-        void store.toggleCallVideo();
-      }
+    const keys = callKeyHandlers(store);
+    function onVisibility(): void {
+      if (document.visibilityState === "hidden") keys.release();
     }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", keys.onKeyDown);
+    window.addEventListener("keyup", keys.onKeyUp);
+    // A release the frame never sees (focus moved to the shell, another window) must still mute.
+    window.addEventListener("blur", keys.release);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("keydown", keys.onKeyDown);
+      window.removeEventListener("keyup", keys.onKeyUp);
+      window.removeEventListener("blur", keys.release);
+      document.removeEventListener("visibilitychange", onVisibility);
+      keys.release();
+    };
   }, [live, store]);
 
   if (!live) return null;

@@ -562,6 +562,50 @@ describe("joining and leaving", () => {
     expect(store.state.announcement).toBe("Camera off");
   });
 
+  it("push-to-talk unmutes while held and mutes on release, announcing both", async () => {
+    const { store, engine } = await harness();
+    store.setCallStart({ audio: false });
+    await store.joinCall("c1");
+    store.pushToTalk(true);
+    expect(store.state.callPushToTalk).toBe(true);
+    expect(store.state.announcement).toBe("Talking. Release Space to mute");
+    // A second press while held is ignored.
+    store.pushToTalk(true);
+    store.pushToTalk(false);
+    expect(engine.audio).toEqual([true, false]);
+    expect(store.state.callPushToTalk).toBe(false);
+    expect(store.state.announcement).toBe("Microphone off");
+    // A release without a press does nothing.
+    store.pushToTalk(false);
+    expect(engine.audio).toEqual([true, false]);
+  });
+
+  it("push-to-talk never mutes a microphone that was on, and a toggle while held sticks", async () => {
+    const { store, engine } = await harness();
+    await store.joinCall("c1");
+    store.pushToTalk(true);
+    expect(engine.audio).toEqual([]);
+    store.toggleCallAudio(); // mute
+    store.toggleCallAudio(); // unmute on purpose
+    engine.audio.length = 0;
+    // Held from muted, then clicked: the click wins and the release leaves the microphone alone.
+    store.toggleCallAudio(); // mute
+    store.pushToTalk(true);
+    store.toggleCallAudio(); // deliberate: mic off while holding
+    store.pushToTalk(false);
+    expect(engine.audio).toEqual([false, true, false]);
+    expect(store.state.callPushToTalk).toBe(false);
+  });
+
+  it("push-to-talk ends with the call", async () => {
+    const { store } = await harness();
+    store.setCallStart({ audio: false });
+    await store.joinCall("c1");
+    store.pushToTalk(true);
+    await store.leaveCall();
+    expect(store.state.callPushToTalk).toBe(false);
+  });
+
   it("disposes the engine on unload without leaving", async () => {
     const { store, engine } = await harness();
     await store.joinCall("c1");
