@@ -113,6 +113,12 @@ export interface CallSnapshot {
   readonly activeSpeaker: ParticipantId | null;
   /** Human-readable reason for `failed`, or a transient warning (e.g. "Camera is in use"). */
   readonly error: string | null;
+  /**
+   * The chosen audio output (`DeviceChoice.audioOutputId`), for the UI to apply to its remote
+   * `<audio>` elements with `setSinkId` (see `applyAudioOutput` in `engine/devices.ts`). Null means
+   * the system default. Optional so hand-built snapshots (mock engine) need not set it.
+   */
+  readonly audioOutputId?: string | null;
 }
 
 /**
