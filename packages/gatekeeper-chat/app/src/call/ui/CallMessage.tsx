@@ -55,9 +55,9 @@ export function CallMessageView({
   onShowCall: () => void;
 }): ReactNode {
   const ended = summary.state === "ended";
-  const text = ended
-    ? callEndedText(summary, nameOf)
-    : `${nameOf(message.authorId) ?? "Someone"} started a call`;
+  // The server writes "<name> started a call" as the body. System messages are authored by the
+  // agent user, so the author is never the caller (it read "Agent started a call").
+  const text = ended ? callEndedText(summary, nameOf) : message.body || "A call started";
 
   return (
     <div role="listitem" data-call={summary.state} className="flex items-center gap-2 px-5 py-1.5 text-[12px] text-kumo-subtle">

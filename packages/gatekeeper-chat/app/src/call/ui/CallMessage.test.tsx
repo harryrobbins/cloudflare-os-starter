@@ -12,7 +12,8 @@ const message: Message = {
   channelId: "c1",
   seq: 4,
   rootId: null,
-  authorId: "a",
+  // As the server writes it: system messages are the agent's, the caller is only in the body.
+  authorId: "agent",
   body: "Alice Chen started a call",
   kind: "system",
   createdAt: Date.UTC(2026, 8, 30, 10, 2),
