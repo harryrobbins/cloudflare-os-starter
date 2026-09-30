@@ -102,7 +102,25 @@ While a call is active the dock only hides on close, and the `/chat` page's unmo
 ## Stream E: integration and end to end
 
 - [ ] Wire engine + UI + Worker on the local platform
-- [ ] `e2e/call-check.mjs`: five fake-media Chromium contexts against a real dev SFU app
+- [x] `e2e/call-check.mjs`: five fake-media Chromium contexts against a real dev SFU app (written;
+      verified only up to the join step, see below)
+- [ ] Five-person run against the real SFU (blocked on the SFU app token)
+
+Real-SFU attempt 2026-09-30 (standalone `wrangler dev` via `CHAT_DEV_ENV_FILE`, credentials from a
+file outside the repo, deleted afterwards):
+- **SFU: blocked.** `sessions/new` answers 401 `Invalid bearer token, please ensure the token is
+  current and not expired` for the supplied app id and token, from the Worker and from a direct
+  `curl`. The app id itself exists (an unknown id answers 404). The token needs re-copying or
+  regenerating in the dashboard (Realtime → SFU → the app). Nothing past the join was exercised, so
+  RED, munged Opus fmtp, simulcast, black-frame keep-alive, downgrade paths, sidebar/full-page moves
+  and the stats log line remain unverified.
+- **Join failure path: pass.** The join answers 502, the pane shows "The call could not connect ·
+  The call service refused that request (unauthorized)" with Close/Retry, and no call row or system
+  message is left behind (`GET /channels/general/call` → `null`, history empty).
+- **TURN: pass.** The Worker mints credentials (`chat.call.turn outcome=ok`). Two Chromium peer
+  connections with `iceTransportPolicy: "relay"` and freshly minted credentials connected in 4.2 s
+  over `relay/udp` (RTT 13 ms) and carried audio and video.
+- Firefox/WebKit: not run.
 - [ ] README section for calls; update chat.md "out of scope" note
 - [ ] Production mutation summary for Harry (SFU app + TURN key creation, secrets, release)
 
