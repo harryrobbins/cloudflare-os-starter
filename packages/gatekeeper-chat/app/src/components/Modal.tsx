@@ -16,6 +16,7 @@ export function Modal({
   children,
   footer,
   width = "sm",
+  drawer = false,
 }: {
   title: string;
   description?: string;
@@ -23,6 +24,7 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   width?: "sm" | "md";
+  drawer?: boolean;
 }): ReactNode {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreTo = useRef<HTMLElement | null>(null);
@@ -65,7 +67,7 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-[1250] flex items-start justify-center bg-black/40 p-4 pt-[12vh] backdrop-blur-[2px]"
+      className={`chat-modal fixed inset-0 z-[1250] flex bg-black/40 backdrop-blur-[2px] ${drawer ? "items-stretch justify-start" : "items-start justify-center p-4 pt-[12vh]"}`}
       onClick={onClose}
     >
       <div
@@ -75,7 +77,8 @@ export function Modal({
         aria-label={title}
         onClick={(event) => event.stopPropagation()}
         className={[
-          "chat-rise flex w-full flex-col overflow-hidden rounded-xl border border-kumo-line bg-kumo-base shadow-2xl",
+          drawer ? "chat-drawer h-full w-[min(22rem,90vw)]" : "",
+          "chat-modal-panel chat-rise flex w-full flex-col overflow-hidden rounded-xl border border-kumo-line bg-kumo-base shadow-2xl",
           width === "sm" ? "max-w-md" : "max-w-xl",
         ].join(" ")}
       >
@@ -90,7 +93,7 @@ export function Modal({
             <X size={15} />
           </IconButton>
         </div>
-        <div className="quiet-scroll max-h-[60vh] min-h-0 overflow-y-auto px-4 py-4">{children}</div>
+        <div className={drawer ? "min-h-0 flex-1" : "chat-modal-body quiet-scroll max-h-[60vh] min-h-0 overflow-y-auto px-4 py-4"}>{children}</div>
         {footer !== undefined && (
           <div className="flex items-center justify-end gap-2 border-t border-kumo-line px-4 py-3">
             {footer}

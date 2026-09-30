@@ -46,3 +46,9 @@ What the research could not show, and the kanban and whiteboard builds found on 
 - V8 value sizes versus JSON;
 - guessable request ids;
 - native undo in the sandbox.
+
+## Mobile apps
+
+[Mobile Chat and PWA](mobile-chat-and-pwa.md) investigates app-specific launch versus
+workspace sharing, home-screen installation, phone interaction and Slack-replacement
+requirements. Implementation and qualification: [Mobile Chat plan](../plans/mobile-chat.md).

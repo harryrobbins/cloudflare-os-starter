@@ -477,3 +477,34 @@ pre {
     scroll-behavior: auto !important;
   }
 }
+
+/* The standalone app owns safe areas; a Workshop iframe owns its own frame. */
+@media (max-width: 899px) {
+  html:not([data-embed="1"]) #root {
+    position: fixed;
+    top: var(--chat-top, 0px);
+    width: 100%;
+    height: var(--chat-height, 100dvh);
+  }
+  html:not([data-embed="1"]) .chat-shell {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  }
+  .chat-mobile-nav { padding-bottom: env(safe-area-inset-bottom); }
+  [data-keyboard="1"] .chat-mobile-nav { display: none; }
+  .chat-modal { top: var(--chat-top, 0px); height: var(--chat-height, 100dvh); bottom: auto; padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  .chat-modal-panel { max-height: 100%; }
+  .chat-modal-body { max-height: none; flex: 1; }
+  .chat-drawer { max-width: min(22rem, 90vw); }
+  input:not([type="checkbox"]):not([type="radio"]), textarea, select { font-size: 16px; }
+  textarea { max-height: min(12rem, 30dvh); }
+  .quiet-scroll { overscroll-behavior: contain; }
+}
+@media (pointer: coarse) {
+  button, a, [role="menuitem"], label:has(input[type="file"]) { min-height: 44px; }
+  button[aria-label], label:has(input[type="file"]) { min-width: 44px; }
+  .chat-message-actions { position: relative; top: auto; right: auto; opacity: 1; margin-top: 4px; display: flex; justify-content: flex-end; }
+  .chat-message-actions > div { flex-wrap: wrap; justify-content: flex-end; box-shadow: none; border: 0; background: transparent; }
+  .chat-message-actions button[aria-label^="React with"], .chat-message-actions button[aria-label="Copy link"] { display: none; }
+  label:has(input[type="file"]) ~ * { flex-shrink: 0; }
+  .opacity-0.group-hover\:opacity-100 { opacity: 1; }
+}
