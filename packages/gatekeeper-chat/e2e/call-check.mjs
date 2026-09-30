@@ -88,7 +88,7 @@ try {
     })
     await page.goto(`${APP}/dev/login?as=${encodeURIComponent(id)}`)
     await page.locator('a[data-channel-id="general"]').click({ timeout: 30_000 })
-    people.push({ id, page, failures })
+    people.push({ id, name: identities.find((i) => i.id === id)?.name ?? id, page, failures })
   }
 
   // --- join, one at a time ------------------------------------------------
@@ -132,16 +132,22 @@ try {
   }
 
   // --- active speaker -------------------------------------------------------
-  // The fake microphone beeps, so somebody is always loud enough. The SFU negotiates no
-  // ssrc-audio-level extension, so this proves the inbound-rtp audioLevel fallback.
-  const highlighted = await until(async () => {
-    for (const person of people) {
-      const speaking = await person.page.locator("[data-testid='call-tile'][data-speaking='true']").count()
-      if (speaking === 0) return false
+  // The SFU negotiates no ssrc-audio-level extension, so this proves the inbound-rtp audioLevel
+  // fallback. Every fake microphone beeps alike, so all but one person mute: the others must then see
+  // that person's tile highlighted (your own tile never is).
+  const [speaker, ...listeners] = people
+  for (const person of listeners) await person.page.getByRole('button', { name: /^Mute microphone/ }).click()
+  const heard = new Set()
+  const deadline = Date.now() + 12_000
+  while (Date.now() < deadline && heard.size < listeners.length) {
+    for (const person of listeners) {
+      const ring = person.page.locator("[data-testid='call-tile'][data-speaking='true']")
+      if ((await ring.count()) === 1 && ((await ring.textContent()) ?? '').includes(speaker.name)) heard.add(person.id)
     }
-    return true
-  }, 10_000, 'a speaking tile for everyone').then(() => true, () => false)
-  check('active speaker highlights a tile for everybody', highlighted)
+    await speaker.page.waitForTimeout(250)
+  }
+  check(`active speaker: everybody else highlights ${speaker.id}`, heard.size === listeners.length, `${heard.size}/${listeners.length}`)
+  for (const person of listeners) await person.page.getByRole('button', { name: /^Unmute microphone/ }).click()
 
   // --- camera off past the SFU's 30 s inactivity window ---------------------
   const [first, second] = people
@@ -160,22 +166,27 @@ try {
   const t2 = (await snapshot(second.page)).in.filter((i) => i.kind === 'video')
   const flowing = t2.filter((b) => b.bytes > (t1.find((a) => a.mid === b.mid)?.bytes ?? 0)).length
   check(`camera off 35 s: ${first.id} still sends video (black frames)`, sent2 > sent1, `${sent2 - sent1} bytes in 6 s`)
-  check(`camera off 35 s: ${first.id} keeps every simulcast layer alive`, encoding.length === Object.keys(layers2).length, `encoding ${encoding.join(',') || 'none'} of ${Object.keys(layers2).join(',')}`)
+  const layerState = (await snapshot(first.page)).out.filter((o) => o.kind === 'video').map((o) => `${o.rid}:${o.active === false ? 'inactive' : 'active'}:${o.limit}`).join(' ')
+  check(`camera off 35 s: ${first.id} keeps every simulcast layer alive`, encoding.length === Object.keys(layers2).length, `encoding ${encoding.join(',') || 'none'} of ${Object.keys(layers2).join(',')} (${layerState})`)
   check(`camera off 35 s: ${second.id} still receives every video track`, flowing >= people.length - 1, `flowing=${flowing}`)
   await first.page.getByRole('button', { name: /^Turn camera on/ }).click()
   // Back on: everybody decodes real video from everybody again, whatever layer they pull.
+  let stalled = ''
   const decodingAll = async () => {
     for (const person of people) {
       const a = (await snapshot(person.page)).in.filter((i) => i.kind === 'video')
       await person.page.waitForTimeout(1_500)
       const b = (await snapshot(person.page)).in.filter((i) => i.kind === 'video')
       const moving = b.filter((x) => x.frames > (a.find((y) => y.mid === x.mid)?.frames ?? 0) + 5).length
-      if (moving < people.length - 1) return false
+      if (moving < people.length - 1) {
+        stalled = `${person.id}: ${b.map((x) => `mid${x.mid} +${x.frames - (a.find((y) => y.mid === x.mid)?.frames ?? 0)}f ${x.width ?? '-'}w`).join(', ')}`
+        return false
+      }
     }
     return true
   }
   const back = await until(decodingAll, 20_000, 'video after camera on').then(() => true, () => false)
-  check(`camera on again: everybody decodes ${first.id}'s video`, back)
+  check(`camera on again: everybody decodes ${first.id}'s video`, back, back ? '' : `last stalled view ${stalled}`)
 
   // --- leave ------------------------------------------------------------------
   for (const person of people) {

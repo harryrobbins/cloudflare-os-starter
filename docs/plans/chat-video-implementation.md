@@ -155,7 +155,7 @@ Bugs found and fixed (each with a test that fails without the fix):
    subscribed sockets' lists on the server (`Broadcaster.follow`), so the ring (and every later
    message) goes through the normal channel path; the store fetches the channel list when a ring names
    an unknown conversation and rings once the membership is known. (Reworked after the real-SFU run;
-   needs a rerun.)
+   the 2026-10-01 rerun passed, below.)
 5. **Focus lost when the call moved** (fork `31cb0002`). After Pop out the home composer's autofocus
    took the keyboard; closing the drawer mid-call left it on the body. Focus now follows the frame
    after a move, goes to the pill when the frame hides mid-call, and returns to the opener otherwise.
@@ -170,11 +170,39 @@ Observed, not fixed:
   Worker's force-close of its tracks gets a slow `410 gone` from the SFU. Nothing waits on it.
 - One of six `call-check` runs had the DM caller publish but never announce, then leave (callee
   connected alone); not reproduced in five further runs, including a targeted repro.
-- Firefox's TURN warning: the Worker passes six TURN URLs; trimming to three would silence it.
 
 SFU usage for the whole session: about 25 calls, mostly 1–3 minutes with 2–5 people and 3 simulcast
 layers each, plus the TURN-proxied runs — a few GB of SFU egress at most, and a few hundred MB relayed
 through TURN. Nothing was deployed.
+
+### Real-SFU rerun, 2026-10-01 (after feat/chat-video-next and the cleanup pass)
+
+Same setup, fresh Durable Object state, starter `eee44a1` + fork `e111b22f`, then the fix below.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Five people, one channel call | pass | `call-check.mjs` 43/43 twice before the fix; after it 44/44 in three consecutive runs at host load 14–17 on 11 cores. Two single failures earlier under that load (layer `a` not encoding once, one viewer's video stalled once after camera on) did not recur; the check now prints layer state and the stalled view |
+| One `pc.getStats()` per quality tick | pass | every tile rates `good` for every viewer (receivers sampled); telemetry `lossSendPct` present in every line (only `remote-inbound-rtp` matched via `localId` supplies it), `rttAvgMs`, `jitterMs`, `framesDecoded`; per-minute `final:false` lines at `intervalMs` ≈ 59 880 |
+| CPU shedding (field trial) | pass | shed `a` at 9 s, `b` at 15 s, `c` kept, banner; `limitedCpuMs` reported; restore not observed (run ended 12 s after overuse) |
+| Active speaker | **fixed** | bug 8: the SFU negotiates no `ssrc-audio-level` extension (0 `extmap` lines either way), so `getSynchronizationSources()` has no `audioLevel` and nothing highlighted. With the fallback, `call-check.mjs` (four muted, one talking) sees all four others highlight the speaker, 4/4 in five runs; Firefox highlights too. Your own tile is never ringed, by design |
+| Join → announce | pass | click → join 170–265 ms, join → publish 1.5 s (media + ICE gathering), publish → announce 240–313 ms; ~2.3 s click to announced |
+| TURN list | pass | `stun:…:3478` + `turn:…:3478?transport=udp`, `turn:…:3478?transport=tcp`, `turns:…:443?transport=tcp`; relay-only person connects `relay/udp` |
+| Firefox 151 | pass | a/b/c at 1280/640/320, audio + video both ways, tiles `good`, speaking tile highlighted, telemetry has RTT and `lossSendPct`; the ">= 5 STUN/TURN servers" warning is gone (0 in two runs) |
+| DM created after the callee connected | pass | callee's rail shows it, first message arrives, second arrives live, ring "Dev User is calling", both connected |
+| Tab closed mid-call | pass | the other side loses the tile in 211 ms; the closer's `final:true` stats line is logged before its `leave` |
+| Raise hand | pass | both others see `hand-raised`; lowering clears it |
+| Reactions | pass | 👍 floats on the other person's view within 200 ms |
+| Push-to-talk | pass | muted → others see mic off; Space held → mic on for others; released → off |
+| Audio only | pass | inbound video tracks 0 (paused tiles shown), camera on the 1 fps black keep-alive, others see no video from that person |
+| Noise suppression / blur | pass, headless limits | both switch to on (RNNoise and MediaPipe load); the call stays connected on one PC with audio flowing. Under blur, headless software GL encodes ~11 frames/s summed over three layers (from ~42): not representative of a real GPU |
+| Migration 6 | pass | fresh DO: `schema_meta.schema_version = 6`, `call_participants.hand_at` present |
+| Full page ↔ sidebar ↔ pill | pass | `call-move-check.mjs` 8/8 (shell rebuilt from fork `e111b22f`) |
+| WebKit | not run | needs apt packages (sudo) |
+
+8. **No active speaker behind the SFU.** Fixed in `01d4c9f`: when a receiver's synchronization
+   sources carry no level, the speaker tick reads one `pc.getStats()` and uses `inbound-rtp.audioLevel`
+   (matched by mid or track id); `call-check.mjs` now mutes all but one person and asserts the
+   others highlight that one.
 
 - [x] README section for calls; update chat.md "out of scope" note (feat/chat-video-next, Stream H)
 - [x] Production mutation summary for Harry, drafted below; **not executed**
