@@ -124,6 +124,43 @@ Add this section after the user guide in `src/README.md`, which ships as the gad
 4. Two worked examples in this blueprint's own terms: one operation call and one adaptation.
 5. That edits to a gadget copy are not carried back to `packages/blueprint-*`.
 
+## Evals: what an agent must be able to do
+
+Every adaptable blueprint ships `src/evals.mjs`, published as `evals.mjs`. It is not a server
+module, so the platform never loads it. It is the blueprint's executable promise about the
+requests an agent should handle: a few `use` evals and at least one `adapt` eval, each phrased
+as a person would type it in the Workshop chat, in the blueprint's own domain.
+
+```js
+// <Name>: requests an agent should be able to carry out with this gadget.
+// Run: node scripts/blueprint-evals/run.mjs <format> [--eval <id>] [--reference] [--model <m>]
+export default [
+  {
+    id: "kebab-case-id",
+    kind: "use",   // "use": call operations from executeCode, editing no file; "adapt": edit code
+    prompt: "What the person asks for, in their words.",
+    // A known-good solution. `--reference` runs it without a model, proving the eval is
+    // achievable and its check is right; the package tests run every reference.
+    reference: { code: "await env.<Binding>.<method>({ … });" },
+    //   adapt: { edits: [{ file: "client.js", find: "<exact text>", replace: "<text>" }] }
+    /** @param {EvalContext} t @returns {Promise<string[]>} problems; empty means pass */
+    async check(t) { const state = await t.gadget.<read method>(); return [ … ]; },
+  },
+];
+```
+
+`EvalContext` (scripts/blueprint-evals/run.mjs) holds:
+- `t.gadget`: the gadget's real `Gadget` class, built from the final files and running in Node
+  with in-memory Durable Object storage. Call its methods directly.
+- `t.files`: the final gadget files, keyed by name.
+- `await t.client()`: a Playwright page running the assembled client exactly as the platform
+  does, with `gadget` bridged to `t.gadget`. Use it to click an added action and check its effect.
+
+Checks judge outcomes, not method choice: accept any reasonable way of doing the job, and be
+tolerant of wording, case and layout jitter. The runner also fails a `use` eval that edited a
+file, and any eval that touched a `.lib.js` file. Record model runs in the package README's
+"Adapting this gadget" section (model, date, pass rate) when they change.
+
 ## Checks before release
 
 - `node --test scripts/gadget-entry.test.ts` and the package's `test:run` (plus `test:e2e`
@@ -131,6 +168,8 @@ Add this section after the user guide in `src/README.md`, which ships as the gad
 - `dist/client.js` and `dist/server.js` start with the banner and the adapt block, contain
   no `import` from a relative path, and are unminified.
 - `pack:gadget` bumps the format revision, and `pack-gadget.mjs --check` passes.
+- Every eval passes with `--reference`, and a model run with the test model
+  (`litellm_proxy/deepseek/deepseek-v4-flash`) passes most runs; investigate any eval it fails.
 - Smoke test in the Workshop with one request of each kind, phrased in the blueprint's own
   terms. A content request should use `describeBinding` and call operations without editing
   code. A request to change behaviour or display should edit the adapt block of `client.js`,
