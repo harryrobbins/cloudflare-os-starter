@@ -7,14 +7,16 @@ import { catalog } from '../src/catalog.js';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const generated = join(root, 'src/generated');
 mkdirSync(generated, { recursive: true });
-const result = spawnSync('go', ['build', '-trimpath', '-o', join(generated, 'converter.wasm'), '.'], {
+// The converter is an embedded WASM asset; release provenance is recorded by the wrapper.
+// Disable optional VCS stamping so Go does not mistake a linked worktree for its parent directory.
+const result = spawnSync('go', ['build', '-buildvcs=false', '-trimpath', '-o', join(generated, 'converter.wasm'), '.'], {
   cwd: join(root, 'converter'),
   env: { ...process.env, GOOS: 'js', GOARCH: 'wasm' },
   stdio: 'inherit',
 });
 if (result.error) throw result.error;
 if (result.status !== 0) process.exit(result.status ?? 1);
-const examples = spawnSync('go', ['run', './cmd/examples'], {
+const examples = spawnSync('go', ['run', '-buildvcs=false', './cmd/examples'], {
   cwd: join(root, 'converter'), input: JSON.stringify(catalog), encoding: 'utf8',
   maxBuffer: 2 * 1024 * 1024,
 });
@@ -39,7 +41,7 @@ for (const filename of ['LICENSE.txt', 'THIRD_PARTY_NOTICES.txt']) {
 }
 // Retain notices for all Go modules linked into the converter, including the
 // converter library's older D2 dependency. Pin/source information accompanies them.
-const modules = spawnSync('go', ['list', '-deps', '-json', '.'], {
+const modules = spawnSync('go', ['list', '-buildvcs=false', '-deps', '-json', '.'], {
   cwd: join(root, 'converter'), encoding: 'utf8',
   env: { ...process.env, GOOS: 'js', GOARCH: 'wasm' }, maxBuffer: 16 * 1024 * 1024,
 });

@@ -26,9 +26,13 @@ export class Gadget extends DurableObject {
     // RPC calls may overlap at await points. Chain mutations so each operation
     // observes and commits one authoritative document state in strict order.
     this.mutationQueue = Promise.resolve();
+    // Diagram objects in drawings render through the MermaiD2 connector when it is connected to
+    // this document as MERMAID2 (optional, like GOOGLE_DOC).
+    const renderer = env?.MERMAID2;
     this.drawings = new DrawingHost(ctx.storage, {
       onChange: (id) => this.schedulePreview(id),
       defaultTitle: "Untitled drawing",
+      renderDiagram: renderer ? (request) => renderer.render(request) : null,
     });
     /** @type {Map<string, {timer: any, since: number}>} */
     this.previewTimers = new Map();
@@ -420,6 +424,10 @@ export class Gadget extends DurableObject {
 
   async drawingHistory(id, limit) {
     return (await this.drawings.open(id)).api.getHistory(limit);
+  }
+
+  async drawingDiagramRender(id, diagramId, opts) {
+    return (await this.drawings.open(id)).api.getDiagramRender(diagramId, opts);
   }
 
   drawingPresence(id, presence) {

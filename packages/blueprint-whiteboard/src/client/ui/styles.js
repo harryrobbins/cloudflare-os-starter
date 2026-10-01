@@ -174,6 +174,10 @@ input:focus { border-color: var(--accent); }
 .swatch[aria-checked="true"], .swatch[aria-pressed="true"] { border-color: var(--text); box-shadow: inset 0 0 0 2px var(--surface); border-width: 3px; }
 .swatch.none { background: linear-gradient(135deg, transparent 45%, var(--danger) 45%, var(--danger) 55%, transparent 55%), var(--surface); }
 .swatch-chip { width: 18px; height: 18px; min-height: 0; border-width: 1px; border-color: var(--text-3); }
+.picker-pop { display: grid; gap: 2px; padding: 6px; }
+.picker-heading { grid-column: 1 / -1; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; padding: 6px 2px 2px; }
+.picker-heading:first-child { padding-top: 0; }
+.picker-pop .picker-choice { width: 36px; height: 36px; min-height: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 .wb-stylebar .btn { min-height: 30px; }
 .wb-stylebar .btn.small { min-width: 30px; }
 .move-group .btn, .size-group .btn { padding: 4px; min-width: 30px; }
@@ -283,6 +287,7 @@ input:focus { border-color: var(--accent); }
   .size-field input { min-height: 44px; }
   .menu .btn { min-height: 44px; }
   .swatch-pop .swatch { width: 44px; height: 44px; }
+  .picker-pop .picker-choice { width: 44px; height: 44px; }
   .modal .swatch { width: 44px; height: 44px; }
   .modal-actions .btn { min-height: 44px; }
   .object-picker .picker-option { min-height: 44px; }

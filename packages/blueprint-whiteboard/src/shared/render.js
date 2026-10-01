@@ -3,13 +3,16 @@
 // (one <g> per object, patched per object), and the server serialises the same nodes into the SVG
 // export, so an export is the board as drawn. No DOM access here.
 
-import { fmt, center, connectorRoute, penWorldPoints, polylineMidpoint, strokePathD, textLayout, textWidth, fitCamera, boardBounds, rotatedBounds } from "./geometry.js";
+import { fmt, center, connectorRoute, penWorldPoints, polylineMidpoint, strokePathD, textLayout, textWidth, fitCamera, boardBounds, rotatedBounds, wrapText, LINE_HEIGHT } from "./geometry.js";
+import { diagramHash } from "./diagram.js";
+import { tableLayout } from "./table.js";
 import { DEFAULT_TITLE, sortedObjects } from "./protocol.js";
 import { getIcon, iconPaths, iconPlacement, iconTextBox, DEFAULT_ICON_STROKE, DEFAULT_INK } from "./icons/registry.js";
 import { codeLayout, fitColumns, CODE_FONT_FAMILY, CODE_CHAR_EM } from "./code/layout.js";
 import { codeTheme } from "./code/theme.js";
 import { truncateText } from "./graphemes.js";
 import { routePathD, routeEndDirections, routeMidpoint, createRouteEnv } from "./connectors.js";
+import { shapeOf, shapeOutline, cmdsToPath } from "./shapes.js";
 
 /** @typedef {import("./protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("./protocol.js").BoardSnapshot} BoardSnapshot */
@@ -50,7 +53,7 @@ export function h(tag, attrs, children) {
  * @returns {VNode|null}
  */
 export function textNode(o) {
-  if (!o.text || o.type === "pen" || o.type === "connector" || o.type === "code") return null;
+  if (!o.text || o.type === "pen" || o.type === "connector" || o.type === "code" || o.type === "table" || o.type === "diagram") return null;
   if (o.type === "icon" && !iconTextBox(o)) return null;
   const layout = textLayout(o);
   if (!layout.lines.length) return null;
@@ -68,39 +71,68 @@ export function textNode(o) {
 }
 
 /**
+ * Stroke pattern attributes for style.dash ("solid" or absent: none), scaled by the line width.
+ * Dots are zero-length dashes with round caps.
+ * @param {string|undefined} dash @param {number} width
+ * @returns {Record<string, string>}
+ */
+export function dashAttrs(dash, width) {
+  const w = Math.max(0.5, width || 0);
+  if (dash === "dashed") return { "stroke-dasharray": `${fmt(Math.max(6, w * 4))} ${fmt(Math.max(4, w * 3))}` };
+  if (dash === "dotted") return { "stroke-dasharray": `0 ${fmt(Math.max(4, w * 2.5))}`, "stroke-linecap": "round" };
+  return {};
+}
+
+/**
  * The shape (without text) of a non-connector object.
  * @param {WhiteboardObject} o
+ * @param {Images} [images]  diagram renders by object id
  * @returns {VNode[]}
  */
-function shapeNodes(o) {
+function shapeNodes(o, images) {
   const s = o.style;
   const paint = {
     fill: s.fill, stroke: s.stroke === "none" || !s.strokeWidth ? "none" : s.stroke,
     "stroke-width": s.stroke === "none" || !s.strokeWidth ? null : s.strokeWidth,
   };
+  const dash = paint.stroke === "none" ? {} : dashAttrs(s.dash, s.strokeWidth);
   switch (o.type) {
     case "sticky":
       return [
         h("rect", { x: o.x + 2, y: o.y + 4, width: o.w, height: o.h, rx: 6, fill: "#000000", "fill-opacity": "0.12" }),
         h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, rx: 6, ...paint }),
       ];
-    case "rect":
-      return [h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, rx: 4, ...paint })];
+    case "rect": {
+      const shape = shapeOf(o) ?? "rect";
+      if (shape === "rect") return [h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, rx: 4, ...paint, ...dash })];
+      const g = shapeOutline(shape, o.w, o.h);
+      const nodes = (g.behind ?? []).map((b) => h("path", { d: cmdsToPath(b, o.x, o.y, fmt), ...paint, ...dash, "stroke-linejoin": "round" }));
+      nodes.push(h("path", { d: cmdsToPath(g.cmds, o.x, o.y, fmt), ...paint, ...dash, "stroke-linejoin": "round" }));
+      if (g.detail && paint.stroke !== "none") {
+        nodes.push(h("path", { d: cmdsToPath(g.detail, o.x, o.y, fmt), fill: "none", stroke: paint.stroke, "stroke-width": paint["stroke-width"], ...dash }));
+      }
+      return nodes;
+    }
     case "ellipse":
-      return [h("ellipse", { cx: o.x + o.w / 2, cy: o.y + o.h / 2, rx: o.w / 2, ry: o.h / 2, ...paint })];
+      return [h("ellipse", { cx: o.x + o.w / 2, cy: o.y + o.h / 2, rx: o.w / 2, ry: o.h / 2, ...paint, ...dash })];
     case "text":
       return s.fill === "none" ? [] : [h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, fill: s.fill })];
     case "frame":
-      return [h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, rx: 2, ...paint })];
+      return [h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, rx: 2, ...paint, ...dash })];
     case "pen":
       return [h("path", {
         d: strokePathD(penWorldPoints(o)), fill: "none", stroke: s.stroke === "none" ? "#1f2937" : s.stroke,
         "stroke-width": Math.max(0.5, s.strokeWidth), "stroke-linecap": "round", "stroke-linejoin": "round",
+        ...dashAttrs(s.dash, Math.max(0.5, s.strokeWidth)),
       })];
     case "icon":
       return iconNodes(o);
     case "code":
       return codeNodes(o);
+    case "table":
+      return tableNodes(o);
+    case "diagram":
+      return diagramNodes(o, images);
     default:
       return [];
   }
@@ -222,17 +254,174 @@ function codeNodes(o) {
 }
 
 /**
- * An arrowhead at `tip`, pointing away from `from`.
- * @param {{x: number, y: number}} from @param {{x: number, y: number}} tip @param {number} width @param {string} color
+ * Rendered diagrams by object id, as the canvas and the export know them: `href` is a data: URL
+ * of the SVG (drawn with <image>, so it can never run script), `status` what to say otherwise.
+ * @typedef {Map<string, {hash: string, status: string, href?: string, error?: string}>} Images
  */
-function arrowHead(from, tip, width, color) {
+
+/**
+ * A table: background, shaded header row, grid and wrapped cell text (src/shared/table.js).
+ * @param {WhiteboardObject} o
+ * @returns {VNode[]}
+ */
+function tableNodes(o) {
+  const L = tableLayout(o);
+  const s = o.style;
+  const line = s.stroke === "none" ? "#9ca3af" : s.stroke;
+  const width = Math.max(0.5, s.strokeWidth || 1);
+  /** @type {VNode[]} */
+  const nodes = [h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, fill: s.fill === "none" ? "#ffffff" : s.fill })];
+  if (o.header && L.rows > 1) nodes.push(h("rect", { x: o.x, y: o.y, width: o.w, height: L.rowH, fill: line, "fill-opacity": "0.14" }));
+  let d = "";
+  for (let r = 1; r < L.rows; r++) d += `M${fmt(o.x)} ${fmt(o.y + r * L.rowH)}H${fmt(o.x + o.w)}`;
+  for (let c = 1; c < L.cols; c++) d += `M${fmt(L.xs[c])} ${fmt(o.y)}V${fmt(o.y + o.h)}`;
+  if (d) nodes.push(h("path", { d, fill: "none", stroke: line, "stroke-width": width }));
+  nodes.push(h("rect", { x: o.x, y: o.y, width: o.w, height: o.h, fill: "none", stroke: line, "stroke-width": width }));
+  const anchor = s.align === "center" ? "middle" : s.align === "right" ? "end" : "start";
+  for (const cell of L.cells) {
+    if (!cell.lines.length) continue;
+    const x = anchor === "middle" ? cell.x + cell.w / 2 : anchor === "end" ? cell.x + cell.w : cell.x;
+    nodes.push(h("text", {
+      x, y: cell.baseline, "font-size": s.fontSize, "font-family": FONT_FAMILY, fill: s.textColor, "text-anchor": anchor,
+      "font-weight": cell.header ? "600" : null, style: "white-space:pre",
+    }, cell.lines.map((t, i) => ({ tag: "tspan", attrs: { x: fmt(x), ...(i === 0 ? {} : { dy: fmt(L.lineHeight) }) }, text: t || " " }))));
+  }
+  return nodes;
+}
+
+/**
+ * A diagram: its render as an image when there is one for its current source (see
+ * src/shared/diagram.js), else a placeholder with its language, a status line and the start of
+ * its source.
+ * @param {WhiteboardObject} o @param {Images} [images]
+ * @returns {VNode[]}
+ */
+function diagramNodes(o, images) {
+  const s = o.style;
+  const img = images?.get(o.id);
+  const current = img && img.hash === diagramHash(o) ? img : null;
+  /** @type {VNode[]} */
+  const nodes = [h("rect", {
+    x: o.x, y: o.y, width: o.w, height: o.h, rx: 6, fill: s.fill === "none" ? "#ffffff" : s.fill,
+    stroke: s.stroke === "none" ? "none" : s.stroke, "stroke-width": s.stroke === "none" ? null : Math.max(0.5, s.strokeWidth || 1),
+  })];
+  const pad = Math.min(12, o.w / 10, o.h / 10);
+  if (current?.href) {
+    nodes.push(h("image", {
+      x: o.x + pad, y: o.y + pad, width: Math.max(1, o.w - 2 * pad), height: Math.max(1, o.h - 2 * pad),
+      href: current.href, preserveAspectRatio: "xMidYMid meet",
+    }));
+    return nodes;
+  }
+  const fs = Math.max(8, Math.min(s.fontSize, o.h / 6));
+  const label = o.syntax === "mermaid" ? "Mermaid diagram" : "D2 diagram";
+  const status = !o.text?.trim() ? "Empty: double-click to write its source"
+    : !current ? (img?.status === "pending" ? "Rendering…" : "Not rendered yet")
+    : current.status === "unavailable" ? "Renderer not connected: connect MermaiD2 to this board as MERMAID2"
+    : current.status === "too-large" ? "Drawn on the board; left out of this export to keep it small"
+    : current.status === "error" ? `Could not render: ${current.error ?? "error"}`
+    : current.status === "pending" ? "Rendering…" : "";
+  const color = current?.status === "error" ? "#b91c1c" : "#6b7280";
+  const room = Math.max(1, o.w - 2 * pad);
+  nodes.push(h("text", { x: o.x + pad, y: o.y + pad + fs, "font-size": fs, "font-family": FONT_FAMILY, "font-weight": "600", fill: "#374151" }, [{ tag: "tspan", attrs: {}, text: label }]));
+  const statusLines = wrapText(status, room, fs * 0.9, 2);
+  const lh = fs * LINE_HEIGHT;
+  nodes.push(h("text", { x: o.x + pad, y: o.y + pad + fs + lh, "font-size": fs * 0.9, "font-family": FONT_FAMILY, fill: color },
+    statusLines.map((t, i) => ({ tag: "tspan", attrs: { x: fmt(o.x + pad), ...(i ? { dy: fmt(lh * 0.9) } : {}) }, text: t }))));
+  const top = o.y + pad + fs + lh * (1 + statusLines.length * 0.9) + lh * 0.3;
+  const maxLines = Math.max(0, Math.floor((o.y + o.h - pad - top) / (lh * 0.9)));
+  const src = (o.text ?? "").split("\n").slice(0, maxLines);
+  if (src.length && maxLines > 0) {
+    nodes.push(h("svg", { x: o.x + pad, y: top, width: room, height: Math.max(1, o.y + o.h - pad - top), overflow: "hidden" }, [
+      h("text", { x: 0, y: fs * 0.85, "font-size": fs * 0.85, "font-family": CODE_FONT_FAMILY, fill: "#4b5563", style: "white-space:pre", "xml:space": "preserve" },
+        src.map((t, i) => ({ tag: "tspan", attrs: { x: "0", ...(i ? { dy: fmt(lh * 0.9) } : {}) }, text: t || " " }))),
+    ]));
+  }
+  return nodes;
+}
+
+/**
+ * The marker drawn at a connector end (style.arrowStart / arrowEnd; see Arrowhead in protocol.js),
+ * and how far the line is cut back so it does not show through a hollow marker.
+ * @param {string} kind @param {{x: number, y: number}} tip
+ * @param {{x: number, y: number}} dir  unit direction of travel into the tip
+ * @param {number} width @param {string} color
+ * @returns {{nodes: VNode[], inset: number}}
+ */
+export function arrowMarker(kind, tip, dir, width, color) {
+  const ux = dir.x, uy = dir.y, px = -uy, py = ux;
+  /** @param {number} back @param {number} side */
+  const at = (back, side) => [tip.x - ux * back + px * side, tip.y - uy * back + py * side];
+  /** @param {number[][]} list */
+  const pts = (list) => list.map(([x, y]) => `${fmt(x)},${fmt(y)}`).join(" ");
+  const line = { fill: "none", stroke: color, "stroke-width": width, "stroke-linecap": "round", "stroke-linejoin": "round" };
   const len = Math.max(8, width * 4), half = Math.max(4, width * 2);
-  const dx = tip.x - from.x, dy = tip.y - from.y;
-  const d = Math.hypot(dx, dy) || 1;
-  const ux = dx / d, uy = dy / d;
-  const bx = tip.x - ux * len, by = tip.y - uy * len;
-  const pts = [[tip.x, tip.y], [bx - uy * half, by + ux * half], [bx + uy * half, by - ux * half]];
-  return h("polygon", { points: pts.map(([x, y]) => `${fmt(x)},${fmt(y)}`).join(" "), fill: color });
+  switch (kind) {
+    case "arrow":
+      return { nodes: [h("polygon", { points: pts([[tip.x, tip.y], at(len, half), at(len, -half)]), fill: color })], inset: 0 };
+    case "open":
+      return { nodes: [h("polyline", { points: pts([at(len, -half * 1.2), [tip.x, tip.y], at(len, half * 1.2)]), ...line })], inset: 0 };
+    case "triangle": {
+      const l = len * 1.3, hw = half * 1.5;
+      return { nodes: [h("polygon", { points: pts([[tip.x, tip.y], at(l, -hw), at(l, hw)]), ...line, fill: "#ffffff" })], inset: l };
+    }
+    case "diamond": case "diamondOpen": {
+      const l = Math.max(14, width * 7), hw = Math.max(5, width * 2.5);
+      return {
+        nodes: [h("polygon", { points: pts([[tip.x, tip.y], at(l / 2, -hw), at(l, 0), at(l / 2, hw)]), ...line, fill: kind === "diamond" ? color : "#ffffff" })],
+        inset: l,
+      };
+    }
+    case "circle": {
+      const r = Math.max(4, width * 2);
+      const [cx, cy] = at(r, 0);
+      return { nodes: [h("circle", { cx, cy, r, fill: color })], inset: r };
+    }
+    case "bar": {
+      const b = Math.max(6, width * 3);
+      return { nodes: [h("polyline", { points: pts([at(b, -b), at(b, b)]), ...line })], inset: 0 };
+    }
+    case "crow": {
+      const l = Math.max(12, width * 5), hw = Math.max(7, width * 3.5);
+      return { nodes: [h("polyline", { points: pts([at(0, -hw), at(l, 0), at(0, hw)]), ...line }), h("polyline", { points: pts([at(0, 0), at(l, 0)]), ...line })], inset: 0 };
+    }
+    default:
+      return { nodes: [], inset: 0 };
+  }
+}
+
+/**
+ * A route with its ends cut back by `start` and `end` world units (never past its middle), for
+ * drawing the line under hollow markers.
+ * @param {import("./connectors.js").Route} route @param {number} start @param {number} end
+ * @param {{start: {x: number, y: number}, end: {x: number, y: number}}} dirs
+ * @returns {import("./connectors.js").Route}
+ */
+function trimRoute(route, start, end, dirs) {
+  if (!start && !end) return route;
+  if (route.cubic) {
+    const [p0, c1, c2, p3] = route.cubic;
+    const chord = Math.hypot(p3.x - p0.x, p3.y - p0.y) / 2;
+    const s = Math.min(start, chord), e = Math.min(end, chord);
+    const sx = dirs.start.x * s, sy = dirs.start.y * s, ex = dirs.end.x * e, ey = dirs.end.y * e;
+    return {
+      ...route,
+      cubic: [{ x: p0.x + sx, y: p0.y + sy }, { x: c1.x + sx, y: c1.y + sy }, { x: c2.x - ex, y: c2.y - ey }, { x: p3.x - ex, y: p3.y - ey }],
+    };
+  }
+  const points = route.points.slice();
+  const n = points.length;
+  if (n < 2) return route;
+  /** @param {number} i @param {number} j @param {number} by */
+  const cut = (i, j, by) => {
+    const a = points[i], b = points[j];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    const k = Math.min(by, n === 2 ? d / 2 : d) / (d || 1);
+    points[i] = { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
+  };
+  if (start) cut(0, 1, start);
+  if (end) cut(n - 1, n - 2, end);
+  return { ...route, points };
 }
 
 /**
@@ -256,14 +445,17 @@ function connectorNode(o, resolve, env) {
   const d = routePathD(route);
   const dirs = routeEndDirections(route);
   const tipEnd = points[points.length - 1], tipStart = points[0];
+  const ends = points.length >= 2;
+  const endMark = ends ? arrowMarker(s.arrowEnd, tipEnd, dirs.end, width, color) : { nodes: [], inset: 0 };
+  const startMark = ends ? arrowMarker(s.arrowStart, tipStart, { x: -dirs.start.x, y: -dirs.start.y }, width, color) : { nodes: [], inset: 0 };
+  const drawn = startMark.inset || endMark.inset ? routePathD(trimRoute(route, startMark.inset, endMark.inset, dirs)) : d;
   /** @type {VNode[]} */
   const children = [
     // A wide transparent path makes thin connectors easy to hit.
     h("path", { d, fill: "none", stroke: "transparent", "stroke-width": Math.max(12, width + 10), "data-hit": "1" }),
-    h("path", { d, fill: "none", stroke: color, "stroke-width": width, "stroke-linejoin": "round" }),
+    h("path", { d: drawn, fill: "none", stroke: color, "stroke-width": width, "stroke-linejoin": "round", ...dashAttrs(s.dash, width) }),
+    ...endMark.nodes, ...startMark.nodes,
   ];
-  if (s.arrowEnd === "arrow" && points.length >= 2) children.push(arrowHead({ x: tipEnd.x - dirs.end.x, y: tipEnd.y - dirs.end.y }, tipEnd, width, color));
-  if (s.arrowStart === "arrow" && points.length >= 2) children.push(arrowHead({ x: tipStart.x + dirs.start.x, y: tipStart.y + dirs.start.y }, tipStart, width, color));
   if (o.text) {
     const mid = routeMidpoint(route);
     const fontSize = s.fontSize;
@@ -292,7 +484,7 @@ function connectorNode(o, resolve, env) {
  */
 export function objectNode(o, resolve, env) {
   if (o.type === "connector") return connectorNode(o, resolve, env);
-  const children = shapeNodes(o);
+  const children = shapeNodes(o, /** @type {any} */ (env)?.images);
   const text = textNode(o);
   if (text) children.push(text);
   const c = center(o);
@@ -334,10 +526,10 @@ export const EXPORT_TEXT_BUDGET = 2_000_000;
  * The whole board (or one frame and its members) as a standalone SVG document. At most
  * EXPORT_TEXT_BUDGET characters of text are laid out, in stacking order.
  * @param {BoardSnapshot} board
- * @param {{padding?: number, frameId?: string|null}} [options]
+ * @param {{padding?: number, frameId?: string|null, images?: Images}} [options]  images: diagram renders
  * @returns {string}
  */
-export function boardToSvg(board, { padding = 40, frameId = null } = {}) {
+export function boardToSvg(board, { padding = 40, frameId = null, images = undefined } = {}) {
   const all = board.objects ?? {};
   /** @type {Record<string, WhiteboardObject>} */
   let objects = all;
@@ -352,6 +544,7 @@ export function boardToSvg(board, { padding = 40, frameId = null } = {}) {
   }
   // Elbow connectors route around the whole board's objects, as on the canvas (a frame export too).
   const env = createRouteEnv(all, { memo: true });
+  if (images) /** @type {any} */ (env).images = images;
   const bounds = boardBounds(objects, env) ?? { x: 0, y: 0, w: 800, h: 600 };
   // Frame names sit above the frame; leave room for them.
   const top = Math.min(bounds.y, ...Object.values(objects).filter((o) => o.type === "frame").map((f) => f.y - f.style.fontSize * 1.25 - 4));

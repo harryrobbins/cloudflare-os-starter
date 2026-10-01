@@ -484,7 +484,7 @@ describe("gestures", () => {
     const { ctx } = setup(board(a));
     ctx.registerClick = () => true;
     G.objectPressGesture(ctx, pt(10, 10), a).up(pt(10, 10));
-    expect(ctx.editText).toHaveBeenCalledWith(a.id);
+    expect(ctx.editText).toHaveBeenCalledWith(a.id, expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }));
   });
 
   it("resize commits geometry and membership in one update", () => {
@@ -585,5 +585,78 @@ describe("gestures", () => {
     expect(calls).toHaveLength(0);
     G.connectGesture(ctx, pt(50, 50), a).up(pt(350, 50));
     expect(calls[0][1][0]).toEqual({ type: "connector", from: a.id, to: b.id });
+  });
+
+  it("connector dropped on empty canvas adds a connected copy of the source in one request", () => {
+    const a = obj("rect", { x: 0, y: 0, w: 100, h: 60, style: { ...TYPE_DEFAULTS.rect.style, shape: "diamond", fill: "#ffd29c" } });
+    const { ctx, calls } = setup(board(a));
+    const g = G.connectGesture(ctx, pt(132, 30), a, { side: "right" });
+    g.move(pt(400, 30));
+    g.frame(); // draws the ghost without writing
+    expect(calls).toHaveLength(0);
+    g.up(pt(400, 30));
+    expect(calls).toHaveLength(1);
+    const [copy, conn] = calls[0][1];
+    expect(copy).toMatchObject({ type: "rect", x: 350, y: 0, w: 100, h: 60, frameId: null, style: { shape: "diamond", fill: "#ffd29c" } });
+    expect(copy.text).toBeUndefined();
+    expect(conn).toEqual({ type: "connector", from: a.id, to: copy.id, fromSide: "right" });
+    expect(ctx.finishCreate).toHaveBeenCalledWith(copy.id, "rect");
+  });
+
+  it("connector dropped near its source, or a tap, creates nothing", () => {
+    const a = obj("rect", { x: 0, y: 0, w: 100, h: 100 });
+    const { ctx, calls } = setup(board(a));
+    G.connectGesture(ctx, pt(50, 50), a).up(pt(110, 50)); // within the margin around the source
+    G.connectGesture(ctx, pt(50, 50), a).up(pt(51, 50));
+    expect(calls).toHaveLength(0);
+  });
+
+  it("connected copies: text, frames and code become default rectangles; icons keep their icon", () => {
+    const t = obj("text", { x: 0, y: 0, w: 100, h: 40 });
+    expect(G.connectedCopy(t, { x: 500, y: 500 })).toEqual({ type: "rect", x: 400, y: 440, w: 200, h: 120 });
+    const icon = obj("icon", { x: 0, y: 0, w: 96, h: 96, packId: "core.1", iconId: "database" });
+    expect(G.connectedCopy(icon, { x: 100, y: 100 })).toMatchObject({ type: "icon", packId: "core.1", iconId: "database", x: 52, y: 52 });
+  });
+
+  it("the rectangle tool draws the current shape at its default size", () => {
+    const { ctx, calls } = setup(board());
+    ctx.shape = () => "cylinder";
+    G.createGesture(ctx, pt(500, 500), "rect").up(pt(500, 500));
+    expect(calls[0][1][0]).toMatchObject({ type: "rect", w: 140, h: 160, x: 430, y: 420, style: { shape: "cylinder" } });
+  });
+});
+
+describe("undo of style keys older objects lack", () => {
+  it("reads missing shape and dash as their fallbacks", async () => {
+    const { previousValues, effectivePatch } = await import("../../src/client/model/undo.js");
+    const older = obj("rect", { style: { fill: "#ffffff", stroke: "#1f2937", strokeWidth: 2, textColor: "#1f2937", fontSize: 18, align: "center", arrowStart: "none", arrowEnd: "none" } });
+    expect(previousValues(older, { style: { shape: "star", dash: "dotted" } })).toEqual({ style: { shape: "rect", dash: "solid" } });
+    expect(effectivePatch(older, { style: { shape: "rect" } })).toBeNull();
+    expect(effectivePatch(older, { style: { shape: "star" } })).toEqual({ style: { shape: "star" } });
+  });
+});
+
+describe("table cell edits on the client", () => {
+  it("merge, undo per cell, rebase per cell, and follow a moved cell", async () => {
+    const { mergePatches, patchObject } = await import("../../src/client/model/ops.js");
+    const { previousValues, effectivePatch } = await import("../../src/client/model/undo.js");
+    const { rebasePatch } = await import("../../src/client/model/rebase.js");
+    const { cellAnchor, relocateCell } = await import("../../src/client/ui/canvas/text-editor.js");
+    const t = obj("table", { cells: [["a", "b"], ["c", "d"]] });
+    const m = mergePatches({ cellEdits: [{ r: 0, c: 0, text: "A" }] }, { cellEdits: [{ r: 1, c: 1, text: "D" }] });
+    expect(patchObject(t, m).cells).toEqual([["A", "b"], ["c", "D"]]);
+    expect(patchObject(t, m).cellEdits).toBeUndefined();
+    expect(mergePatches({ cells: [["x"]] }, { cellEdits: [{ r: 0, c: 0, text: "y" }] })).toEqual({ cells: [["y"]] });
+    expect(previousValues(t, { cellEdits: [{ r: 0, c: 1, text: "Z" }] })).toEqual({ cellEdits: [{ r: 0, c: 1, text: "b" }] });
+    expect(effectivePatch(t, { cellEdits: [{ r: 0, c: 1, text: "b" }] })).toBeNull();
+    // They changed (0,0); my edits of (0,0) and (1,0): the first is dropped (flash), the second kept.
+    const theirs = { ...t, cells: [["THEIRS", "b"], ["c", "d"]] };
+    const r = rebasePatch({ cellEdits: [{ r: 0, c: 0, text: "mine" }, { r: 1, c: 0, text: "C" }] }, t, theirs);
+    expect(r.patch).toEqual({ cellEdits: [{ r: 1, c: 0, text: "C" }] });
+    expect(r.flash).toBe(true);
+    const a = cellAnchor([["h1", "h2"], ["x", "1"], ["y", "2"]], { r: 2, c: 1 });
+    expect(relocateCell(a, [["h1", "h2"], ["new", ""], ["x", "1"], ["y", "2"]])).toEqual({ r: 3, c: 1 });
+    expect(relocateCell(a, [["h1", "h2"], ["y", "2"]])).toEqual({ r: 1, c: 1 });
+    expect(relocateCell(a, [["h1"], ["x"]])).toBeNull();
   });
 });

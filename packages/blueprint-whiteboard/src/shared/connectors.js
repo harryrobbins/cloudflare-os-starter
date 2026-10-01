@@ -45,9 +45,10 @@
 // so any list is valid. At most MAX_SEGMENTS; an edit pins both sides (the route's shape depends on
 // them) and "Reset route" clears the edits and the pins.
 
-import { center, anchor, facingSide, rotatedBounds, pointsBounds, polylineMidpoint, distanceToPolyline, rectsIntersect, rotatePoint, fmt } from "./geometry.js";
+import { center, anchor, outlineAnchor, facingSide, rotatedBounds, pointsBounds, polylineMidpoint, distanceToPolyline, rectsIntersect, rotatePoint, fmt } from "./geometry.js";
 import { cubicPoint, cubicBounds, cubicEndDirection, cubicMidpoint, closestOnCubic, flattenCubic, cubicPathD } from "./bezier.js";
 import { LIMITS } from "./protocol.js";
+import { hasCustomOutline, shapeOf } from "./shapes.js";
 import { orthogonalPath, headingOf, segmentCrossesRect, strictlyInside, simplifyOrthogonal, BEND_COST } from "./orthogonal.js";
 
 /** @typedef {import("./protocol.js").WhiteboardObject} WhiteboardObject */
@@ -75,7 +76,7 @@ export const CURVE_ARM_MAX = 480;
 /** Tolerance of the polyline stored in a curved route's `points`. */
 export const CURVE_FLATTEN_TOL = 0.5;
 /** Object types that elbow routes avoid. */
-export const OBSTACLE_TYPES = Object.freeze(new Set(["sticky", "rect", "ellipse", "text", "icon", "code"]));
+export const OBSTACLE_TYPES = Object.freeze(new Set(["sticky", "rect", "ellipse", "text", "icon", "code", "table", "diagram"]));
 /** Cost added per place an automatic route passes through one of its own end boxes. */
 const CROSS_PENALTY = 1e6;
 const SIDES4 = /** @type {const} */ (["right", "bottom", "left", "top"]);
@@ -558,27 +559,62 @@ export function connectorRoute(conn, from, to, env) {
   const key = id ? id + GEOMETRY_KEY : "";
   const sig = id ? [
     routing, conn.fromSide, conn.toSide, segs.join(":"), routing === "curved" ? curveOf(conn.curve)?.join(":") : "",
-    from.x, from.y, from.w, from.h, from.rot || 0, to.x, to.y, to.w, to.h, to.rot || 0,
+    from.x, from.y, from.w, from.h, from.rot || 0, to.x, to.y, to.w, to.h, to.rot || 0, shapeOf(from), shapeOf(to),
   ].join(",") : "";
   const hit = id ? env?.memo?.get(key) : undefined;
   if (hit && hit.sig === sig && !auto) { CONNECTOR_STATS.memoHits++; return hit.route; }
   const { fromSide, toSide } = hit && hit.sig === sig ? hit.route : chooseSides({ ...conn, routing }, from, to);
   const a = anchor(from, fromSide), b = anchor(to, toSide);
+  const ea = endAnchor(from, fromSide), eb = endAnchor(to, toSide);
   /** @type {Route} */
   let route;
   if (routing === "curved") {
-    const cubic = curveCubic(a, b, curveOf(conn.curve));
+    const cubic = curveCubic(ea, eb, curveOf(conn.curve));
     route = { kind: "cubic", points: flattenCubic(cubic, CURVE_FLATTEN_TOL, 8), cubic, fromSide, toSide, routing, avoided: false };
-  } else if (routing === "elbow" && segs.length) {
-    route = { kind: "polyline", points: elbowFromSegments(a, b, segs), cubic: null, fromSide, toSide, routing, avoided: false };
   } else if (routing === "elbow") {
-    const { points, avoided } = autoElbow(conn, from, to, a, b, env, fromSide, toSide);
-    route = { kind: "polyline", points, cubic: null, fromSide, toSide, routing, avoided };
+    // Ports stay STUB outside the boxes; only the first and last points move onto a shaped outline.
+    const { points, avoided } = segs.length ? { points: elbowFromSegments(a, b, segs), avoided: false } : autoElbow(conn, from, to, a, b, env, fromSide, toSide);
+    route = { kind: "polyline", points: snapElbowEnds(points, a, b, ea, eb), cubic: null, fromSide, toSide, routing, avoided };
   } else {
-    route = { kind: "polyline", points: [a.point, b.point], cubic: null, fromSide, toSide, routing, avoided: false };
+    route = { kind: "polyline", points: [ea.point, eb.point], cubic: null, fromSide, toSide, routing, avoided: false };
   }
   if (id && !(hit && hit.sig === sig)) env?.memo?.set(key, { sig, route });
   return route;
+}
+
+/**
+ * The anchor a connector end is drawn from: the side's anchor, moved onto the outline of a shaped
+ * rectangle (src/shared/shapes.js) along the line from its centre, with the side's normal.
+ * @param {Box & {style?: {shape?: string}}} o @param {Side4} side
+ * @returns {{point: Point, normal: Point}}
+ */
+export function endAnchor(o, side) {
+  const a = anchor(o, side);
+  if (!hasCustomOutline(o)) return a;
+  return { point: outlineAnchor(o, side), normal: a.normal };
+}
+
+/** @param {Point} n */
+const axisAligned = (n) => Math.abs(n.x) > 0.9999 || Math.abs(n.y) > 0.9999;
+
+/**
+ * An elbow's end points moved from the box anchors onto shaped outlines. Only when the side's
+ * normal is on an axis (the move is then along the first or last segment, so the route stays
+ * orthogonal and its segment chain unchanged).
+ * @param {Point[]} points @param {{point: Point, normal: Point}} a @param {{point: Point, normal: Point}} b
+ * @param {{point: Point, normal: Point}} ea @param {{point: Point, normal: Point}} eb
+ */
+function snapElbowEnds(points, a, b, ea, eb) {
+  // Only along the stub's own line, so the route stays orthogonal.
+  const inLine = (/** @type {{point: Point, normal: Point}} */ x, /** @type {Point} */ p) =>
+    Math.abs(x.normal.x) > 0.9999 ? Math.abs(p.y - x.point.y) < 0.01 : Math.abs(p.x - x.point.x) < 0.01;
+  const moveStart = ea !== a && axisAligned(a.normal) && points.length > 1 && inLine(a, ea.point);
+  const moveEnd = eb !== b && axisAligned(b.normal) && points.length > 1 && inLine(b, eb.point);
+  if (!moveStart && !moveEnd) return points;
+  const out = points.slice();
+  if (moveStart) out[0] = { ...ea.point };
+  if (moveEnd) out[out.length - 1] = { ...eb.point };
+  return out;
 }
 
 /** Suffix of the memo key holding a connector's end-geometry memo (see connectorRoute). */

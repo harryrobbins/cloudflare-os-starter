@@ -13,6 +13,7 @@ import { MAX_DISPLAY_NAME_LENGTH } from "../contract.js";
 import { useChat, useStore } from "../hooks/store.js";
 import { readLanding, writeLanding, type Landing } from "../store/recents.js";
 import { Avatar, Button } from "../components/primitives.js";
+import { InstallChat } from "../components/InstallChat.js";
 import { ViewShell } from "./ViewShell.js";
 
 export function SettingsView({ onBack }: { onBack?: () => void }): ReactNode {
@@ -31,6 +32,7 @@ export function SettingsView({ onBack }: { onBack?: () => void }): ReactNode {
   return (
     <ViewShell title="Settings" {...(onBack === undefined ? {} : { onBack })}>
       <div className="mx-auto flex max-w-xl flex-col gap-8 p-5">
+        <InstallChat />
         <section>
           <h2 className="mb-3 text-[13px] font-semibold text-kumo-strong">You</h2>
           <div className="flex items-center gap-3 rounded-xl border border-kumo-line bg-kumo-elevated p-4">

@@ -5,7 +5,8 @@ The service is implemented in [records-service](../../../packages/records-servic
 available at [records.surprisingly.ltd](https://records.surprisingly.ltd). The
 [delivery checklist](../../plans/external_datastores/records-delivery.md) records verified capabilities
 and remaining work; the [homeserver deployment record](../../../packages/records-service/deploy/homeserver.md)
-records the deployed release and its operational limits. The product site source remains in
+records the deployed release and its operational limits. The proposed storage and sync architecture is
+[Records as an immutable fact store](../../plans/external_datastores/records-immutable-facts.md). The product site source remains in
 [sites/records](../../../sites/records/README.md).
 
 All earlier Records architecture recommendations below are **superseded**. Their code traces and
@@ -25,7 +26,7 @@ must be checked against their own environment and date rather than treated as cu
 | [canonical-postgres-datastore-research.md](canonical-postgres-datastore-research.md) | Historical canonical plan | Immutable history in OLTP Postgres (journal, PG18 temporal keys), commit-ordered cursors, Replicache/Zero status and protocol, realtime without replication, the Jira Cloud REST v3 surface and clients, RLS from JWTs, Cloudflare Access for SaaS, delegation, Hono and Workers placement |
 | [organisation-datastores-decisions.md](organisation-datastores-decisions.md) | Historical organisation datastores plan | Decisions for the earlier Projects service: domain service, publication versus provisioning, registry, trusted caller and observers, RLS, outbox correction, Neon and Hyperdrive, Phase 0 evidence |
 | [gadget-postgres-mirror.md](gadget-postgres-mirror.md) | Historical canonical plan (rejected option) | Whether blueprints could tick "backed by Postgres": how gadget storage works, where change capture could sit, mirror and sync-engine options |
-| [immutable-datastores-lakehouse.md](immutable-datastores-lakehouse.md) | Immutable datastores plan (not pursued) | Durable Objects as event-sourced shards, Iceberg on R2 Data Catalog, DuckLake, Pipelines, DuckDB on Containers, erasure in an immutable lake |
+| [immutable-datastores-lakehouse.md](immutable-datastores-lakehouse.md) | Immutable datastores plan (not pursued; immutability revisited in [records-immutable-facts.md](../../plans/external_datastores/records-immutable-facts.md)) | Durable Objects as event-sourced shards, Iceberg on R2 Data Catalog, DuckLake, Pipelines, DuckDB on Containers, erasure in an immutable lake |
 | [gadget-http-api-options.md](gadget-http-api-options.md) | Gadget HTTP API plan | Ways to give one gadget a REST interface: `/api` Cap'n Web, a gatekeeper with hook delivery (recommended), rejected direct options |
 | [gadget-http-api-recommendations.md](gadget-http-api-recommendations.md) | Gadget HTTP API plan | Review of that plan: P0 gates, a path-specific Access boundary, idempotency and deadline semantics, token lifecycle, route manifests and OpenAPI |
 | [gadget-connectors-and-services.md](gadget-connectors-and-services.md) | Background | Inter-gadget connectivity, data connectors and service APIs; why services are gatekeepers, not gadgets |

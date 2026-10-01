@@ -1546,6 +1546,12 @@ export async function createStore(options) {
       undoRedo(redoStack, undoStack);
     },
 
+    async getDiagramRender(id, opts) {
+      // A platform stub answers any method name; plain adapters (hosts, the harness) may lack it.
+      if (disposed || gadget.getDiagramRender === undefined) return null;
+      return (await gadget.getDiagramRender(id, opts?.force ? { force: true } : undefined)) ?? null;
+    },
+
     async loadHistory(limit) {
       const entries = /** @type {HistoryEntry[]} */ (await gadget.getHistory(limit) ?? []);
       const ids = new Set(entries.map((e) => e.id));

@@ -18,6 +18,7 @@ import {
   plainTextOf, textToEntries, codeFenceToEntry,
 } from "../../shared/backup.js";
 import { linkToEntry } from "../../shared/link-card.js";
+import { tableToEntry } from "../../shared/backup.js";
 import { detectLanguage, languageLabel } from "../../shared/code/languages.js";
 import { expandMoveIds, frameAtPoint, validIds } from "./canvas/model.js";
 
@@ -74,7 +75,8 @@ export function clipboardPayload(objects, ids) {
  * @param {{json?: string, text?: string}} data
  * @param {{doc: BackupDocument, text: string}|null} memory
  * A fenced Markdown code block (```lang ... ```) becomes one code block in that language.
- * @returns {{kind: "objects", entries: Entry[], skipped: number}|{kind: "text", entries: Entry[], truncated: number}|{kind: "code", entries: Entry[]}|{kind: "link", entries: Entry[]}|{kind: "none"}|{kind: "error", message: string}}
+ * Tab-separated rows, CSV or a Markdown table becomes a table; a ```d2 or ```mermaid fence a diagram.
+ * @returns {{kind: "objects", entries: Entry[], skipped: number}|{kind: "text", entries: Entry[], truncated: number}|{kind: "code"|"link"|"table", entries: Entry[]}|{kind: "none"}|{kind: "error", message: string}}
  */
 export function readPaste({ json, text }, memory) {
   if (json) {
@@ -95,6 +97,8 @@ export function readPaste({ json, text }, memory) {
     if (fence) return { kind: "code", entries: [fence] };
     const link = linkToEntry(text);
     if (link) return { kind: "link", entries: [link] };
+    const table = tableToEntry(text);
+    if (table) return { kind: "table", entries: [table] };
     const { entries, truncated } = textToEntries(text);
     if (entries.length) return { kind: "text", entries, truncated };
   }
@@ -166,7 +170,7 @@ export function createClipboard(app, { showToast }) {
 
   /**
    * Creates `entries` near the pointer (or the view centre), as one undo step, and selects them.
-   * @param {Entry[]} entries @param {{what?: "objects"|"text"|"code"|"link", skipped?: number, truncated?: number}} [info]
+   * @param {Entry[]} entries @param {{what?: "objects"|"text"|"code"|"link"|"table", skipped?: number, truncated?: number}} [info]
    */
   function place(entries, { what = "objects", skipped = 0, truncated = 0 } = {}) {
     if (!entries.length) return [];
@@ -185,6 +189,10 @@ export function createClipboard(app, { showToast }) {
     const left = dropped + truncated;
     app.announce(what === "link"
       ? "Added a website card. Select Open website to view or copy its link."
+      : what === "table"
+      ? `Added a table with ${entries[0]?.object.cells?.length ?? 0} rows from the pasted text`
+      : what === "code" && entries[0]?.object.type === "diagram"
+      ? `Added a ${entries[0].object.syntax === "mermaid" ? "Mermaid" : "D2"} diagram from the pasted text`
       : what === "code"
       ? `Added a ${languageLabel(entries[0]?.object.language ?? "plain")} code block from the pasted text`
       : what === "text"
@@ -203,8 +211,8 @@ export function createClipboard(app, { showToast }) {
     if (r.kind === "none") return false;
     if (r.kind === "error") { showToast(r.message); return true; }
     if (r.kind === "text") place(r.entries, { what: "text", truncated: r.truncated });
-    else if (r.kind === "code" || r.kind === "link") place(r.entries, { what: r.kind });
-    else place(r.entries, { skipped: r.skipped });
+    else if (r.kind === "code" || r.kind === "link" || r.kind === "table") place(r.entries, { what: r.kind });
+    else if (r.kind === "objects") place(r.entries, { skipped: r.skipped });
     return true;
   }
 

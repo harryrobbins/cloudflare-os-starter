@@ -5,6 +5,8 @@
 // Every object op names exactly one object, so the optimistic value of an object is its server
 // value with the pending ops naming it applied in queue order (see view.js).
 
+import { applyCellEdits } from "../../shared/protocol.js";
+
 /** @typedef {import("../../shared/protocol.js").WhiteboardObject} WhiteboardObject */
 /** @typedef {import("../../shared/protocol.js").ObjectPatch} ObjectPatch */
 /** @typedef {import("../../shared/protocol.js").ObjectOp} ObjectOp */
@@ -48,6 +50,10 @@
 export function patchObject(obj, patch) {
   const next = /** @type {WhiteboardObject} */ ({ ...obj, ...patch });
   next.style = patch.style ? { ...obj.style, ...patch.style } : obj.style;
+  if (patch.cellEdits) {
+    next.cells = applyCellEdits(next.cells ?? [], patch.cellEdits);
+    delete (/** @type {any} */ (next)).cellEdits;
+  }
   return next;
 }
 
@@ -129,6 +135,10 @@ export function mergeOps(target, next) {
 export function mergePatches(a, b) {
   const out = { ...a, ...b };
   if (a.style && b.style) out.style = { ...a.style, ...b.style };
+  // Cell edits accumulate (the later edit of a cell wins); a whole grid replaces earlier edits.
+  if (b.cells) delete out.cellEdits;
+  else if (a.cellEdits && b.cellEdits) out.cellEdits = [...a.cellEdits, ...b.cellEdits];
+  if (a.cells && b.cellEdits) { out.cells = applyCellEdits(a.cells, b.cellEdits); delete out.cellEdits; }
   return out;
 }
 

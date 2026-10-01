@@ -64,7 +64,7 @@ export const TOOL_KEYS = Object.freeze({
 
 /** @type {Record<Tool, string>} */
 const TOOL_LABELS = {
-  select: "Select", hand: "Hand (pan)", sticky: "Sticky note", rect: "Rectangle", ellipse: "Ellipse",
+  select: "Select", hand: "Hand (pan)", sticky: "Sticky note", rect: "Shape", ellipse: "Ellipse",
   text: "Text", frame: "Frame", connector: "Connector", pen: "Pen",
 };
 
@@ -169,7 +169,7 @@ export const COMMANDS = Object.freeze([
 
 /** Shown to screen readers (aria-describedby) and usable as a help text by the shell. */
 export const SHORTCUTS_HINT =
-  "Whiteboard canvas. Tools: V select, H hand, N sticky note, R rectangle, O ellipse, T text, F frame, " +
+  "Whiteboard canvas. Tools: V select, H hand, N sticky note, R shape, O ellipse, T text, F frame, " +
   "C connector, P pen. A opens the Add menu, Shift+O the Objects list. " +
   "I opens icons and shapes, Ctrl+period emoji and symbols, K adds a code block. " +
   "Arrow keys move the selection (Shift for 10), or pan the view when nothing is selected. " +

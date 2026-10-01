@@ -20,8 +20,9 @@ import {
   BACKGROUNDS, LIMITS, TYPE_DEFAULTS, cleanCoord, cleanLine, cleanPoints, cleanText, compareObjects,
   effectiveFrameId, isObject, isObjectType, normalizeNewObject,
 } from "./protocol.js";
-import { boardBounds, rotatedBounds, unionRects } from "./geometry.js";
+import { boardBounds, rotatedBounds, unionRects, textWidth } from "./geometry.js";
 import { resolveLanguage } from "./code/languages.js";
+import { parseTable, fitColumns } from "./table.js";
 import { codeHeight } from "./code/layout.js";
 
 /** @typedef {import("./protocol.js").WhiteboardObject} WhiteboardObject */
@@ -71,6 +72,8 @@ export const TEXT_STICKY = Object.freeze({ size: 200, gap: 40 });
  * @property {string} [packId] @property {string} [iconId]
  * @property {string} [language] @property {"light"|"dark"} [theme] @property {boolean} [lineNumbers]
  * @property {boolean} [wrap] @property {string} [filename]
+ * @property {string[][]} [cells] @property {boolean} [header] @property {number[]|null} [colWidths]
+ * @property {string} [syntax] @property {string} [layout] @property {boolean} [sketch]
  */
 
 /**
@@ -112,6 +115,11 @@ export function toPortable(list, all) {
     if (o.type === "code") {
       p.language = o.language; p.theme = o.theme; p.lineNumbers = o.lineNumbers; p.wrap = o.wrap; p.filename = o.filename;
     }
+    if (o.type === "table") {
+      p.cells = (o.cells ?? []).map((r) => [...r]); p.header = !!o.header;
+      if (o.colWidths?.length) p.colWidths = [...o.colWidths];
+    }
+    if (o.type === "diagram") { p.syntax = o.syntax; p.layout = o.layout; p.sketch = !!o.sketch; p.theme = o.theme; }
     if (o.type === "connector") {
       p.from = o.from; p.to = o.to;
       p.fromSide = o.fromSide; p.toSide = o.toSide; p.routing = o.routing;
@@ -298,6 +306,7 @@ export function parseBackup(input) {
       segments: o.segments, curve: o.curve,
       packId: o.packId, iconId: o.iconId,
       language: o.language, theme: o.theme, lineNumbers: o.lineNumbers, wrap: o.wrap, filename: o.filename,
+      cells: o.cells, header: o.header, colWidths: o.colWidths, syntax: o.syntax, layout: o.layout, sketch: o.sketch,
     }));
     if (!norm) return problem(`Object ${index + 1}: invalid.`);
     delete norm.id;
@@ -529,6 +538,14 @@ export function codeFenceToEntry(text, detect = () => "plain") {
   const code = src.slice(firstEnd + 1, lastStart);
   // Another fence inside means this is Markdown with several blocks, not one code block.
   if (code.split("\n").some((l) => l.trimStart().startsWith(mark))) return null;
+  // A D2 or Mermaid fence is a diagram, drawn by the renderer.
+  const syntax = info.toLowerCase() === "d2" ? "d2" : info.toLowerCase() === "mermaid" ? "mermaid" : null;
+  if (syntax && code.length <= LIMITS.diagramText) {
+    const d = /** @type {Record<string, any>|null} */ (normalizeNewObject({ id: PLACEHOLDER_ID, type: "diagram", text: code, syntax }));
+    if (!d) return null;
+    delete d.id; delete d.z; delete d.frameId;
+    return { ref: "c0", index: 0, object: d, frameRef: null, fromRef: null, toRef: null };
+  }
   const norm = /** @type {Record<string, any>|null} */ (normalizeNewObject({
     id: PLACEHOLDER_ID, type: "code", text: code, language: resolveLanguage(info) ?? detect(code),
   }));
@@ -536,6 +553,26 @@ export function codeFenceToEntry(text, detect = () => "plain") {
   norm.h = Math.min(LIMITS.sizeMax, codeHeight(norm));
   delete norm.id; delete norm.z; delete norm.frameId;
   return { ref: "c0", index: 0, object: norm, frameRef: null, fromRef: null, toRef: null };
+}
+
+/**
+ * Pasted tabular text (spreadsheet rows, CSV or a Markdown table; see parseTable) as one table
+ * entry sized to its content, or null when `text` is not a table.
+ * @param {string} text
+ * @returns {Entry|null}
+ */
+export function tableToEntry(text) {
+  const parsed = parseTable(text);
+  if (!parsed) return null;
+  const rows = parsed.cells.length, cols = parsed.cells[0].length;
+  const t = /** @type {Record<string, any>|null} */ (normalizeNewObject({
+    id: PLACEHOLDER_ID, type: "table", cells: parsed.cells, header: parsed.header,
+    w: Math.min(1600, Math.max(240, cols * 150)), h: Math.max(40, rows * 40),
+  }));
+  if (!t) return null;
+  t.colWidths = fitColumns(/** @type {any} */ (t), textWidth);
+  delete t.id; delete t.z; delete t.frameId;
+  return { ref: "t0", index: 0, object: t, frameRef: null, fromRef: null, toRef: null };
 }
 
 /**

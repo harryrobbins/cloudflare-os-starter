@@ -7,6 +7,8 @@ export default defineConfig({
   resolve: { alias: { "cloudflare:workers": fileURLToPath(new URL("./test/fixtures/cloudflare-workers.js", import.meta.url)) } },
   test: {
     environment: "node",
+    // Bound CPU-heavy lexer/serialization suites so timer-driven tests are not starved.
+    maxWorkers: 4,
     include: ["test/shared/**/*.test.js", "test/core/**/*.test.js", "test/client/**/*.test.js", "test/tools/**/*.test.js", "test/performance/**/*.test.js"],
     passWithNoTests: true,
   },

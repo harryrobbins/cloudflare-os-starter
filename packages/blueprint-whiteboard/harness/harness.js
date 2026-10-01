@@ -37,7 +37,7 @@ const PRESENCE_LOG_MAX = 5000;
 
 function startServer() {
   state.generation++;
-  state.server = new FakeGadget(state.repo);
+  state.server = new FakeGadget(state.repo, params.has("norender") ? { renderDiagram: null } : {});
 }
 startServer();
 

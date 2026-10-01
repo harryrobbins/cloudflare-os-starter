@@ -6,14 +6,29 @@
 import { createWhiteboard } from "../src/core/whiteboard.js";
 import { Hub } from "../src/core/hub.js";
 
+/**
+ * A stand-in for the MermaiD2 connector: an SVG listing the source's lines in boxes, after a short
+ * delay. Source containing "!error" fails, like invalid syntax would.
+ * @param {{source: string, language: string}} request
+ */
+export async function fakeRender(request) {
+  await new Promise((r) => setTimeout(r, 150));
+  if (request.source.includes("!error")) throw new Error(`invalid_request: ${request.language} syntax error on line 1`);
+  const lines = request.source.split("\n").filter((l) => l.trim()).slice(0, 12);
+  const esc = (/** @type {string} */ s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const rows = lines.map((l, i) => `<rect x="10" y="${10 + i * 34}" width="300" height="26" rx="4" fill="#dbeafe" stroke="#1d4ed8"/><text x="20" y="${28 + i * 34}" font-family="sans-serif" font-size="13">${esc(l.slice(0, 40))}</text>`).join("");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="${20 + lines.length * 34}" viewBox="0 0 320 ${20 + lines.length * 34}">${rows}</svg>`;
+  return { data: new TextEncoder().encode(svg), contentType: "image/svg+xml" };
+}
+
 export class FakeGadget {
   /**
    * @param {import("../src/core/repository.js").Repository} repo
-   * @param {{hub?: ConstructorParameters<typeof Hub>[0]}} [options]
+   * @param {{hub?: ConstructorParameters<typeof Hub>[0], renderDiagram?: ((request: any) => Promise<{data: unknown}>)|null}} [options]
    */
-  constructor(repo, { hub } = {}) {
+  constructor(repo, { hub, renderDiagram = fakeRender } = {}) {
     this.hub = new Hub(hub);
-    this.board = createWhiteboard(repo, { onEvent: (event) => { this.hub.broadcast(event); } });
+    this.board = createWhiteboard(repo, { onEvent: (event) => { this.hub.broadcast(event); }, renderDiagram });
   }
 
   getBoard() { return this.board.getBoard(); }
@@ -24,6 +39,9 @@ export class FakeGadget {
   getFrame(frame) { return this.board.getFrame(frame); }
   /** @param {any} args */
   exportSvg(args) { return this.board.exportSvg(args); }
+  /** @param {string} id */
+  /** @param {any} [opts] */
+  getDiagramRender(id, opts) { return this.board.diagramRender(id, opts); }
 
   /** @param {any} request */
   async applyOperation(request) { return (await this.board.applyOperation(request)).result; }
@@ -78,5 +96,5 @@ export class FakeGadget {
 export const RPC_METHODS = new Set([
   "getBoard", "getHistory", "findObjects", "getFrame", "exportSvg", "applyOperation", "undo",
   "addObjects", "addStickies", "updateObjects", "moveObjects", "arrangeGrid", "deleteObjects",
-  "addFrame", "connectObjects", "addCode", "subscribe", "updatePresence", "leavePresence",
+  "addFrame", "connectObjects", "addCode", "subscribe", "updatePresence", "leavePresence", "getDiagramRender",
 ]);

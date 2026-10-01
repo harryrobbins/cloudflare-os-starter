@@ -26,8 +26,12 @@ export class Gadget extends DurableObject {
     // Events are handed to the hub inside the whiteboard's queue, right after each commit, so
     // deliveries start in revision order. Delivery itself is not awaited: a slow subscriber must
     // not hold up the next mutation. Hub deliveries never reject.
+    // Diagrams render through the MermaiD2 connector when it is connected to this board as
+    // MERMAID2 (optional: without it diagrams draw as placeholders; see src/shared/diagram.js).
+    const renderer = /** @type {any} */ (env)?.MERMAID2;
     this.#board = createWhiteboard(new DoStorageRepository(ctx.storage), {
       onEvent: (event) => { this.#hub.broadcast(event); },
+      renderDiagram: renderer ? (request) => renderer.render(request) : null,
     });
   }
 
@@ -68,6 +72,14 @@ export class Gadget extends DurableObject {
   /** @param {any} [args] {frame?} */
   exportSvg(args) {
     return this.#board.exportSvg(args);
+  }
+
+  /**
+   * A diagram's rendered SVG (cached, else rendered now), or its status.
+   * @param {string} id @param {{force?: boolean}} [opts]  force: draw again (Render again)
+   */
+  getDiagramRender(id, opts) {
+    return this.#board.diagramRender(id, opts);
   }
 
   // --- Core writes ---------------------------------------------------------------------------
@@ -248,7 +260,7 @@ const AT = { type: "object", properties: { x: { type: "number" }, y: { type: "nu
 const FRAME = { type: "string" };
 const BY = { type: "string" };
 const IDS = { type: "array", items: { type: "string" } };
-const OBJECT_TYPES = ["sticky", "rect", "ellipse", "text", "frame", "pen", "connector", "icon", "code"];
+const OBJECT_TYPES = ["sticky", "rect", "ellipse", "text", "frame", "pen", "connector", "icon", "code", "table", "diagram"];
 
 const DESCRIPTION = Object.freeze({
   gadget: "whiteboard",
@@ -260,7 +272,7 @@ const DESCRIPTION = Object.freeze({
     "in `errors` ({index, code, message}), so check `errors` after a write. Every write takes an optional `by`, the name shown in Activity " +
     "(e.g. \"Assistant\"). A `color` is yellow, orange, red, pink, purple, blue, teal, green, gray, white, black or \"#rrggbb\"; " +
     "a `frame` is a frame's id or name; `at` is a top-left {x, y}. Also available, see README.md: getHistory(limit), " +
-    "exportSvg({frame?}), exportData() and importData({data, at?}) for backups.",
+    "exportSvg({frame?}), exportData() and importData({data, at?}) for backups, and getDiagramRender(id) for a diagram's rendered SVG.",
   operations: [
     {
       name: "getBoard",
@@ -311,7 +323,8 @@ const DESCRIPTION = Object.freeze({
     {
       name: "addObjects",
       description: "Creates objects of any type (" + OBJECT_TYPES.join(", ") + ") with their fields: x, y, w, h, rot, text, style, frameId; " +
-        "pen needs points, connector from and to (and routing), icon packId and iconId. Omitted fields take defaults; `color` sets the fill (the line for pen, connector and glyph icons); `frame` puts it in an existing frame. Give your own ids (\"o_\" + 12 hex) to connect them, or put them in a frame (frameId), in the same call.",
+        "pen needs points, connector from and to (and routing), icon packId and iconId; a table takes rows (an array of rows of cell text); " +
+        "a diagram takes source and language (\"d2\" or \"mermaid\"); a rect takes a named shape (e.g. \"diamond\", \"cylinder\") and any line a dash (\"dashed\", \"dotted\"). Omitted fields take defaults; `color` sets the fill (the line for pen, connector and glyph icons); `frame` puts it in an existing frame. Give your own ids (\"o_\" + 12 hex) to connect them, or put them in a frame (frameId), in the same call.",
       input: {
         type: "object", required: ["objects"], properties: {
           objects: {

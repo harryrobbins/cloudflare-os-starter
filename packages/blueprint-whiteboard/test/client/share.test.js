@@ -177,7 +177,7 @@ describe("onboarding, backup naming and templates", () => {
   });
 
   it("ships four versioned templates that read cleanly within caps", () => {
-    expect(TEMPLATES.map((t) => t.id)).toEqual(["brainstorm", "retrospective", "journey", "architecture"]);
+    expect(TEMPLATES.map((t) => t.id)).toEqual(["brainstorm", "retrospective", "journey", "architecture", "flowchart", "data-model"]);
     for (const t of TEMPLATES) {
       expect(t.doc.version).toBe(1);
       const parsed = parseBackup(JSON.parse(JSON.stringify(t.doc)));

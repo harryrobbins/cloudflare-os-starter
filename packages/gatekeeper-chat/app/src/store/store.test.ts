@@ -633,6 +633,14 @@ describe("socket events", () => {
 });
 
 describe("drafts", () => {
+  it("flushes unsaved text when the phone hides the page before the debounce", async () => {
+    const { store } = harness();
+    await store.start({ embedded: false });
+    store.setDraft("c1", "save before suspension");
+    store.setVisible(false);
+    expect(JSON.parse(localStorage.getItem("chat.drafts.v1") ?? "{}").c1.body).toBe("save before suspension");
+    store.dispose();
+  });
   it("keeps one draft per conversation and per thread", async () => {
     const { store } = harness();
     await store.start({ embedded: false });

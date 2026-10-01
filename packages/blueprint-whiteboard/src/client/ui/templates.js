@@ -28,10 +28,12 @@ const sticky = (/** @type {Record<string, any>} */ f, /** @type {string} */ fill
 const label = (/** @type {Record<string, any>} */ f, fontSize = 32) =>
   o("text", { w: 600, h: Math.round(fontSize * 1.8), ...f, style: { fill: "none", fontSize, align: "left" } });
 const frame = (/** @type {Record<string, any>} */ f) => o("frame", { ...f, style: { fill: "#ffffff", stroke: "#9ca3af", strokeWidth: 1, fontSize: 18 } });
-const box = (/** @type {Record<string, any>} */ f, fill = "#ffffff") =>
-  o(f.type ?? "rect", { w: 220, h: 110, ...f, style: { fill, stroke: "#1f2937", strokeWidth: 2, fontSize: 20, align: "center" } });
-const link = (/** @type {string} */ from, /** @type {string} */ to, text = "") =>
-  o("connector", { from, to, text, routing: "straight", style: { stroke: "#1f2937", strokeWidth: 2, arrowEnd: "arrow" } });
+const box = (/** @type {Record<string, any>} */ { shape, ...f }, fill = "#ffffff") =>
+  o(f.type ?? "rect", { w: 220, h: 110, ...f, style: { fill, stroke: "#1f2937", strokeWidth: 2, fontSize: 20, align: "center", ...(shape ? { shape } : {}) } });
+const link = (/** @type {string} */ from, /** @type {string} */ to, text = "", /** @type {Record<string, any>} */ extra = {}) =>
+  o("connector", { from, to, text, routing: "straight", ...extra, style: { stroke: "#1f2937", strokeWidth: 2, arrowEnd: "arrow", ...extra.style } });
+const table = (/** @type {Record<string, any>} */ f) =>
+  o("table", { w: 320, header: true, ...f, h: f.cells.length * 40, style: { fill: "#ffffff", stroke: "#6b7280", strokeWidth: 1, fontSize: 16, align: "left" } });
 
 /** @param {any[]} objects @returns {BackupDocument} */
 const doc = (objects) => ({ format: BACKUP_FORMAT, version: BACKUP_VERSION, objects });
@@ -81,8 +83,8 @@ function architecture() {
     box({ id: "users", type: "ellipse", x: 60, y: 320, w: 200, h: 120, text: "Users", frameId: "f" }, COLORS.gray),
     box({ id: "web", x: 380, y: 325, text: "Web app", frameId: "f" }, COLORS.blue),
     box({ id: "api", x: 700, y: 325, text: "API", frameId: "f" }, COLORS.purple),
-    box({ id: "db", x: 1060, y: 160, text: "Database", frameId: "f" }, COLORS.green),
-    box({ id: "queue", x: 1060, y: 490, text: "Queue", frameId: "f" }, COLORS.orange),
+    box({ id: "db", shape: "cylinder", x: 1100, y: 120, w: 150, h: 180, text: "Database", frameId: "f" }, COLORS.green),
+    box({ id: "queue", shape: "queue", x: 1060, y: 490, w: 240, h: 100, text: "Queue", frameId: "f" }, COLORS.orange),
     box({ id: "worker", x: 700, y: 600, text: "Worker", frameId: "f" }, COLORS.teal),
   ];
   return doc([f, ...nodes,
@@ -90,12 +92,44 @@ function architecture() {
     link("api", "queue", "enqueues"), link("queue", "worker", "delivers"), link("worker", "db")]);
 }
 
+function flowchart() {
+  const f = frame({ id: "f", x: 0, y: 0, w: 1240, h: 1080, text: "Flowchart" });
+  const elbow = (/** @type {string} */ a, /** @type {string} */ b, text = "", sides = {}) => link(a, b, text, { routing: "elbow", ...sides });
+  return doc([f,
+    box({ id: "start", shape: "pill", x: 420, y: 60, w: 200, h: 80, text: "Start", frameId: "f" }, COLORS.green),
+    box({ id: "input", shape: "parallelogram", x: 400, y: 200, w: 240, h: 100, text: "Get request", frameId: "f" }),
+    box({ id: "check", shape: "diamond", x: 410, y: 360, w: 220, h: 140, text: "Valid?", frameId: "f" }, COLORS.yellow),
+    box({ id: "fix", x: 820, y: 200, w: 220, h: 100, text: "Ask for changes", frameId: "f" }, COLORS.orange),
+    box({ id: "save", shape: "subprocess", x: 410, y: 560, w: 220, h: 110, text: "Process it", frameId: "f" }, COLORS.blue),
+    box({ id: "store", shape: "cylinder", x: 120, y: 540, w: 160, h: 150, text: "Records", frameId: "f" }, COLORS.gray),
+    box({ id: "report", shape: "document", x: 410, y: 730, w: 220, h: 120, text: "Send receipt", frameId: "f" }),
+    box({ id: "end", shape: "pill", x: 420, y: 920, w: 200, h: 80, text: "Done", frameId: "f" }, COLORS.red),
+    elbow("start", "input"), elbow("input", "check"), elbow("check", "save", "yes"), elbow("check", "fix", "no", { fromSide: "right", toSide: "bottom" }),
+    elbow("fix", "input", "", { fromSide: "left", toSide: "right" }), elbow("save", "store", "writes"), elbow("save", "report"), elbow("report", "end"),
+  ]);
+}
+
+function dataModel() {
+  const f = frame({ id: "f", x: 0, y: 0, w: 1300, h: 640, text: "Data model" });
+  const er = (/** @type {string} */ a, /** @type {string} */ b, text = "") =>
+    link(a, b, text, { routing: "elbow", style: { arrowStart: "bar", arrowEnd: "crow" } });
+  return doc([f,
+    table({ id: "customer", x: 60, y: 80, frameId: "f", cells: [["Customer", "Type"], ["id", "uuid"], ["name", "text"], ["email", "text"]] }),
+    table({ id: "order", x: 500, y: 80, frameId: "f", cells: [["Order", "Type"], ["id", "uuid"], ["customer_id", "uuid"], ["placed_at", "timestamp"], ["status", "text"]] }),
+    table({ id: "line", x: 500, y: 380, frameId: "f", cells: [["Order line", "Type"], ["order_id", "uuid"], ["product_id", "uuid"], ["quantity", "int"]] }),
+    table({ id: "product", x: 940, y: 380, frameId: "f", cells: [["Product", "Type"], ["id", "uuid"], ["name", "text"], ["price", "numeric"]] }),
+    er("customer", "order", "places"), er("order", "line", "contains"), er("product", "line", "appears in"),
+  ]);
+}
+
 /** @type {readonly Template[]} */
 export const TEMPLATES = Object.freeze([
   { id: "brainstorm", name: "Brainstorm", description: "A topic in the middle with ideas around it", doc: brainstorm() },
   { id: "retrospective", name: "Retrospective", description: "Went well, to improve and actions, each in a frame", doc: retrospective() },
   { id: "journey", name: "Journey map", description: "Stages across, actions, thoughts, feelings, pain points and opportunities down", doc: journeyMap() },
-  { id: "architecture", name: "Architecture sketch", description: "Boxes and arrows for a simple system", doc: architecture() },
+  { id: "architecture", name: "Architecture sketch", description: "Boxes, a database and a queue for a simple system", doc: architecture() },
+  { id: "flowchart", name: "Flowchart", description: "Start, input, a decision, a subprocess, a database and a document, with elbow arrows", doc: flowchart() },
+  { id: "data-model", name: "Data model", description: "Tables for entities, joined by one-to-many (crow's foot) connectors", doc: dataModel() },
 ]);
 
 /**

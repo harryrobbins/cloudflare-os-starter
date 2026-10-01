@@ -226,3 +226,5 @@ redaction/retention, webhook dispatch, streaming large snapshots and full legacy
 unfinished. The outbox checkbox denotes durable transactional markers, not webhook delivery.
 The custom ontology is an executable third module, not a compatibility adapter for a vendor.
 Enterprise scalability is a testable requirement, not an unqualified marketing claim.
+The proposed route through these gaps is [Records as an immutable fact store](records-immutable-facts.md)
+(section 10, migration plan). It is not yet accepted, and no checkbox here depends on it.
