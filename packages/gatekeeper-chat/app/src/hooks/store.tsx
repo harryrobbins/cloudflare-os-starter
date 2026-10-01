@@ -5,8 +5,9 @@
 // typing indicator changed is exactly the jank the quality bar rules out. Selectors must return a
 // stable reference for unchanged state -- scalars, or a slice of the immutable snapshot.
 
-import { createContext, useContext, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNode } from "react";
 
+import type { CallSnapshot } from "../call/engine/types.js";
 import type { ChatStore } from "../store/store.js";
 import { INITIAL_STATE, type ChatState } from "../store/state.js";
 
@@ -35,4 +36,14 @@ export function useChat<T>(selector: (state: ChatState) => T): T {
     () => selector(store.getSnapshot()),
     () => selector(INITIAL_STATE),
   );
+}
+
+/**
+ * Where this frame's call is -- its conversation and phase -- for components that only place the call
+ * and must not re-render on every media or quality change in the snapshot.
+ */
+export function useCallPlace(): Pick<CallSnapshot, "channelId" | "phase"> {
+  const channelId = useChat((state) => state.call.channelId);
+  const phase = useChat((state) => state.call.phase);
+  return useMemo(() => ({ channelId, phase }), [channelId, phase]);
 }

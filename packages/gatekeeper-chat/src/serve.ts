@@ -151,13 +151,15 @@ async function serveApp(request: Request, env: ChatEnv, url: URL): Promise<Respo
  * there to stop script injection, and a style attribute is not that. Images and media allow `data:`
  * and `blob:` for monograms and upload previews. The socket is same-origin, but older Safari does not
  * read `'self'` as covering `wss:`, so the explicit socket origin is listed too. `frame-ancestors
- * 'self'` is what lets the shell's dock frame this app and nobody else.
+ * 'self'` is what lets the shell's dock frame this app and nobody else. `'wasm-unsafe-eval'` allows
+ * compiling WebAssembly and nothing else (no `eval`, no inline script): the call's optional noise
+ * suppression and background blur run bundled Wasm (RNNoise, MediaPipe) served from this origin.
  */
 export function contentSecurityPolicy(env: Pick<ChatEnv, "PUBLIC_BASE_URL">, requestOrigin: string): string {
   const socket = socketOrigin(env.PUBLIC_BASE_URL) ?? socketOrigin(requestOrigin);
   return [
     "default-src 'self'",
-    "script-src 'self'",
+    "script-src 'self' 'wasm-unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "media-src 'self' blob:",
@@ -181,12 +183,22 @@ function socketOrigin(base: string): string | null {
   }
 }
 
+/**
+ * Calls (chat-video.md, "Shell integration"): the app asks for the camera, the microphone and screen
+ * sharing, and plays remote media. `self` covers this document and the shell that frames it (same
+ * origin); the shell's iframe `allow` attribute delegates the same features. Nothing cross-origin gets
+ * any of them.
+ */
+export const PERMISSIONS_POLICY =
+  "camera=(self), microphone=(self), display-capture=(self), autoplay=(self), fullscreen=(self)";
+
 function withShellHeaders(response: Response, env: ChatEnv, url: URL): Response {
   if (!(response.headers.get("content-type") ?? "").includes("text/html")) return response;
   const headers = new Headers(response.headers);
   headers.set("content-security-policy", contentSecurityPolicy(env, url.origin));
   headers.set("x-content-type-options", "nosniff");
   headers.set("referrer-policy", "same-origin");
+  headers.set("permissions-policy", PERMISSIONS_POLICY);
   return new Response(response.body, { status: response.status, headers });
 }
 

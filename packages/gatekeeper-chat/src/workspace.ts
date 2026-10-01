@@ -14,11 +14,13 @@ import type { ChatEnv } from "./env.js";
 import { errorResponse, unauthenticated } from "./http.js";
 import { runMigrations } from "./migrations.js";
 import { deliverAgentReply, runAgentOutbox, type AgentGateway } from "./do/agent.js";
+import { runCallExpiry } from "./do/calls.js";
 import type { Broadcaster, Ctx } from "./do/context.js";
 import { sweepPending } from "./do/files.js";
 import { logEvent } from "./do/logs.js";
 import { route } from "./do/router.js";
 import { ensureSearchStarted, runSearchOutbox, searchSyncStatus } from "./do/search-sync.js";
+import { realtimeFromEnv, type RealtimeConfig } from "./do/sfu.js";
 import { createBroadcaster, handleFrame, readAttachment, socketClosed } from "./do/sockets.js";
 import { touchUser } from "./do/users.js";
 import { IDENTITY_HEADER, type ChatIdentity, type SearchSyncStatus } from "./shared/protocol.js";
@@ -41,6 +43,8 @@ export class ChatWorkspace extends DurableObject<ChatEnv> {
   /** The alarm wake a search write asked for, awaited before the response leaves. */
   #searchKick: Promise<void> | null = null;
   #searchChecked = false;
+  /** Realtime SFU/TURN for calls, or null (calls off). Replaceable only through {@link useRealtime}. */
+  #realtime: RealtimeConfig | null;
 
   constructor(ctx: DurableObjectState, env: ChatEnv) {
     super(ctx, env);
@@ -51,6 +55,8 @@ export class ChatWorkspace extends DurableObject<ChatEnv> {
     // The broadcaster needs the context and the context holds the broadcaster, so the cycle is broken
     // with a getter: by the time any fan-out happens, the field is assigned.
     this.#bus = createBroadcaster(ctx, () => this.#ctx);
+    this.#realtime = realtimeFromEnv(env);
+    const realtime = () => this.#realtime;
     this.#ctx = {
       sql: ctx.storage.sql,
       storage: ctx.storage,
@@ -61,6 +67,9 @@ export class ChatWorkspace extends DurableObject<ChatEnv> {
       wakeAt: (at) => this.#wakeAt(at),
       agentGateway: workshopGateway(ctx, env),
       searchChanged: () => this.#kickSearch(),
+      get realtime() {
+        return realtime();
+      },
     };
   }
 
@@ -103,19 +112,51 @@ export class ChatWorkspace extends DurableObject<ChatEnv> {
   }
 
   /**
-   * The one alarm, shared by the pending-upload sweep, the agent outbox and the omni-search outbox.
+   * The one alarm, shared by the pending-upload sweep, call expiry, the agent outbox and the
+   * omni-search outbox.
    * Each part says when it next needs to run; the earliest is set. A throw leaves the runtime to retry
    * the alarm, which is what a failed agent outbox write should get -- the search part never throws,
    * so a search outage cannot cause that retry.
    */
   override async alarm(): Promise<void> {
     const remaining = await sweepPending(this.#ctx);
+    const callNext = await this.#runCalls();
     const agentNext = await this.#runOutbox();
     const searchNext = await this.#runSearch();
-    const wakes = [remaining > 0 ? Date.now() + SWEEP_INTERVAL_MS : null, agentNext, searchNext].filter(
+    const wakes = [remaining > 0 ? Date.now() + SWEEP_INTERVAL_MS : null, callNext, agentNext, searchNext].filter(
       (at): at is number => at !== null,
     );
     if (wakes.length > 0) await this.#wakeAt(Math.min(...wakes));
+  }
+
+  /**
+   * Call expiry, as the alarm runs it. Never rejects: SFU closes are already best-effort, and a bug
+   * here must not make the shared alarm retry the upload sweep and the outboxes; it is logged and
+   * retried in a minute instead.
+   */
+  async #runCalls(): Promise<number | null> {
+    try {
+      return await runCallExpiry(this.#ctx);
+    } catch (error) {
+      logEvent("chat.call.error", {
+        message: (error instanceof Error ? error.message : String(error)).slice(0, 200),
+      });
+      return Date.now() + 60_000;
+    }
+  }
+
+  /**
+   * Test seam: replaces the Realtime configuration (null switches calls off), so a suite can put a
+   * fake SFU and TURN behind an injected `fetch`. Called in-process through `runInDurableObject`;
+   * never reachable from a request.
+   */
+  useRealtime(config: RealtimeConfig | null): void {
+    this.#realtime = config;
+  }
+
+  /** Test and operations seam: runs call expiry now instead of waiting for the alarm. */
+  async runCallExpiry(): Promise<number | null> {
+    return this.#runCalls();
   }
 
   /** Test and operations seam: runs the sweep now instead of waiting for the alarm. */

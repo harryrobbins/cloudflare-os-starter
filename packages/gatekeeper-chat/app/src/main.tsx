@@ -9,6 +9,7 @@ import "./styles.css";
 import { trackMobileViewport } from "./lib/mobile.js";
 
 import { createTransport } from "./api/transport.js";
+import { createAppCallEngine } from "./call/index.js";
 import { StoreProvider } from "./hooks/store.js";
 import { applyAccent, createBridge, parseEmbedOptions } from "./lib/bridge.js";
 import { attachStore, navigateToAppPath, router } from "./router.js";
@@ -24,7 +25,10 @@ async function main(): Promise<void> {
   }
   const { bridged, compact } = parseEmbedOptions();
   const transport = await createTransport();
-  const store = new ChatStore({ transport, navigate: navigateToAppPath });
+  // One engine for the life of the page, above the router: moving between the full page and the
+  // dock, or between conversations, never tears a call down.
+  const callEngine = await createAppCallEngine(transport);
+  const store = new ChatStore({ transport, navigate: navigateToAppPath, callEngine });
   attachStore(store);
   store.setNavigate(navigateToAppPath);
 
@@ -38,6 +42,8 @@ async function main(): Promise<void> {
         applyAccent(accent);
       },
       onVisible: (visible) => store.setVisible(visible),
+      onLayout: (mode) => store.setLayout(mode),
+      onCallControl: (action) => store.callControl(action),
     },
     bridged,
   );
@@ -45,8 +51,14 @@ async function main(): Promise<void> {
   if (bridge.active) {
     store.onBadgeChange = (unread, mentions) => bridge.badge(unread, mentions);
     store.onNotify = (title, body, href) => bridge.notify(title, body, href);
+    store.onCallChange = (call) => bridge.call(call);
+    store.onPresent = (mode) => bridge.present(mode);
     store.onNotificationClick = (href) => bridge.expand(href);
   }
+
+  // Unload leaves the call with keepalive requests, so the others do not see a frozen tile until the
+  // heartbeat expires (store.disposeCall).
+  window.addEventListener("pagehide", () => store.disposeCall());
 
   // The three browser signals the read model depends on: is the document visible, is the window focused,
   // and has the OS theme changed while no explicit override is set.

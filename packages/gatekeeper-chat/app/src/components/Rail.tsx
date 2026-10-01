@@ -14,6 +14,7 @@ import {
   LockSimple,
   MagnifyingGlass,
   NotePencil,
+  VideoCamera,
   Plus,
   Star,
   Users,
@@ -273,6 +274,9 @@ function ChannelRow({
   const users = useChat((state) => state.users);
   const meId = useChat((state) => state.me?.id);
   const otherId = direct ? otherMemberIds(channel, meId)[0] : undefined;
+  // A call is running here: the camera glyph, filled while this frame is in it.
+  const call = useChat((state) => state.calls[channel.id]);
+  const here = useChat((state) => state.call.callId !== null && state.call.callId === call?.id);
 
   return (
     <Link
@@ -312,6 +316,15 @@ function ChannelRow({
         )}
       </span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
+      {call !== undefined && (
+        <VideoCamera
+          size={13}
+          weight={here ? "fill" : "regular"}
+          data-testid="rail-call"
+          className="shrink-0 text-kumo-success"
+          aria-label={here ? "You are in this call" : `Call in progress, ${call.participants.length} in it`}
+        />
+      )}
       {hasDraft && (
         <NotePencil
           size={12}
@@ -319,7 +332,7 @@ function ChannelRow({
           aria-label="Unsent draft"
         />
       )}
-      {online !== undefined && !unread && mentions === 0 && !hasDraft && (
+      {online !== undefined && !unread && mentions === 0 && !hasDraft && call === undefined && (
         <PresenceDot online={online} className="h-2 w-2" />
       )}
       {!muted && <CountBadge count={mentions} />}

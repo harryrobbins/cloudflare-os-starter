@@ -7,7 +7,9 @@
 #   packages/gatekeeper-chat/e2e/stop-dev.sh     # kills the group
 #
 # Env: CHAT_DEV_LOG (default $STATE/dev.log), CHAT_DEV_TIMEOUT (default 120),
-#      CHAT_DEV_STATE (default ${TMPDIR:-/tmp}/cfos-chat-dev), CHAT_SKIP_BUILD=1 to reuse app/dist.
+#      CHAT_DEV_STATE (default ${TMPDIR:-/tmp}/cfos-chat-dev), CHAT_SKIP_BUILD=1 to reuse app/dist,
+#      CHAT_DEV_ENV_FILE=<path> to pass wrangler an --env-file (e.g. the REALTIME_* call credentials
+#      for e2e/call-check.mjs; keep that file outside the repo).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -45,7 +47,7 @@ if [[ -z "${CHAT_SKIP_BUILD:-}" || ! -f "$PKG/app/dist/index.html" ]]; then
 fi
 
 cd "$PKG"
-setsid pnpm exec wrangler dev -c wrangler.dev.jsonc >"$LOG" 2>&1 </dev/null &
+setsid pnpm exec wrangler dev -c wrangler.dev.jsonc ${CHAT_DEV_ENV_FILE:+--env-file "$CHAT_DEV_ENV_FILE"} >"$LOG" 2>&1 </dev/null &
 PID=$!
 sleep 0.5
 PGID="$(ps -o pgid= -p "$PID" | tr -d ' ' || true)"

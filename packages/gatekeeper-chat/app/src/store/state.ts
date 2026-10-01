@@ -4,10 +4,14 @@
 import type {
   Attachment,
   BadgeSummary,
+  CallFeature,
+  CallReaction,
+  CallState,
   Channel,
   ChannelId,
   Membership,
   MessageId,
+  ParticipantId,
   ReadCursor,
   SearchResult,
   ThreadSummary,
@@ -18,6 +22,17 @@ import type {
 import type { SocketStatus } from "../api/types.js";
 import type { Draft } from "./drafts.js";
 import type { LocalMessage } from "./merge.js";
+import type { CallSnapshot, DeviceChoice } from "../call/engine/types.js";
+import {
+  CALLS_DISABLED,
+  DEFAULT_CALL_START,
+  IDLE_CALL,
+  NO_DEVICES,
+  NO_CALL_UI,
+  type CallRing,
+  type CallStart,
+  type CallUi,
+} from "./calls.js";
 
 export type ThemeMode = "light" | "dark";
 
@@ -163,7 +178,43 @@ export interface ChatState {
   /** The conversation the UI currently shows, so notifications know what is on screen. */
   readonly activeChannelId: ChannelId | null;
   readonly activeRootId: MessageId | null;
+
+  // --- calls (docs/plans/chat-video.md) ---
+  /** `/api/me`'s `calls`. Disabled hides every call control. */
+  readonly callFeature: CallFeature;
+  /** Active calls by conversation: the room, from `call` events, `hello` and the channel list. */
+  readonly calls: Readonly<Record<ChannelId, CallState>>;
+  /** This frame's own call, as the engine reports it. */
+  readonly call: CallSnapshot;
+  readonly callUi: CallUi;
+  /** Incoming calls not yet answered or dismissed. */
+  readonly rings: readonly CallRing[];
+  /** Remembered per browser; null ids mean the system default. */
+  readonly callDevices: DeviceChoice;
+  /** Whether the next join starts with the microphone, the camera and each effect on. */
+  readonly callStart: CallStart;
+  /**
+   * Where the shell has put this frame (`chat:layout`): its full `/chat` page, the dock, or out of
+   * sight behind the floating call pill. Null when no shell has said, standalone included.
+   */
+  readonly shellLayout: "page" | "dock" | "hidden" | null;
+  /** Full-page "Focus": the rail is hidden so the call takes the whole width. */
+  readonly callFocus: boolean;
+  /** Space is held while muted: the microphone is on until it is released (push-to-talk). */
+  readonly callPushToTalk: boolean;
+  /** Reactions in this frame's call, newest last, each shown for {@link CALL_REACTION_SHOW_MS}. */
+  readonly callReactions: readonly CallReactionShown[];
 }
+
+/** One reaction on screen: over the sender's tile. `id` is local, for keys and expiry. */
+export interface CallReactionShown {
+  readonly id: number;
+  readonly participantId: ParticipantId;
+  readonly emoji: CallReaction;
+}
+
+/** How long a reaction floats over a tile. */
+export const CALL_REACTION_SHOW_MS = 4_000;
 
 export const INITIAL_STATE: ChatState = {
   phase: "loading",
@@ -201,4 +252,15 @@ export const INITIAL_STATE: ChatState = {
   focused: true,
   activeChannelId: null,
   activeRootId: null,
+  callFeature: CALLS_DISABLED,
+  calls: {},
+  call: IDLE_CALL,
+  callUi: NO_CALL_UI,
+  rings: [],
+  callDevices: NO_DEVICES,
+  callStart: DEFAULT_CALL_START,
+  shellLayout: null,
+  callFocus: false,
+  callPushToTalk: false,
+  callReactions: [],
 };

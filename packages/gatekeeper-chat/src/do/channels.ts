@@ -29,6 +29,7 @@ import {
   requireRead,
   unleavableReason,
 } from "./access.js";
+import { activeCallsFor } from "./calls.js";
 import { allow, firstRow, placeholders, refuse, updateRow, type Ctx, type Outcome } from "./context.js";
 import { newChannelId } from "./ids.js";
 import { hashId, logEvent } from "./logs.js";
@@ -92,6 +93,7 @@ export function listChannels(ctx: Ctx, user: UserRow): ChannelListResponse {
     memberships,
     users: loadUsers(ctx, referenced),
     badges: badgeSummary(ctx, user.id),
+    calls: activeCallsFor(ctx, user.id),
   };
 }
 
@@ -180,6 +182,7 @@ export function createChannel(
   }
 
   logEvent("chat.channel.create", { kind: request.kind, user: hashId(user.id), channel: hashId(id) });
+  ctx.bus.follow(members, id);
   ctx.bus.badges(members);
   return channelResponse(ctx, id, user.id);
 }

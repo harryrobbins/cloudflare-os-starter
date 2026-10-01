@@ -8,6 +8,8 @@ import { ArrowClockwise, CheckCircle, Info, WarningCircle, WifiSlash, X } from "
 import type { ReactNode } from "react";
 
 import { useChat, useStore } from "../hooks/store.js";
+import { callHref } from "../store/calls.js";
+import { IncomingCall } from "../call/ui/IncomingCall.js";
 import { IconButton, Spinner } from "./primitives.js";
 
 export function Toasts({
@@ -18,7 +20,11 @@ export function Toasts({
 }): ReactNode {
   const store = useStore();
   const toasts = useChat((state) => state.toasts);
-  if (toasts.length === 0) return null;
+  const rings = useChat((state) => state.rings);
+  const channels = useChat((state) => state.channels);
+  const users = useChat((state) => state.users);
+  const meId = useChat((state) => state.me?.id);
+  if (toasts.length === 0 && rings.length === 0) return null;
 
   return (
     <div
@@ -26,6 +32,24 @@ export function Toasts({
       // none, and an error toast is already accompanied by the failed row in the list.
       className="pointer-events-none fixed right-4 bottom-4 z-[1400] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2"
     >
+      {/* Incoming calls sit on top of the stack: they are the one card that expires on its own
+          while it still matters. */}
+      {rings.map((ring) => (
+        <IncomingCall
+          key={ring.callId}
+          ring={ring}
+          caller={users[ring.startedBy]}
+          channel={channels[ring.channelId]}
+          users={users}
+          meId={meId}
+          onJoin={() => {
+            store.dismissRing(ring.callId);
+            onNavigate(callHref(ring.channelId));
+            store.openCallPrejoin(ring.channelId);
+          }}
+          onDismiss={() => store.dismissRing(ring.callId)}
+        />
+      ))}
       {toasts.map((toast) => (
         <div
           key={toast.id}

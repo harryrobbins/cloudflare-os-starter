@@ -140,6 +140,29 @@ export interface ChatConfig {
    * reading chat).
    */
   agentReplies?: boolean;
+  /**
+   * Video calls in chat (docs/plans/chat-video.md): Cloudflare Realtime SFU media plus TURN relay.
+   * Absent or `enabled: false` generates empty `REALTIME_*` vars, and the chat Worker then answers
+   * every call route with 503 `unavailable` and shows no call button.
+   */
+  calls?: ChatCallsConfig;
+}
+
+/**
+ * The Realtime resources a call needs. Both ids are public identifiers, so they live here as vars;
+ * their credentials are Worker secrets (`REALTIME_SFU_APP_SECRET`, `REALTIME_TURN_KEY_API_TOKEN`),
+ * which the generated config lists as required so wrangler refuses to deploy without them.
+ */
+export interface ChatCallsConfig {
+  /** Whether calls are on. Requires `chat.enabled` and `sfuAppId`. */
+  enabled: boolean;
+  /** The Realtime SFU app id (32 hex characters). Becomes `REALTIME_SFU_APP_ID`. */
+  sfuAppId?: string;
+  /**
+   * The Realtime TURN key id (32 hex characters). Becomes `REALTIME_TURN_KEY_ID`. Optional but
+   * recommended: without TURN, anyone behind a strict NAT or firewall cannot connect media.
+   */
+  turnKeyId?: string;
 }
 
 /**

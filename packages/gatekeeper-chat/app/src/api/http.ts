@@ -3,7 +3,23 @@
 
 import {
   apiPath,
+  type AnnounceTracksRequest,
   type Attachment,
+  type CallResponse,
+  type CallStatsReport,
+  type CloseTracksRequest,
+  type CloseTracksResponse,
+  type JoinCallResponse,
+  type LeaveCallRequest,
+  type OkResponse,
+  type PublishTracksRequest,
+  type PublishTracksResponse,
+  type PullTracksRequest,
+  type PullTracksResponse,
+  type ReconnectCallRequest,
+  type ReconnectCallResponse,
+  type RenegotiateRequest,
+  type SetLayerRequest,
   type ChannelId,
   type ChannelListResponse,
   type ChannelResponse,
@@ -59,6 +75,7 @@ async function request<T>(
   path: string,
   body?: unknown,
   signal?: AbortSignal,
+  keepalive = false,
 ): Promise<T> {
   let response: Response;
   try {
@@ -73,6 +90,7 @@ async function request<T>(
       credentials: "same-origin",
       cache: "no-store",
       ...(signal ? { signal } : {}),
+      ...(keepalive ? { keepalive } : {}),
     });
   } catch (cause) {
     if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
@@ -113,6 +131,8 @@ const STATUS_CODES: Readonly<Record<number, ErrorCode>> = {
   413: "payload_too_large",
   429: "rate_limited",
   501: "not_implemented",
+  502: "upstream_error",
+  503: "unavailable",
 };
 
 function codeForStatus(code: string | undefined, status: number): ErrorCode {
@@ -187,6 +207,28 @@ export function createHttpApi(): ChatApi {
     getUsers: (ids: readonly UserId[]) =>
       request<UserListResponse>("GET", apiPath("listUsers") + query({ ids: ids.join(",") })),
     getUser: (userId: UserId) => request<{ user: User }>("GET", apiPath("getUser", { userId })),
+
+    getCall: (channelId: ChannelId) => request<CallResponse>("GET", apiPath("getCall", { channelId })),
+    joinCall: (channelId: ChannelId) =>
+      request<JoinCallResponse>("POST", apiPath("joinCall", { channelId }), {}),
+    publishTracks: (callId: string, body: PublishTracksRequest) =>
+      request<PublishTracksResponse>("POST", apiPath("publishTracks", { callId }), body),
+    announceTracks: (callId: string, body: AnnounceTracksRequest) =>
+      request<CallResponse>("POST", apiPath("announceTracks", { callId }), body),
+    pullTracks: (callId: string, body: PullTracksRequest) =>
+      request<PullTracksResponse>("POST", apiPath("pullTracks", { callId }), body),
+    renegotiateCall: (callId: string, body: RenegotiateRequest) =>
+      request<OkResponse>("POST", apiPath("renegotiateCall", { callId }), body),
+    closeTracks: (callId: string, body: CloseTracksRequest) =>
+      request<CloseTracksResponse>("POST", apiPath("closeTracks", { callId }), body),
+    setLayer: (callId: string, body: SetLayerRequest) =>
+      request<OkResponse>("POST", apiPath("setLayer", { callId }), body),
+    reconnectCall: (callId: string, body: ReconnectCallRequest) =>
+      request<ReconnectCallResponse>("POST", apiPath("reconnectCall", { callId }), body),
+    leaveCall: (callId: string, body: LeaveCallRequest, options?: { readonly keepalive?: boolean }) =>
+      request<OkResponse>("POST", apiPath("leaveCall", { callId }), body, undefined, options?.keepalive === true),
+    postCallStats: (callId: string, body: CallStatsReport, options?: { readonly keepalive?: boolean }) =>
+      request<OkResponse>("POST", apiPath("postCallStats", { callId }), body, undefined, options?.keepalive === true),
   };
 }
 

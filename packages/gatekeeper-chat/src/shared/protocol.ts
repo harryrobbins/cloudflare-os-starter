@@ -136,6 +136,11 @@ export interface Message {
   readonly agentRequest?: AgentRequest;
   /** Present on the Agent's answer: whose question it answers, and where the full conversation is. */
   readonly agentReply?: AgentReply;
+  /**
+   * Present on the system message a call posts when it starts ("Harry started a call"). The same
+   * message is edited when the call ends, so its `call.state` moves from `active` to `ended`.
+   */
+  readonly call?: CallSummary;
 }
 
 // ---------------------------------------------------------------------------
@@ -273,6 +278,10 @@ export const RATE_LIMITS = {
   searchesPerMinute: 60,
   /** Questions to the Agent, retries included: each one is a model run billed to the asker. */
   agentRequestsPerHour: 20,
+  /** `call/join` and `reconnect`: each one creates an SFU session and mints TURN credentials. */
+  callJoinsPerMinute: 10,
+  /** Every other call route (publish, pull, renegotiate, ...). A 5-way join is about ten. */
+  callSignalsPerMinute: 240,
 } as const;
 
 /**
@@ -318,6 +327,10 @@ export const ERROR_CODES = [
   "rate_limited",
   "not_implemented",
   "internal",
+  /** A feature that is switched off in this deployment (calls without SFU credentials). */
+  "unavailable",
+  /** Cloudflare Realtime (SFU or TURN) refused or failed the request we forwarded. */
+  "upstream_error",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -342,6 +355,8 @@ export const ERROR_STATUS: Readonly<Record<ErrorCode, number>> = {
   rate_limited: 429,
   not_implemented: 501,
   internal: 500,
+  unavailable: 503,
+  upstream_error: 502,
 };
 
 // ---------------------------------------------------------------------------
@@ -362,6 +377,8 @@ export interface MeResponse {
     readonly maxAttachmentsPerMessage: number;
   };
   readonly protocolVersion: number;
+  /** Absent from an older server: treat as disabled. */
+  readonly calls?: CallFeature;
 }
 
 /** `PATCH /api/me` */
@@ -385,6 +402,11 @@ export interface ChannelListResponse {
   /** Everyone referenced by a DM or group channel above, so the rail can render names. */
   readonly users: readonly User[];
   readonly badges: BadgeSummary;
+  /**
+   * Active calls in conversations the caller can see, so the rail can mark them. The server always
+   * sends it; optional only so a client talking to an older server still type-checks its handling.
+   */
+  readonly calls?: readonly CallState[];
 }
 
 /** `POST /api/channels` */
@@ -685,7 +707,31 @@ export type ClientEvent =
   | { readonly t: "sub"; readonly channels: readonly ChannelId[] }
   | { readonly t: "typing"; readonly channel: ChannelId }
   | { readonly t: "read"; readonly channel: ChannelId; readonly seq: number }
-  | { readonly t: "ping" };
+  | { readonly t: "ping" }
+  /**
+   * While in a call: sent on every mute/camera/screen change and every {@link CALL_HEARTBEAT_MS}.
+   * The server records it as the participant's heartbeat and broadcasts `call` only when a flag
+   * changed. Ignored (with an `error` event) for a participant the caller does not own.
+   */
+  | {
+      readonly t: "call-beat";
+      readonly call: CallId;
+      readonly participant: ParticipantId;
+      readonly audio: boolean;
+      readonly video: boolean;
+      readonly screen: boolean;
+    }
+  /**
+   * Raise or lower this participant's hand. Broadcast as a `call` event when it changes; the hand is
+   * {@link CallParticipant.hand}. Same ownership rule as `call-beat`.
+   */
+  | { readonly t: "call-hand"; readonly call: CallId; readonly participant: ParticipantId; readonly raised: boolean }
+  /**
+   * A quick reaction in the call: one of {@link CALL_REACTIONS}, fanned out as `call-react` and never
+   * stored. At most {@link CALL_REACTION_BURST} per {@link CALL_REACTION_WINDOW_MS} per participant;
+   * the rest are dropped with an `error` event.
+   */
+  | { readonly t: "call-react"; readonly call: CallId; readonly participant: ParticipantId; readonly emoji: CallReaction };
 
 /**
  * Server to client.
@@ -703,6 +749,8 @@ export type ServerEvent =
       readonly protocolVersion: number;
       /** Per-channel high-water marks at connect time, so the client knows what to catch up on. */
       readonly lastSeq: Readonly<Record<ChannelId, number>>;
+      /** Active calls the user can see, as in {@link ChannelListResponse.calls}. */
+      readonly calls?: readonly CallState[];
     }
   | {
       readonly t: "msg";
@@ -758,6 +806,31 @@ export type ServerEvent =
       readonly unread: Readonly<Record<ChannelId, number>>;
       readonly mentions: Readonly<Record<ChannelId, number>>;
       readonly threads: number;
+    }
+  /**
+   * A conversation's call changed: started, somebody joined, left, announced a track or toggled a
+   * flag. `call` is the whole current state, or null when the call ended. Sent to the conversation's
+   * recipients like `msg`. `ring` is set only on the event that starts a call in a `dm` or `group`,
+   * and never to the person who started it.
+   */
+  | { readonly t: "call"; readonly channel: ChannelId; readonly call: CallState | null; readonly ring?: boolean }
+  /**
+   * This participant no longer exists: the same person joined from another tab or frame, or the
+   * server expired it. The receiving client tears its call down without calling `leave`.
+   */
+  /** Somebody in the conversation's call reacted (`call-react`). Ephemeral: never stored or replayed. */
+  | {
+      readonly t: "call-react";
+      readonly channel: ChannelId;
+      readonly call: CallId;
+      readonly participant: ParticipantId;
+      readonly emoji: CallReaction;
+    }
+  | {
+      readonly t: "call-moved";
+      readonly call: CallId;
+      readonly participant: ParticipantId;
+      readonly reason: "replaced" | "expired";
     }
   | { readonly t: "error"; readonly code: ErrorCode; readonly message: string };
 
@@ -816,9 +889,293 @@ export type AppToShellMessage =
       readonly body: string;
       readonly href: string;
     }
-  | { readonly type: "chat:expand"; readonly href: string };
+  | { readonly type: "chat:expand"; readonly href: string }
+  /**
+   * This frame joined (`active: true`) or left a call. While active the shell must keep the frame
+   * mounted however the dock is toggled, and may show a live-call indicator; `href` is the
+   * conversation's path under `/gatekeeper/chat`, for the indicator's link.
+   */
+  | {
+      readonly type: "chat:call";
+      readonly active: boolean;
+      readonly href?: string;
+      /** Microphone published and unmuted, for the shell's floating pill. Re-sent on every change. */
+      readonly audio?: boolean;
+      /** Camera on. Re-sent on every change. */
+      readonly video?: boolean;
+    }
+  /**
+   * "Expand to full page" (`page`) or "Pop out to sidebar" (`dock`) from the call bar. The shell moves
+   * the one persistent frame (chat-video.md, "Shell: one persistent chat frame") and answers with
+   * `chat:layout`; the call is never rejoined.
+   */
+  | { readonly type: "chat:present"; readonly mode: "page" | "dock" };
 
 export type ShellToAppMessage =
   | { readonly type: "chat:open"; readonly href: string }
   | { readonly type: "chat:theme"; readonly mode: "light" | "dark"; readonly accent?: string }
-  | { readonly type: "chat:visible"; readonly visible: boolean };
+  | { readonly type: "chat:visible"; readonly visible: boolean }
+  /**
+   * Where the persistent frame is shown now. `page` is the full layout, `dock` the compact one, and
+   * `hidden` means neither is on screen (a call keeps running behind the shell's floating pill). The
+   * `compact` query parameter is only the initial value; this message wins from then on.
+   */
+  | { readonly type: "chat:layout"; readonly mode: "page" | "dock" | "hidden" }
+  /** A control on the shell's floating "In a call" pill. */
+  | { readonly type: "chat:call-control"; readonly action: "toggle-audio" | "toggle-video" | "leave" };
+
+// ---------------------------------------------------------------------------
+// Calls (docs/plans/chat-video.md): Cloudflare Realtime SFU, rooms kept in the Durable Object
+// ---------------------------------------------------------------------------
+
+export type CallId = string;
+/** One per join, not per person: rejoining after `leave` or a replacement gets a new id. */
+export type ParticipantId = string;
+export type CallTrackKind = "audio" | "video" | "screen";
+
+/** People in one call at once. The sixth `join` is a `conflict`. */
+export const MAX_CALL_PARTICIPANTS = 5;
+/** How often a client in a call sends `call-beat`. */
+export const CALL_HEARTBEAT_MS = 10_000;
+/** A participant with no `call-beat` for this long is dropped (lazily, and by the alarm). */
+export const CALL_PARTICIPANT_TTL_MS = 45_000;
+/** TURN credential lifetime minted per join. Longer than any call we expect; the SFU max is 48 h. */
+export const CALL_TURN_TTL_SECONDS = 12 * 60 * 60;
+/** Simulcast layers, best first. ASCII order is what the SFU's automatic switching walks. */
+export const CALL_SIMULCAST_RIDS = ["a", "b", "c"] as const;
+export type CallSimulcastRid = (typeof CALL_SIMULCAST_RIDS)[number];
+/** Tracks per `publish`/`pull`/`close-tracks` request. The SFU allows 64. */
+export const MAX_CALL_TRACKS_PER_REQUEST = 32;
+/** The quick reactions a call offers. A closed set, so the server can validate and the UI can lay it out. */
+export const CALL_REACTIONS = ["👍", "👏", "😂", "🎉", "❤️", "😮"] as const;
+export type CallReaction = (typeof CALL_REACTIONS)[number];
+/** Reactions one participant may send per {@link CALL_REACTION_WINDOW_MS}. */
+export const CALL_REACTION_BURST = 5;
+export const CALL_REACTION_WINDOW_MS = 10_000;
+/** Upper bound for one SDP blob we forward. Real offers for a 5-way call are ~10-30 KiB. */
+export const MAX_SDP_BYTES = 128 * 1024;
+
+/**
+ * A call's length as the history line says it: `under a minute`, `23 min`, `1 h`, `1 h 5 min`. The
+ * server writes it into the ended call's message body and the client renders it, so they agree.
+ */
+export function formatCallDuration(ms: number): string {
+  const minutes = Math.round(Math.max(0, ms) / 60_000);
+  if (minutes < 1) return "under a minute";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+}
+
+/**
+ * A published track that is flowing (its owner saw `bytesSent > 0` and announced it). Only these
+ * appear in {@link CallParticipant.tracks} and only these can be pulled.
+ */
+export interface CallTrack {
+  /** The SFU `trackName`, chosen by the server: `${participantId}-${kind}`. */
+  readonly name: string;
+  readonly kind: CallTrackKind;
+  /** True when published with {@link CALL_SIMULCAST_RIDS}; pull it with a `rid`. */
+  readonly simulcast: boolean;
+}
+
+export interface CallParticipant {
+  readonly id: ParticipantId;
+  readonly userId: UserId;
+  /** The participant's SFU session. Public within the call: pulling needs it. */
+  readonly sessionId: string;
+  readonly joinedAt: Timestamp;
+  /** Microphone published and unmuted. */
+  readonly audio: boolean;
+  /** Camera published and on. */
+  readonly video: boolean;
+  /** Sharing their screen. */
+  readonly screen: boolean;
+  /** When they raised their hand (`call-hand`); absent while it is down. Oldest first is the queue. */
+  readonly hand?: Timestamp;
+  readonly tracks: readonly CallTrack[];
+}
+
+/** An active call, as pushed in `call` events. Ended calls are only ever a {@link CallSummary}. */
+export interface CallState {
+  readonly id: CallId;
+  readonly channelId: ChannelId;
+  readonly startedBy: UserId;
+  readonly startedAt: Timestamp;
+  /** The system message this call posted, so the client can link the two. */
+  readonly messageId: MessageId;
+  /** Live participants, in join order. At most {@link MAX_CALL_PARTICIPANTS}. */
+  readonly participants: readonly CallParticipant[];
+}
+
+/** What a call's system message carries. */
+export interface CallSummary {
+  readonly id: CallId;
+  readonly state: "active" | "ended";
+  readonly startedAt: Timestamp;
+  readonly endedAt: Timestamp | null;
+  /** Everyone who joined at any point, in first-join order. */
+  readonly participantIds: readonly UserId[];
+}
+
+/** `MeResponse.calls` */
+export interface CallFeature {
+  /** False when the deployment has no SFU credentials; the UI hides every call control. */
+  readonly enabled: boolean;
+  readonly maxParticipants: number;
+}
+
+/** What `RTCPeerConnection` takes, as minted from TURN (port-53 URLs already removed). */
+export interface CallIceServer {
+  readonly urls: readonly string[];
+  readonly username?: string;
+  readonly credential?: string;
+}
+
+/** `{type, sdp}`, exactly as the browser and the SFU exchange it. */
+export interface SessionDescription {
+  readonly type: "offer" | "answer";
+  readonly sdp: string;
+}
+
+/** `GET /api/channels/:channelId/call` */
+export interface CallResponse {
+  readonly call: CallState | null;
+}
+
+/**
+ * `POST /api/channels/:channelId/call/join` (body `{}`). Starts the call when none is running.
+ * The caller negotiates right away: an SFU session that never connects expires.
+ */
+export interface JoinCallResponse {
+  readonly call: CallState;
+  readonly participantId: ParticipantId;
+  /** This participant's SFU session (also in `call.participants`). */
+  readonly sessionId: string;
+  readonly iceServers: readonly CallIceServer[];
+}
+
+/** `POST /api/calls/:callId/publish` -- the client offers, the SFU answers. */
+export interface PublishTracksRequest {
+  readonly participantId: ParticipantId;
+  readonly offer: SessionDescription;
+  /** One entry per new `sendonly` transceiver in the offer. At most one per kind per participant. */
+  readonly tracks: readonly { readonly mid: string; readonly kind: CallTrackKind; readonly simulcast: boolean }[];
+}
+export interface PublishTracksResponse {
+  readonly answer: SessionDescription;
+  /** The server-chosen track names, by mid. Not visible to others until announced. */
+  readonly tracks: readonly { readonly mid: string; readonly name: string; readonly kind: CallTrackKind }[];
+}
+
+/** `POST /api/calls/:callId/announce` -- these published tracks now have bytes flowing. */
+export interface AnnounceTracksRequest {
+  readonly participantId: ParticipantId;
+  readonly names: readonly string[];
+}
+
+/** `POST /api/calls/:callId/pull` -- the SFU offers (when it needs to), the client answers via `renegotiate`. */
+export interface PullTracksRequest {
+  readonly participantId: ParticipantId;
+  readonly tracks: readonly {
+    /** Whose track. The server resolves their SFU session; the client never supplies one. */
+    readonly participantId: ParticipantId;
+    readonly name: string;
+    /** Preferred simulcast layer; ignored for a non-simulcast track. */
+    readonly rid?: CallSimulcastRid;
+  }[];
+}
+export interface PullTracksResponse {
+  /** Present when `requiresImmediateRenegotiation`: apply it, answer, then call `renegotiate`. */
+  readonly offer?: SessionDescription;
+  readonly requiresImmediateRenegotiation: boolean;
+  /** One per requested track, in request order. `mid` is on the caller's own connection. */
+  readonly tracks: readonly {
+    readonly participantId: ParticipantId;
+    readonly name: string;
+    readonly mid: string | null;
+    /** The SFU's per-item `errorCode`, when this one failed. */
+    readonly error?: string;
+  }[];
+}
+
+/** `POST /api/calls/:callId/renegotiate` -- the answer to an SFU offer. Answers `OkResponse`. */
+export interface RenegotiateRequest {
+  readonly participantId: ParticipantId;
+  readonly answer: SessionDescription;
+}
+
+/**
+ * `POST /api/calls/:callId/close-tracks` -- the caller's own transceivers (published or pulled).
+ * With `offer` it is a negotiated close and the response carries the answer; without, it is forced.
+ */
+export interface CloseTracksRequest {
+  readonly participantId: ParticipantId;
+  readonly mids: readonly string[];
+  readonly offer?: SessionDescription;
+}
+export interface CloseTracksResponse {
+  readonly answer?: SessionDescription;
+}
+
+/** `POST /api/calls/:callId/layer` -- change the preferred simulcast layer of one pulled track. Answers `OkResponse`. */
+export interface SetLayerRequest {
+  readonly participantId: ParticipantId;
+  /** The pulled track's mid on the caller's connection. */
+  readonly mid: string;
+  /** Whose track it is, so the server can name it to the SFU. */
+  readonly trackParticipantId: ParticipantId;
+  readonly name: string;
+  readonly rid: CallSimulcastRid;
+}
+
+/**
+ * `POST /api/calls/:callId/reconnect` -- recovery after the connection failed: a new SFU session for
+ * the same participant. The server clears the participant's tracks (they must be re-published and
+ * re-announced) and force-closes the old ones best-effort.
+ */
+export interface ReconnectCallRequest {
+  readonly participantId: ParticipantId;
+}
+export type ReconnectCallResponse = JoinCallResponse;
+
+/** `POST /api/calls/:callId/leave`. Answers `OkResponse`; leaving twice is not an error. */
+export interface LeaveCallRequest {
+  readonly participantId: ParticipantId;
+}
+
+/**
+ * `POST /api/calls/:callId/stats` -- a participant's call-quality summary, sent every 60 s and on
+ * leave (chat-video.md, "Quality phase 1"). Aggregates only: no SDP, no candidate addresses, no
+ * device labels. The Worker logs it (redacted) and keeps nothing else. Answers `OkResponse`.
+ */
+export interface CallStatsReport {
+  readonly participantId: ParticipantId;
+  /** True for the last report of this participant (sent on leave). */
+  readonly final: boolean;
+  /** Milliseconds covered by this report (since the previous one, or since joining). */
+  readonly intervalMs: number;
+  /** Milliseconds since joining. */
+  readonly durationMs: number;
+  readonly rttMs: { readonly avg: number | null; readonly max: number | null };
+  /** Percent of packets lost, 0..100. `send` is what the SFU reports about our uplink. */
+  readonly lossPercent: { readonly send: number | null; readonly receive: number | null };
+  readonly jitterMs: number | null;
+  readonly framesDecoded: number;
+  readonly framesDropped: number;
+  /** Milliseconds the camera encoder spent limited, from `qualityLimitationDurations`. */
+  readonly limitedMs: { readonly cpu: number; readonly bandwidth: number };
+  /** Milliseconds spent in audio-only mode. */
+  readonly audioOnlyMs: number;
+  /** The selected candidate pair goes through TURN. */
+  readonly relayed: boolean | null;
+  /** e.g. "opus", "red", "VP8", "H264". Codec names only. */
+  readonly audioCodec: string | null;
+  readonly videoCodec: string | null;
+  /** How many times the connection was rebuilt. */
+  readonly reconnects: number;
+}
+
+/** Stats reports per participant per minute the Worker accepts; more are dropped with 429. */
+export const MAX_CALL_STATS_PER_MINUTE = 4;

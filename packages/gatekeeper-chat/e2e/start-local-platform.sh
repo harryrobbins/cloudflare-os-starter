@@ -29,10 +29,14 @@
 #   - Chat after the platform. A platform start prunes entries it did not see come up, so restarting
 #     the platform alone leaves the router with a 503 until the chat process is restarted too.
 #
-# Env: CFOS_REBUILD=1, CFOS_LOG, CFOS_READY_TIMEOUT -- same meanings as the whiteboard script. Plus
+# Env: CFOS_REBUILD=1, CFOS_LOG, CFOS_READY_TIMEOUT -- same meanings as the whiteboard script. CHAT_PORT
+# (default 8788) moves the chat Worker when that port is taken; the router finds it by name. Plus
 # VITE_CHAT_DOCK (default "true"), which is the *shell's* build-time flag for the chat dock: the
 # frontend dist is rebuilt whenever it does not match, because a dist built without it has no sidebar
 # row, no drawer and no /chat route to check.
+#
+# CHAT_DEV_ENV_FILE=<path> passes the chat Worker an --env-file, as in start-dev.sh (the REALTIME_* call
+# credentials for e2e/call-move-check.mjs; keep that file outside the repo).
 #
 # CHAT_IN_PLATFORM=1 is the other layout, for `@agent` (e2e/agent-check.mjs): this Worker runs INSIDE
 # the platform's workerd, appended to its multi-config `wrangler dev` (one more patch:
@@ -49,7 +53,7 @@ PKG="$(cd "$HERE/.." && pwd)"
 REPO="$(cd "$PKG/../.." && pwd)"
 C="$REPO/cloudflare-os"
 URL="http://localhost:8787"
-CHAT_PORT=8788
+CHAT_PORT="${CHAT_PORT:-8788}"
 STATE_DIR="${TMPDIR:-/tmp}/cfos-chat-platform"
 PGID_FILE="$STATE_DIR/pgid"
 CHAT_PGID_FILE="$STATE_DIR/chat.pgid"
@@ -194,7 +198,7 @@ fi
 
 # --- 2. this Worker, registered with the platform's wrangler ---------------------------------------
 cd "$PKG"
-setsid "$C/node_modules/.bin/wrangler" dev -c wrangler.dev.jsonc --port "$CHAT_PORT" >"$CHAT_LOG" 2>&1 </dev/null &
+setsid "$C/node_modules/.bin/wrangler" dev -c wrangler.dev.jsonc --port "$CHAT_PORT" ${CHAT_DEV_ENV_FILE:+--env-file "$CHAT_DEV_ENV_FILE"} >"$CHAT_LOG" 2>&1 </dev/null &
 CHAT_PID=$!
 sleep 0.5
 CHAT_PGID="$(ps -o pgid= -p "$CHAT_PID" | tr -d ' ' || true)"

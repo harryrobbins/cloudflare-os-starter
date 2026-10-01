@@ -8,7 +8,8 @@
 //   * The applied version is recorded in `schema_meta`, not inferred from the tables present.
 //
 // Version 1 is what `/api/me` needs; version 2 is the rest of the plan's schema block; version 3 is
-// the agent outbox; version 4 is the omni-search outbox.
+// the agent outbox; version 4 is the omni-search outbox; version 5 is video calls
+// (docs/plans/chat-video.md, "Storage").
 //
 // `ALTER TABLE ... ADD COLUMN` has no `IF NOT EXISTS`, so {@link addColumn} checks
 // `pragma_table_info` first -- otherwise a migration that is re-run after a partial failure throws
@@ -348,6 +349,69 @@ export const MIGRATIONS: readonly Migration[] = [
         )
       `);
       sql.exec(`INSERT INTO search_sync (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
+    },
+  },
+  {
+    version: 5,
+    description: "video calls: one row per call, one per join",
+    up(sql) {
+      sql.exec(`
+        CREATE TABLE IF NOT EXISTS calls (
+          id                TEXT PRIMARY KEY,
+          channel_id        TEXT NOT NULL,
+          started_by        TEXT NOT NULL,
+          started_at        INTEGER NOT NULL,
+          -- NULL while the call runs.
+          ended_at          INTEGER,
+          -- The system message the call posted; edited to "Call ended ..." when it ends.
+          message_id        TEXT NOT NULL,
+          peak_participants INTEGER NOT NULL DEFAULT 1
+        )
+      `);
+      // One running call per conversation. A second `join` that races the first loses on this
+      // index rather than starting a parallel call.
+      sql.exec(`CREATE UNIQUE INDEX IF NOT EXISTS calls_one_active ON calls (channel_id) WHERE ended_at IS NULL`);
+      sql.exec(`CREATE INDEX IF NOT EXISTS calls_message ON calls (message_id)`);
+
+      sql.exec(`
+        CREATE TABLE IF NOT EXISTS call_participants (
+          -- One per join, not per person: rejoining after leave or replacement is a new row.
+          id             TEXT PRIMARY KEY,
+          call_id        TEXT NOT NULL REFERENCES calls (id),
+          user_id        TEXT NOT NULL,
+          -- The SFU session. Always read from here, never from a request.
+          sfu_session_id TEXT NOT NULL,
+          joined_at      INTEGER NOT NULL,
+          -- NULL while in the call.
+          left_at        INTEGER,
+          -- The call heartbeat; a participant silent for CALL_PARTICIPANT_TTL_MS is expired.
+          last_seen_at   INTEGER NOT NULL,
+          audio          INTEGER NOT NULL DEFAULT 0,
+          video          INTEGER NOT NULL DEFAULT 0,
+          screen         INTEGER NOT NULL DEFAULT 0,
+          -- JSON [{name, kind, mid, simulcast, announced}]: every published track, the mid kept so
+          -- the object can force-close it when its owner vanishes.
+          tracks         TEXT NOT NULL DEFAULT '[]'
+        )
+      `);
+      // One live row per person per call; a second tab's join ends the first row.
+      sql.exec(
+        `CREATE UNIQUE INDEX IF NOT EXISTS call_participants_live
+           ON call_participants (call_id, user_id) WHERE left_at IS NULL`,
+      );
+      // The expiry sweep's scan: live rows by heartbeat age.
+      sql.exec(
+        `CREATE INDEX IF NOT EXISTS call_participants_seen
+           ON call_participants (last_seen_at) WHERE left_at IS NULL`,
+      );
+    },
+  },
+  {
+    version: 6,
+    description: "video calls: a raised hand per participant",
+    up(sql) {
+      // When the hand went up; NULL while it is down. A rejoin is a new row, so the hand starts down.
+      addColumn(sql, "call_participants", "hand_at", "INTEGER");
     },
   },
 ];

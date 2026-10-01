@@ -59,6 +59,22 @@ export interface ChatEnv {
    * src/search-client.ts, never as the other package's entrypoint class.
    */
   readonly SEARCH?: SearchService;
+
+  /**
+   * Cloudflare Realtime SFU app for video calls (docs/plans/chat-video.md). A var, from
+   * `chat.calls.sfuAppId` in deployment.jsonc. Calls are enabled only when this and
+   * {@link REALTIME_SFU_APP_SECRET} are both non-empty; otherwise every call route answers
+   * `unavailable` and `MeResponse.calls.enabled` is false.
+   */
+  readonly REALTIME_SFU_APP_ID?: string;
+  /** The SFU app's secret (a Worker secret). Bearer token for the SFU's HTTPS API; never leaves the object. */
+  readonly REALTIME_SFU_APP_SECRET?: string;
+  /**
+   * TURN key id (a var) and its API token (a secret). Optional: without both, joins hand out
+   * STUN only, which works on most networks but not behind a UDP-blocking firewall.
+   */
+  readonly REALTIME_TURN_KEY_ID?: string;
+  readonly REALTIME_TURN_KEY_API_TOKEN?: string;
 }
 
 /** Extra bindings only `wrangler.dev.jsonc` supplies. Production has neither. */

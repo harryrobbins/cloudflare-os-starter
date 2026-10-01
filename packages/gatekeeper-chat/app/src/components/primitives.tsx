@@ -2,7 +2,7 @@
 // the one icon-button treatment the whole app uses. Kept together because each is a dozen lines and
 // splitting them would be filing, not structure.
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode, Ref } from "react";
 
 import { hueFor, initials } from "../lib/format.js";
 
@@ -246,5 +246,78 @@ export function SectionLabel({ children }: { children: ReactNode }): ReactNode {
     <span className="text-[11px] font-semibold tracking-[0.06em] text-kumo-inactive uppercase">
       {children}
     </span>
+  );
+}
+
+/**
+ * A dropdown menu: a click-away backdrop and the `role="menu"` panel, which Escape closes. Where it
+ * sits is the caller's `className` (and `style`); `backdrop` is the backdrop's stacking layer, one
+ * below the panel's.
+ */
+export function Menu({
+  onClose,
+  className,
+  style,
+  menuRef,
+  backdrop = "z-10",
+  children,
+}: {
+  onClose: () => void;
+  className: string;
+  style?: CSSProperties;
+  menuRef?: Ref<HTMLDivElement>;
+  backdrop?: "z-10" | "z-20";
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <>
+      <div className={`fixed inset-0 ${backdrop}`} aria-hidden="true" onClick={onClose} />
+      <div
+        ref={menuRef}
+        role="menu"
+        tabIndex={-1}
+        style={style}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.stopPropagation();
+            onClose();
+          }
+        }}
+        className={className}
+      >
+        {children}
+      </div>
+    </>
+  );
+}
+
+/** One action in a {@link Menu}: an icon and a label, optionally in the danger tone. */
+export function MenuItem({
+  icon,
+  label,
+  onClick,
+  disabled = false,
+  tone = "default",
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  tone?: "default" | "danger";
+}): ReactNode {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      disabled={disabled}
+      className={[
+        "flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+        tone === "danger" ? "text-kumo-danger hover:bg-kumo-danger-tint" : "text-kumo-default hover:bg-kumo-tint",
+      ].join(" ")}
+    >
+      <span className="text-kumo-subtle">{icon}</span>
+      {label}
+    </button>
   );
 }

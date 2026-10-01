@@ -8,6 +8,7 @@
 import type { ChatEnv } from "../env.js";
 import type { ChannelId, ErrorCode, ServerEvent, UserId } from "../shared/protocol.js";
 import type { AgentGateway } from "./agent.js";
+import type { RealtimeConfig } from "./sfu.js";
 
 /** Delivery to live sockets. Implemented by the Durable Object, which owns `ctx.getWebSockets`. */
 export interface Broadcaster {
@@ -21,6 +22,12 @@ export interface Broadcaster {
    * event when it subscribed to that channel or subscribed to nothing at all.
    */
   toChannel(channelId: ChannelId, event: ServerEvent, options?: { readonly exclude?: UserId }): void;
+  /**
+   * A new membership: adds the channel to each of these users' sockets that subscribed to a list,
+   * so a conversation created or joined after a socket subscribed reaches it through
+   * {@link toChannel} like any other. A socket that subscribed to nothing already receives it.
+   */
+  follow(userIds: Iterable<UserId>, channelId: ChannelId): void;
   /** One event to every live socket. Only presence uses it. */
   toAll(event: ServerEvent): void;
   /** Recomputes each user's {@link import("../shared/protocol.js").BadgeSummary} and pushes it. */
@@ -55,6 +62,12 @@ export interface Ctx {
    * Optional so a hand-built test context need not provide it.
    */
   searchChanged?(): void;
+  /**
+   * Cloudflare Realtime (SFU and TURN) for video calls, or null/absent when this deployment has no
+   * SFU credentials -- the calls kill switch (src/do/calls.ts). Carries its own `fetch` so a test can
+   * put a fake SFU behind it. Optional so a hand-built test context need not provide it.
+   */
+  readonly realtime?: RealtimeConfig | null;
 }
 
 /** `?, ?, ?` for an `IN (...)` list. Bound parameters only; never interpolated values. */

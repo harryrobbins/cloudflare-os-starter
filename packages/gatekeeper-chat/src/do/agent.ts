@@ -45,7 +45,7 @@ import { consume } from "./limits.js";
 import { hashId, logEvent } from "./logs.js";
 import { hydrateMessages, loadMessage, sendMessage } from "./messages.js";
 import type { ChannelRow, MessageRow, UserRow } from "./rows.js";
-import { loadUserRow } from "./users.js";
+import { loadUserRow, namesFor } from "./users.js";
 
 /** The workspace every asker's questions go to, created in their account on first use. */
 export const AGENT_GADGET_TITLE = "Chat agent";
@@ -452,18 +452,6 @@ function tokenIds(rows: readonly MessageRow[]): UserId[] {
     for (const match of row.body.matchAll(/<@([A-Za-z0-9_-]{1,64})>/gu)) ids.push(match[1]!);
   }
   return ids;
-}
-
-function namesFor(ctx: Ctx, userIds: readonly UserId[]): Map<UserId, string> {
-  const ids = [...new Set(userIds)].slice(0, 100);
-  const out = new Map<UserId, string>();
-  if (ids.length === 0) return out;
-  for (const row of ctx.sql
-    .exec<{ id: string; name: string }>(`SELECT id, name FROM users WHERE id IN (${placeholders(ids.length)})`, ...ids)
-    .toArray()) {
-    out.set(row.id, row.name);
-  }
-  return out;
 }
 
 // ---------------------------------------------------------------------------

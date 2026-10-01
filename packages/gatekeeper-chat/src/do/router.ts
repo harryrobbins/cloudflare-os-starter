@@ -21,13 +21,22 @@ import {
 } from "../shared/protocol.js";
 import { FILES_PREFIX, matchApiRoute, matchFilePath, WS_PATH, type ApiRouteName } from "../shared/routes.js";
 import {
+  parseAnnounceTracks,
+  parseCallStatsReport,
+  parseCloseTracks,
   parseCreateChannel,
   parseEditMessage,
   parseEmoji,
+  parseJoinCall,
   parseListMessagesQuery,
   parseListThreadsQuery,
   parseMarkRead,
+  parseParticipantRequest,
+  parsePublishTracks,
+  parsePullTracks,
+  parseRenegotiate,
   parseSendMessage,
+  parseSetLayer,
   parseUpdateMembership,
   parseUpdateChannel,
   parseUpdateMe,
@@ -45,6 +54,21 @@ import {
   updateMembership,
 } from "./channels.js";
 import { retryAgentRequest } from "./agent.js";
+import {
+  announceTracks,
+  callFeature,
+  closeTracks,
+  getCall,
+  joinCall,
+  leaveCall,
+  publishTracks,
+  pullTracks,
+  reconnectCall,
+  renegotiateCall,
+  setLayer,
+  unavailable,
+} from "./calls.js";
+import { postCallStats } from "./call-stats.js";
 import type { Ctx, Outcome } from "./context.js";
 import { createUpload, serveFile } from "./files.js";
 import {
@@ -73,8 +97,11 @@ function respond<T>(outcome: Outcome<T>): Response {
     : errorResponse(outcome.code, outcome.message, outcome.retryAfter);
 }
 
-/** Turns a validator's {@link Result} into a 400, or hands the value to a handler. */
-function validated<T>(result: Result<T>, handler: (value: T) => Response): Response {
+/** Turns a validator's {@link Result} into a 400, or hands the value to a (possibly async) handler. */
+function validated<T, R extends Response | Promise<Response>>(
+  result: Result<T>,
+  handler: (value: T) => R,
+): R | Response {
   return result.ok ? handler(result.value) : errorResponse("invalid_request", result.message);
 }
 
@@ -181,12 +208,12 @@ export async function route(
 
     case "sendMessage": {
       const body = await readJson(request);
-      const parsed = parseSendMessage(body);
-      if (!parsed.ok) return errorResponse("invalid_request", parsed.message);
-      return respond(
-        await sendMessage(ctx, user, params["channelId"]!, parsed.value, {
-          workshopAccount: identity.workshopAccount ?? null,
-        }),
+      return validated(parseSendMessage(body), async (send) =>
+        respond(
+          await sendMessage(ctx, user, params["channelId"]!, send, {
+            workshopAccount: identity.workshopAccount ?? null,
+          }),
+        ),
       );
     }
 
@@ -277,6 +304,64 @@ export async function route(
     case "subscribePush":
     case "unsubscribePush":
       return errorResponse("not_implemented", `${name} is not implemented yet.`);
+
+    // Calls (src/do/calls.ts). The kill switch is checked before the body is parsed, so a deployment
+    // without SFU credentials answers every call route with the same 503.
+    case "getCall":
+      return respond(await getCall(ctx, user, params["channelId"]!));
+
+    case "joinCall":
+    case "publishTracks":
+    case "announceTracks":
+    case "pullTracks":
+    case "renegotiateCall":
+    case "closeTracks":
+    case "setLayer":
+    case "reconnectCall":
+    case "postCallStats":
+    case "leaveCall": {
+      if (!callFeature(ctx).enabled) return respond(unavailable());
+      return callRoute(ctx, user, name, params, await readJson(request));
+    }
+  }
+}
+
+/** The call routes that take a body: validate, then hand to src/do/calls.ts. */
+async function callRoute(
+  ctx: Ctx,
+  user: UserRow,
+  name: ApiRouteName,
+  params: Readonly<Record<string, string>>,
+  body: unknown,
+): Promise<Response> {
+  const callId = params["callId"] ?? "";
+  switch (name) {
+    case "joinCall":
+      return validated(parseJoinCall(body), async () => respond(await joinCall(ctx, user, params["channelId"]!)));
+    case "publishTracks":
+      return validated(parsePublishTracks(body), async (v) => respond(await publishTracks(ctx, user, callId, v)));
+    case "announceTracks":
+      return validated(parseAnnounceTracks(body), async (v) => respond(await announceTracks(ctx, user, callId, v)));
+    case "pullTracks":
+      return validated(parsePullTracks(body), async (v) => respond(await pullTracks(ctx, user, callId, v)));
+    case "renegotiateCall":
+      return validated(parseRenegotiate(body), async (v) => respond(await renegotiateCall(ctx, user, callId, v)));
+    case "closeTracks":
+      return validated(parseCloseTracks(body), async (v) => respond(await closeTracks(ctx, user, callId, v)));
+    case "setLayer":
+      return validated(parseSetLayer(body), async (v) => respond(await setLayer(ctx, user, callId, v)));
+    case "postCallStats":
+      return validated(parseCallStatsReport(body), (v) => respond(postCallStats(ctx, user, callId, v)));
+    case "reconnectCall":
+      return validated(parseParticipantRequest(body), async ({ participantId }) =>
+        respond(await reconnectCall(ctx, user, callId, participantId)),
+      );
+    case "leaveCall":
+      return validated(parseParticipantRequest(body), async ({ participantId }) =>
+        respond(await leaveCall(ctx, user, callId, participantId)),
+      );
+    default:
+      return errorResponse("not_found", "No such call route.");
   }
 }
 
@@ -293,6 +378,7 @@ function me(ctx: Ctx, user: UserRow, admin: boolean): MeResponse {
       maxAttachmentsPerMessage: MAX_ATTACHMENTS_PER_MESSAGE,
     },
     protocolVersion: PROTOCOL_VERSION,
+    calls: callFeature(ctx),
   };
 }
 

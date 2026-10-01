@@ -105,6 +105,28 @@ export interface ChatApi {
   /** Several directory entries by id, in one request. An id the directory does not show is absent. */
   getUsers(ids: readonly UserId[]): Promise<UserListResponse>;
   getUser(userId: UserId): Promise<{ user: import("../contract.js").User }>;
+
+  // Calls. The call routes are the engine's signalling channel; see `call/engine/types.ts`.
+  getCall(channelId: ChannelId): Promise<import("../contract.js").CallResponse>;
+  joinCall(channelId: ChannelId): Promise<import("../contract.js").JoinCallResponse>;
+  publishTracks(callId: string, request: import("../contract.js").PublishTracksRequest): Promise<import("../contract.js").PublishTracksResponse>;
+  announceTracks(callId: string, request: import("../contract.js").AnnounceTracksRequest): Promise<import("../contract.js").CallResponse>;
+  pullTracks(callId: string, request: import("../contract.js").PullTracksRequest): Promise<import("../contract.js").PullTracksResponse>;
+  renegotiateCall(callId: string, request: import("../contract.js").RenegotiateRequest): Promise<import("../contract.js").OkResponse>;
+  closeTracks(callId: string, request: import("../contract.js").CloseTracksRequest): Promise<import("../contract.js").CloseTracksResponse>;
+  setLayer(callId: string, request: import("../contract.js").SetLayerRequest): Promise<import("../contract.js").OkResponse>;
+  reconnectCall(callId: string, request: import("../contract.js").ReconnectCallRequest): Promise<import("../contract.js").ReconnectCallResponse>;
+  /** `keepalive` lets the request outlive the page (sent from `pagehide`). */
+  leaveCall(
+    callId: string,
+    request: import("../contract.js").LeaveCallRequest,
+    options?: { readonly keepalive?: boolean },
+  ): Promise<import("../contract.js").OkResponse>;
+  postCallStats(
+    callId: string,
+    report: import("../contract.js").CallStatsReport,
+    options?: { readonly keepalive?: boolean },
+  ): Promise<import("../contract.js").OkResponse>;
 }
 
 export type SocketStatus = "idle" | "connecting" | "open" | "reconnecting" | "closed";
@@ -144,4 +166,10 @@ export interface MockControls {
   setConnected(connected: boolean): void;
   /** Makes the next N writes fail, to exercise the failed/retry path. */
   failNextWrites(count: number, code?: ErrorCode): void;
+  /** Somebody else starts a call here; in a dm or group it rings this client. */
+  ringFrom(channelId: ChannelId, userId: UserId): void;
+  /** Fills a conversation's call to the cap with other people, so the "full" state can be seen. */
+  fillCall(channelId: ChannelId): void;
+  /** Ends a conversation's call as if everybody left. */
+  endCall(channelId: ChannelId): void;
 }

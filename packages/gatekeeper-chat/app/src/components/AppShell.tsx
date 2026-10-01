@@ -19,6 +19,8 @@ import { ConnectionBanner, LiveRegion, Toasts } from "./Toasts.js";
 import { MobileNav } from "./MobileNav.js";
 import { Modal } from "./Modal.js";
 import { Rail } from "./Rail.js";
+import { CallDock } from "../call/ui/CallDock.js";
+import { isLivePhase } from "../store/calls.js";
 import { Button, EmptyState, Skeleton } from "./primitives.js";
 
 interface Layout {
@@ -45,6 +47,8 @@ export function AppShell(): ReactNode {
   const compact = useChat((state) => state.compact);
   const narrowViewport = useMediaQuery(NARROW_QUERY);
   const narrow = narrowViewport || compact;
+  // The full-page call's "Focus": the rail steps aside while this frame is in a call.
+  const focusCall = useChat((state) => state.callFocus && isLivePhase(state.call.phase));
   const [railOpen, setRailOpen] = useState(false);
   const [dialog, setDialog] = useState<"channel" | "message" | null>(null);
   const [overlay, setOverlay] = useState<"switcher" | "shortcuts" | null>(null);
@@ -109,7 +113,7 @@ export function AppShell(): ReactNode {
       <div className="chat-shell flex h-full flex-col overflow-hidden bg-kumo-base">
         <ConnectionBanner />
         <div className="flex min-h-0 flex-1">
-          {!narrow && (
+          {!narrow && !focusCall && (
             <div className="w-[260px] shrink-0">
               <Rail
                 onNewChannel={layout.openNewChannel}
@@ -148,6 +152,9 @@ export function AppShell(): ReactNode {
 
         <Toasts onNavigate={navigateToAppPath} />
         <LiveRegion />
+        {/* Call audio, shortcuts and the way back to the call: above the routed views, so neither
+            navigation nor a layout switch interrupts a call. */}
+        <CallDock />
 
         {dialog === "channel" && (
           <NewChannelDialog

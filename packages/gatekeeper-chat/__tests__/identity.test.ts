@@ -229,14 +229,21 @@ describe("serveChat, with an already-verified identity", () => {
       const response = await serveChat(new Request(`${ORIGIN}${path}`), env, identity);
       const csp = response.headers.get("content-security-policy") ?? "";
       expect(csp).toContain("frame-ancestors 'self'");
-      expect(csp).toContain("script-src 'self'");
+      // Wasm compilation only (the call's effects); never 'unsafe-eval' or 'unsafe-inline'.
+      expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval';");
+      expect(csp).not.toMatch(/'unsafe-eval'|script-src[^;]*'unsafe-inline'/);
       expect(csp).toContain(`connect-src 'self' ${ORIGIN.replace(/^http/, "ws")}`);
       expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+      // Calls: media capture for this origin only, which the shell's same-origin frame shares.
+      expect(response.headers.get("permissions-policy")).toBe(
+        "camera=(self), microphone=(self), display-capture=(self), autoplay=(self), fullscreen=(self)",
+      );
       expect(await response.text()).not.toMatch(/<script(?![^>]*\bsrc=)/);
     }
     const asset = await serveChat(new Request(`${ORIGIN}${APP_BASE}theme-boot.js`), env, identity);
     expect(asset.status).toBe(200);
     expect(asset.headers.get("content-security-policy")).toBeNull();
+    expect(asset.headers.get("permissions-policy")).toBeNull();
     expect(contentSecurityPolicy({ PUBLIC_BASE_URL: "nonsense" }, "https://chat.example")).toContain(
       "connect-src 'self' wss://chat.example",
     );

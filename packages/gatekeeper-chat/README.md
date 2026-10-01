@@ -511,6 +511,59 @@ Deploy chat before the Workshop -- `deploy.ts` already orders it that way. The b
 entrypoint, so a Workshop deploy against a chat Worker that does not export `GatekeeperVendor`
 fails; that is exactly why `agentAccess` is a separate switch from `enabled`.
 
+## Video calls
+
+Any conversation (channel, DM or group) can hold one call of up to five people. Media goes over
+[Cloudflare Realtime](https://developers.cloudflare.com/realtime/): one SFU session per person, the
+camera sent as three simulcast layers, and each viewer pulling the layer its tile is drawn at. The
+browser never talks to the SFU's control API: every operation goes through the Durable Object, which
+checks that the caller owns the participant and holds the SFU secret. Design:
+[docs/plans/chat-video.md](../../docs/plans/chat-video.md); delivery state and what has been checked
+against the real SFU: [docs/plans/chat-video-implementation.md](../../docs/plans/chat-video-implementation.md).
+Configuration and secrets: [Video calls](../../docs/customization.md#video-calls).
+
+| Path | What it is |
+| --- | --- |
+| `src/do/calls.ts` | rooms, participants, the join/publish/pull/leave routes, `call-beat`, raised hands and reactions |
+| `src/do/sfu.ts`, `src/do/turn.ts` | the SFU control API client (the secret stays here) and per-join TURN credentials |
+| `src/do/call-stats.ts` | `POST /calls/:callId/stats`: one redacted log line per quality summary, nothing stored |
+| `app/src/call/engine/` | `CallEngine`: one `RTCPeerConnection` to the SFU, adaptation, stats, effects |
+| `app/src/call/effects/` | optional noise suppression (RNNoise) and background blur (MediaPipe), loaded on first use |
+| `app/src/call/ui/` | the call panel, bar, tiles, pre-join checks, picture-in-picture and shortcuts |
+
+In a call:
+
+| Key | Does |
+| --- | --- |
+| `Ctrl/Cmd+D` | microphone on or off |
+| `Ctrl/Cmd+E` | camera on or off |
+| `Space` (held) | push-to-talk while muted; ignored while focus is in a text field, a button or a menu |
+
+The bar also has raise hand (the tiles and the People list show the queue, first raised first),
+quick reactions (six emoji, floated over the sender's tile for four seconds, at most five per ten
+seconds each), screen share, and a menu with Audio only (pause everyone's video and your camera),
+noise suppression and background blur (each shown only where the browser can run it, off by
+default, and turned off automatically when the device cannot keep up). Opened on its own rather than
+in the shell, chat in Chrome and Edge can also float the call over other tabs (Document
+Picture-in-Picture); the API refuses from inside the shell's iframe, so the button is hidden there.
+
+TURN credentials are minted per join. The Worker trims the minted list to STUN plus one TURN URL each
+over UDP 3478, TCP 3478 and TLS on port 443 (`selectIceUrls` in `src/do/turn.ts`), the last two for
+networks that block UDP or allow only HTTPS; a list without TLS on 443 is logged as
+`chat.call.turn_warning`.
+
+Checks outside `pnpm test:run`:
+
+```sh
+# a real dev SFU app and TURN key; credentials in a file OUTSIDE the repo
+CHAT_DEV_ENV_FILE=/path/calls.env packages/gatekeeper-chat/e2e/start-dev.sh
+cd packages/gatekeeper-chat && node e2e/call-check.mjs    # five fake-media Chromium people, one relay-only
+cd ../.. && packages/gatekeeper-chat/e2e/stop-dev.sh
+
+# the effects alone, no SFU needed: RNNoise and MediaPipe in headless Chromium
+cd packages/gatekeeper-chat && node e2e/effects-check.mjs
+```
+
 ## Deployment
 
 `pnpm deploy` at the repository root (`scripts/deploy.ts`) generates this Worker's production config
