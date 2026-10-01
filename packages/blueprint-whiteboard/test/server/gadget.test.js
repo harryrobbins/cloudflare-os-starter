@@ -364,3 +364,15 @@ describe("code blocks over RPC", () => {
     expect(Date.now() - t0).toBeLessThan(5000);
   });
 });
+
+describe("describeGadget over RPC", () => {
+  it("returns the description through a real stub, as describeBinding calls it", async () => {
+    const { stub } = fresh();
+    const d = await stub.describeGadget();
+    expect(d).toMatchObject({ gadget: "whiteboard", contract: 1 });
+    expect(d.operations.map((o) => o.name)).toContain("addStickies");
+    // Side-effect free: describing does not create board state.
+    const keys = await runInDurableObject(stub, async (_i, state) => [...(await state.storage.list()).keys()]);
+    expect(keys).toEqual([]);
+  });
+});

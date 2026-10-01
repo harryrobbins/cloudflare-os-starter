@@ -20,6 +20,7 @@ import { showToast, ensureToastHost, closeMenu } from "./dialogs.js";
 import { ConnectionAnnouncer, statusText } from "../sync/connection.js";
 import { keyAction } from "./canvas/keymap.js";
 import { mountShare, SHARE_CSS } from "./share.js";
+import { normalizeAdapt, createAppHandle, runSafely } from "./adapt.js";
 
 /** @typedef {import("../store-contract.js").Store} Store */
 /** @typedef {import("../store-contract.js").ClientState} ClientState */
@@ -92,10 +93,12 @@ function lowerFirst(s) {
 /**
  * @param {HTMLElement} root
  * @param {Store} store
- * @param {{embedded?: boolean}} [options]  embedded: another app hosts the whiteboard (Docs). It
+ * @param {{embedded?: boolean, adapt?: any}} [options]  embedded: another app hosts the whiteboard (Docs). It
  *   leaves document.title and pagehide to the host, which calls destroy() when it closes the board.
+ *   adapt: the adapt block from client.js (./adapt.js validates it; README "Adapting this gadget").
  */
-export function mountApp(root, store, { embedded = false } = {}) {
+export function mountApp(root, store, { embedded = false, adapt } = {}) {
+  const settings = normalizeAdapt(adapt);
   const lifetime = new AbortController();
   const signal = lifetime.signal;
   injectStyles();
@@ -126,7 +129,7 @@ export function mountApp(root, store, { embedded = false } = {}) {
   const appEl = h("div", { class: "wb-app" });
   const canvasHost = h("div", { class: "wb-canvas-host" });
   /** Last colours chosen in the style bar, per object type; new objects of that type use them. @type {Map<string, Record<string, any>>} */
-  const lastColours = new Map();
+  const lastColours = new Map(settings.newObjectColors);
   /** @type {App["toolStyle"]} */
   const toolStyle = (type) => ({ ...(lastColours.get(type) ?? {}) });
   const canvas = createCanvas(uiStore, { announce, toolStyle });
@@ -182,6 +185,7 @@ export function mountApp(root, store, { embedded = false } = {}) {
   app.onStyleBarToggle = (visible) => appEl.classList.toggle("has-selection", visible);
   const people = createPeople(app);
   const minimap = createMinimap(app);
+  if (!settings.minimap) minimap.el.style.display = "none";
   const outline = createOutline(app);
   const activity = createActivity(app);
   const iconPicker = createIconPicker(app);
@@ -193,8 +197,16 @@ export function mountApp(root, store, { embedded = false } = {}) {
   appEl.append(canvasHost, styleBar.el, topbar, toolbar.el, toolbar.history, people.el, people.chip, minimap.el, minimap.zoom);
   root.replaceChildren(appEl);
 
+  // The adapt block's `app` handle. The toast host is a polite live region, so screen readers hear toasts.
+  const toast = (/** @type {string} */ message) => { showToast(message, { timeout: 5000 }); };
+  const handle = createAppHandle({ store: uiStore, canvas, toast });
+  // Actions from the adapt block, for the board menu and the right-click menu (./share.js).
+  const actions = settings.actions.map((a) => ({
+    label: a.label, title: a.title, className: "adapt-action", dataset: { action: a.id },
+    onSelect: () => runSafely(a.label, () => a.run(handle), toast),
+  }));
   // Clipboard, backup, templates, help, onboarding, deep links, presentation (./share.js).
-  const share = mountShare(app, { topbar });
+  const share = mountShare(app, { topbar, actions });
   app.contextItems = share.contextItems;
   /** @param {string} command a keymap.js ShellCommand */
   const runCommand = (command) => {
@@ -386,6 +398,10 @@ export function mountApp(root, store, { embedded = false } = {}) {
   share.render();
   const unsubscribe = uiStore.subscribe(onChange);
 
+  // Extra styles from the adapt block, after the built-in ones.
+  const adaptStyles = settings.styles ? h("style", { id: "wb-adapt-styles" }, settings.styles) : null;
+  if (adaptStyles) document.head.appendChild(adaptStyles);
+
   // Leave presence promptly when the iframe goes away.
   if (!embedded) window.addEventListener("pagehide", () => { closeMenu(); store.dispose(); }, { signal });
 
@@ -398,8 +414,14 @@ export function mountApp(root, store, { embedded = false } = {}) {
     closeMenu();
     share.destroy();
     canvas.destroy();
+    adaptStyles?.remove();
     root.replaceChildren();
   };
 
-  return { app, unsubscribe, destroy };
+  if (settings.onReady) {
+    const onReady = settings.onReady;
+    runSafely("onReady", () => onReady(handle), toast);
+  }
+
+  return { app, unsubscribe, destroy, handle };
 }

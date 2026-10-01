@@ -8,7 +8,7 @@
     "pack:gadget": "node scripts/build.mjs && node scripts/pack-gadget.mjs",
     "test:run": "vitest run && vitest run --config vitest.workers.config.ts",
     "harness": "node harness/serve.mjs",
-    "test:e2e": "node --test --test-concurrency=1 e2e/harness.test.mjs"
+    "test:e2e": "node --test --test-concurrency=1 'e2e/*.test.mjs'"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "catalog:",

@@ -38,6 +38,17 @@ Before any production mutation, follow `.agents/skills/cloudflare-os-operator/SK
 account and route, current root and submodule commits, affected Workers and resources, Access/AI/
 observability state, last-known-good versions, rollback limitations, and a passing validation.
 
+# Blueprints the Workshop agent can use and adapt
+
+When creating, converting or substantially changing a blueprint (`packages/blueprint-*`,
+`formats/`), follow `.agents/skills/author-adaptable-blueprints/SKILL.md`. Each blueprint ships:
+
+- a readable `client.js` (with an adapt block) and `server.js` (with `describeGadget()`) over
+  prebuilt `*.lib.js` bundles;
+- package-only evals (`src/evals.mjs`), run with `node scripts/blueprint-evals/run.mjs <format>`.
+
+Whiteboard and Ranked vote are the reference conversions; the other formats are not converted yet.
+
 # Records / external datastores: intent
 
 Records is a generic, schema-driven **app datastore service** for cloudflare-os apps: shared data that

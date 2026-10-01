@@ -12,11 +12,12 @@ This package started as a copy of [`blueprint-kanban`](../blueprint-kanban/READM
 | --- | --- |
 | `src/shared/` | The contract: data shapes, wire protocol, limits, sanitisers (`protocol.js`); geometry, text layout and connector routing (`geometry.js`); the object renderer shared by the client and the SVG export (`render.js`); stroke simplification (`simplify.js`); fractional ordering keys (`order.js`); icon and stencil packs (`icons/registry.js` over the checked-in, generated `generated/icon-packs.js`); grapheme clusters, so emoji sequences are never split by truncation or wrapping (`graphemes.js`) |
 | `src/core/` | Storage-agnostic whiteboard rules (`whiteboard.js`), the subscriber and presence hub (`hub.js`), and the `Repository` seam with an in-memory implementation |
-| `src/server/` | The `Gadget` Durable Object, its storage repository, and the `ExportHandler` |
-| `src/client/` | Sync store (`sync/`, `model/`), the canvas (`ui/canvas/`) and the app shell (`ui/`), wired in `main.js`; the emoji and symbol data of the picker's second tab (`ui/unicode.js` over the checked-in, generated, client-only `generated/unicode-data.js`) |
+| `src/server/` | The `Gadget` Durable Object (with `describeGadget()`, its operations for agents), its storage repository, and the `ExportHandler` |
+| `src/client/` | Sync store (`sync/`, `model/`), the canvas (`ui/canvas/`) and the app shell (`ui/`), wired in `main.js`, which starts with the adapt block (`ui/adapt.js` validates it and builds its `app` handle); the emoji and symbol data of the picker's second tab (`ui/unicode.js` over the checked-in, generated, client-only `generated/unicode-data.js`) |
 | `harness/` | Local multi-user simulator: the real client in several panes over the real core |
 | `e2e/` | Playwright suites for the harness and for a local Cloudflare OS instance |
-| `scripts/` | `build.mjs` (esbuild into `dist/`), `pack-gadget.mjs` and `archive.mjs` (`.gadget` archives), `build-icon-packs.mjs` (icon pack compiler; see below) |
+| `src/evals.mjs` | Requests an agent must be able to carry out (`scripts/blueprint-evals/run.mjs whiteboard`); shipped as `evals.mjs` |
+| `scripts/` | `build.mjs` (readable `client.js` / `server.js` entries plus `client.lib.js` / `server.lib.js` libraries in `dist/`, via `scripts/gadget-entry.mjs`), `pack-gadget.mjs` and `archive.mjs` (`.gadget` archives), `build-icon-packs.mjs` (icon pack compiler; see below) |
 
 ## Commands
 
@@ -24,7 +25,7 @@ Run these from the repository root. Node comes from fnm (`fnm use v24.21.0`).
 
 ```sh
 pnpm --filter blueprint-whiteboard test:run      # unit tests (node) + server tests (workerd)
-pnpm --filter blueprint-whiteboard build:gadget  # dist/server.js, dist/client.js, dist/README.md
+pnpm --filter blueprint-whiteboard build:gadget  # dist/{server,client}.js, dist/{server,client}.lib.js, dist/README.md, dist/evals.mjs
 pnpm --filter blueprint-whiteboard pack:gadget   # build, then write formats/whiteboard.gadget (bumps revision on change)
 pnpm --filter blueprint-whiteboard benchmark     # performance report (JSON + Markdown, no board content)
 ```
@@ -74,3 +75,15 @@ Connector routes (curved routing, `segments`, `curve`) are additive fields, like
 **A new revision only changes what new whiteboards get.** Existing whiteboards keep the code they were created from. The `schemaVersion` in `meta` plus the `migrate` hook in `src/core/whiteboard.js` are how newer code upgrades older data.
 
 **Never change `blueprintId`** (`format.whiteboard`).
+
+## Evals
+
+`src/evals.mjs` holds the requests an agent must be able to handle with this gadget (see
+`.agents/skills/author-adaptable-blueprints`). It stays in this package: shipped in the gadget,
+an agent reads it and copies the answers. Run `node scripts/blueprint-evals/run.mjs whiteboard`
+(`--reference` needs no model).
+
+| Date | Model | Result |
+| --- | --- | --- |
+| 2026-10-01 | reference | 3/3 |
+| 2026-10-01 | deepseek/deepseek-v4-flash, 3 runs per eval, evals hidden from the agent | 9/9 |

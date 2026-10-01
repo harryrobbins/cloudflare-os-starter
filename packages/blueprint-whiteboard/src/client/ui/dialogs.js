@@ -143,7 +143,7 @@ export function placeMenu(menu, avoid, view, { prefer = "below", margin = 8, gap
  * @param {HTMLElement|{x: number, y: number, returnFocus?: HTMLElement|null, avoid?: ClientRect|null, pointerType?: string}} anchor
  *   `avoid`: a client rect the menu is placed beside (default: the point itself). A touch
  *   anchor keeps TOUCH_CLEARANCE from the point and prefers to sit above it.
- * @param {{label: string, onSelect: () => void, danger?: boolean, className?: string}[]} items
+ * @param {{label: string, onSelect: () => void, danger?: boolean, className?: string, title?: string, dataset?: Record<string, string>}[]} items
  * @param {{label?: string}} [opts]
  */
 export function openMenu(anchor, items, { label = "Actions" } = {}) {
@@ -156,6 +156,7 @@ export function openMenu(anchor, items, { label = "Actions" } = {}) {
   const menu = h("div", { class: "menu", role: "menu", "aria-label": label },
     items.map((item) => h("button", {
       type: "button", role: "menuitem", class: "btn" + (item.danger ? " danger-text" : "") + (item.className ? " " + item.className : ""),
+      title: item.title, dataset: item.dataset,
       onclick: (/** @type {MouseEvent} */ e) => {
         // detail 0: keyboard (Enter/Space) or assistive technology activation.
         if (!armed && e.detail !== 0) return;

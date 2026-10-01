@@ -84,6 +84,9 @@ export class VoteService {
 
   async markdown() { return (await this.vote()).summaryMarkdown(); }
 
+  /** The vote's state and latest count in plain terms; never ballots. */
+  async result() { return (await this.vote()).resultSummary(); }
+
   /**
    * Runs one rule method, persists what it changed, then pushes views. Writes are serialised so a
    * failed persist cannot interleave with the next write. Resolves {revision, ...} or {error}.

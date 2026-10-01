@@ -23,7 +23,7 @@ import { encodeContent, serializeArchive } from "./archive.mjs";
 
 const pkg = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = join(pkg, "../..");
-const FILES = ["server.js", "client.js", "README.md"];
+const FILES = ["server.js", "server.lib.js", "client.js", "client.lib.js", "README.md"];
 const FIXED_DATE = "2026-09-24T00:00:00.000Z";
 export const SIDECAR_KEYS = new Set(["blueprintId", "title", "description", "output", "author", "revision", "$comment"]);
 export const ARCHIVE_BUDGET_BYTES = 200 * 1024;

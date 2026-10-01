@@ -1,18 +1,15 @@
 // @ts-check
-// Client entry point. Runs inside the gadget's sandboxed iframe, which has no HTML of its own.
-// Provided by the platform: `gadget` (RPC stub to the Gadget Durable Object), `gadgetViewer` (the
-// signed-in account; our fork's patch) and `RpcTarget`, declared as module-scope bindings in a
-// prefix the platform prepends to this file (NOT properties of globalThis). All are read as free
-// identifiers behind `typeof` guards.
+// Runs inside the gadget's sandboxed iframe, which has no HTML of its own. Provided by the platform:
+// `gadget` (RPC stub to the Gadget Durable Object), `gadgetViewer` (the signed-in account) and
+// `RpcTarget`, declared as module-scope bindings in a prefix the platform prepends (NOT properties
+// of globalThis), so they are read as free identifiers behind `typeof` guards.
 //
-// Sync: subscribe() hands the server an RpcTarget whose update(view) receives this viewer's view
-// after every change. A heartbeat (ping) every 10 s, retried once after 2 s, re-subscribes when the server has restarted
-// and forgotten us. After a facet restart the platform never replaces this frame's `gadget` stub,
-// so when calls keep failing the frame reloads itself (at most 3 times a minute, counted in
-// window.name, which survives the reload). Nothing is held only on the client: every change is
-// sent straight away, so a reload loses nothing.
+// This file is the main view: the adapt block, then the page it composes. The engine (sections,
+// drag and drop, live sync, styles) is in client.lib.js, bundled from
+// packages/blueprint-ranked-vote/src/client/{app,connect,styles}.js.
 
-import { mountApp } from "./app.js";
+import { mountApp, h } from "./app.js";
+import { connectVote } from "./connect.js";
 import { injectStyles } from "./styles.js";
 
 /* global gadget, gadgetViewer, RpcTarget */
@@ -23,29 +20,34 @@ const platformRpcTarget = typeof RpcTarget !== "undefined" ? RpcTarget : Object;
 // @ts-ignore provided by the platform prefix: {id, displayName, role} of the signed-in user
 const platformViewer = typeof gadgetViewer !== "undefined" ? gadgetViewer : undefined;
 
-const WINDOW_NAME_PREFIX = "ranked-vote:";
-const MAX_AUTO_RELOADS = 3;
-const AUTO_RELOAD_WINDOW_MS = 60_000;
-const PING_MS = 10_000;
-const RETRY_MS = 2_000;
-
-/** @returns {number[]} */
-function recentReloads() {
-  try {
-    const raw = window.name;
-    if (!raw.startsWith(WINDOW_NAME_PREFIX)) return [];
-    const list = JSON.parse(raw.slice(WINDOW_NAME_PREFIX.length))?.reloads;
-    return Array.isArray(list) ? list.filter((t) => typeof t === "number" && Date.now() - t < AUTO_RELOAD_WINDOW_MS) : [];
-  } catch { return []; }
-}
-
-function reloadFrame() {
-  const list = recentReloads();
-  if (list.length >= MAX_AUTO_RELOADS) return false;
-  try { window.name = WINDOW_NAME_PREFIX + JSON.stringify({ reloads: [...list, Date.now()] }); } catch { /* ignore */ }
-  setTimeout(() => location.reload(), 300);
-  return true;
-}
+// ===== Adapt this gadget =====================================================
+// Settings and extension points, honoured by client.lib.js. Change these rather than the library.
+// README.md ("Adapting this gadget") documents every field and the `app` handle.
+const adapt = {
+  title: "Ranked vote",          // the page title
+  labels: {                      // button and heading text
+    reveal: "Reveal", undoReveal: "Undo Reveal", propose: "Propose an option",
+    ranking: "Your ranking", results: "Results", fields: "Fields", activity: "Activity",
+  },
+  // Which sections show, in which column and order. Built in: results, add (the propose form),
+  // ranking, ready (Reveal and voters), fields, activity. Add a panel's name to show it.
+  layout: {
+    main: ["results", "add", "ranking"],
+    side: ["ready", "fields", "activity"],
+  },
+  // Extra sections: name -> (app) => Node | string | array, redrawn after every change. Build
+  // nodes with h(tag, props, children), e.g. h("h2", { text: "Hello" }).
+  panels: {},
+  showRoundTable: true,          // the results table, one column per round
+  showRoundStory: true,          // the round-by-round explanation under it
+  styles: "",                    // extra CSS, applied after the built-in styles
+  // Extra commands, shown as buttons in a toolbar under the question:
+  // { id, label, title?, run(app) }. run may be async; a thrown error shows as a message.
+  actions: [
+  ],
+  onReady(app) {},               // called once, when the first view has arrived, with the app handle
+};
+// ==============================================================================
 
 /** The signed-in account. Every change is attributed to it; nobody is asked for a name. */
 function account() {
@@ -55,18 +57,12 @@ function account() {
   return id ? { id, name } : null;
 }
 
-function randomId() {
-  const bytes = new Uint8Array(8);
-  crypto.getRandomValues(bytes);
-  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 if (!document.documentElement.lang) document.documentElement.lang = "en";
 if (!document.head.querySelector("meta[name=viewport]")) {
   document.head.append(Object.assign(document.createElement("meta"), { name: "viewport", content: "width=device-width, initial-scale=1" }));
 }
-document.title = "Ranked vote";
-injectStyles();
+document.title = adapt.title;
+injectStyles(adapt.styles);
 const root = document.createElement("div");
 document.body.appendChild(root);
 
@@ -76,67 +72,8 @@ if (!platformGadget) {
 } else if (!me) {
   root.textContent = "This vote needs to know who you are, and the platform did not say. Reload the page, or update Cloudflare OS.";
 } else {
-  const g = /** @type {any} */ (platformGadget);
-  const clientId = randomId();
-  let failures = 0;
-
-  /** @param {string} method @param {any} args */
-  const call = async (method, args) => {
-    let r;
-    try {
-      r = await g[method](args);
-      failures = 0;
-    } catch (e) {
-      noteFailure();
-      throw e;
-    }
-    // A refusal by the vote's rules, e.g. a duplicate option.
-    if (r && typeof r.error === "string") throw new Error(r.error);
-    return r;
-  };
-
-  const app = mountApp(root, { me, call, onRetry: () => { if (!reloadFrame()) location.reload(); } });
-
-  class Listener extends platformRpcTarget {
-    /** @param {any} view */
-    update(view) { app.setView(view); }
-  }
-  const listener = new Listener();
-
-  async function subscribe() {
-    const view = await g.subscribe(listener, { clientId, voterId: me.id });
-    app.setView(view);
-    app.setConnection("live");
-    failures = 0;
-  }
-
-  function noteFailure() {
-    failures++;
-    if (failures >= 2) {
-      app.setConnection("lost");
-      if (failures === 2) reloadFrame();
-    }
-  }
-
-  async function ping() {
-    try {
-      const r = await g.ping(clientId, me.id);
-      failures = 0;
-      if (!r.subscribed) await subscribe();
-      else { app.setView(r.view); app.setConnection("live"); }
-    } catch {
-      noteFailure();
-      if (failures === 1) setTimeout(ping, RETRY_MS);
-    }
-  }
-
-  subscribe().catch(() => { noteFailure(); setTimeout(ping, 2000); });
-  setInterval(ping, PING_MS);
-  // A write whose broadcast has not arrived within a second fetches the view directly.
-  setInterval(() => {
-    const v = app.view;
-    if (v && v.revision < app.awaitRevision) g.getView(me.id).then((/** @type {any} */ view) => app.setView(view), () => {});
-  }, 1000);
-  addEventListener("pagehide", () => { try { g.unsubscribe(clientId); } catch { /* ignore */ } });
-  /** @type {any} */ (globalThis).rankedVote = { app };
+  const connection = connectVote({ gadget: platformGadget, RpcTarget: platformRpcTarget, me });
+  const controller = mountApp(root, { me, call: connection.call, onRetry: connection.retry, adapt });
+  connection.start(controller);
+  /** @type {any} */ (globalThis).rankedVote = { app: controller.app };
 }

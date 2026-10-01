@@ -1,6 +1,6 @@
 // @ts-check
 // Multi-user harness for the whiteboard: one in-page fake server (real src/core over an InMemoryRepository) and
-// several same-origin iframes, each running the real dist/client.js with its own `gadget` proxy.
+// several same-origin iframes, each running the real dist/client.lib.js + dist/client.js with its own `gadget` proxy.
 //
 // Transport model (per pane, in each direction): calls are delivered in order after `latency`
 // ms; arguments and results are structured-cloned (so nothing aliases across "the wire");
@@ -319,11 +319,15 @@ setLatency(state.latency);
   connect(paneId, win, RpcTarget) {
     const pane = state.panes.get(paneId);
     if (!pane) throw new Error("unknown pane " + paneId);
-    // Fetched fresh per pane load, so a rebuild is picked up by "Reload".
-    const clientSource = fetch("../dist/client.js", { cache: "no-store" }).then((r) => {
-      if (!r.ok) throw new Error("dist/client.js missing: run node scripts/build.mjs");
+    // Fetched fresh per pane load, so a rebuild is picked up by "Reload". Assembled like the
+    // platform (workshop-backend gadget-files.ts assembleClientCode): the library, then client.js,
+    // as one module.
+    const fetchDist = (/** @type {string} */ name) => fetch("../dist/" + name, { cache: "no-store" }).then((r) => {
+      if (!r.ok) throw new Error(`dist/${name} missing: run node scripts/build.mjs`);
       return r.text();
     });
+    const clientSource = Promise.all([fetchDist("client.lib.js"), fetchDist("client.js")])
+      .then(([library, client]) => `${library}\n;\n${client}`);
     return { gadget: pane.connect(win, RpcTarget), viewer: pane.viewer, exportFormat: pane.exportFormat, clientSource };
   },
   getBoard: () => state.server.getBoard(),

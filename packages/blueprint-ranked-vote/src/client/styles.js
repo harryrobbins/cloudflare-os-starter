@@ -134,10 +134,18 @@ table.rounds tr.won td:first-child { font-weight: 800; color: var(--win); }
 .narrative { margin: 10px 0 0; padding-left: 18px; font-size: 13px; color: var(--text-2); display: grid; gap: 3px; }
 details.past { margin-top: 10px; }
 details.past summary { cursor: pointer; font-weight: 600; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
 `;
 
-export function injectStyles() {
+/** Adds the built-in CSS, then `extra` (client.js adapt.styles) so it wins. @param {string} [extra] */
+export function injectStyles(extra = "") {
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
+  if (typeof extra === "string" && extra.trim()) {
+    const custom = document.createElement("style");
+    custom.dataset.adapt = "";
+    custom.textContent = extra;
+    document.head.appendChild(custom);
+  }
 }

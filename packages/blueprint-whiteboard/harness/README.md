@@ -1,6 +1,6 @@
 # Multi-user harness
 
-A local simulator for the whiteboard: two or more side-by-side panes, each running the real built `dist/client.js`, all talking to one fake server (`harness/fake-server.js`) that runs the real whiteboard rules (`src/core/whiteboard.js`) and subscriber hub (`src/core/hub.js`) over an `InMemoryRepository`, in the browser.
+A local simulator for the whiteboard: two or more side-by-side panes, each running the real built `dist/client.lib.js` + `dist/client.js` (assembled as the platform does), all talking to one fake server (`harness/fake-server.js`) that runs the real whiteboard rules (`src/core/whiteboard.js`) and subscriber hub (`src/core/hub.js`) over an `InMemoryRepository`, in the browser.
 
 There is no dev server and no file watching. Rebuild, then reload.
 
@@ -50,7 +50,7 @@ After changing client code, run `node scripts/build.mjs` again and press **Reloa
 - `gadgetViewer`, a frozen `{id, displayName, role}` for the pane's account (`user-a`, the `names=` entry or `User A`, `build`), like the platform's signed-in viewer. The client attributes every change to `displayName` and shows it on the me button, which only changes the colour;
 - `RpcTarget`, a trivial class from the pane's realm. Instances passed as arguments go by reference, wrapped in a stub with `dup()` and `onRpcBroken()`. Delivery to a killed pane rejects.
 
-It then runs `dist/client.js` as an inline module with a prefix that declares `gadget`, `gadgetViewer`, `RpcTarget` (and the platform's other prefix names `RpcStub`, `newMessagePortRpcSession`, `blockedOpen`) as module-scope bindings, like the platform's `INJECTED_CODE_PREFIX`. They are not on `window`, so a client that reads `globalThis.gadget` fails here too, and a bundle that declares one of those names at top level fails with a SyntaxError. In export mode `gadgetExportFormatId` is a real global, as in the platform's export page.
+It then runs `dist/client.lib.js`, `"\n;\n"` and `dist/client.js` as one inline module with a prefix that declares `gadget`, `gadgetViewer`, `RpcTarget` (and the platform's other prefix names `RpcStub`, `newMessagePortRpcSession`, `blockedOpen`) as module-scope bindings, like the platform's `INJECTED_CODE_PREFIX`. They are not on `window`, so a client that reads `globalThis.gadget` fails here too, and a bundle that declares one of those names at top level fails with a SyntaxError. In export mode `gadgetExportFormatId` is a real global, as in the platform's export page.
 
 ## Scripting it
 

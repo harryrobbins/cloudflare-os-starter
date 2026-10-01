@@ -17,7 +17,7 @@ import { linkFor, watchLinks } from "./deep-link.js";
 
 export { SHARE_CSS } from "./share.css.js";
 
-/** @typedef {{label: string, onSelect: () => void, danger?: boolean, className?: string}} MenuItem */
+/** @typedef {{label: string, onSelect: () => void, danger?: boolean, className?: string, title?: string, dataset?: Record<string, string>}} MenuItem */
 
 /**
  * Shows a link that could not be copied, selected, so it can be copied by hand.
@@ -60,9 +60,10 @@ export function openWebsiteDialog(link, returnFocus) {
 
 /**
  * @param {import("./app.js").App} app
- * @param {{topbar: HTMLElement}} where
+ * @param {{topbar: HTMLElement, actions?: MenuItem[]}} where  actions: the adapt block's, listed
+ *   first in the board menu and last in the right-click menu
  */
-export function mountShare(app, { topbar }) {
+export function mountShare(app, { topbar, actions = [] }) {
   const { store, canvas } = app;
   const ui = { showToast: (/** @type {string} */ m) => { showToast(m); } };
   const clipboard = createClipboard(app, ui);
@@ -122,6 +123,7 @@ export function mountShare(app, { topbar }) {
   menuBtn.addEventListener("click", () => {
     /** @type {MenuItem[]} */
     const items = [
+      ...actions,
       { label: "Keyboard shortcuts (?)", className: "board-help", onSelect: () => { help(menuBtn); } },
     ];
     if (presentationFrames(store.getState().board.objects).length) {
@@ -173,7 +175,7 @@ export function mountShare(app, { topbar }) {
         items.push({ label: "Paste text as sticky notes…", className: "ctx-paste-text", onSelect: () => { pasteText(); } });
         items.push({ label: "Add a template…", className: "ctx-template", onSelect: () => { templates(); } });
       }
-      return items;
+      return [...items, ...actions];
     },
     /**
      * @param {import("../store-contract.js").ClientState} state

@@ -229,6 +229,11 @@ Formats are the blueprints offered under **New** in the composer. You can promot
 - **Updating a format.** A deployment reinstalls a format only when its `revision` or presentation changes. Bump `revision` with every code change.
 - **Never change a `blueprintId`.** It is the install key.
 
+- **Adaptable formats.** Whiteboard and Ranked vote follow [the adaptable-blueprint pattern](../.agents/skills/author-adaptable-blueprints/SKILL.md). It has three parts:
+  - readable `client.js` and `server.js` entries over prebuilt `client.lib.js` and `server.lib.js` bundles; the fork's Workshop loads the client library before `client.js`;
+  - a `describeGadget()` method, whose result `describeBinding` shows the agent;
+  - evals that run with `node scripts/blueprint-evals/run.mjs <format>`.
+
 This repository builds these formats from source, and each package's tests fail if its committed archive is stale:
 
 | Format | Source | Rebuild with |
