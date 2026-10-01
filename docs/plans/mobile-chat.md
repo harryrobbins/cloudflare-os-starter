@@ -25,7 +25,7 @@ drafts and existing catch-up. No new native client or generic gadget sharing mec
 - [x] Replace stale sockets on network return or resume after suspension; ignore old socket events.
 - [x] Verify targeted unit/type tests and mobile browser flows, plus desktop/compact regressions.
 - [x] Merge to main including the previously present repository changes requested for deployment.
-- [ ] Run canonical release validation, serial production deploy, and record live evidence.
+- [x] Run canonical release validation, serial production deploy, and record live evidence.
 
 ## Acceptance evidence
 
@@ -80,3 +80,14 @@ in another serialization test. Whiteboard now caps test workers at four and give
 two large simulations 20s runner headroom; traffic/work/time assertions are unchanged.
 All 672 Node and 21 workerd Whiteboard tests pass with these settings. Production release
 validation must pass again before uploading.
+
+
+## Production completion
+
+All 15 configured Workers were deployed from isolated source `30fe643` and each final
+live version was verified at 100%. TLS and unauthenticated Access redirects passed.
+[Release evidence and rollback versions](../deployments/2026-10-01-mobile-chat.md) records
+the test-runner correction, interrupted/shared-checkout attempts, Go worktree build fix,
+concurrently merged Whiteboard/Docs changes, final IDs and remaining live-device gates.
+The implementation checklist is complete; physical and signed-in production qualification
+and the separate Slack-replacement work above are not claimed complete.
