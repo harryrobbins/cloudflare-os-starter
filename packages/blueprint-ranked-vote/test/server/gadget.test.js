@@ -45,6 +45,21 @@ describe("Gadget", () => {
     expect(text).toContain("# What should we call it?");
   });
 
+  it("describes itself and runs the agent verbs over RPC", async () => {
+    const g = fresh();
+    const d = await g.describeGadget();
+    expect(d.gadget).toBe("format.ranked-vote");
+    expect(d.operations.map((o) => o.name)).toContain("setUpVote");
+    const r = await g.setUpVote({ question: "Lunch?", fields: [{ label: "Walk", kind: "text" }], options: [{ title: "Pizza", values: { Walk: "5 min" } }, "Sushi"], minVoters: 2 });
+    expect(r.added.map((o) => o.title)).toEqual(["Pizza", "Sushi"]);
+    const [p, s] = r.added.map((o) => o.id);
+    await g.setReady({ by: alice, ready: true, ranking: [p, s] });
+    await g.setReady({ by: bob, ready: true, ranking: [p, s] });
+    const res = await g.getResult();
+    expect(res.latestCount).toMatchObject({ winner: "Pizza", ballots: 2, current: true });
+    expect(await g.setReady({ ready: false })).toMatchObject({ error: expect.stringMatching(/assistant cannot/) });
+  });
+
   it("survives a restart with the same data", async () => {
     const id = env.GADGET.idFromName(crypto.randomUUID());
     const g = env.GADGET.get(id);

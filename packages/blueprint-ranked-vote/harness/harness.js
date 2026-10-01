@@ -1,22 +1,41 @@
 // @ts-check
-// Multi-user harness: the real VoteService (src/core) over in-memory storage in this page, and one
-// same-origin iframe per viewer running the real dist/client.js. Arguments and results are
-// structured-cloned, as over RPC. ?names=Alice,Bob,Cara picks the panes.
+// Multi-user harness: the real Gadget class (src/server, with `cloudflare:workers` mapped to a
+// stand-in by the import map in index.html) over in-memory storage in this page, and one
+// same-origin iframe per viewer running the real built client, assembled as the platform does
+// (client.lib.js, then client.js). Arguments and results are structured-cloned, as over RPC.
+// ?names=Alice,Bob,Cara picks the panes.
 //
-// "Restart" builds a new service over the same storage and makes every stub handed out so far
+// "Restart" builds a new Gadget over the same storage and makes every stub handed out so far
 // reject forever, as the platform does after a facet restart; panes must reload themselves.
 
-import { InMemoryRepository, VoteService } from "../src/core/store.js";
+import { Gadget } from "../src/server/index.js";
+
+/** The slice of Durable Object KV storage the Gadget uses. */
+class MemoryStorage {
+  data = new Map();
+  /** @param {string[]} keys */
+  async get(keys) { return new Map(keys.filter((k) => this.data.has(k)).map((k) => [k, structuredClone(this.data.get(k))])); }
+  /** @param {{prefix?: string}} o */
+  async list({ prefix = "" } = {}) { return new Map([...this.data].filter(([k]) => k.startsWith(prefix)).map(([k, v]) => [k, structuredClone(v)])); }
+  /** @param {Record<string, any>} entries */
+  async put(entries) { for (const [k, v] of Object.entries(entries)) this.data.set(k, structuredClone(v)); }
+  /** @param {string[]} keys */
+  async delete(keys) { for (const k of keys) this.data.delete(k); }
+  /** @param {(txn: MemoryStorage) => Promise<unknown>} fn */
+  async transaction(fn) { return fn(this); }
+}
 
 const params = new URLSearchParams(location.search);
 const names = (params.get("names") || "Alice,Bob,Cara").split(",").map((s) => s.trim()).filter(Boolean);
-const repo = new InMemoryRepository();
-let service = new VoteService(repo);
+const storage = new MemoryStorage();
+/** @type {any} */
+let server = new Gadget(/** @type {any} */ ({ storage }), {});
 let generation = 1;
-const clientSource = fetch("/dist/client.js", { cache: "no-store" }).then((r) => r.text());
+// The platform's client code: the library, then client.js, as one module (gadget-files.ts).
+const clientSource = Promise.all(["client.lib.js", "client.js"].map((f) => fetch(`/dist/${f}`, { cache: "no-store" }).then((r) => (r.ok ? r.text() : ""))))
+  .then(([lib, client]) => (lib.trim() ? `${lib}\n;\n${client}` : client));
 
-const METHODS = ["getView", "getSummaryMarkdown", "setQuestion", "addField", "removeField", "addOption", "updateOption",
-  "withdrawOption", "saveRanking", "setReady", "removeBallot", "setMinVoters", "reopen", "subscribe", "unsubscribe", "ping"];
+const METHODS = Object.getOwnPropertyNames(Gadget.prototype).filter((m) => m !== "constructor");
 
 /** @param {any} v */
 const clone = (v) => (v === undefined ? v : structuredClone(v));
@@ -33,12 +52,9 @@ function makeGadget(paneId) {
       if (m === "subscribe") {
         const [target, client] = args;
         const stub = { update: (/** @type {any} */ view) => { if (born !== generation) throw new Error("gone"); return target.update(clone(view)); } };
-        return clone(await service.subscribe(stub, clone(client)));
+        return clone(await server.subscribe(stub, clone(client)));
       }
-      const fn = m.startsWith("get") || m === "ping" || m === "unsubscribe"
-        ? /** @type {any} */ ({ getView: (/** @type {string} */ id) => service.view(id), getSummaryMarkdown: () => service.markdown(), ping: (/** @type {string} */ c, /** @type {string} */ v) => service.ping(c, v), unsubscribe: (/** @type {string} */ c) => service.unsubscribe(c) })[m]
-        : (/** @type {any} */ a) => service.write(m, a);
-      return clone(await fn(...args.map(clone)));
+      return clone(await server[m](...args.map(clone)));
     };
   }
   return g;
@@ -50,7 +66,7 @@ function makeGadget(paneId) {
     const name = names[Number(paneId)] ?? `User ${paneId}`;
     return { gadget: makeGadget(paneId), viewer: { id: `${name.toLowerCase()}@example.com`, displayName: name, role: "build" }, exportFormat: null, clientSource };
   },
-  get service() { return service; },
+  get gadget() { return server; },
 };
 
 const panes = /** @type {HTMLElement} */ (document.getElementById("panes"));
@@ -70,6 +86,6 @@ names.forEach((name, i) => {
 
 /** @type {HTMLElement} */ (document.getElementById("restart")).addEventListener("click", () => {
   generation++;
-  service = new VoteService(repo);
+  server = new Gadget(/** @type {any} */ ({ storage }), {});
   /** @type {HTMLElement} */ (document.getElementById("log")).textContent = `restarted (generation ${generation})`;
 });

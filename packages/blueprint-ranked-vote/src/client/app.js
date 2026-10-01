@@ -12,6 +12,11 @@
 // saved ballot, or a per-viewer shuffle the server suggests. The first drag saves a ballot.
 //
 // No <form> anywhere: the gadget iframe has no allow-forms. No confirm(): two-step buttons instead.
+//
+// Adapting: mountApp takes the `adapt` block from client.js (labels, layout, panels, round
+// display, actions, onReady; styles are applied by injectStyles) and returns a controller whose
+// `app` is the documented handle passed to actions, panels and onReady (README "Adapting this
+// gadget"). Anything else here is internal.
 
 /** @typedef {ReturnType<typeof import("../core/vote.js").Vote.prototype.viewFor>} View */
 
@@ -20,7 +25,7 @@
  * @param {Record<string, any>} [props]
  * @param {(Node|string|null|undefined|false)[]} [children]
  */
-function h(tag, props = {}, children = []) {
+export function h(tag, props = {}, children = []) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(props)) {
     if (v === undefined || v === null || v === false) continue;
@@ -82,15 +87,80 @@ function twoStep(label, armed, key, act, cls = "btn link danger") {
   return b;
 }
 
+/** The Assistant's id (src/core/vote.js ASSISTANT): anyone may rename or withdraw its options. */
+const ASSISTANT_ID = "assistant";
+
+export const BUILT_IN_SECTIONS = /** @type {const} */ (["results", "add", "ranking", "ready", "fields", "activity"]);
+
+export const DEFAULT_LABELS = {
+  reveal: "Reveal",
+  undoReveal: "Undo Reveal",
+  propose: "Propose an option",
+  ranking: "Your ranking",
+  results: "Results",
+  fields: "Fields",
+  activity: "Activity",
+};
+
+/**
+ * Checks client.js's `adapt` block: unknown keys are ignored, and a bad entry is reported in the
+ * console and skipped rather than breaking the vote.
+ * @param {any} adapt
+ */
+export function normaliseAdapt(adapt) {
+  const a = adapt && typeof adapt === "object" ? adapt : {};
+  const warn = (/** @type {string} */ m) => console.warn(`ranked-vote adapt: ${m}`);
+  /** @type {Record<string, (app: any) => any>} */
+  const panels = {};
+  for (const [name, fn] of Object.entries(a.panels && typeof a.panels === "object" ? a.panels : {})) {
+    if (typeof fn !== "function") warn(`panels.${name} is not a function; skipped`);
+    else if (/** @type {readonly string[]} */ (BUILT_IN_SECTIONS).includes(name)) warn(`panels.${name} clashes with a built-in section; skipped`);
+    else panels[name] = fn;
+  }
+  const known = new Set([...BUILT_IN_SECTIONS, ...Object.keys(panels)]);
+  const column = (/** @type {unknown} */ list, /** @type {string[]} */ fallback, /** @type {string} */ where) => {
+    if (list === undefined) return fallback;
+    if (!Array.isArray(list)) { warn(`layout.${where} must be a list of section names`); return fallback; }
+    return list.filter((n) => known.has(n) || (warn(`layout.${where}: no section called "${n}"`), false));
+  };
+  const layout = a.layout && typeof a.layout === "object" ? a.layout : {};
+  /** @type {{id: string, label: string, title: string, run: (app: any) => any}[]} */
+  const actions = [];
+  for (const [i, x] of (Array.isArray(a.actions) ? a.actions : []).entries()) {
+    if (!x || typeof x.run !== "function" || typeof x.label !== "string" || !x.label.trim()) {
+      console.error(`ranked-vote adapt: actions[${i}] needs a label and a run(app) function; skipped`, x);
+      continue;
+    }
+    actions.push({ id: String(x.id ?? `action-${i}`), label: x.label, title: typeof x.title === "string" ? x.title : "", run: x.run });
+  }
+  const labels = { ...DEFAULT_LABELS };
+  for (const [k, v] of Object.entries(a.labels && typeof a.labels === "object" ? a.labels : {})) {
+    if (k in labels && typeof v === "string" && v.trim()) /** @type {any} */ (labels)[k] = v;
+    else warn(`labels.${k} ignored`);
+  }
+  return {
+    labels,
+    layout: { main: column(layout.main, ["results", "add", "ranking"], "main"), side: column(layout.side, ["ready", "fields", "activity"], "side") },
+    panels,
+    showRoundTable: a.showRoundTable !== false,
+    showRoundStory: a.showRoundStory !== false,
+    actions,
+    onReady: typeof a.onReady === "function" ? a.onReady : null,
+  };
+}
+
 /**
  * @param {HTMLElement} root
  * @param {{
  *   me: {id: string, name: string},
  *   call: (method: string, args: any) => Promise<any>,
  *   onRetry: () => void,
+ *   adapt?: any,
  * }} deps
  */
-export function mountApp(root, { me, call, onRetry }) {
+export function mountApp(root, { me, call, onRetry, adapt: rawAdapt }) {
+  const adapt = normaliseAdapt(rawAdapt);
+  const L = adapt.labels;
   /** @type {View|null} */
   let view = null;
   /** @type {string[]|null} a local order not yet reflected in `view` */
@@ -105,6 +175,7 @@ export function mountApp(root, { me, call, onRetry }) {
 
   const live = h("div", { class: "sr-only", "aria-live": "polite", role: "status" });
   const toasts = h("div", { class: "toast-area", role: "alert" });
+  /** @type {Record<string, HTMLElement>} */
   const sections = {
     header: h("header", { class: "top" }),
     notices: h("div"),
@@ -115,11 +186,14 @@ export function mountApp(root, { me, call, onRetry }) {
     fields: h("div", { class: "card" }),
     activity: h("div", { class: "card" }),
   };
+  for (const name of Object.keys(adapt.panels)) sections[name] = h("div", { class: "card panel", dataset: { panel: name } });
+  // Extra commands from the adapt block: a toolbar under the header, in tab order.
+  const toolbar = adapt.actions.length ? h("div", { class: "actions", role: "toolbar", "aria-label": "Vote actions" }) : null;
   root.append(h("div", { class: "app" }, [
-    sections.header, sections.notices,
+    sections.header, toolbar, sections.notices,
     h("div", { class: "grid" }, [
-      h("section", { "aria-label": "Options" }, [sections.results, sections.add, sections.ranking]),
-      h("aside", { "aria-label": "Reveal, fields and activity" }, [sections.ready, sections.fields, sections.activity]),
+      h("section", { "aria-label": "Options" }, adapt.layout.main.map((n) => sections[n])),
+      h("aside", { "aria-label": "Reveal, fields and activity" }, adapt.layout.side.map((n) => sections[n])),
     ]),
   ]), live, toasts);
 
@@ -141,6 +215,7 @@ export function mountApp(root, { me, call, onRetry }) {
       return result;
     } catch (e) {
       toast(message(e));
+      try { /** @type {any} */ (e).shown = true; } catch { /* not an object */ }
       throw e;
     }
   }
@@ -169,10 +244,10 @@ export function mountApp(root, { me, call, onRetry }) {
 
   // --- Sections ------------------------------------------------------------------------------
 
-  /** @type {Set<keyof typeof sections>} */
+  /** @type {Set<string>} */
   const stale = new Set();
 
-  /** @param {keyof typeof sections} name @param {() => (Node|string|null|false)[]} build */
+  /** @param {string} name @param {() => (Node|string|null|false)[]} build */
   function paint(name, build) {
     const el = sections[name];
     if ((name === "ranking" && dragging) || (name === "header" && editingQuestion)) { stale.add(name); return; }
@@ -207,6 +282,19 @@ export function mountApp(root, { me, call, onRetry }) {
     paint("ready", readiness);
     paint("fields", fields);
     paint("activity", activity);
+    for (const [name, panel] of Object.entries(adapt.panels)) paint(name, () => customPanel(name, panel));
+  }
+
+  /** A panel from the adapt block: rebuilt on every change; a throw shows in the panel. @param {string} name @param {(app: any) => any} panel */
+  function customPanel(name, panel) {
+    if (!view) return [];
+    try {
+      const out = panel(app);
+      return (Array.isArray(out) ? out : [out]).filter((x) => x !== null && x !== undefined && x !== false);
+    } catch (e) {
+      console.error(`ranked-vote adapt: panels.${name} failed`, e);
+      return [h("p", { class: "muted small", text: `This panel failed: ${message(e)}` })];
+    }
   }
 
   function header() {
@@ -325,14 +413,14 @@ export function mountApp(root, { me, call, onRetry }) {
       return h("li", { text: `No majority of ${active}. ${outNames} ${round.eliminated.length > 1 ? "are" : "is"} out${tie}.${n ? ` ${n === 1 ? "1 vote moves" : `${n} votes move`} on: ${moves.join(", ")}.` : ""}` });
     }));
     const children = [
-      nested ? h("h3", { text: `Count ${r.n} · ${when(r.at)}` }) : h("h2", { text: current ? "Results" : `Last count (${when(r.at)}) · voting has reopened` }),
+      nested ? h("h3", { text: `Count ${r.n} · ${when(r.at)}` }) : h("h2", { text: current ? L.results : `Last count (${when(r.at)}) · voting has reopened` }),
       h("div", { class: "winner" }, [h("span", { class: "trophy", "aria-hidden": "true", text: "🏆" }), h("div", {}, [
         h("div", { class: "name", text: r.winner ? name(r.winner) : "No winner" }),
         h("div", { class: "muted small", text: `${r.ballots} ballot${r.ballots === 1 ? "" : "s"}: ${r.voters.join(", ")}. Ballots stay private.` }),
       ])]),
-      h("div", { class: "table-wrap" }, [table]),
-      story,
-    ];
+      adapt.showRoundTable ? h("div", { class: "table-wrap" }, [table]) : null,
+      adapt.showRoundStory ? story : null,
+    ].filter((c) => c !== null);
     if (current && !nested) {
       children.push(h("div", { class: "row", style: "margin-top:12px" }, [
         h("span", { class: "grow muted small", text: "Reopen to propose more options or change your order. Everyone clicks Reveal again for a new count." }),
@@ -367,7 +455,7 @@ export function mountApp(root, { me, call, onRetry }) {
         announce(`Added ${r.option.title}. It is at the bottom of everyone's list.`);
       } catch { /* toast shown */ }
     };
-    const title = /** @type {HTMLInputElement} */ (h("input", { class: "text grow", placeholder: "Propose an option", maxlength: v.limits.title, "aria-label": "New option", dataset: { key: "new:title", draft: "" } }));
+    const title = /** @type {HTMLInputElement} */ (h("input", { class: "text grow", placeholder: L.propose, maxlength: v.limits.title, "aria-label": "New option", dataset: { key: "new:title", draft: "" } }));
     title.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
     const inputs = v.fields.map((f) => {
       const input = /** @type {HTMLInputElement} */ (f.kind === "long"
@@ -401,7 +489,7 @@ export function mountApp(root, { me, call, onRetry }) {
     else if (!v.mine) hint = "Shuffled for you. Drag to rank, most preferred at the top; your first move saves your ballot.";
     else hint = "Drag to rank, most preferred at the top. Only you can see your order.";
     const head = h("div", { class: "list-head" }, [
-      h("h2", { text: `Your ranking (${order.length})` }),
+      h("h2", { text: `${L.ranking} (${order.length})` }),
       h("span", { class: "muted small", text: hint }),
     ]);
     if (!order.length) return [head, h("div", { class: "card muted", text: "No options yet. Propose the first one above." })];
@@ -438,7 +526,7 @@ export function mountApp(root, { me, call, onRetry }) {
         }),
         isNew ? h("span", { class: "badge", text: "New" }) : null,
         h("span", { class: "by", text: `proposed by ${o.by.id === me.id ? "you" : o.by.name}` }),
-        o.by.id === me.id && v.phase === "open" ? h("span", { class: "own-actions" }, [
+        (o.by.id === me.id || o.by.id === ASSISTANT_ID) && v.phase === "open" ? h("span", { class: "own-actions" }, [
           h("button", {
             class: "btn link small", type: "button", text: open ? "Done" : "Edit", dataset: { key: `e:${o.id}` },
             onclick: () => {
@@ -469,7 +557,7 @@ export function mountApp(root, { me, call, onRetry }) {
   function details(o) {
     const v = /** @type {View} */ (view);
     const open = v.phase === "open";
-    const mine = o.by.id === me.id;
+    const mine = o.by.id === me.id || o.by.id === ASSISTANT_ID;
     const box = h("div", { class: "details" });
     if (mine && open) {
       const t = /** @type {HTMLInputElement} */ (h("input", { class: "text", value: o.title, maxlength: v.limits.title, dataset: { key: `name:${o.id}` } }));
@@ -507,19 +595,19 @@ export function mountApp(root, { me, call, onRetry }) {
   function readiness() {
     if (!view) return [];
     const v = view;
-    const out = [h("h2", { text: "Reveal" })];
+    const out = [h("h2", { text: L.reveal })];
     const waiting = v.voters.filter((x) => !x.ready);
     if (v.phase === "closed") {
       out.push(h("p", { class: "muted small", text: "Everyone clicked Reveal and the count ran. Reopen voting from the results to vote again." }));
     } else if (v.mine?.ready) {
-      out.push(h("button", { class: "btn big", type: "button", text: "Undo Reveal", dataset: { key: "reveal" }, onclick: () => act("setReady", { ready: false }).catch(() => {}) }));
+      out.push(h("button", { class: "btn big", type: "button", text: L.undoReveal, dataset: { key: "reveal" }, onclick: () => act("setReady", { ready: false }).catch(() => {}) }));
       const more = Math.max(0, v.minVoters - v.voters.length);
       const parts = [waiting.length ? `on ${waiting.map((x) => x.name).join(", ")}` : "", more ? `for ${more} more voter${more === 1 ? "" : "s"}` : ""].filter(Boolean);
       out.push(h("p", { class: "small", text: parts.length ? `You're ready. Waiting ${parts.join(" and ")}.` : "You're ready." }));
     } else {
       const few = v.options.length < 2;
       out.push(h("button", {
-        class: "btn big primary", type: "button", text: "Reveal", disabled: few, dataset: { key: "reveal" },
+        class: "btn big primary", type: "button", text: L.reveal, disabled: few, dataset: { key: "reveal" },
         onclick: () => act("setReady", { ready: true, ranking: currentOrder() }).then(() => announce("You're ready. Your order is locked.")).catch(() => {}),
       }));
       out.push(h("p", { class: "muted small", text: few
@@ -585,7 +673,7 @@ export function mountApp(root, { me, call, onRetry }) {
     };
     label.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); add(); } });
     return [
-      h("h2", { text: "Fields" }),
+      h("h2", { text: L.fields }),
       h("p", { class: "muted small", text: "Every option has these. Open an option to fill them in." }),
       h("ul", { class: "fields-list" }, v.fields.map((f) => h("li", {}, [
         h("span", { class: "grow", text: f.label }),
@@ -599,7 +687,7 @@ export function mountApp(root, { me, call, onRetry }) {
   function activity() {
     if (!view) return [];
     return [
-      h("h2", { text: "Activity" }),
+      h("h2", { text: L.activity }),
       view.activity.length
         ? h("ol", { class: "activity" }, view.activity.map((a) => h("li", {}, [h("time", { text: when(a.at) }), `${a.by} ${a.text}`])))
         : h("p", { class: "muted small", text: "Nothing yet." }),
@@ -706,9 +794,76 @@ export function mountApp(root, { me, call, onRetry }) {
     window.addEventListener("pointercancel", end);
   }
 
+  // --- The `app` handle (README "Adapting this gadget") ----------------------------------------
+
+  /** @param {unknown} ref an option id or title */
+  const optionId = (ref) => {
+    const key = String(ref ?? "");
+    const fold = (/** @type {string} */ x) => x.toLocaleLowerCase("en").trim();
+    const o = view?.options.find((x) => /** @type {any} */ (x).id === key) ?? view?.options.find((x) => fold(/** @type {any} */ (x).title) === fold(key));
+    if (!o) throw new Error(`No option called “${key}”`);
+    return /** @type {any} */ (o).id;
+  };
+
+  const app = Object.freeze({
+    /** The signed-in account {id, name}; every write is attributed to it. */
+    me: Object.freeze({ ...me }),
+    /** The current view (question, phase, fields, options, voters, mine, results …), or null before it loads. */
+    get view() { return view; },
+    /** Status and latest count by title, from the server's getResult(). */
+    getResult: () => call("getResult", undefined),
+    /** Markdown of options, fields, voters and counts (no ballots). */
+    getSummaryMarkdown: () => call("getSummaryMarkdown", undefined),
+    /** @param {{question?: string, fields?: any[], options?: any[], minVoters?: number}} args */
+    setUpVote: (args) => act("setUpVote", args),
+    /** @param {(string|{title: string, description?: string, values?: Record<string, string>})[]} options */
+    proposeOptions: (options) => act("proposeOptions", { options }),
+    /** @param {string} title @param {Record<string, string>} [values] keyed by field label or id */
+    proposeOption: (title, values) => act("proposeOptions", { options: [{ title, values }] }),
+    /** @param {string} option title or id @param {Record<string, string>} values keyed by field label or id */
+    fillInOption: (option, values) => act("fillInOption", { option, values }),
+    /** @param {string} question */
+    setQuestion: (question) => act("setQuestion", { question }),
+    /** @param {string} label @param {"text"|"long"|"url"} [kind] */
+    addField: (label, kind = "text") => act("addField", { label, kind }),
+    /** @param {number} minVoters */
+    setMinVoters: (minVoters) => act("setMinVoters", { minVoters }),
+    /** Moves an option (id or title) to a 1-based position in this viewer's own ranking. @param {string} option @param {number} position */
+    moveOption: (option, position) => {
+      const id = optionId(option);
+      const order = currentOrder().filter((x) => x !== id);
+      order.splice(Math.max(0, Math.min(order.length, Math.floor(position) - 1)), 0, id);
+      return saveOrder(order);
+    },
+    /** This viewer's own Reveal, with their current order. */
+    reveal: () => act("setReady", { ready: true, ranking: currentOrder() }),
+    undoReveal: () => act("setReady", { ready: false }),
+    reopen: () => act("reopen"),
+    /** Shows a short message at the bottom of the vote. @param {string} text */
+    toast: (text) => toast(String(text)),
+    /** Redraws every section, e.g. after a panel's own data changed. */
+    render: () => render(),
+    /** Any Gadget method, with `by` added. Rejects with the rules' message on {error}. @param {string} method @param {any} [args] */
+    call: (method, args = {}) => act(method, args),
+  });
+
+  for (const a of adapt.actions) {
+    /** @type {HTMLElement} */ (toolbar).append(h("button", {
+      class: "btn", type: "button", text: a.label, title: a.title || undefined, dataset: { action: a.id },
+      onclick: async () => {
+        try { await a.run(app); } catch (e) {
+          console.error(`ranked-vote action ${a.id} failed`, e);
+          if (!(/** @type {any} */ (e)?.shown)) toast(message(e));
+        }
+      },
+    }));
+  }
+
   render();
+  let ready = false;
 
   return {
+    app,
     /** @param {View} next */
     setView(next) {
       if (view && next.revision <= view.revision) return;
@@ -719,6 +874,10 @@ export function mountApp(root, { me, call, onRetry }) {
         announce(`Everyone is ready. The winner is ${r.winner ? r.options[r.winner] : "nobody"}.`);
       }
       render();
+      if (!ready) {
+        ready = true;
+        if (adapt.onReady) Promise.resolve().then(() => adapt.onReady?.(app)).catch((e) => console.error("ranked-vote adapt: onReady failed", e));
+      }
     },
     /** @param {"connecting"|"live"|"lost"} state */
     setConnection(state) {

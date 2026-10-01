@@ -33,3 +33,15 @@ The `test` task run by `pnpm check` rebuilds `dist/` and fails when `formats/ran
 - **Everyone who has ranked must Reveal.** A voter is anyone with a saved ballot. The count also waits for a minimum number of voters, 2 by default and adjustable in the UI, so that the first two people to rank cannot end the vote early. Set it to the group's size.
 - **Late options** go to the bottom of every ballot, marked new, and clear every Reveal.
 - **Storage.** `meta`, `ballots`, one `o:<id>` per option and one `r:<n>` per count, so no value nears the 128 KiB limit. The limits are 100 options, 10 fields, 60 voters and 20 stored counts.
+
+## Evals
+
+`src/evals.mjs` holds the requests an agent must be able to handle with this gadget (see
+`.agents/skills/author-adaptable-blueprints`). It stays in this package: shipped in the gadget,
+an agent reads it and copies the answers. Run `node scripts/blueprint-evals/run.mjs ranked-vote`
+(`--reference` needs no model).
+
+| Date | Model | Result |
+| --- | --- | --- |
+| 2026-10-01 | reference | 3/3 |
+| 2026-10-01 | deepseek/deepseek-v4-flash, 3 runs per eval, evals hidden from the agent | 9/9 |

@@ -20,12 +20,22 @@
 //
 // Every write bumps `revision` and returns the state keys it changed; the server persists them in
 // one transaction and pushes fresh views to subscribers.
+//
+// The assistant: an agent calling from the Workshop has no signed-in account, so its writes are
+// attributed to ASSISTANT. Options it proposes belong to everyone (anyone may rename or withdraw
+// them), and it never ranks or clicks Reveal: a ballot is a person's own.
+//
+// References: wherever a write takes an option or a field, it accepts the id or, for agents, the
+// option's title or the field's label (case-insensitive).
 
 import { countInstantRunoff } from "../shared/count.js";
 
 export const SCHEMA_VERSION = 1;
 export const DESCRIPTION_FIELD = "description";
 export const FIELD_KINDS = /** @type {const} */ (["text", "long", "url"]);
+
+/** Who agent writes are attributed to. */
+export const ASSISTANT = Object.freeze({ id: "assistant", name: "Assistant" });
 
 export const LIMITS = {
   options: 100,
@@ -179,6 +189,46 @@ export class Vote {
     return lines.join("\n");
   }
 
+  /**
+   * The vote's state and latest count in plain terms (titles, names, ISO times) for agents. Never
+   * includes ballots.
+   */
+  resultSummary() {
+    const { meta, ballots } = this.s;
+    const voters = Object.entries(ballots)
+      .map(([id, b]) => ({ id, name: b.name, ready: b.ready }))
+      .toSorted((a, b) => a.name.localeCompare(b.name));
+    const latest = this.s.results.at(-1);
+    const title = (/** @type {Result} */ r, /** @type {string} */ id) => r.options[id] ?? "(withdrawn)";
+    return {
+      question: meta.question,
+      phase: meta.phase,
+      minVoters: meta.minVoters,
+      options: meta.order.map((id) => {
+        const o = /** @type {Option} */ (this.s.options.get(id));
+        return { id, title: o.title, proposedBy: o.by.name };
+      }),
+      voters,
+      waitingOn: meta.phase === "open" ? voters.filter((v) => !v.ready).map((v) => v.name) : [],
+      votersNeeded: meta.phase === "open" ? Math.max(0, meta.minVoters - voters.length) : 0,
+      latestCount: latest ? {
+        count: latest.n,
+        at: new Date(latest.at).toISOString(),
+        current: meta.phase === "closed",
+        winner: latest.winner ? title(latest, latest.winner) : null,
+        ballots: latest.ballots,
+        voters: [...latest.voters],
+        rounds: latest.rounds.map((round, i) => ({
+          round: i + 1,
+          votes: Object.fromEntries(Object.entries(round.counts).toSorted((a, b) => b[1] - a[1]).map(([id, n]) => [title(latest, id), n])),
+          eliminated: round.eliminated.map((id) => title(latest, id)),
+          ...(round.tieBreak ? { tieBreak: round.tieBreak } : {}),
+        })),
+      } : null,
+      earlierCounts: Math.max(0, this.s.results.length - 1),
+    };
+  }
+
   // --- Writes -------------------------------------------------------------------------------
 
   #begin() { this.dirty = new Set(); }
@@ -199,11 +249,26 @@ export class Vote {
     if (this.s.meta.phase !== "open") throw new VoteError("The results are showing; reopen voting first");
   }
 
-  /** @param {string} id */
-  #option(id) {
-    const o = this.s.options.get(typeof id === "string" ? id : "");
-    if (!o) throw new VoteError("No such option");
+  /** An option by id or (folded) title. @param {unknown} ref */
+  #option(ref) {
+    const key = typeof ref === "string" ? ref : "";
+    const o = this.s.options.get(key) ?? [...this.s.options.values()].find((x) => fold(x.title) === fold(key));
+    if (!o) throw new VoteError(key ? `No option called “${key}”` : "No such option");
     return o;
+  }
+
+  /** A field by id or (folded) label, from `fields` (default: the vote's). @param {unknown} ref @param {Field[]} [fields] */
+  #field(ref, fields = this.s.meta.fields) {
+    const key = typeof ref === "string" ? ref : "";
+    return fields.find((f) => f.id === key) ?? fields.find((f) => fold(f.label) === fold(key));
+  }
+
+  /** Whether `who` may rename or withdraw `o`: its proposer, or anyone for the assistant's. @param {Option} o @param {Actor} who */
+  #owns(o, who) { return o.by.id === who.id || o.by.id === ASSISTANT.id; }
+
+  /** @param {Actor} who */
+  #refuseAssistantBallot(who) {
+    if (who.id === ASSISTANT.id) throw new VoteError("A ballot is a person's own: the assistant cannot rank options or click Reveal");
   }
 
   /** @param {string} exceptId clears readiness of every ballot except this voter's; returns how many */
@@ -242,29 +307,43 @@ export class Vote {
     return { field, revision: this.s.meta.revision, keys: [...this.dirty] };
   }
 
-  /** @param {{by: Actor, fieldId: string}} args */
-  removeField({ by, fieldId }) {
+  /** @param {{by: Actor, fieldId?: string, field?: string}} args  fieldId: an id or label */
+  removeField({ by, fieldId, field: ref }) {
     this.#begin();
     const who = actor(by);
     const { fields } = this.s.meta;
-    const i = fields.findIndex((f) => f.id === fieldId);
+    const found = this.#field(fieldId ?? ref);
+    const i = found ? fields.indexOf(found) : -1;
     if (i < 0) throw new VoteError("No such field");
-    if (fieldId === DESCRIPTION_FIELD) throw new VoteError("The description field cannot be removed");
+    if (found?.id === DESCRIPTION_FIELD) throw new VoteError("The description field cannot be removed");
     const [field] = fields.splice(i, 1);
     for (const o of this.s.options.values()) {
-      if (fieldId in o.values) { delete o.values[fieldId]; this.dirty.add(`o:${o.id}`); }
+      if (field.id in o.values) { delete o.values[field.id]; this.dirty.add(`o:${o.id}`); }
     }
     return this.#commit(who, `removed the field “${field.label}”`);
   }
 
-  /** @param {Record<string, unknown>} values */
-  #cleanValues(values) {
+  /**
+   * Field values keyed by field id or label. An unknown key is ignored, or refused when `strict`
+   * (agent calls), so a misspelt label is not silently dropped.
+   * @param {unknown} values @param {boolean} [strict] @param {Field[]} [fields]
+   */
+  #cleanValues(values, strict = false, fields = this.s.meta.fields) {
     /** @type {Record<string, string>} */
     const out = {};
-    if (!values || typeof values !== "object") return out;
-    for (const f of this.s.meta.fields) {
-      if (!(f.id in values)) continue;
-      out[f.id] = f.kind === "long" ? cleanText(values[f.id], LIMITS.value) : cleanLine(values[f.id], LIMITS.value);
+    if (values === undefined || values === null) return out;
+    if (typeof values !== "object" || Array.isArray(values)) {
+      if (strict) throw new VoteError("values must be an object of {field label or id: text}");
+      return out;
+    }
+    for (const [key, value] of Object.entries(values)) {
+      const f = this.#field(key, fields);
+      if (!f) {
+        if (strict) throw new VoteError(`No field called “${key}”. Fields: ${fields.map((x) => x.label).join(", ")}`);
+        continue;
+      }
+      if (strict && typeof value !== "string") throw new VoteError(`The value for “${f.label}” must be text`);
+      out[f.id] = f.kind === "long" ? cleanText(value, LIMITS.value) : cleanLine(value, LIMITS.value);
     }
     return out;
   }
@@ -306,21 +385,124 @@ export class Vote {
   }
 
   /**
-   * Edits an option's fields (anyone) or its name (only whoever proposed it). A new name counts as
-   * a new suggestion for everyone else: it moves to the bottom of their ballot, marked unseen, and
-   * every Reveal resets. The proposer's own ballot keeps its place.
-   * @param {{by: Actor, optionId: string, title?: string, values?: Record<string, unknown>}} args
+   * Sets up or extends a vote in one write: an optional question, fields (an existing label is
+   * reused), options (a title already on the list is skipped and reported) and a minimum number of
+   * voters. Everything is validated before anything changes. Option values may be keyed by field
+   * label or id, including fields added in the same call; `description` fills the Description.
+   * @param {{by: Actor, question?: string, fields?: unknown[], options?: unknown[], minVoters?: number}} args
    */
-  updateOption({ by, optionId, title, values }) {
+  setUp({ by, question, fields = [], options = [], minVoters }) {
+    this.#begin();
+    const who = actor(by);
+    const { meta } = this.s;
+    if (!Array.isArray(fields)) throw new VoteError("fields must be a list of {label, kind}");
+    if (!Array.isArray(options)) throw new VoteError("options must be a list of titles or {title, description?, values?}");
+    if (options.length || minVoters !== undefined) this.#requireOpen();
+
+    let q;
+    if (question !== undefined) {
+      q = cleanLine(question, LIMITS.question);
+      if (!q) throw new VoteError("The question cannot be empty");
+    }
+
+    /** @type {Field[]} planned field list: existing, then new ones with placeholder ids */
+    const planned = [...meta.fields];
+    /** @type {{label: string, kind: Field["kind"]}[]} */
+    const newFields = [];
+    for (const raw of fields) {
+      const f = /** @type {any} */ (typeof raw === "string" ? { label: raw } : raw);
+      const label = cleanLine(f?.label, LIMITS.fieldLabel);
+      if (!label) throw new VoteError("Every field needs a label");
+      const kind = f.kind ?? "text";
+      if (!FIELD_KINDS.includes(kind)) throw new VoteError(`Field “${label}”: kind must be one of ${FIELD_KINDS.join(", ")}`);
+      if (planned.some((x) => fold(x.label) === fold(label))) continue;
+      newFields.push({ label, kind });
+      planned.push({ id: `new:${newFields.length}`, label, kind });
+    }
+    if (planned.length > LIMITS.fields) throw new VoteError(`At most ${LIMITS.fields} fields`);
+
+    /** @type {{title: string, values: Record<string, string>}[]} */
+    const toAdd = [];
+    const skipped = [];
+    for (const raw of options) {
+      const o = /** @type {any} */ (typeof raw === "string" ? { title: raw } : raw);
+      if (!o || typeof o !== "object") throw new VoteError("Each option is a title or {title, description?, values?}");
+      const t = cleanLine(o.title, LIMITS.title);
+      if (!t) throw new VoteError("Every option needs a title");
+      if (toAdd.some((x) => fold(x.title) === fold(t))) throw new VoteError(`“${t}” is listed twice`);
+      if ([...this.s.options.values()].some((x) => fold(x.title) === fold(t))) { skipped.push(t); continue; }
+      const values = this.#cleanValues(o.values, true, planned);
+      if (o.description !== undefined) values[DESCRIPTION_FIELD] = cleanText(o.description, LIMITS.value);
+      toAdd.push({ title: t, values });
+    }
+    if (this.s.options.size + toAdd.length > LIMITS.options) throw new VoteError(`At most ${LIMITS.options} options`);
+
+    let min;
+    if (minVoters !== undefined) {
+      min = Math.floor(Number(minVoters));
+      if (!Number.isFinite(min) || min < 1 || min > LIMITS.voters) throw new VoteError(`Choose between 1 and ${LIMITS.voters} voters`);
+    }
+
+    // Validated: apply.
+    const parts = [];
+    if (q !== undefined && q !== meta.question) { meta.question = q; parts.push(`set the question to “${q}”`); }
+    /** @type {Record<string, string>} */
+    const idFor = {};
+    for (const [i, f] of newFields.entries()) {
+      const field = { id: `f${meta.nextId++}`, label: f.label, kind: f.kind };
+      meta.fields.push(field);
+      idFor[`new:${i + 1}`] = field.id;
+    }
+    if (newFields.length) parts.push(`added the field${newFields.length === 1 ? "" : "s"} ${newFields.map((f) => `“${f.label}”`).join(", ")}`);
+    const added = [];
+    for (const o of toAdd) {
+      const id = `o${meta.nextId++}`;
+      const values = Object.fromEntries(Object.entries(o.values).filter(([, v]) => v).map(([k, v]) => [idFor[k] ?? k, v]));
+      this.s.options.set(id, { id, title: o.title, values, by: who, at: this.now() });
+      meta.order.push(id);
+      this.dirty.add(`o:${id}`);
+      for (const [voterId, b] of Object.entries(this.s.ballots)) {
+        b.ranking.push(id);
+        if (voterId !== who.id) b.unseen.push(id);
+        this.dirty.add("ballots");
+      }
+      added.push({ id, title: o.title });
+    }
+    if (added.length) {
+      const reset = this.#unready();
+      parts.push(`proposed ${added.map((o) => `“${o.title}”`).join(", ")}${reset ? `; ${reset} reveal${reset === 1 ? "" : "s"} reset` : ""}`);
+    }
+    let counted = false;
+    if (min !== undefined && min !== meta.minVoters) {
+      meta.minVoters = min;
+      parts.push(`set the minimum to ${min} voter${min === 1 ? "" : "s"}`);
+      counted = this.#maybeCount();
+      if (counted) parts.push("everyone is ready, so the count ran");
+    }
+    const out = { question: meta.question, fields: structuredClone(meta.fields), added, skipped, minVoters: meta.minVoters, counted };
+    if (!parts.length) return { ...out, revision: meta.revision, keys: [] };
+    const { revision, keys } = this.#commit(who, parts.join("; "));
+    return { ...out, revision, keys };
+  }
+
+  /**
+   * Edits an option's fields (anyone) or its name (only whoever proposed it, or anyone for the
+   * assistant's). A new name counts as a new suggestion for everyone else: it moves to the bottom
+   * of their ballot, marked unseen, and every Reveal resets. The proposer's own ballot keeps its
+   * place. `strict` refuses unknown field keys instead of ignoring them.
+   * @param {{by: Actor, optionId?: string, option?: string, title?: string, values?: Record<string, unknown>, strict?: boolean}} args
+   */
+  updateOption({ by, optionId, option: ref, title, values, strict = false }) {
     this.#begin();
     const who = actor(by);
     this.#requireOpen();
-    const o = this.#option(optionId);
+    const o = this.#option(optionId ?? ref);
+    const clean = values !== undefined ? this.#cleanValues(values, strict) : undefined;
     const parts = [];
     if (title !== undefined) {
       const t = cleanLine(title, LIMITS.title);
       if (t !== o.title) {
-        if (o.by.id !== who.id) throw new VoteError(`Only ${o.by.name} can rename “${o.title}”`);
+        if (!this.#owns(o, who)) throw new VoteError(`Only ${o.by.name} can rename “${o.title}”`);
         this.#checkTitle(t, o.id);
         parts.push(`renamed “${o.title}” to “${t}”`);
         o.title = t;
@@ -334,8 +516,7 @@ export class Vote {
         if (reset) parts.push(`${reset} reveal${reset === 1 ? "" : "s"} reset`);
       }
     }
-    if (values !== undefined) {
-      const clean = this.#cleanValues(values);
+    if (clean !== undefined) {
       const changed = Object.keys(clean).filter((k) => (o.values[k] ?? "") !== clean[k]);
       for (const k of changed) {
         if (clean[k]) o.values[k] = clean[k];
@@ -353,13 +534,13 @@ export class Vote {
     return this.#commit(who, parts.join("; "));
   }
 
-  /** Only whoever proposed an option may withdraw it. @param {{by: Actor, optionId: string}} args */
-  withdrawOption({ by, optionId }) {
+  /** Only whoever proposed an option (anyone, for the assistant's) may withdraw it. @param {{by: Actor, optionId?: string, option?: string}} args */
+  withdrawOption({ by, optionId, option: ref }) {
     this.#begin();
     const who = actor(by);
     this.#requireOpen();
-    const o = this.#option(optionId);
-    if (o.by.id !== who.id) throw new VoteError(`Only ${o.by.name} can withdraw “${o.title}”`);
+    const o = this.#option(optionId ?? ref);
+    if (!this.#owns(o, who)) throw new VoteError(`Only ${o.by.name} can withdraw “${o.title}”`);
     this.s.options.delete(o.id);
     this.s.meta.order = this.s.meta.order.filter((id) => id !== o.id);
     for (const b of Object.values(this.s.ballots)) {
@@ -389,6 +570,7 @@ export class Vote {
   saveRanking({ by, ranking }) {
     this.#begin();
     const who = actor(by);
+    this.#refuseAssistantBallot(who);
     this.#requireOpen();
     const ids = this.#checkRanking(ranking);
     const existing = this.s.ballots[who.id];
@@ -408,6 +590,7 @@ export class Vote {
   setReady({ by, ready, ranking }) {
     this.#begin();
     const who = actor(by);
+    this.#refuseAssistantBallot(who);
     this.#requireOpen();
     let b = this.s.ballots[who.id];
     if (ready) {
@@ -481,14 +664,16 @@ export class Vote {
   /**
    * Removes a ballot. Anyone may remove their own; anyone may remove someone else's that is not
    * ready (for a colleague who is away and holding up the reveal). Logged by name.
-   * @param {{by: Actor, voterId: string}} args
+   * @param {{by: Actor, voterId?: string, voter?: string}} args  voterId: an account id or a voter's name
    */
-  removeBallot({ by, voterId }) {
+  removeBallot({ by, voterId: ref, voter }) {
     this.#begin();
     const who = actor(by);
     this.#requireOpen();
-    const b = this.s.ballots[typeof voterId === "string" ? voterId : ""];
-    if (!b) throw new VoteError("No such ballot");
+    const key = typeof (ref ?? voter) === "string" ? /** @type {string} */ (ref ?? voter) : "";
+    const voterId = key in this.s.ballots ? key : Object.keys(this.s.ballots).find((id) => fold(this.s.ballots[id].name) === fold(key)) ?? "";
+    const b = this.s.ballots[voterId];
+    if (!b) throw new VoteError(key ? `Nobody called “${key}” has a ballot` : "No such ballot");
     const own = voterId === who.id;
     if (!own && b.ready) throw new VoteError(`${b.name} is ready; only they can withdraw their ballot now`);
     delete this.s.ballots[voterId];
