@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, inject, it, vi } from "vitest";
 
 import { createRecordsServer, fixedWindowLimiter, type RecordsServer } from "../src/index.js";
 import { startContractStack, type ContractStack } from "./support/world.js";
@@ -157,10 +157,18 @@ describe("server configuration", () => {
   });
 
   it("the fixed window resets", () => {
-    const limit = fixedWindowLimiter({ limit: 1, windowMs: 1 });
-    expect(limit("a")).toBe(true);
-    expect(limit("a")).toBe(false);
-    expect(limit("b")).toBe(true);
+    const clock = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    try {
+      const limit = fixedWindowLimiter({ limit: 1, windowMs: 1 });
+      expect(limit("a")).toBe(true);
+      expect(limit("a")).toBe(false);
+      expect(limit("b")).toBe(true);
+      clock.mockReturnValue(1_001);
+      expect(limit("a")).toBe(true);
+      expect(limit("a")).toBe(false);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("adds the Worker's security headers and serves the OpenAPI document on the public origin", async () => {
