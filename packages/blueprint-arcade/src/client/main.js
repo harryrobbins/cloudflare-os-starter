@@ -1,3 +1,4 @@
+import { mountAdapt } from "../../../../scripts/blueprint-adapt/client.mjs";
 // @ts-check
 // Client entry point. Runs inside the gadget's sandboxed iframe, which has no HTML of its own.
 // Provided by the platform: `gadget` (RPC stub to the Gadget Durable Object), `gadgetViewer` (the
@@ -22,6 +23,17 @@ const platformGadget = typeof gadget !== "undefined" ? gadget : undefined;
 const platformRpcTarget = typeof RpcTarget !== "undefined" ? RpcTarget : Object;
 // @ts-ignore provided by the platform prefix: {id, displayName, role} of the signed-in user
 const platformViewer = typeof gadgetViewer !== "undefined" ? gadgetViewer : undefined;
+
+// ===== Adapt this gadget =====================================================
+// README.md ("Adapting this gadget") documents each setting and the app handle.
+const adapt = {
+  title: 'Arcade',
+  actionLabel: "Extra actions",
+  styles: "",
+  actions: [],
+  onReady(app) {},
+};
+// ============================================================================
 
 const WINDOW_NAME_PREFIX = "arcade:";
 const MAX_AUTO_RELOADS = 3;
@@ -108,6 +120,7 @@ if (!platformGadget) {
     app.setView(view);
     app.setConnection("live");
     failures = 0;
+    if (!adaptMounted) { adaptMounted = true; await mountAdapt(adapt, { gadget: platformGadget, methods: ["getView", "getTemplates", "getGame", "createGame", "saveGame", "updateGame", "createTune", "getTune", "setTitle"], refresh: async () => app.setView(await g.getView(me.id)) }); }
   }
 
   function noteFailure() {
@@ -133,6 +146,7 @@ if (!platformGadget) {
     }
   }
 
+  let adaptMounted = false;
   subscribe().catch(() => { noteFailure(); setTimeout(ping, 2000); });
   setInterval(ping, PING_MS);
   // A write whose broadcast has not arrived within a second fetches the view directly.

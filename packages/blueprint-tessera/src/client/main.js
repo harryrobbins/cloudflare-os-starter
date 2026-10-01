@@ -1,3 +1,5 @@
+import { mountAdapt } from "../../../../scripts/blueprint-adapt/client.mjs";
+import { layoutWorkerUrl } from "./worker-url.js";
 // Tessera Mosaic client. Runs as one data: module script in the gadget's sandboxed, opaque-origin
 // iframe: no storage, no fetch (connect-src 'none'), no blob:, no form submission, no dialogs.
 // The platform prepends a prefix that declares `gadget` (a capnweb stub to src/server/index.js)
@@ -17,6 +19,17 @@ import {
 
 /* global gadget, WORKER_DATA_URL */
 const rpc = typeof gadget !== 'undefined' ? gadget : null
+
+// ===== Adapt this gadget =====================================================
+// README.md ("Adapting this gadget") documents each setting and the app handle.
+const adapt = {
+  title: 'Tessera',
+  actionLabel: "Extra actions",
+  styles: "",
+  actions: [],
+  onReady(app) {},
+};
+// ============================================================================
 
 /** The five procedural families plus Titanic; birds and pixels need megabytes of images. */
 const FAMILIES = ['tax-cases', 'tax-returns', 'payments', 'invoices', 'products', 'titanic']
@@ -189,7 +202,7 @@ const handle = mountTessera(root, {
   fetchAsset: path => path === 'data/titanic.csv'
     ? Promise.resolve(new Response(TITANIC_CSV, { headers: { 'content-type': 'text/csv' } }))
     : Promise.reject(new Error(`No bundled asset ${path}.`)),
-  layoutWorker: () => new Worker(WORKER_DATA_URL, { type: 'module' }),
+  layoutWorker: () => new Worker(layoutWorkerUrl, { type: 'module' }),
   initialDataset,
   initialView,
   onViewChange: (view, datasetKey) => saveSoon(stateFor(datasetKey, view, maxRowsFor)),
@@ -372,3 +385,5 @@ globalThis.tesseraGadget = {
   currentKey: () => handle.currentDatasetKey(),
   count: () => handle.app.dataset?.n ?? 0,
 }
+
+await mountAdapt(adapt, { gadget: rpc, methods: ["getState", "setState", "listSources", "loadTable"], ready });

@@ -1,6 +1,111 @@
 import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';
 
 export class Gadget extends DurableObject {
+  /** Bounded, side-effect-free contract for describeBinding. */
+  describeGadget() {
+    return {
+      "gadget": "mermaid2",
+      "contract": 1,
+      "summary": "Use the listed domain methods first. Connector calls require the named binding. Omitted author on supported writes is Assistant. Read README.md for the remaining low-level API.",
+      "operations": [
+        {
+          "name": "getDocument",
+          "description": "Read saved source, options, and revision.",
+          "input": {},
+          "example": "await env.Blueprint.getDocument();",
+          "returns": "{revision, language?, layout?, theme?, drafts?}"
+        },
+        {
+          "name": "updateDiagram",
+          "description": "Save source using the current revision; preserves the other language draft. Validates the entire document before writing. Does not render.",
+          "input": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string"
+              },
+              "language": {
+                "enum": [
+                  "mermaid",
+                  "d2"
+                ]
+              },
+              "layout": {
+                "enum": [
+                  "tala",
+                  "dagre",
+                  "elk"
+                ]
+              },
+              "theme": {
+                "type": "string"
+              },
+              "sketch": {
+                "type": "boolean"
+              },
+              "live": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "source"
+            ]
+          },
+          "example": "await env.Blueprint.updateDiagram({ source: \"flowchart LR\\nA[Idea] --> B[Draft]\", language: \"mermaid\", layout: \"dagre\" });",
+          "returns": "Saved document"
+        },
+        {
+          "name": "renderDiagram",
+          "description": "Render via the MERMAID2 connector; requires its binding. Reads no saved revisions.",
+          "input": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string"
+              },
+              "language": {
+                "type": "string"
+              },
+              "layout": {
+                "type": "string"
+              },
+              "theme": {
+                "type": "integer"
+              },
+              "sketch": {
+                "type": "boolean"
+              },
+              "format": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source",
+              "language"
+            ]
+          },
+          "example": "await env.Blueprint.renderDiagram({ source: \"a -> b\", language: \"d2\", layout: \"dagre\", theme: 104, sketch: false, format: \"svg\" });",
+          "returns": "{data: Uint8Array, contentType, nodes, edges, d2Source}"
+        }
+      ],
+      "adapt": {
+        "client": "client.js: adapt block (title, actionLabel, styles, actions, onReady)",
+        "server": "server.js: class Gadget",
+        "readme": "README.md#adapting-this-gadget"
+      }
+    };
+  }
+
+  /** Saves source with current revisions; preserves the other language's draft. */
+  updateDiagram(input) {
+    const current = this.getDocument();
+    const document = { language: "mermaid", layout: "tala", theme: "104", sketch: false, live: true, ...current,
+      ...input, drafts: { mermaid: "", d2: "", ...current.drafts } };
+    if (typeof input?.source !== "string") throw new Error("source must be text");
+    document.drafts[document.language] = input.source;
+    return this.setDocument({ expectedRevision: current.revision, document });
+  }
+
   getDocument() { return this.ctx.storage.kv.get('document') ?? { revision: 0 }; }
   setDocument(request) {
     const current = this.getDocument();

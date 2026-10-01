@@ -1,12 +1,17 @@
-import { build } from 'esbuild';
-import { copyFile, mkdir, readFile } from 'node:fs/promises';
+import * as esbuild from "esbuild";
+import { buildClientEntry, buildServerEntry } from "../../../scripts/gadget-entry.mjs";
+import { copyFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
 await mkdir(dist, { recursive: true });
-await build({ entryPoints: [join(root, 'src/server/index.js')], outfile: join(dist, 'server.js'), bundle: true, format: 'esm', target: 'es2022', platform: 'neutral', external: ['cloudflare:workers'] });
-await build({ entryPoints: [join(root, 'src/client/main.js')], outfile: join(dist, 'client.js'), bundle: true, format: 'esm', target: 'es2022', minify: true, define: { MERMAID2_CSS: JSON.stringify(await readFile(join(root, 'src/client/style.css'), 'utf8')) } });
+await buildServerEntry({ esbuild, entry: join(root, "src/server/index.js"), outDir: dist,
+    banner: "// MermaiD2 gadget server: readable RPC surface. Source: packages/blueprint-mermaid2/src/server.",
+    library: { absWorkingDir: root } });
+await buildClientEntry({ esbuild, entry: join(root, "src/client/main.js"), outDir: dist,
+    banner: "// MermaiD2 gadget client: readable view and adapt block. Source: packages/blueprint-mermaid2/src/client.",
+    library: { absWorkingDir: root, minify: true, loader: { ".css": "text" } } });
 await copyFile(join(root, 'src/README.md'), join(dist, 'README.md'));
 await copyFile(join(root, 'LICENSE.txt'), join(dist, 'LICENSE.txt'));
 await mkdir(join(dist, 'skills'), { recursive: true });

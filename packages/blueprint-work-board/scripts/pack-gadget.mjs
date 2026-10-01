@@ -20,7 +20,7 @@ import { BLUEPRINT_BINDINGS } from "../src/shared/records.js";
 
 const pkg = join(dirname(fileURLToPath(import.meta.url)), "..");
 const STEM = "work-board";
-export const FILES = ["server.js", "client.js", "README.md", "SKILL.md", "service-requirement.json"];
+export const FILES = ["client.lib.js", "server.lib.js", "server.js", "client.js", "README.md", "SKILL.md", "service-requirement.json"];
 const FIXED_DATE = "2026-09-25T00:00:00.000Z";
 const lockPath = join(pkg, "gadget.lock.json");
 

@@ -1,3 +1,5 @@
+import mermaidCss from "./style.css";
+import { mountAdapt } from "../../../../scripts/blueprint-adapt/client.mjs";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { history, historyKeymap, defaultKeymap, indentWithTab } from '@codemirror/commands';
@@ -7,7 +9,18 @@ import { renderDiagram } from './engine.js';
 import { examples, exampleOptions } from './examples.js';
 import { exportDiagram } from './export.js';
 import { loadDraft, saveDraft } from './persistence.js';
-const style = document.createElement('style'); style.textContent = MERMAID2_CSS; document.head.append(style);
+// ===== Adapt this gadget =====================================================
+// README.md ("Adapting this gadget") documents each setting and the app handle.
+const adapt = {
+  title: 'MermaiD2',
+  actionLabel: "Extra actions",
+  styles: "",
+  actions: [],
+  onReady(app) {},
+};
+// ============================================================================
+
+const style = document.createElement('style'); style.textContent = mermaidCss; document.head.append(style);
 const mount = document.createElement('div'); mount.id = 'app'; document.body.append(mount);
 
 const icons = {
@@ -371,3 +384,5 @@ updateLanguageButtons();
 updateSourceInfo();
 save();
 requestRender();
+
+await mountAdapt(adapt, { gadget: gadget, methods: ["getDocument", "updateDiagram", "renderDiagram", "exportDiagram"] });

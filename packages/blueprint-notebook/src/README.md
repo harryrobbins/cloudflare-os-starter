@@ -20,3 +20,45 @@ The agent may edit the document through these gadget methods. Do not edit applic
 Execution requires a fresh owner-authenticated UI permit for the exact source and generation. Agents and collaborators cannot mint those permits. Ask the owner to run the cell using the notebook UI. A code edit after submission leaves the output labelled as coming from an older revision.
 
 Limits: 100 cells; 16,000 source characters per cell; 100,000 UTF-8 JSON bytes per cell; 2 MB total notebook storage. Imported active HTML/JavaScript is never executed. Unsupported bounded MIME data/metadata are preserved in downloads, not displayed.
+
+## Adapting this gadget
+
+Each gadget is an editable copy. Changes to a copy do not flow back to this source package.
+
+- `client.js`: readable view entry with the `adapt` block near the top.
+- `client.lib.js`: prebuilt UI, sync and rendering library, loaded before the entry.
+- `server.js`: readable `Gadget` class and its RPC surface.
+- `server.lib.js`: prebuilt core, validation and storage helpers.
+- `README.md`: this guide. Never edit `*.lib.js`; rebuild source to change stable library code.
+
+For content work, call `describeGadget()` through `describeBinding` and use the described
+operations without editing files. Common operations: `getNotebook`, `appendCell`, `exportNotebook`, `getRuntimeStatus`.
+
+The `adapt` fields are:
+
+- `title`: browser document title; it does not rename stored content.
+- `actionLabel`: accessible name of the extra-actions region.
+- `styles`: extra CSS applied after the built-in styles.
+- `actions`: `{ id, label, title?, run(app) }` commands shown at the bottom right. Buttons
+  work with keyboard and touch; invalid or duplicate actions are ignored with a console warning.
+- `onReady(app)`: called once after the initial view has loaded (or shown its connection state).
+  Async actions and callbacks are supported; failures appear as a short status message.
+
+`app` is a frozen handle with these RPC methods (same arguments and results as the server):
+`getNotebook`, `appendCell`, `saveCell`, `changeStructure`, `exportNotebook`, `getRuntimeStatus`. It also has `notify(text)` for a short live status message and
+`refresh()` to reload data where the view supports it (otherwise it is a no-op).
+The handle exposes no storage, approval tokens, or UI internals.
+
+For example, inspect the current content:
+
+```js
+await env.Notebook.getNotebook();
+```
+
+To add a help action to your copy, change `actions` in `client.js`:
+
+```js
+actions: [{ id: "help", label: "About this view", run(app) {
+  app.notify("Use the built-in controls to explore this notebook.");
+} }],
+```

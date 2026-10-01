@@ -375,9 +375,12 @@ setInterval(() => {
 syncControls();
 
 async function start() {
-  const response = await fetch("/dist/client.js", { cache: "no-store" });
-  if (!response.ok) throw new Error(`dist/client.js: HTTP ${response.status} (run node scripts/build.mjs)`);
-  html = await response.text();
+  const code = (await Promise.all(["client.lib.js", "client.js"].map(async file => {
+    const response = await fetch("/dist/" + file, { cache: "no-store" });
+    if (!response.ok) throw new Error(file + " missing: run node scripts/build.mjs");
+    return response.text();
+  }))).join("\n;\n");
+  html = code;
   for (let i = 0; i < panes.length; i++) mountPane(i);
   status(`${panes.length} pane(s) · ${planning ? "work v1 + planning (010)" : "work v1 only"} · ${fake.rows.size} records seeded in ${seedMs} ms · ${fake.approval} approval${latency ? ` · ${latency} ms` : ""}`);
   harness.ready = true;

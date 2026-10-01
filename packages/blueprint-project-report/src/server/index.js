@@ -21,6 +21,72 @@ class PokeReceiver extends RpcTarget {
 }
 
 export class Gadget extends DurableObject {
+  /** Bounded, side-effect-free contract for describeBinding. */
+  describeGadget() {
+    return {
+      "gadget": "project-report",
+      "contract": 1,
+      "summary": "A read-only Projects report backed by RECORDS; no business-record write methods.",
+      "operations": [
+        {
+          "name": "getSetup",
+          "description": "Describe Projects binding health and service requirement.",
+          "input": {},
+          "example": "await env.Blueprint.getSetup();",
+          "returns": "{connected, binding, requirement, error}"
+        },
+        {
+          "name": "listProjects",
+          "description": "Read visible projects via RECORDS.",
+          "input": {},
+          "example": "await env.Blueprint.listProjects();",
+          "returns": "Project[]"
+        },
+        {
+          "name": "getWorkflow",
+          "description": "Read available workflow states and transitions.",
+          "input": {},
+          "example": "await env.Blueprint.getWorkflow();",
+          "returns": "Workflow"
+        },
+        {
+          "name": "listIssues",
+          "description": "Read visible issues; passes filters to Records unchanged.",
+          "input": {
+            "type": "object",
+            "properties": {
+              "projectId": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "cursor": {
+                "type": "string"
+              }
+            },
+            "required": []
+          },
+          "example": "await env.Blueprint.listIssues({ limit: 20 });",
+          "returns": "{items, nextCursor}"
+        },
+        {
+          "name": "exportCsv",
+          "description": "Export a read-only CSV of visible issues.",
+          "input": {},
+          "example": "await env.Blueprint.exportCsv();",
+          "returns": "string"
+        }
+      ],
+      "adapt": {
+        "client": "client.js: adapt block (title, actionLabel, styles, actions, onReady)",
+        "server": "server.js: class Gadget",
+        "readme": "README.md#adapting-this-gadget"
+      }
+    };
+  }
+
   /** @param {DurableObjectState} ctx @param {any} env */
   constructor(ctx, env) {
     super(ctx, env);

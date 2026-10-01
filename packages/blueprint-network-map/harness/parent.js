@@ -267,9 +267,12 @@ function mountPane(i) {
 }
 
 async function start() {
-  const response = await fetch("/dist/client.js", { cache: "no-store" });
-  if (!response.ok) throw new Error(`dist/client.js: HTTP ${response.status} (run node scripts/build.mjs)`);
-  html = await response.text();
+  const code = (await Promise.all(["client.lib.js", "client.js"].map(async file => {
+    const response = await fetch("/dist/" + file, { cache: "no-store" });
+    if (!response.ok) throw new Error(file + " missing: run node scripts/build.mjs");
+    return response.text();
+  }))).join("\n;\n");
+  html = code;
   for (let i = 0; i < panes.length; i++) mountPane(i);
   document.getElementById("status").textContent = `${panes.length} pane(s)${latency ? `, ${latency} ms` : ""}`;
   window.harness.ready = true;

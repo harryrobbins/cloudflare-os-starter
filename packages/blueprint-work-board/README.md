@@ -42,3 +42,27 @@ never `playwright install`). E2E screenshots land in `e2e/screenshots/` (gitigno
 The `--formats` form writes `formats/work-board.gadget` and `formats/work-board.json`, bumping the
 revision in `gadget.lock.json` when the code changes. Commit all three together; the package `test`
 task fails when they are stale. Never change `blueprintId` after a deployment has installed it.
+
+## Adaptable gadget checks
+
+The packed format ships readable client/server entries, prebuilt libraries, and a bounded
+`describeGadget()` contract. Evals live in `src/evals.mjs` and are never packed.
+
+Run the archive integration checks with `node --test scripts/blueprint-adapt.test.ts` from
+the repository root. They run every RPC example and every reference eval against the
+shipped archive, including the real assembled client in Chromium. Connector-backed formats
+use deterministic fixtures, not live accounts.
+
+Reference validation (2026-10-01): 3/3 evals pass against the packed archive; all
+`describeGadget()` examples run. Package unit/server suites pass. Shared extension and
+build checks, scoped tooling lint, and script type checks pass. Signed-in Workshop
+smoke tests have not been run.
+
+Model evals: pending authorization to send gadget source and prompts to the configured
+`litellm_proxy/deepseek/deepseek-v4-flash` test proxy (2026-10-01). No model pass rate is claimed.
+
+Browser suite (2026-10-01): 30/32 pass. The offline retry-button test loses its
+button to automatic recovery, and the 2,000-item filter test measures slightly
+over its 50 ms limit. Both failures also reproduce with the committed pre-migration
+client served through the same harness. These are unresolved baseline test failures;
+the migration's three reference evals and RPC examples pass.

@@ -12,6 +12,121 @@ import { DoStorageRepository } from "./do-repository.js";
 import { buildBackup, toConnectionsCsv, toElementsCsv, toGexf, toGraphml, toKumuJson } from "../shared/exports.js";
 
 export class Gadget extends DurableObject {
+  /** Bounded, side-effect-free contract for describeBinding. */
+  describeGadget() {
+    return {
+      "gadget": "network-map",
+      "contract": 1,
+      "summary": "Use the listed domain methods first. Connector calls require the named binding. Omitted author on supported writes is Assistant. Read README.md for the remaining low-level API.",
+      "operations": [
+        {
+          "name": "describeMap",
+          "description": "Read counts, fields, types, views, and limits.",
+          "input": {},
+          "example": "await env.Blueprint.describeMap();",
+          "returns": "Map description"
+        },
+        {
+          "name": "findElements",
+          "description": "Find elements by text, tag, or type.",
+          "input": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": []
+          },
+          "example": "await env.Blueprint.findElements({ text: \"school\", limit: 10 });",
+          "returns": "Element[]"
+        },
+        {
+          "name": "addElements",
+          "description": "Add elements with generated ids. Validates all labels before writing; core errors are returned alongside successful upserts. Omitted by uses Assistant.",
+          "input": {
+            "type": "object",
+            "properties": {
+              "labels": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "by": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "labels"
+            ]
+          },
+          "example": "await env.Blueprint.addElements({ labels: [\"Library\", \"Community garden\"] });",
+          "returns": "{ids, upserts, errors, revision}"
+        },
+        {
+          "name": "getMapMarkdown",
+          "description": "Read a bounded outline for summarising the map.",
+          "input": {
+            "type": "object",
+            "properties": {
+              "limit": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": []
+          },
+          "example": "await env.Blueprint.getMapMarkdown({ limit: 30 });",
+          "returns": "string"
+        },
+        {
+          "name": "applyOperation",
+          "description": "Low-level escape hatch. Valid operations apply in order; errors and conflicts report refused operations. Updates need baseVersion; see README.",
+          "input": {
+            "type": "object",
+            "properties": {
+              "ops": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {},
+                  "required": []
+                }
+              },
+              "structure": {
+                "type": "object",
+                "properties": {},
+                "required": []
+              },
+              "by": {
+                "type": "string"
+              },
+              "senderId": {
+                "type": "string"
+              },
+              "requestId": {
+                "type": "string"
+              }
+            },
+            "required": []
+          },
+          "example": "await env.Blueprint.applyOperation({ by: \"Assistant\", senderId: \"assistant\", requestId: \"example-title\", structure: { title: \"Local services\" }, ops: [] });",
+          "returns": "{upserts, errors, conflicts, revision}"
+        }
+      ],
+      "adapt": {
+        "client": "client.js: adapt block (title, actionLabel, styles, actions, onReady)",
+        "server": "server.js: class Gadget",
+        "readme": "README.md#adapting-this-gadget"
+      }
+    };
+  }
+
   #hub = new Hub();
   /** @type {ReturnType<typeof createNetworkMap>} */
   #map;
@@ -52,11 +167,20 @@ export class Gadget extends DurableObject {
   /** @param {string} token @param {number} cursor */
   snapshotPage(token, cursor) { return this.#map.snapshotPage(token, cursor); }
 
+  /** Adds labelled elements with generated ids. Validates all labels before writing. */
+  async addElements(input) {
+    if (!Array.isArray(input?.labels) || !input.labels.length || input.labels.length > 100 || input.labels.some(label => typeof label !== "string" || !label.trim() || label.length > 200)) throw new Error("Use 1–100 nonempty labels of at most 200 characters.");
+    const ids = input.labels.map(() => "e_" + crypto.randomUUID().replaceAll("-", "").slice(0, 12));
+    const result = await this.applyOperation({ senderId: "assistant", by: input.by ?? "Assistant", requestId: crypto.randomUUID(),
+      ops: input.labels.map((label, i) => ({ op: "create", object: { id: ids[i], label } })) });
+    return { ...result, ids: (result.upserts ?? []).map(object => object.id) };
+  }
+
   // --- Writes --------------------------------------------------------------------------------
 
   /** @param {any} request {senderId, by, requestId, ops, structure} */
   async applyOperation(request) {
-    return (await this.#map.applyOperation(request)).result;
+    return (await this.#map.applyOperation({ ...request, by: request?.by ?? "Assistant" })).result;
   }
 
   /** @param {any} args {senderId, by, requestId?, historyId?} */

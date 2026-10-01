@@ -1,7 +1,19 @@
+import { mountAdapt } from "../../../../scripts/blueprint-adapt/client.mjs";
 import css from './style.css'
 import chartCss from './chart.css'
 import { filterPredicate } from '../shared/validation.js'
 import { buildPageChartSpec, renderVegaLite } from './chart.js'
+
+// ===== Adapt this gadget =====================================================
+// README.md ("Adapting this gadget") documents each setting and the app handle.
+const adapt = {
+  title: 'Data Explorer',
+  actionLabel: "Extra actions",
+  styles: "",
+  actions: [],
+  onReady(app) {},
+};
+// ============================================================================
 
 const style = document.createElement('style'); style.textContent = css + chartCss; document.head.append(style)
 document.body.innerHTML = '<main id="root"><section class="empty"><h2>Opening Synthetic Data Explorer…</h2></section></main>'
@@ -65,3 +77,5 @@ function operatorLabel(value) { return ({ eq: '=', gt: '>', gte: '≥', lt: '<',
 function submit(label) { const node = el('button', 'primary', label); node.type = 'submit'; return node }
 async function initialize() { errorMessage = ''; render(); [dataset, collections, state] = await Promise.all([gadget.describeDataset(), gadget.listCollections(), gadget.getState()]); if (!state.collection || !collections.some(item => item.name === state.collection)) state = { collection: collections[0]?.name, cursorHistory: [] }; if (!state.collection) throw new Error('The connected dataset has no collections.'); await loadCollection() }
 await safe(initialize)()
+
+await mountAdapt(adapt, { gadget: gadget, methods: ["describeDataset", "listCollections", "describeCollection", "query", "aggregate", "getRecord", "getState", "setState"], refresh: () => safe(initialize)() });

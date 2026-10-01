@@ -16,7 +16,7 @@ import { encodeContent, serializeArchive } from "./archive.mjs";
 
 const pkg = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = join(pkg, "../..");
-const FILES = ["server.js", "client.js", "README.md", "LICENSE.txt", "skills/mermaid2-connector/SKILL.md", "skills/mermaid2-blueprint/SKILL.md", "skills/d2-authoring/SKILL.md"];
+const FILES = ["client.lib.js", "server.lib.js", "server.js", "client.js", "README.md", "LICENSE.txt", "skills/mermaid2-connector/SKILL.md", "skills/mermaid2-blueprint/SKILL.md", "skills/d2-authoring/SKILL.md"];
 // Archive dates are inert once installed (the sidecar owns presentation); fixed for reproducibility.
 const FIXED_DATE = "2026-09-30T00:00:00.000Z";
 

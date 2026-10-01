@@ -38,7 +38,7 @@ export function parseModuleImports(source) {
     if (m[1].startsWith("*")) throw new Error(`export * from "${m[3]}" is not supported in a gadget entry: name the exports`);
     decls.push({ start: m.index, end: m.index + m[0].length, specifier: m[3], bindings: parseNamedList(m[1]), kind: "export" });
   }
-  return decls.sort((a, b) => a.start - b.start);
+  return decls.toSorted((a, b) => a.start - b.start);
 }
 
 /** @param {string} clause */
@@ -125,7 +125,7 @@ export async function buildClientEntry({ esbuild, entry, outDir, banner, library
   const source = await readFile(entry, "utf8");
   const decls = parseModuleImports(source);
   if (decls.some((d) => d.kind === "export")) throw new Error(`${entry}: a client entry does not export`);
-  if (/\bimport\s*\(/.test(withoutComments(source))) throw new Error(`${entry}: dynamic import() cannot load in the gadget iframe`);
+  if (/(?<![\w.])import\s*\(/.test(withoutComments(source))) throw new Error(`${entry}: dynamic import() cannot load in the gadget iframe`);
   const names = decls.flatMap((d) => d.bindings.map((b) => b.local));
   const client = banner.trimEnd() + "\n" + replaceDeclarations(source, decls, () =>
     `// From client.lib.js, the prebuilt library the platform loads before this file. Do not edit\n` +
@@ -164,7 +164,7 @@ export async function buildClientEntry({ esbuild, entry, outDir, banner, library
 export async function buildServerEntry({ esbuild, entry, outDir, banner, library = {}, budgetBytes = DEFAULT_ENTRY_BUDGET_BYTES }) {
   const source = await readFile(entry, "utf8");
   const decls = parseModuleImports(source).filter((d) => !d.specifier.startsWith("cloudflare:"));
-  if (/\bimport\s*\(/.test(withoutComments(source))) throw new Error(`${entry}: use static imports in a server entry`);
+  if (/(?<![\w.])import\s*\(/.test(withoutComments(source))) throw new Error(`${entry}: use static imports in a server entry`);
   const imports = decls.filter((d) => d.kind === "import");
   const reexports = decls.filter((d) => d.kind === "export");
   const importNames = imports.flatMap((d) => d.bindings.map((b) => b.local));

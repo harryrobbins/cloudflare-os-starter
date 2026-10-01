@@ -114,3 +114,11 @@ test("JSDoc import() types in comments are not dynamic imports", async () => {
   await writeFile(join(src, "dyn.js"), `const m = await import("./dep.js");\n`);
   await assert.rejects(buildClientEntry({ esbuild, entry: join(src, "dyn.js"), outDir: join(scratch, "dyn-out"), banner: "//" }), /dynamic import/);
 });
+
+// Notebook's core has an import() method; it is not an ECMAScript dynamic import.
+test("a method named import is allowed in a readable server entry", async () => {
+  const src = join(scratch, "method-import");
+  await mkdir(src, { recursive: true });
+  await writeFile(join(src, "index.js"), `export class Gadget { load(core, text) { return core.import(text); } }`);
+  await buildServerEntry({ esbuild, entry: join(src, "index.js"), outDir: join(scratch, "method-import-out"), banner: "// Test" });
+});

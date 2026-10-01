@@ -38,9 +38,9 @@ export async function loadFormat(/** @type {string} */ format) {
 /** The package that packs formats/<format>.gadget. */
 export async function formatPackage(/** @type {string} */ format) {
   const packages = await readdir(join(repo, "packages"));
-  for (const name of packages.filter((p) => p.startsWith("blueprint-")).sort()) {
+  for (const name of packages.filter((p) => p.startsWith("blueprint-")).toSorted()) {
     const pack = await readFile(join(repo, "packages", name, "scripts", "pack-gadget.mjs"), "utf8").catch(() => "");
-    if (pack.includes(`formats/${format}.gadget`) || pack.includes(`"${format}.gadget"`)) return join(repo, "packages", name);
+    if (pack.includes(`formats/${format}.gadget`) || pack.includes(`"${format}.gadget"`) || pack.includes(`const STEM = "${format}"`)) return join(repo, "packages", name);
   }
   return null;
 }
@@ -59,16 +59,16 @@ export async function loadEvals(/** @type {string} */ format) {
  * A gadget whose server is rebuilt whenever its server files change, keeping its storage.
  * @param {Record<string, string>} files  live, edited in place by the agent
  */
-function liveGadget(files) {
+function liveGadget(files, env = {}) {
   const storage = new MemoryStorage();
   /** @type {{key: string, loaded: Awaited<ReturnType<typeof loadGadget>>} | null} */
   let current = null;
   return {
     async get() {
-      const key = Object.keys(files).filter((f) => f.endsWith(".js") && f !== "client.lib.js").sort().map((f) => f + "\0" + files[f]).join("\0");
+      const key = Object.keys(files).filter((f) => f.endsWith(".js") && f !== "client.lib.js").toSorted().map((f) => f + "\0" + files[f]).join("\0");
       if (current?.key !== key) {
         await current?.loaded.dispose();
-        current = { key, loaded: await loadGadget(files, { storage }) };
+        current = { key, loaded: await loadGadget(files, { storage, env }) };
       }
       return current.loaded.gadget;
     },
@@ -113,7 +113,8 @@ function applyEdits(files, edits) {
  */
 export async function runEval({ ev, format, llm, browser }) {
   const files = { ...format.files };
-  const live = liveGadget(files);
+  const env = ev.environment ? await ev.environment() : {};
+  const live = liveGadget(files, env);
   /** @type {{page: import("playwright").Page}[]} */
   const opened = [];
   const started = Date.now();

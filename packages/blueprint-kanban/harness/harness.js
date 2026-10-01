@@ -312,10 +312,7 @@ setLatency(state.latency);
     const pane = state.panes.get(paneId);
     if (!pane) throw new Error("unknown pane " + paneId);
     // Fetched fresh per pane load, so a rebuild is picked up by "Reload".
-    const clientSource = fetch("../dist/client.js", { cache: "no-store" }).then((r) => {
-      if (!r.ok) throw new Error("dist/client.js missing: run node scripts/build.mjs");
-      return r.text();
-    });
+    const clientSource = Promise.all(["client.lib.js", "client.js"].map(file => fetch("../dist/" + file, { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(file + " missing"); return r.text(); }))).then(parts => parts.join("\n;\n"));
     return { gadget: pane.connect(win, RpcTarget), viewer: pane.viewer, exportFormat: pane.exportFormat, clientSource };
   },
   getBoard: () => state.server.getBoard(),

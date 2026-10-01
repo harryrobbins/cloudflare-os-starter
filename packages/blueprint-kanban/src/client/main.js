@@ -1,3 +1,4 @@
+import { mountAdapt } from "../../../../scripts/blueprint-adapt/client.mjs";
 // @ts-check
 // Client entry point. Runs inside the gadget's sandboxed iframe, which has no HTML of its own:
 // everything is built here. Provided by the platform: `gadget` (RPC stub to the Gadget Durable
@@ -22,6 +23,17 @@ const platformViewer = typeof gadgetViewer !== "undefined" ? gadgetViewer : unde
 const exportFormatId = typeof gadgetExportFormatId !== "undefined" ? gadgetExportFormatId : undefined;
 
 /** window.name survives reloads of the same browsing context; used to carry the viewer across. */
+// ===== Adapt this gadget =====================================================
+// README.md ("Adapting this gadget") documents each setting and the app handle.
+const adapt = {
+  title: 'Board',
+  actionLabel: "Extra actions",
+  styles: "",
+  actions: [],
+  onReady(app) {},
+};
+// ============================================================================
+
 const WINDOW_NAME_PREFIX = "kanban:";
 const MAX_AUTO_RELOADS = 3;
 const AUTO_RELOAD_WINDOW_MS = 60_000;
@@ -148,6 +160,7 @@ if (exportFormatId !== undefined) {
     throw err;
   }
   mountApp(root, store);
+  await mountAdapt(adapt, { gadget: platformGadget, methods: ["getBoard", "findCards", "addCards", "updateCard", "moveCard", "deleteCard", "addColumn"] });
   const liveStore = store;
   liveStore.subscribe((state, change) => {
     if (change.kind === "connection" && state.connection === "live") {

@@ -8,7 +8,7 @@ import { buildGadget } from './build.mjs'
 
 const pkg = join(dirname(fileURLToPath(import.meta.url)), '..')
 const repo = join(pkg, '../..')
-const FILES = ['server.js', 'client.js', 'README.md']
+const FILES = ["client.lib.js", "server.lib.js", 'server.js', 'client.js', 'README.md']
 const FIXED_DATE = '2026-09-23T00:00:00.000Z'
 export const paths = { sidecar: join(repo, 'formats/tessera.json'), archive: join(repo, 'formats/tessera.gadget'), lock: join(pkg, 'gadget.lock.json') }
 // No bindings: any declared binding forces New through /blueprint/<id> setup, and the platform has

@@ -204,9 +204,12 @@ function mountFrame() {
 }
 
 async function start() {
-  const response = await fetch('/dist/client.js', { cache: 'no-store' })
-  if (!response.ok) throw new Error(`dist/client.js: HTTP ${response.status} (run node scripts/build.mjs)`)
-  html = createSandboxedHtml(await response.text(), viewer)
+  const code = (await Promise.all(["client.lib.js", "client.js"].map(async file => {
+    const response = await fetch("/dist/" + file, { cache: "no-store" });
+    if (!response.ok) throw new Error(file + " missing: run node scripts/build.mjs");
+    return response.text();
+  }))).join("\n;\n");
+  html = createSandboxedHtml(code, viewer);
   mountFrame()
   document.getElementById('status').textContent = procgen ? 'env: PROCGEN (fake, small profile)' : 'env: no bindings'
   window.harness.ready = true

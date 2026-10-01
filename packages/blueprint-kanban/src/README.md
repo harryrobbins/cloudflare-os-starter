@@ -158,3 +158,45 @@ The board is stored in this gadget's Durable Object storage:
 `subscribe(callback, client)` keeps the callback and calls `callback.operation(event)` with `{type: "operation" | "comment" | "snapshot", ...}` and `callback.presence(event)` with `{type: "join" | "update" | "leave", clientId, name, color, openCardId, dragCardId, hoverColumnId, at}`. Events carry the `senderId` of the request that caused them so the originating client can skip its own echo.
 
 A subscriber that falls behind is dropped, and a `leave` is broadcast for it: this happens when it has more than 500 deliveries unacknowledged, or its oldest unacknowledged delivery is over 30 seconds old. Its next `updatePresence` returns `known: false`, so it re-subscribes and gets a fresh snapshot. Presence updates identical to the previous one and less than 100 ms after it are accepted but not broadcast.
+
+## Adapting this gadget
+
+Each gadget is an editable copy. Changes to a copy do not flow back to this source package.
+
+- `client.js`: readable view entry with the `adapt` block near the top.
+- `client.lib.js`: prebuilt UI, sync and rendering library, loaded before the entry.
+- `server.js`: readable `Gadget` class and its RPC surface.
+- `server.lib.js`: prebuilt core, validation and storage helpers.
+- `README.md`: this guide. Never edit `*.lib.js`; rebuild source to change stable library code.
+
+For content work, call `describeGadget()` through `describeBinding` and use the described
+operations without editing files. Common operations: `getBoard`, `findCards`, `addCards`, `addColumn`.
+
+The `adapt` fields are:
+
+- `title`: browser document title; it does not rename stored content.
+- `actionLabel`: accessible name of the extra-actions region.
+- `styles`: extra CSS applied after the built-in styles.
+- `actions`: `{ id, label, title?, run(app) }` commands shown at the bottom right. Buttons
+  work with keyboard and touch; invalid or duplicate actions are ignored with a console warning.
+- `onReady(app)`: called once after the initial view has loaded (or shown its connection state).
+  Async actions and callbacks are supported; failures appear as a short status message.
+
+`app` is a frozen handle with these RPC methods (same arguments and results as the server):
+`getBoard`, `findCards`, `addCards`, `updateCard`, `moveCard`, `deleteCard`, `addColumn`. It also has `notify(text)` for a short live status message and
+`refresh()` to reload data where the view supports it (otherwise it is a no-op).
+The handle exposes no storage, approval tokens, or UI internals.
+
+For example, inspect the current content:
+
+```js
+await env.Board.getBoard();
+```
+
+To add a help action to your copy, change `actions` in `client.js`:
+
+```js
+actions: [{ id: "help", label: "About this view", run(app) {
+  app.notify("Use the built-in controls to explore this board.");
+} }],
+```

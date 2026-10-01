@@ -271,3 +271,45 @@ archived), `viewer` (a Records actor for `me`). Errors are `code: detail` string
 **Agents cannot change items through this board.** A change needs a viewer assertion, which only
 a signed-in person using the board can obtain. Use `propose()` instead: the person applies your
 proposal from the board's Proposals tray, and the change is attributed to them.
+
+## Adapting this gadget
+
+Each gadget is an editable copy. Changes to a copy do not flow back to this source package.
+
+- `client.js`: readable view entry with the `adapt` block near the top.
+- `client.lib.js`: prebuilt UI, sync and rendering library, loaded before the entry.
+- `server.js`: readable `Gadget` class and its RPC surface.
+- `server.lib.js`: prebuilt core, validation and storage helpers.
+- `README.md`: this guide. Never edit `*.lib.js`; rebuild source to change stable library code.
+
+For content work, call `describeGadget()` through `describeBinding` and use the described
+operations without editing files. Common operations: `getSetup`, `query`, `vocabulary`, `listViews`, `saveView`, `datasets`, `listProposals`.
+
+The `adapt` fields are:
+
+- `title`: browser document title; it does not rename stored content.
+- `actionLabel`: accessible name of the extra-actions region.
+- `styles`: extra CSS applied after the built-in styles.
+- `actions`: `{ id, label, title?, run(app) }` commands shown at the bottom right. Buttons
+  work with keyboard and touch; invalid or duplicate actions are ignored with a console warning.
+- `onReady(app)`: called once after the initial view has loaded (or shown its connection state).
+  Async actions and callbacks are supported; failures appear as a short status message.
+
+`app` is a frozen handle with these RPC methods (same arguments and results as the server):
+`getSetup`, `query`, `item`, `summary`, `vocabulary`, `listViews`, `saveView`, `datasets`, `dataset`, `listReports`, `saveReport`, `propose`, `listProposals`. It also has `notify(text)` for a short live status message and
+`refresh()` to reload data where the view supports it (otherwise it is a no-op).
+The handle exposes no storage, approval tokens, or UI internals.
+
+For example, inspect the current content:
+
+```js
+await env.WorkBoard.getSetup();
+```
+
+To add a help action to your copy, change `actions` in `client.js`:
+
+```js
+actions: [{ id: "help", label: "About this view", run(app) {
+  app.notify("Use the built-in controls to explore this work-board.");
+} }],
+```

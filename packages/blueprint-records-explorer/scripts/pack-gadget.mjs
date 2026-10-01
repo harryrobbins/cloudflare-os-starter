@@ -6,7 +6,7 @@ import { encodeContent, serializeArchive } from './archive.mjs'
 
 const pkg = join(dirname(fileURLToPath(import.meta.url)), '..')
 const repo = join(pkg, '../..')
-const FILES = ['server.js', 'client.js', 'README.md']
+const FILES = ["client.lib.js", "server.lib.js", 'server.js', 'client.js', 'README.md']
 const FIXED_DATE = '2026-09-25T00:00:00.000Z'
 export const paths = { sidecar: join(repo, 'formats/records-explorer.json'), archive: join(repo, 'formats/records-explorer.gadget'), lock: join(pkg, 'gadget.lock.json') }
 /** `typeUrlPattern` must equal the Records service connector's SupportedResource.urlPattern. */

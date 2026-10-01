@@ -348,6 +348,7 @@ export function createExplorer({ gadget, root, doc = document, timers = true }) 
   const ready = run(initialize)
   return {
     state: s,
+    refresh: () => run(initialize),
     ready,
     pollActivity: () => run(pollActivity),
     dispose() { disposed = true; if (timer) clearTimeout(timer) },

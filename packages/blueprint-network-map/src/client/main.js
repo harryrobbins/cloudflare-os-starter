@@ -1,3 +1,4 @@
+import { mountAdapt } from "../../../../scripts/blueprint-adapt/client.mjs";
 // @ts-check
 // Client entry point. Runs inside the gadget's sandboxed iframe, which has no HTML of its own:
 // everything is built here. Provided by the platform: `gadget` (RPC stub to the Gadget Durable
@@ -24,6 +25,17 @@ const platformGadget = typeof gadget !== "undefined" ? gadget : undefined;
 const platformRpcTarget = typeof RpcTarget !== "undefined" ? RpcTarget : undefined;
 // @ts-ignore provided by the platform prefix: {id, displayName, role} of the signed-in user
 const platformViewer = typeof gadgetViewer !== "undefined" ? gadgetViewer : undefined;
+
+// ===== Adapt this gadget =====================================================
+// README.md ("Adapting this gadget") documents each setting and the app handle.
+const adapt = {
+  title: 'Network Map',
+  actionLabel: "Extra actions",
+  styles: "",
+  actions: [],
+  onReady(app) {},
+};
+// ============================================================================
 
 const WINDOW_NAME_PREFIX = "network-map:";
 const MAX_AUTO_RELOADS = 3;
@@ -150,6 +162,12 @@ if (!platformGadget) {
   root.textContent = "This page runs inside a Cloudflare OS gadget.";
 } else {
   const app = mountApp(root, store);
+  const stopAdaptWatch = store.subscribe(() => {
+    if (store.status.connection === "live") {
+      stopAdaptWatch();
+      void mountAdapt(adapt, { gadget: platformGadget, methods: ["describeMap", "findElements", "getNeighbourhood", "getMapMarkdown", "addElements", "applyOperation"] });
+    }
+  });
   store.start();
   /** @type {any} */ (globalThis).networkMap = { store, app };
 }

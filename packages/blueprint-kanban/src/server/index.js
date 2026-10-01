@@ -14,6 +14,92 @@ import { boardToCsv } from "../shared/protocol.js";
 // ---------------------------------------------------------------------------------------------
 
 export class Gadget extends DurableObject {
+  /** Bounded, side-effect-free contract for describeBinding. */
+  describeGadget() {
+    return {
+      "gadget": "board",
+      "contract": 1,
+      "summary": "Use the listed domain methods first. Connector calls require the named binding. Omitted author on supported writes is Assistant. Read README.md for the remaining low-level API.",
+      "operations": [
+        {
+          "name": "getBoard",
+          "description": "Read the current board and revisions.",
+          "input": {},
+          "example": "await env.Blueprint.getBoard();",
+          "returns": "{title, revision, columns, columnOrder, cards, labels}"
+        },
+        {
+          "name": "findCards",
+          "description": "Find cards by title, label, or column.",
+          "input": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": []
+          },
+          "example": "await env.Blueprint.findCards({ text: \"review\" });",
+          "returns": "Card[]"
+        },
+        {
+          "name": "addCards",
+          "description": "Add cards; reads current revisions, applies valid cards and reports errors for invalid items.",
+          "input": {
+            "type": "object",
+            "properties": {
+              "cards": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "column": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "title", "column"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "cards"
+            ]
+          },
+          "example": "await env.Blueprint.addCards({ cards: [{ title: \"Review proposals\", column: \"Backlog\" }] });",
+          "returns": "{created, errors}"
+        },
+        {
+          "name": "addColumn",
+          "description": "Add a column; reads current revisions and returns validation errors.",
+          "input": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
+          "example": "await env.Blueprint.addColumn({ name: \"Blocked\" });",
+          "returns": "{column, errors}"
+        }
+      ],
+      "adapt": {
+        "client": "client.js: adapt block (title, actionLabel, styles, actions, onReady)",
+        "server": "server.js: class Gadget",
+        "readme": "README.md#adapting-this-gadget"
+      }
+    };
+  }
+
   #hub = new Hub();
   /** @type {ReturnType<typeof createBoard>} */
   #board;
@@ -71,28 +157,28 @@ export class Gadget extends DurableObject {
 
   /** @param {any} args {cards, by?} */
   async addCards(args) {
-    const { created, errors } = await this.#board.addCards(args);
+    const { created, errors } = await this.#board.addCards({ ...args, by: args?.by ?? "Assistant" });
     return { created, errors };
   }
 
   /** @param {any} args {cardId, fields, by?} */
   async updateCard(args) {
-    return (await this.#board.updateCard(args)).result;
+    return (await this.#board.updateCard({ ...args, by: args?.by ?? "Assistant" })).result;
   }
 
   /** @param {any} args {cardId, toColumn, position?, by?} */
   async moveCard(args) {
-    return (await this.#board.moveCard(args)).result;
+    return (await this.#board.moveCard({ ...args, by: args?.by ?? "Assistant" })).result;
   }
 
   /** @param {any} args {cardId, by?} */
   async deleteCard(args) {
-    return (await this.#board.deleteCard(args)).result;
+    return (await this.#board.deleteCard({ ...args, by: args?.by ?? "Assistant" })).result;
   }
 
   /** @param {any} args {name, index?, by?} */
   async addColumn(args) {
-    const { column, errors } = await this.#board.addColumn(args);
+    const { column, errors } = await this.#board.addColumn({ ...args, by: args?.by ?? "Assistant" });
     return { column, errors };
   }
 

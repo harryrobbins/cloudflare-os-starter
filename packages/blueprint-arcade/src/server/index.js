@@ -34,6 +34,74 @@ class DoRepository {
 }
 
 export class Gadget extends DurableObject {
+  /** Bounded, side-effect-free contract for describeBinding. */
+  describeGadget() {
+    return {
+      "gadget": "arcade",
+      "contract": 1,
+      "summary": "Use the listed domain methods first. Connector calls require the named binding. Omitted author on supported writes is Assistant. Read README.md for the remaining low-level API.",
+      "operations": [
+        {
+          "name": "getTemplates",
+          "description": "List built-in templates and runnable starter cartridges.",
+          "input": {},
+          "example": "await env.Blueprint.getTemplates();",
+          "returns": "Template[]"
+        },
+        {
+          "name": "getView",
+          "description": "Read the shelf; omit viewerId for no personal preferences.",
+          "input": {},
+          "example": "await env.Blueprint.getView();",
+          "returns": "{title, games, tunes, revision, prefs}"
+        },
+        {
+          "name": "createGame",
+          "description": "Create a game; input is validated before writing. Omitted by uses Assistant.",
+          "input": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "template": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": []
+          },
+          "example": "await env.Blueprint.createGame({ title: \"Meteor practice\", template: \"blank\" });",
+          "returns": "{game, revision}"
+        },
+        {
+          "name": "setTitle",
+          "description": "Rename the arcade. Validates before writing; omitted by uses Assistant.",
+          "input": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "title"
+            ]
+          },
+          "example": "await env.Blueprint.setTitle({ title: \"Evening arcade\" });",
+          "returns": "{revision}"
+        }
+      ],
+      "adapt": {
+        "client": "client.js: adapt block (title, actionLabel, styles, actions, onReady)",
+        "server": "server.js: class Gadget",
+        "readme": "README.md#adapting-this-gadget"
+      }
+    };
+  }
+
   /** @param {DurableObjectState} ctx @param {unknown} env */
   constructor(ctx, env) {
     super(ctx, /** @type {any} */ (env));
@@ -56,33 +124,33 @@ export class Gadget extends DurableObject {
   // --- Writes (every args object carries by = {id, name} of the signed-in account) -----------
 
   /** @param {any} args {by, title} */
-  setTitle(args) { return this.service.write("setTitle", args); }
+  setTitle(args) { return this.service.write("setTitle", { ...args, by: args?.by ?? { id: "assistant", name: "Assistant" } }); }
   /** @param {any} args {by, title?, template?, source?, description?} */
-  createGame(args) { return this.service.write("createGame", args); }
+  createGame(args) { return this.service.write("createGame", { ...args, by: args?.by ?? { id: "assistant", name: "Assistant" } }); }
   /** @param {any} args {by, gameId, source, baseVersion?} */
-  saveGame(args) { return this.service.write("saveGame", args); }
+  saveGame(args) { return this.service.write("saveGame", { ...args, by: args?.by ?? { id: "assistant", name: "Assistant" } }); }
   /** @param {any} args {by, gameId, title?, description?} */
-  updateGame(args) { return this.service.write("updateGame", args); }
+  updateGame(args) { return this.service.write("updateGame", { ...args, by: args?.by ?? { id: "assistant", name: "Assistant" } }); }
   /** @param {any} args {by, gameId, title?} */
-  duplicateGame(args) { return this.service.write("duplicateGame", args); }
+  duplicateGame(args) { return this.service.write("duplicateGame", { ...args, by: args?.by ?? { id: "assistant", name: "Assistant" } }); }
   /** @param {any} args {by, gameId} */
-  resetGame(args) { return this.service.write("resetGame", args); }
+  resetGame(args) { return this.service.write("resetGame", { ...args, by: args?.by ?? { id: "assistant", name: "Assistant" } }); }
   /** @param {any} args {by, gameId} */
-  deleteGame(args) { return this.service.write("deleteGame", args); }
+  deleteGame(args) { return this.service.write("deleteGame", { ...args, by: args?.by ?? { id: "assistant", name: "Assistant" } }); }
   /** @param {any} args {by, gameId, toIndex} */
-  moveGame(args) { return this.service.write("moveGame", args); }
+  moveGame(args) { return this.service.write("moveGame", { ...args, by: args?.by ?? { id: "assistant", name: "Assistant" } }); }
   /** @param {any} args {by, gameId, score, detail?} */
   submitScore(args) { return this.service.write("submitScore", args); }
   /** @param {any} args {by, gameId} */
-  clearScores(args) { return this.service.write("clearScores", args); }
+  clearScores(args) { return this.service.write("clearScores", { ...args, by: args?.by ?? { id: "assistant", name: "Assistant" } }); }
   /** @param {any} args {by, song?} */
-  createTune(args) { return this.service.write("createTune", args); }
+  createTune(args) { return this.service.write("createTune", { ...args, by: args?.by ?? { id: "assistant", name: "Assistant" } }); }
   /** @param {any} args {by, tuneId, song, baseVersion?} */
-  saveTune(args) { return this.service.write("saveTune", args); }
+  saveTune(args) { return this.service.write("saveTune", { ...args, by: args?.by ?? { id: "assistant", name: "Assistant" } }); }
   /** @param {any} args {by, tuneId} */
-  duplicateTune(args) { return this.service.write("duplicateTune", args); }
+  duplicateTune(args) { return this.service.write("duplicateTune", { ...args, by: args?.by ?? { id: "assistant", name: "Assistant" } }); }
   /** @param {any} args {by, tuneId} */
-  deleteTune(args) { return this.service.write("deleteTune", args); }
+  deleteTune(args) { return this.service.write("deleteTune", { ...args, by: args?.by ?? { id: "assistant", name: "Assistant" } }); }
   /** @param {any} args {by, layout?, custom?, muted?, volume?} */
   setPrefs(args) { return this.service.write("setPrefs", args); }
 

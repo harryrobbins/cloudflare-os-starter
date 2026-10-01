@@ -21,7 +21,7 @@ describe('gadget archive', () => {
 
   it('--check compares a fresh build, not whatever is in dist/', async () => {
     const sidecar = { title: 'T', description: 'd', author: { type: 'user', name: 'n', id: 'i' }, output: { id: 'tessera' }, revision: 3 }
-    const committedFiles = { 'server.js': 'old server', 'client.js': 'old client', 'README.md': 'readme' }
+    const committedFiles = { 'client.lib.js': 'client library', 'server.lib.js': 'server library', 'server.js': 'old server', 'client.js': 'old client', 'README.md': 'readme' }
     const committed = { sidecar, lock: { revision: 3, contentHash: contentHash(committedFiles) }, archive: packArchive(committedFiles, sidecar) }
     expect(staleReasons(committedFiles, committed)).toEqual([])
 

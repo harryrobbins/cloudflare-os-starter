@@ -47,3 +47,21 @@ The `test` task run by `pnpm check` rebuilds `dist/` and fails when `formats/arc
 - **Keys.** Games read actions. Players choose a layout, or "auto" for the game's own, and can rebind actions. Settings are stored per account (`p:<userId>`). Escape is never bound, because the platform uses it to leave full screen.
 - **Concurrent edits.** `saveGame`/`saveTune` take `baseVersion` and refuse a stale save instead of overwriting it.
 - **Trust.** As with every format here, the server takes `by` from the caller. Game code runs only in viewers' sandboxed frames (no network), and is written by people who can edit the arcade anyway.
+
+## Adaptable gadget checks
+
+The packed format ships readable client/server entries, prebuilt libraries, and a bounded
+`describeGadget()` contract. Evals live in `src/evals.mjs` and are never packed.
+
+Run the archive integration checks with `node --test scripts/blueprint-adapt.test.ts` from
+the repository root. They run every RPC example and every reference eval against the
+shipped archive, including the real assembled client in Chromium. Connector-backed formats
+use deterministic fixtures, not live accounts.
+
+Reference validation (2026-10-01): 3/3 evals pass against the packed archive; all
+`describeGadget()` examples run. Package unit/server suites pass. Shared extension and
+build checks, scoped tooling lint, and script type checks pass. Signed-in Workshop
+smoke tests have not been run.
+
+Model evals: pending authorization to send gadget source and prompts to the configured
+`litellm_proxy/deepseek/deepseek-v4-flash` test proxy (2026-10-01). No model pass rate is claimed.

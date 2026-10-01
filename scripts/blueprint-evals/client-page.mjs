@@ -30,7 +30,7 @@ const PAGE_RUNTIME = `(() => {
       if (typeof m !== "string" || m === "then") return undefined;
       if (m === "dup") return () => gadget;
       return (...args) => globalThis.__evalRpc(m, JSON.stringify(enc(args)))
-        .then((r) => (r === undefined || r === null ? undefined : JSON.parse(r)));
+        .then((r) => (r === undefined || r === null ? undefined : JSON.parse(r, (_key, value) => value?.__evalBytes ? new Uint8Array(value.__evalBytes) : value)));
     },
   });
   globalThis.__evalGadget = gadget;
@@ -81,9 +81,10 @@ export async function openClient({ browser, files, gadget }) {
     return v;
   };
   await page.exposeFunction("__evalRpc", async (/** @type {string} */ method, /** @type {string} */ argsJson) => {
+    if (method === "$canAuthorizeOwnerActions") return "false";
     if (typeof gadget[method] !== "function") throw new Error(`The gadget has no RPC method ${method}()`);
     const result = await gadget[method](...dec(JSON.parse(argsJson)));
-    return result === undefined ? undefined : JSON.stringify(result);
+    return result === undefined ? undefined : JSON.stringify(result, (_key, value) => value instanceof Uint8Array ? { __evalBytes: [...value] } : value);
   });
   await page.setContent("<!DOCTYPE html><html><head></head><body></body></html>");
   await page.addScriptTag({ content: PAGE_RUNTIME });

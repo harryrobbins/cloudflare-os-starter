@@ -17,12 +17,26 @@ export class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = 
 export class WorkerEntrypoint { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }
 export class RpcTarget {}
 export class RpcStub {}
+export const restore = Symbol.for("gadget.restore");
 `;
 
 /** In-memory Durable Object KV storage with the semantics gadgets rely on. */
 export class MemoryStorage {
   /** @type {Map<string, unknown>} */
   #data = new Map();
+
+  // Synchronous KV API used by newer gadget facets, backed by the same data as async storage.
+  get kv() {
+    return {
+      get: (key) => this.#data.has(key) ? structuredClone(this.#data.get(key)) : undefined,
+      put: (key, value) => { this.#data.set(key, structuredClone(value)); },
+      delete: (key) => this.#data.delete(key),
+      list: (options = {}) => {
+        const entries = [...this.#data].filter(([key]) => !options.prefix || key.startsWith(options.prefix)).toSorted(([a], [b]) => a.localeCompare(b));
+        return new Map(entries.map(([key, value]) => [key, structuredClone(value)]));
+      },
+    };
+  }
 
   /** @param {string | string[]} key */
   async get(key) {
@@ -50,7 +64,7 @@ export class MemoryStorage {
 
   /** @param {{prefix?: string, start?: string, startAfter?: string, end?: string, limit?: number, reverse?: boolean}} [o] */
   async list(o = {}) {
-    let keys = [...this.#data.keys()].sort();
+    let keys = [...this.#data.keys()].toSorted();
     if (o.prefix !== undefined) keys = keys.filter((k) => k.startsWith(/** @type {string} */ (o.prefix)));
     if (o.start !== undefined) keys = keys.filter((k) => k >= /** @type {string} */ (o.start));
     if (o.startAfter !== undefined) keys = keys.filter((k) => k > /** @type {string} */ (o.startAfter));
@@ -72,7 +86,10 @@ export class MemoryStorage {
   }
 
   /** @param {() => unknown} fn */
-  transactionSync(fn) { return fn(); }
+  transactionSync(fn) {
+    const before = structuredClone(this.#data);
+    try { return fn(); } catch (error) { this.#data = before; throw error; }
+  }
   async getAlarm() { return null; }
   async setAlarm() {}
   async deleteAlarm() {}
@@ -112,7 +129,8 @@ export async function loadGadget(files, { env = {}, storage = new MemoryStorage(
   const ctx = {
     storage,
     id: { toString: () => "eval-gadget", name: "eval-gadget" },
-    waitUntil() {},
+    waitUntil(promise) { Promise.resolve(promise).catch(() => {}); },
+    restore: async (params) => gadget[Symbol.for("gadget.restore")](params),
     blockConcurrencyWhile: (/** @type {() => unknown} */ fn) => fn(),
   };
   const gadget = new module.Gadget(ctx, env);

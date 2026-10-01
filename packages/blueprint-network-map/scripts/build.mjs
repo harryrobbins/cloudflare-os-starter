@@ -1,13 +1,8 @@
-// Bundles the gadget into the three files a Cloudflare OS gadget is made of:
-//   dist/server.js  the `Gadget` Durable Object and `ExportHandler`, one ESM module (unminified,
-//                   so it stays legible in the Workshop editor)
-//   dist/client.js  the UI, one minified ESM module (the iframe cannot import siblings), with the
-//                   layout worker inlined as a data: URL (the CSP blocks blob: workers)
-//   dist/README.md  what the in-Workshop agent reads before calling the RPC surface
-//
-// Budgets (docs/plans/network-map-blueprint.md §2): client JS ≤ 1.5 MiB in total, the core
-// ≤ 700 KiB. The build fails when a budget is exceeded; the archive budget is checked by
-// pack-gadget.mjs.
+import * as esbuild from "esbuild";
+import { buildClientEntry, buildServerEntry } from "../../../scripts/gadget-entry.mjs";
+// Builds readable client.js/server.js entries and their prebuilt *.lib.js libraries.
+// The platform loads client.lib.js before client.js in the same module scope.
+// README.md and package-specific assets are packed alongside them.
 
 import { build } from "esbuild";
 import { copyFile, mkdir, readFile } from "node:fs/promises";
@@ -47,15 +42,9 @@ const common = {
 
 export async function buildGadget(outDir = dist) {
   await mkdir(outDir, { recursive: true });
-  await build({
-    ...common,
-    entryPoints: [join(pkg, "src/server/index.js")],
-    outfile: join(outDir, "server.js"),
-    platform: "neutral",
-    minify: false,
-    external: ["cloudflare:workers"],
-    banner: { js: "// Network map gadget server. Built from packages/blueprint-network-map; edit there, not here." },
-  });
+  await buildServerEntry({ esbuild, entry: join(pkg, "src/server/index.js"), outDir,
+    banner: "// Network Map gadget server: readable RPC surface. Source: packages/blueprint-network-map/src/server.",
+    library: { absWorkingDir: pkg } });
   const worker = await build({
     ...common,
     entryPoints: [join(pkg, "src/client/layout/force-worker.js")],
@@ -65,19 +54,11 @@ export async function buildGadget(outDir = dist) {
   });
   const workerCode = worker.outputFiles[0].text;
   const workerUrl = "data:text/javascript;base64," + Buffer.from(workerCode).toString("base64");
-  const client = await build({
-    ...common,
-    entryPoints: [join(pkg, "src/client/main.js")],
-    outfile: join(outDir, "client.js"),
-    platform: "browser",
-    minify: true,
-    metafile: true,
-    define: { LAYOUT_WORKER_URL: JSON.stringify(workerUrl) },
-    plugins: [pureNodeImageDefaults],
-    banner: { js: "// Network map gadget client. Built from packages/blueprint-network-map; edit there, not here." },
-  });
+  const clientEntry = await buildClientEntry({ esbuild, entry: join(pkg, "src/client/main.js"), outDir,
+    banner: "// Network Map gadget client: readable view and adapt block. Source: packages/blueprint-network-map/src/client.",
+    library: { absWorkingDir: pkg, minify: true, define: { LAYOUT_WORKER_URL: JSON.stringify(workerUrl) }, plugins: [pureNodeImageDefaults] } });
   await copyFile(join(pkg, "src/README.md"), join(outDir, "README.md"));
-  const clientBytes = Object.values(client.metafile.outputs).reduce((n, o) => n + o.bytes, 0);
+  const clientBytes = clientEntry.clientBytes + clientEntry.libraryBytes;
   const sizes = { clientBytes, workerBytes: workerCode.length };
   if (clientBytes > BUDGETS.clientCoreBytes) throw new Error(`client.js is ${clientBytes} bytes; the core budget is ${BUDGETS.clientCoreBytes}`);
   if (clientBytes > BUDGETS.clientTotalBytes) throw new Error(`client JS is ${clientBytes} bytes; the budget is ${BUDGETS.clientTotalBytes}`);

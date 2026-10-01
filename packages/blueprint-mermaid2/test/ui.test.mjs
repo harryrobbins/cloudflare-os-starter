@@ -8,7 +8,7 @@ import { assetPath, CSP } from '../../gatekeeper-mermaid2/src/browser-policy.ts'
 const require=createRequire(import.meta.url);
 const capnweb=await readFile(require.resolve('capnweb').replace(/\.cjs$/, '.js'),'utf8');
 const capnUrl='data:text/javascript;base64,'+Buffer.from(capnweb).toString('base64');
-const client=await readFile(new URL('../dist/client.js',import.meta.url),'utf8');
+const client=(await Promise.all(['client.lib.js','client.js'].map(file=>readFile(new URL('../dist/'+file,import.meta.url),'utf8')))).join('\n;\n');
 const server=(await readFile(new URL('../src/server/index.js',import.meta.url),'utf8')).replace("import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';",'const {DurableObject,WorkerEntrypoint}=globalThis.__mermaid2TestRuntime;');
 globalThis.__mermaid2TestRuntime={DurableObject:class{constructor(ctx,env){this.ctx=ctx;this.env=env;}},WorkerEntrypoint:class{}};
 const {Gadget}=await import('data:text/javascript;base64,'+Buffer.from(server).toString('base64'));

@@ -1,6 +1,8 @@
+import * as esbuild from "esbuild";
+import { buildClientEntry, buildServerEntry } from "../../../scripts/gadget-entry.mjs";
 import { build } from 'esbuild'
 import { existsSync } from 'node:fs'
-import { copyFile, mkdir, stat } from 'node:fs/promises'
+import { copyFile, mkdir } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -38,11 +40,15 @@ export async function workerDataUrl() {
 
 export async function buildGadget(outDir = dist) {
   await mkdir(outDir, { recursive: true })
-  await build({ ...common, minify: false, charset: 'utf8', entryPoints: [join(pkg, 'src/server/index.js')], outfile: join(outDir, 'server.js'), platform: 'neutral', external: ['cloudflare:workers'], banner: { js: '// Tessera Mosaic server. Edit packages/blueprint-tessera.' } })
+  await buildServerEntry({ esbuild, entry: join(pkg, "src/server/index.js"), outDir,
+    banner: "// Tessera gadget server: readable RPC surface. Source: packages/blueprint-tessera/src/server.",
+    library: { absWorkingDir: pkg } });
   const worker = await workerDataUrl()
-  await build({ ...browser, entryPoints: [join(pkg, 'src/client/main.js')], outfile: join(outDir, 'client.js'), loader: { '.css': 'text', '.csv': 'text' }, define: { WORKER_DATA_URL: JSON.stringify(worker) }, banner: { js: '// Tessera Mosaic client. Edit packages/blueprint-tessera.' } })
+  const clientEntry = await buildClientEntry({ esbuild, entry: join(pkg, "src/client/main.js"), outDir,
+    banner: "// Tessera gadget client: readable view and adapt block. Source: packages/blueprint-tessera/src/client.",
+    library: { minify: true, loader: { ".css": "text", ".csv": "text" }, define: { WORKER_DATA_URL: JSON.stringify(worker) }, absWorkingDir: pkg, charset: "ascii" } });
   await copyFile(join(pkg, 'src/README.md'), join(outDir, 'README.md'))
-  const size = (await stat(join(outDir, 'client.js'))).size
+  const size = clientEntry.clientBytes + clientEntry.libraryBytes
   console.log(`client.js ${kb(size)} (layout worker ${kb(worker.length)} as a data: URL; budget ${kb(CLIENT_BUDGET_BYTES)})`)
   if (size > CLIENT_BUDGET_BYTES) console.warn('client.js is over the 1.5 MB budget: review the bundle (see the plan\'s Risks section).')
   return outDir

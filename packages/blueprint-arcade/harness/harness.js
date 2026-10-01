@@ -16,7 +16,7 @@ const repo = new InMemoryRepository();
 const make = () => new ArcadeService(repo, { templates: TEMPLATES, starterTunes: STARTER_TUNES });
 let service = make();
 let generation = 1;
-const clientSource = fetch("/dist/client.js", { cache: "no-store" }).then((r) => r.text());
+const clientSource = Promise.all(["client.lib.js", "client.js"].map(file => fetch("/dist/" + file, { cache: "no-store" }).then(r => { if (!r.ok) throw new Error(file + " missing"); return r.text(); }))).then(parts => parts.join("\n;\n"));
 
 const READS = {
   getView: (/** @type {string} */ id) => service.view(id),

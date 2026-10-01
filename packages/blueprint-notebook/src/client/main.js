@@ -1,3 +1,4 @@
+import { mountAdapt } from "../../../../scripts/blueprint-adapt/client.mjs";
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
@@ -7,6 +8,17 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { intentHash } from '../../../gatekeeper-runtime/src/protocol.ts';
 import css from './style.css';
+
+// ===== Adapt this gadget =====================================================
+// README.md ("Adapting this gadget") documents each setting and the app handle.
+const adapt = {
+  title: 'Notebook',
+  actionLabel: "Extra actions",
+  styles: "",
+  actions: [],
+  onReady(app) {},
+};
+// ============================================================================
 
 const style = document.createElement('style'); style.textContent = css; document.head.append(style);
 document.body.innerHTML = `<main class="notebook"><header><div class="brand">N<span>·</span></div><div class="heading"><div class="eyebrow">PYTHON NOTEBOOK</div><input class="title" aria-label="Notebook title" maxlength="120"><div class="save-status" role="status">Opening notebook…</div></div><div class="file-actions"><button id="import">Import .ipynb</button><button id="export">Copy notebook…</button></div></header><section class="kernelbar"><div><span class="dot"></span><strong id="kernel">Python</strong><span id="kernel-info">Checking connection</span></div><button id="stop">Stop / reset kernel</button></section><aside id="setup-help" hidden><strong>Connect Python to run this notebook</strong><p>Open the notebook’s Connections tab → Connect resource → Notebook Python kernel. Connect a Notebook Python account, choose a kernel name, and use the binding name <code>PYTHON</code>. Then return to the notebook. Run starts the selected cell immediately. Activity records each operation.</p></aside><div id="notice" role="status" hidden></div><section id="cells" aria-label="Notebook cells"></section><footer><button id="add-code">＋ Code cell</button><button id="add-markdown">＋ Markdown</button><span>Shift + Enter to save and run</span></footer><input id="file" type="file" accept=".ipynb,application/json" hidden><aside id="copy-help">Copies include cells and saved outputs. Import into a new Notebook and connect your own Python kernel to run it.</aside></main>`;
@@ -167,3 +179,5 @@ await safe(async () => {
   doc = await gadget.getNotebook(); render(); status('All changes saved'); await poll();
   setInterval(() => { if (!document.hidden) safe(poll)(); }, 2500);
 })();
+
+await mountAdapt(adapt, { gadget: gadget, methods: ["getNotebook", "appendCell", "saveCell", "changeStructure", "exportNotebook", "getRuntimeStatus"], refresh: async () => { doc = await gadget.getNotebook(); render(); } });
