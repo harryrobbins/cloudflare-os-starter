@@ -31,7 +31,7 @@ export async function buildGadget(outDir) {
   await mkdir(outDir, { recursive: true });
   await buildServerEntry({ esbuild, entry: join(pkg, "src/server/index.js"), outDir,
     banner: "// Arcade gadget server: readable RPC surface. Source: packages/blueprint-arcade/src/server.",
-    library: { plugins: [raw] } });
+    library: { absWorkingDir: pkg, plugins: [raw] } });
   await buildClientEntry({ esbuild, entry: join(pkg, "src/client/main.js"), outDir,
     banner: "// Arcade gadget client: readable view and adapt block. Source: packages/blueprint-arcade/src/client.",
     library: { absWorkingDir: pkg, minify: true, plugins: [raw] } });

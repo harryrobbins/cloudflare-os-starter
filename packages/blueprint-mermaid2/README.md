@@ -17,5 +17,5 @@ Reference validation (2026-10-01): 3/3 evals pass against the packed archive; al
 build checks, scoped tooling lint, and script type checks pass. Signed-in Workshop
 smoke tests have not been run.
 
-Model evals: pending authorization to send gadget source and prompts to the configured
-`litellm_proxy/deepseek/deepseek-v4-flash` test proxy (2026-10-01). No model pass rate is claimed.
+Model evals: `litellm_proxy/deepseek/deepseek-v4-flash` passed 3/3 on 2026-10-01
+(one run per eval, with operator authorization to send gadget code).

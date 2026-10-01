@@ -29,7 +29,7 @@ export default [
     await page.getByRole("button", { name: "Explore", exact: true }).waitFor({ timeout: 15000 });
     const ready = await page.getByText("Ready to explore", { exact: true }).count();
     await page.getByRole("button", { name: "Explore", exact: true }).click();
-    await page.getByText("Exploring this view", { exact: true }).waitFor();
+    await page.getByText("Exploring this view", { exact: true }).first().waitFor();
     const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     return [...(ready ? [] : ["onReady status missing"]), ...(bg === "rgb(240, 245, 250)" ? [] : ["custom CSS missing"])];
   },
