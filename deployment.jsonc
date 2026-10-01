@@ -171,7 +171,12 @@
     // posted back as the Agent. Each colleague needs a Workshop account with an AI model before the
     // Agent can answer them. Absent or true binds it (the Workshop is then deployed before chat);
     // false turns replies off and chat says so. See packages/gatekeeper-chat/README.md, "Agent".
-    "agentReplies": true
+    "agentReplies": true,
+
+    // Video calls over Cloudflare Realtime: the SFU app and TURN key ids are public; their credentials
+    // are the chat Worker secrets REALTIME_SFU_APP_SECRET and REALTIME_TURN_KEY_API_TOKEN.
+    // { "enabled": false } (or removing the block) turns calls off. See docs/customization.md#video-calls.
+    "calls": { "enabled": true, "sfuAppId": "7cbf75fcd65b93f51d3b70a13d79ed14", "turnKeyId": "53a6b79d5195ee1d575fb46c58a8b65e" }
 
     // The agent-facing half: binds chat to the Workshop as a Gatekeeper vendor, so every workspace
     // gets an ambient ChatSession (public channels: read and search; posting is an approved action).
