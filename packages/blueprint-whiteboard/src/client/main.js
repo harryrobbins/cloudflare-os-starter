@@ -1,5 +1,7 @@
 // @ts-check
-// Client entry point. Runs inside the gadget's sandboxed iframe, which has no HTML of its own:
+// Client entry point: the whiteboard's main view. Change its settings, styles and commands in the
+// adapt block below; README.md ("Adapting this gadget") documents every field and the `app`
+// handle. Runs inside the gadget's sandboxed iframe, which has no HTML of its own:
 // everything is built here. Provided by the platform: `gadget` (RPC stub to the Gadget Durable
 // Object), `gadgetViewer` (the signed-in user; our fork's patch) and `RpcTarget`, declared as
 // module-scope bindings in a prefix the platform prepends to
@@ -22,6 +24,31 @@ const platformRpcTarget = typeof RpcTarget !== "undefined" ? RpcTarget : undefin
 const platformViewer = typeof gadgetViewer !== "undefined" ? gadgetViewer : undefined;
 // @ts-ignore provided by the platform in export mode
 const exportFormatId = typeof gadgetExportFormatId !== "undefined" ? gadgetExportFormatId : undefined;
+
+// ===== Adapt this gadget =====================================================
+// Settings and extension points, honoured by client.lib.js. Change these rather than the library.
+// README.md ("Adapting this gadget") documents every field and the `app` handle.
+const adapt = {
+  // Colours of new objects made with the tools and the Add menu, per type: a colour name (yellow,
+  // orange, red, pink, purple, blue, teal, green, gray, white, black) or "#rrggbb", which sets the
+  // fill (the line for pen and connector), or { fill, stroke, textColor }. The colour last picked
+  // in the style bar takes over from these for the rest of the session.
+  newObjectColors: {
+    // sticky: "yellow",
+  },
+  minimap: true,  // false hides the minimap at the bottom right (the zoom buttons stay)
+  styles: "",     // extra CSS, applied after the built-in styles (e.g. ".wb-topbar { background: #fef3c7; }")
+  actions: [      // extra commands: { id, label, title?, run(app) }, listed first in the board menu (the
+                  // ⋯ button beside the title) and last in the right-click menu. For example:
+    // { id: "tidy", label: "Tidy sticky notes", run(app) {
+    //   const notes = app.findObjects({ type: "sticky" });
+    //   app.arrangeGrid({ ids: notes.map((n) => n.id) });
+    //   app.toast(`Tidied ${notes.length} sticky notes`);
+    // } },
+  ],
+  onReady(app) {},  // called once, after the board is shown, with the app handle
+};
+// ==============================================================================
 
 /**
  * window.name survives reloads of the same browsing context; used to carry the viewer's name and
@@ -128,7 +155,7 @@ if (exportFormatId !== undefined) {
     name: accountName() ?? carried.name ?? "Guest",
     color: carried.color ?? PALETTE[Math.floor(Math.random() * PALETTE.length)],
   };
-  /** @type {import("./store-contract.js").Store|undefined} */
+  /** @type {any} the store (Store in store-contract.js), once created */
   let store;
   /**
    * The recovery screen while it shows: unacknowledged changes kept us from reloading.
@@ -206,7 +233,7 @@ if (exportFormatId !== undefined) {
     root.replaceChildren(message);
     throw err;
   }
-  const { app } = mountApp(root, store);
+  const { app } = mountApp(root, store, { adapt });
   if (!document.activeElement || document.activeElement === document.body) {
     app.canvas.element.focus({ preventScroll: true });
   }

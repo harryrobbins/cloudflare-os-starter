@@ -1,4 +1,4 @@
-// Packs dist/ into formats/whiteboard.gadget, the bundled-format archive the Workshop build installs
+// Packs dist/ (FILES) into formats/whiteboard.gadget, the bundled-format archive the Workshop build installs
 // (see cloudflare-os/packages/workshop-backend/format-blueprints/README.md).
 //
 //   node scripts/pack-gadget.mjs            pack; bumps formats/whiteboard.json `revision` when code changed
@@ -16,7 +16,7 @@ import { encodeContent, serializeArchive } from "./archive.mjs";
 
 const pkg = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = join(pkg, "../..");
-const FILES = ["server.js", "client.js", "README.md"];
+const FILES = ["server.js", "server.lib.js", "client.js", "client.lib.js", "README.md"];
 // Archive dates are inert once installed (the sidecar owns presentation); fixed for reproducibility.
 const FIXED_DATE = "2026-09-16T00:00:00.000Z";
 

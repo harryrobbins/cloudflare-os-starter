@@ -2,7 +2,7 @@
 
 A live, shared whiteboard: an infinite canvas with sticky notes, shapes, text, code blocks, connectors, pen strokes and frames. Everyone who has the whiteboard open sees changes as they happen, sees each other's cursors, and sees a ghost of anything someone is dragging or drawing before they let go.
 
-This gadget is built from `packages/blueprint-whiteboard` in the deployment's starter repository. **Edits made here in the code editor are not carried back to that source.** To change the whiteboard for everyone, change the source and ship a new format revision.
+To read or change a board's content from chat, call its operations (see "Adapting this gadget" below, then "Programmatic use"); to change what the whiteboard looks like or can do, edit the adapt block at the top of `client.js`.
 
 ## Using the whiteboard
 
@@ -42,9 +42,93 @@ Everyone with the whiteboard open is shown at the top right, under their account
 - **Saving and connection**: the status beside the title says **Saved** only when every change you made has been confirmed by the server. It shows **Saving…** while changes are on their way, and **Reconnecting** or **Connection lost** with the number of unsaved changes when the connection drops. Changes you make while reconnecting are kept and sent once it is back. If saving takes unusually long or the connection is down, the status warns that reloading now would lose your unsaved changes; screen readers hear about lost and restored connections, not about every save.
 - **Recovering after the gadget's code changes**: if the gadget's code is changed while the whiteboard is open, it reloads itself to reconnect (your colour is kept), but only when nothing is unsaved. With unsaved changes it shows a **Connection lost** screen instead, with how many changes are unsaved and **Download unsaved changes** (a data file with the last saved board and your unsaved changes; **Show as text** gives the same data to copy if the download is blocked). **Reload and lose them** reloads at once; otherwise the page keeps trying to reconnect and reloads by itself after 5 minutes. If it has to reload more than 3 times in a minute it stops and asks you to reload the page.
 
+## Adapting this gadget
+
+| File | What it is |
+| --- | --- |
+| `client.js` | The main view, readable. Starts with the **adapt block**: settings, styles and extra commands. Edit this. |
+| `client.lib.js` | The prebuilt client library (store, canvas, panels, sync) that `client.js` uses through `gadgetLib`. **Never edit or read it**: it is generated and is replaced whenever the gadget is rebuilt. |
+| `server.js` | The server, readable: class `Gadget` (the RPC methods below and `describeGadget()`) and the export formats. Add server methods here. |
+| `server.lib.js` | The prebuilt server library (whiteboard rules, storage, presence). **Never edit it.** |
+| `README.md` | This guide. |
+
+### Use: change the board's content
+
+Call the gadget's methods from `executeCode` on its binding (`env.Whiteboard` here). `describeBinding` shows `describeGadget()`: each operation with an input schema and a runnable example. They are `getBoard`, `findObjects`, `getFrame`, `addStickies`, `addObjects`, `connectObjects`, `addFrame`, `updateObjects`, `moveObjects`, `arrangeGrid`, `deleteObjects`, `findIcons`, `addIcons`, `addCode`, `undo` and, low-level, `applyOperation` (also how to rename the board or change its background); plus `getHistory`, `exportSvg`, `exportData` and `importData`. "Programmatic use" below documents them in full. Never edit code to change content.
+
+### Adapt: change what it looks like or can do
+
+Edit the adapt block near the top of `client.js`. The library validates it: unknown keys are ignored, and a bad field or action is reported in the browser console and left out rather than breaking the board.
+
+| Field | Meaning |
+| --- | --- |
+| `newObjectColors` | Colours of new objects made with the tools and the Add menu, per type (`sticky`, `rect`, `ellipse`, `text`, `frame`, `pen`, `connector`, `icon`, `code`): a colour name (`yellow`, `orange`, `red`, `pink`, `purple`, `blue`, `teal`, `green`, `gray`, `white`, `black`) or `"#rrggbb"`, which sets the fill (the line for `pen` and `connector`), or `{fill, stroke, textColor}`. The colour a person last picks in the style bar takes over for the rest of their session. Example: `{ sticky: "blue", text: { textColor: "#2563eb" } }`. |
+| `minimap` | `false` hides the minimap at the bottom right; the zoom buttons stay. |
+| `styles` | Extra CSS, applied after the built-in styles. Useful hooks: `.wb-topbar` (title bar), `.wb-toolbar` (tools), `.wb-stylebar` (selection bar), `.wb-minimap`, `.wb-canvas-host`, `.menu` and `.menu .adapt-action` (menus and your commands), `.toast`, and the CSS variables on `:root` such as `--accent`. |
+| `actions` | Extra commands, each `{ id, label, title?, run(app) }`. They are listed **first in the board menu** (the **⋯** button beside the title: `Tab` to it, `Enter`, arrow keys) and **last in the right-click menu** (also `Shift+F10` or a long press), so they are reachable by mouse, keyboard and touch. `run` may be async; if it throws, the person sees "<label> failed: …". |
+| `onReady(app)` | Called once, after the board has loaded and is shown, with the same `app` handle. Use it for set-up such as `app.onChange(...)`. |
+
+**The `app` handle** passed to `run` and `onReady` holds the server's domain verbs with the same names and argument objects, applied through the page's own copy of the board: they show at once, sync in the background, count as the viewer's own change, and each call is one undo step (`Ctrl+Z`). They are synchronous. Colours and frames are given as in the server methods.
+
+| Method | Returns |
+| --- | --- |
+| `app.getBoard()` | `{title, background, objects}`, objects bottom to top (a copy) |
+| `app.findObjects({type?, text?, frame?})` | matching objects: `type` one or a list, `text` a case-insensitive substring, `frame` an id or name |
+| `app.addStickies({stickies, frame?, at?, columns?, gap?})` | `{created, errors}`; without `at` or `frame` the grid is centred in the viewer's view |
+| `app.addObjects({objects})` | `{created, errors}`; objects without `x`/`y` go in the middle of the view |
+| `app.connectObjects({from, to, label?, routing?, arrow?, color?})` | `{connector, errors}` |
+| `app.updateObjects({updates: [{id, fields}]})` | `{errors}` |
+| `app.moveObjects({ids, dx, dy})` | `{errors}` (a frame's members do not move with it) |
+| `app.arrangeGrid({ids, columns?, gap?, at?})` | `{errors}`; lays the objects out in the order given |
+| `app.deleteObjects({ids})` | `{errors}` (attached connectors go too) |
+| `app.getSelection()` / `app.setSelection(ids)` | the selected ids / selects those ids |
+| `app.showObjects(ids)` | pans and zooms so they are in view |
+| `app.getViewport()` | the visible world rectangle `{x, y, w, h}` |
+| `app.toast(message)` | shows a short message for a few seconds (screen readers hear it) |
+| `app.onChange(listener)` | calls `listener(board)` after every change to the board; returns an unsubscribe function |
+
+`errors` are `{index, message}`: the item at `index` was skipped, the rest applied.
+
+For a change the block cannot express, edit the rest of `client.js` (connection handling and the call `mountApp(root, store, { adapt })`), or add a method to class `Gadget` in `server.js` and describe it in its `DESCRIPTION` list; the client reaches server methods through the `gadget` stub. If what you need is not reachable from `client.js` or `server.js`, say so rather than editing a `.lib.js` file.
+
+### Examples
+
+Use, from `executeCode`: seven notes in a row, one colour each.
+
+```js
+const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const colors = ["yellow", "orange", "red", "pink", "purple", "blue", "green"];
+const { created, errors } = await env.Whiteboard.addStickies({
+  stickies: days.map((text, i) => ({ text, color: colors[i] })), columns: 7, by: "Assistant",
+});
+```
+
+Adapt, in the adapt block of `client.js`: a board-menu command that turns the selected objects red, and blue sticky notes by default.
+
+```js
+const adapt = {
+  newObjectColors: { sticky: "blue" },
+  minimap: true,
+  styles: "",
+  actions: [
+    { id: "mark-red", label: "Mark selection red", run(app) {
+      const ids = app.getSelection();
+      if (!ids.length) return app.toast("Select something first");
+      app.updateObjects({ updates: ids.map((id) => ({ id, fields: { color: "red" } })) });
+    } },
+  ],
+  onReady(app) {},
+};
+```
+
+### Where your changes live
+
+Edits made in this gadget's code editor change **this gadget only**. They are not carried back to its source, `packages/blueprint-whiteboard` in the deployment's starter repository, and other whiteboards keep the original. To change the whiteboard for everyone, change the source and ship a new format revision.
+
+
 ## Programmatic use
 
-Call these from `executeCode` through the gadget's binding (for example `env.Whiteboard`). All methods are on the `Gadget` Durable Object.
+Call these from `executeCode` through the gadget's binding (for example `env.Whiteboard`). All methods are on the `Gadget` Durable Object; `describeGadget()` summarises them with input schemas and examples.
 
 **Change the whiteboard through these methods, never by editing this gadget's code.**
 
