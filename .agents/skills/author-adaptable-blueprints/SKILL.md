@@ -74,12 +74,21 @@ Give the server's `Gadget` class a synchronous, side-effect-free `describeGadget
 ```
 
 - List the **convenience** operations an agent should reach for first. These are the
-  blueprint's own domain verbs that read current revisions themselves, validate the whole input
-  before writing, and return ids. List low-level escape hatches (raw operation or patch
-  methods) last. Add a thin, validated verb only where the obvious job has none.
+  blueprint's own domain verbs that read current revisions themselves and return ids. Either
+  validate the whole input before writing, or apply the valid items and report the rest in
+  `errors`, and say which in the description. List low-level escape hatches (raw operation or
+  patch methods) last. Add a thin, validated verb only where the obvious job has none, and
+  describe what exists rather than an idealised API.
+- **Who the agent acts as.** Calls from `executeCode` carry no signed-in account. Attribute
+  agent writes to an "Assistant" identity when `by` is omitted. Let people edit or withdraw what
+  the Assistant created. Never let the Assistant perform a person's own act, such as casting a
+  ballot, approving, or marking someone ready.
 - Every `example` must be real, runnable code whose argument satisfies `input`. A test calls
   each example's operation with that input against the real service or DO.
-- Keep it bounded, around 20 operations and a few KB. The platform truncates at 24 000 characters.
+- Keep it bounded. describeBinding prints it as compact JSON and truncates at 24 000 characters.
+  Explain shared conventions (colours, positions, `by`) once in `summary` rather than in every
+  schema, and name rarely used methods in `summary` instead of listing them. The whiteboard's
+  16 operations come to about 19 KB.
 
 ## Adapt: the adapt block
 
@@ -95,7 +104,7 @@ const adapt = {
   styles: "",   // extra CSS, applied after the built-in styles
   actions: [    // extra commands: { id, label, title?, run(app) } shown in <where>
   ],
-  onReady(app) {},  // called once, after the view is mounted, with the app handle
+  onReady(app) {},  // called once, when the view has mounted and shows its first data
 };
 // ==============================================================================
 ```
@@ -110,9 +119,13 @@ const adapt = {
   server offers, where they make sense client-side, plus a way to show a short message. Document its methods in README.
 - Test each core extension point with a fixture: one extra action appears and runs, extra
   styles apply, and `onReady` fires once.
-- Put the view's composition that people adapt (layout, which panels, labels) in the entry or
-  in the adapt block. If `main.js` is only `mount(root)`, move that composition into it. Stable
-  engine code (sync, geometry, rendering, parsers, vendor libraries) belongs in the library.
+- Settings and actions are usually enough; you need not move the view's composition into the
+  entry. Do expose the composition people plausibly change (layout, panels, labels) as settings.
+  Move sync and reload plumbing into the library when that keeps the adapt block the first
+  thing in the file. Stable engine code (sync, geometry, rendering, parsers, vendor libraries)
+  belongs in the library.
+- Harness and e2e tests inject a fixture adapt block by rewriting `dist/client.js` as it is
+  served, for example with Playwright `context.route`.
 
 ## README: "Adapting this gadget"
 
@@ -122,14 +135,19 @@ Add this section after the user guide in `src/README.md`, which ships as the gad
 2. **Use**: point to `describeGadget()` and list the operation names.
 3. **Adapt**: every `adapt` field, the `app` handle's methods, and where actions appear.
 4. Two worked examples in this blueprint's own terms: one operation call and one adaptation.
+   They must not match an eval; a worked answer in the README makes the eval measure copying.
 5. That edits to a gadget copy are not carried back to `packages/blueprint-*`.
 
 ## Evals: what an agent must be able to do
 
-Every adaptable blueprint ships `src/evals.mjs`, published as `evals.mjs`. It is not a server
-module, so the platform never loads it. It is the blueprint's executable promise about the
-requests an agent should handle: a few `use` evals and at least one `adapt` eval, each phrased
-as a person would type it in the Workshop chat, in the blueprint's own domain.
+Every adaptable blueprint keeps `src/evals.mjs` in its package. It is the blueprint's
+executable promise about the requests an agent should handle: a few `use` evals and at least
+one `adapt` eval, each phrased as a person would type it in the Workshop chat, in the
+blueprint's own domain.
+
+**Never ship evals in the gadget**, and keep their prompts, names and results out of the
+shipped README. In the pilots, agents read a shipped `evals.mjs` and copied the reference
+answer.
 
 ```js
 // <Name>: requests an agent should be able to carry out with this gadget.
@@ -141,8 +159,10 @@ export default [
     prompt: "What the person asks for, in their words.",
     // A known-good solution. `--reference` runs it without a model, proving the eval is
     // achievable and its check is right; the package tests run every reference.
-    reference: { code: "await env.<Binding>.<method>({ … });" },
+    reference: { code: "await env.<Binding>.<method>({ … });" },   // final?: the reply text
     //   adapt: { edits: [{ file: "client.js", find: "<exact text>", replace: "<text>" }] }
+    // Optional: seed state the agent must not create itself (other people's contributions).
+    async setup(t) { await t.gadget.<method>({ … }); },
     /** @param {EvalContext} t @returns {Promise<string[]>} problems; empty means pass */
     async check(t) { const state = await t.gadget.<read method>(); return [ … ]; },
   },
@@ -155,11 +175,16 @@ export default [
 - `t.files`: the final gadget files, keyed by name.
 - `await t.client()`: a Playwright page running the assembled client exactly as the platform
   does, with `gadget` bridged to `t.gadget`. Use it to click an added action and check its effect.
+- `t.final`: the agent's closing reply (or `reference.final`), for requests answered in text.
+
+`scripts/blueprint-evals/node-gadget.mjs` (`loadGadget`, `MemoryStorage`) also serves package
+tests that run the real `Gadget` in Node, such as running every `describeGadget()` example as
+written. workerd has no `new Function`.
 
 Checks judge outcomes, not method choice: accept any reasonable way of doing the job, and be
 tolerant of wording, case and layout jitter. The runner also fails a `use` eval that edited a
-file, and any eval that touched a `.lib.js` file. Record model runs in the package README's
-"Adapting this gadget" section (model, date, pass rate) when they change.
+file, and any eval that touched a `.lib.js` file. Record model runs (model, date, pass rate)
+in the package's own `README.md`, which does not ship.
 
 ## Checks before release
 
@@ -167,7 +192,10 @@ file, and any eval that touched a `.lib.js` file. Record model runs in the packa
   where it exists) pass. The build fails when an entry exceeds its budget.
 - `dist/client.js` and `dist/server.js` start with the banner and the adapt block, contain
   no `import` from a relative path, and are unminified.
-- `pack:gadget` bumps the format revision, and `pack-gadget.mjs --check` passes.
+- `pack:gadget` bumps the revision whenever the content changed since the last pack. Before
+  the final pack of a release, restore `formats/<name>.json` and `gadget.lock.json` to the last
+  released state so the release is one bump. Then `pack-gadget.mjs --check` passes. Repack any
+  format that embeds this one (Docs with Drawings embeds the whiteboard).
 - Every eval passes with `--reference`, and a model run with the test model
   (`litellm_proxy/deepseek/deepseek-v4-flash`) passes most runs; investigate any eval it fails.
 - Smoke test in the Workshop with one request of each kind, phrased in the blueprint's own

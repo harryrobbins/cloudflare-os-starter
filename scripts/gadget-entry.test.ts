@@ -99,3 +99,18 @@ test("a split server keeps cloudflare: imports and serves the rest from server.l
   assert.match(lib, /export \{[^}]*\bExportHandler\b[^}]*\bStore\b|export \{[^}]*\bStore\b[^}]*\bExportHandler\b/);
   assert.doesNotMatch(lib, /cloudflare:workers/);
 });
+
+test("JSDoc import() types in comments are not dynamic imports", async () => {
+  const src = join(scratch, "jsdoc");
+  await mkdir(src, { recursive: true });
+  await writeFile(join(src, "dep.js"), `export const one = 1;\n`);
+  await writeFile(join(src, "main.js"), [
+    `import { one } from "./dep.js";`,
+    `/** @type {import("./dep.js").Thing | undefined} */`,
+    `let thing; // a {@link import("./dep.js")} note`,
+    `globalThis.out = one;`,
+  ].join("\n"));
+  await buildClientEntry({ esbuild, entry: join(src, "main.js"), outDir: join(scratch, "jsdoc-out"), banner: "//" });
+  await writeFile(join(src, "dyn.js"), `const m = await import("./dep.js");\n`);
+  await assert.rejects(buildClientEntry({ esbuild, entry: join(src, "dyn.js"), outDir: join(scratch, "dyn-out"), banner: "//" }), /dynamic import/);
+});

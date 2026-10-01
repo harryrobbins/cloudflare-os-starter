@@ -1,5 +1,7 @@
-// Runs a blueprint's evals (its evals.mjs; see .agents/skills/author-adaptable-blueprints) against
-// the format archive that ships, formats/<format>.gadget.
+// Runs a blueprint's evals (packages/blueprint-*/src/evals.mjs; see
+// .agents/skills/author-adaptable-blueprints) against the format archive that ships,
+// formats/<format>.gadget. Evals stay in the package: shipped in the gadget, an agent reads them
+// and copies the answers.
 //
 //   node scripts/blueprint-evals/run.mjs <format> [--eval <id>] [--reference] [--runs N] [--model M]
 //
@@ -11,9 +13,8 @@
 // Model runs read LITELLM_PROXY_API_KEY and LITELLM_PROXY_API_BASE from the environment or from
 // .env.local in this checkout or the main one. Results are written to scratch/blueprint-evals/.
 
-import { mkdir, readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArchive } from "../../packages/blueprint-kanban/scripts/archive.mjs";
@@ -34,18 +35,24 @@ export async function loadFormat(/** @type {string} */ format) {
   return { files, info: { binding, title: sidecar.title, noun } };
 }
 
-/** @param {Record<string, string>} files */
-export async function loadEvals(files) {
-  if (!files["evals.mjs"]) throw new Error("this gadget ships no evals.mjs");
-  const dir = await mkdtemp(join(tmpdir(), "evals-"));
-  try {
-    await writeFile(join(dir, "evals.mjs"), files["evals.mjs"]);
-    const evals = (await import(pathToFileURL(join(dir, "evals.mjs")).href)).default;
-    if (!Array.isArray(evals)) throw new Error("evals.mjs must export default an array");
-    return evals;
-  } finally {
-    await rm(dir, { recursive: true, force: true });
+/** The package that packs formats/<format>.gadget. */
+export async function formatPackage(/** @type {string} */ format) {
+  const packages = await readdir(join(repo, "packages"));
+  for (const name of packages.filter((p) => p.startsWith("blueprint-")).sort()) {
+    const pack = await readFile(join(repo, "packages", name, "scripts", "pack-gadget.mjs"), "utf8").catch(() => "");
+    if (pack.includes(`formats/${format}.gadget`) || pack.includes(`"${format}.gadget"`)) return join(repo, "packages", name);
   }
+  return null;
+}
+
+/** A format's evals, from its package's src/evals.mjs. */
+export async function loadEvals(/** @type {string} */ format) {
+  const pkg = await formatPackage(format);
+  const file = pkg && join(pkg, "src", "evals.mjs");
+  if (!file || !(await readFile(file, "utf8").catch(() => null))) throw new Error(`no src/evals.mjs for format ${format}`);
+  const evals = (await import(pathToFileURL(file).href)).default;
+  if (!Array.isArray(evals)) throw new Error("evals.mjs must export default an array");
+  return evals;
 }
 
 /**
@@ -115,6 +122,8 @@ export async function runEval({ ev, format, llm, browser }) {
   /** @type {string[]} */
   let problems = [];
   try {
+    // Seed the gadget first (people's earlier contributions an agent must not fake).
+    if (ev.setup) await ev.setup({ gadget: await live.get(), files, binding: format.info.binding });
     if (!llm) {
       if (ev.reference?.code) {
         const r = await executeCode(ev.reference.code, { [format.info.binding]: await live.get() });
@@ -140,6 +149,8 @@ export async function runEval({ ev, format, llm, browser }) {
       const gadget = await live.get();
       const t = {
         gadget, files, binding: format.info.binding,
+        // The agent's closing reply, for requests whose answer is text ("" for a reference run).
+        final: agent?.final ?? ev.reference?.final ?? "",
         async client() {
           const o = await openClient({ browser: await browser(), files, gadget });
           opened.push(o);
@@ -187,7 +198,7 @@ async function main() {
   const runs = reference ? 1 : Number(opt("--runs") ?? 1);
   const model = opt("--model") ?? DEFAULT_MODEL;
   const loaded = await loadFormat(format);
-  const evals = (await loadEvals(loaded.files)).filter((/** @type {any} */ e) => !opt("--eval") || e.id === opt("--eval"));
+  const evals = (await loadEvals(format)).filter((/** @type {any} */ e) => !opt("--eval") || e.id === opt("--eval"));
   if (!evals.length) throw new Error("no matching evals");
   const llm = reference ? null : await proxySettings(model);
 

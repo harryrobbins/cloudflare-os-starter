@@ -125,7 +125,7 @@ export async function buildClientEntry({ esbuild, entry, outDir, banner, library
   const source = await readFile(entry, "utf8");
   const decls = parseModuleImports(source);
   if (decls.some((d) => d.kind === "export")) throw new Error(`${entry}: a client entry does not export`);
-  if (/\bimport\s*\(/.test(source)) throw new Error(`${entry}: dynamic import() cannot load in the gadget iframe`);
+  if (/\bimport\s*\(/.test(withoutComments(source))) throw new Error(`${entry}: dynamic import() cannot load in the gadget iframe`);
   const names = decls.flatMap((d) => d.bindings.map((b) => b.local));
   const client = banner.trimEnd() + "\n" + replaceDeclarations(source, decls, () =>
     `// From client.lib.js, the prebuilt library the platform loads before this file. Do not edit\n` +
@@ -164,7 +164,7 @@ export async function buildClientEntry({ esbuild, entry, outDir, banner, library
 export async function buildServerEntry({ esbuild, entry, outDir, banner, library = {}, budgetBytes = DEFAULT_ENTRY_BUDGET_BYTES }) {
   const source = await readFile(entry, "utf8");
   const decls = parseModuleImports(source).filter((d) => !d.specifier.startsWith("cloudflare:"));
-  if (/\bimport\s*\(/.test(source)) throw new Error(`${entry}: use static imports in a server entry`);
+  if (/\bimport\s*\(/.test(withoutComments(source))) throw new Error(`${entry}: use static imports in a server entry`);
   const imports = decls.filter((d) => d.kind === "import");
   const reexports = decls.filter((d) => d.kind === "export");
   const importNames = imports.flatMap((d) => d.bindings.map((b) => b.local));
@@ -191,6 +191,11 @@ export async function buildServerEntry({ esbuild, entry, outDir, banner, library
   await writeFile(join(outDir, "server.js"), server);
   await writeFile(join(outDir, "server.lib.js"), libCode);
   return { names: [...importNames, ...exportNames], serverBytes: Buffer.byteLength(server), libraryBytes: Buffer.byteLength(libCode) };
+}
+
+/** Source with comments blanked, for syntax checks (JSDoc types say `import("…")`). */
+function withoutComments(/** @type {string} */ source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:"'`\\])\/\/[^\n]*/g, "$1");
 }
 
 /** The platform's client code for a gadget: library, then client.js, in one module (gadget-files.ts). */
